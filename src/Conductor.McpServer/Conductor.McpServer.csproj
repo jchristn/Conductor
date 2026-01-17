@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Conductor.McpServer.xml</DocumentationFile>
+    <Version>1.0.0</Version>
+    <Authors>Joel Christner</Authors>
+    <Company>Joel Christner</Company>
+    <Product>Conductor</Product>
+    <Description>MCP Server integration for Conductor - Exposes Conductor APIs as MCP tools</Description>
+    <Copyright>Copyright (c) 2025 Joel Christner</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Conductor.Core\Conductor.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Voltaic" Version="0.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="bin\$(Configuration)\$(TargetFramework)\Conductor.McpServer.xml" CopyToOutputDirectory="PreserveNewest" Condition="Exists('bin\$(Configuration)\$(TargetFramework)\Conductor.McpServer.xml')" />
+  </ItemGroup>
+
+</Project>

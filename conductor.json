@@ -1,0 +1,35 @@
+{
+  "Webserver": {
+    "Hostname": "localhost",
+    "Port": 9000,
+    "Ssl": false,
+    "Cors": {
+      "Enabled": false,
+      "AllowedOrigins": [],
+      "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      "AllowedHeaders": ["Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password"],
+      "ExposedHeaders": [],
+      "AllowCredentials": false,
+      "MaxAgeSeconds": 86400
+    }
+  },
+  "Database": {
+    "Type": "Sqlite",
+    "Filename": "./conductor.db"
+  },
+  "Logging": {
+    "Servers": [
+      {
+        "Hostname": "127.0.0.1",
+        "Port": 514
+      }
+    ],
+    "LogDirectory": "./logs/",
+    "LogFilename": "conductor.log",
+    "ConsoleLogging": true,
+    "MinimumSeverity": 0
+  },
+  "AdminApiKeys": [
+    "conductoradmin"
+  ]
+}

@@ -1,0 +1,33 @@
+services:
+  conductor:
+    image: jchristn77/conductor:latest
+    container_name: conductor
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./conductor.json:/app/conductor.json:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - DOTNET_RUNNING_IN_CONTAINER=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+
+  conductor-ui:
+    image: jchristn77/conductor-ui:latest
+    container_name: conductor-ui
+    ports:
+      - "9100:9100"
+    depends_on:
+      conductor:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  data:
+  logs:

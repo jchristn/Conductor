@@ -1,0 +1,194 @@
+namespace Conductor.Core.ThirdParty.Ollama.Models
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Text.Json;
+    using System.Text.Json.Serialization;
+
+    /// <summary>
+    /// Custom JSON converter for flexible embeddings handling (single array or array of arrays).
+    /// </summary>
+    public class OllamaEmbeddingsOutputConverter : JsonConverter<object>
+    {
+        /// <summary>
+        /// Read.
+        /// </summary>
+        /// <param name="reader">Reader.</param>
+        /// <param name="typeToConvert">Type to convert.</param>
+        /// <param name="options">Options.</param>
+        /// <returns>Object.</returns>
+        public override object Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType != JsonTokenType.StartArray)
+            {
+                throw new JsonException($"Unexpected token type: {reader.TokenType}. Expected StartArray.");
+            }
+
+            Utf8JsonReader readerCopy = reader;
+            readerCopy.Read();
+
+            if (readerCopy.TokenType == JsonTokenType.Number)
+            {
+                return ReadSingleEmbedding(ref reader);
+            }
+            else if (readerCopy.TokenType == JsonTokenType.StartArray)
+            {
+                return ReadMultipleEmbeddings(ref reader);
+            }
+            else if (readerCopy.TokenType == JsonTokenType.EndArray)
+            {
+                reader.Read();
+                return new List<float>();
+            }
+            else
+            {
+                throw new JsonException($"Unexpected token type in array: {readerCopy.TokenType}. Expected Number or StartArray.");
+            }
+        }
+
+        private List<float> ReadSingleEmbedding(ref Utf8JsonReader reader)
+        {
+            List<float> embedding = new List<float>();
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                    break;
+
+                if (reader.TokenType != JsonTokenType.Number)
+                    throw new JsonException($"Expected number in embedding array, got {reader.TokenType}");
+
+                embedding.Add((float)reader.GetDouble());
+            }
+
+            if (embedding.Count == 0)
+                throw new JsonException("Embedding array cannot be empty");
+
+            return embedding;
+        }
+
+        private List<List<float>> ReadMultipleEmbeddings(ref Utf8JsonReader reader)
+        {
+            List<List<float>> embeddings = new List<List<float>>();
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                    break;
+
+                if (reader.TokenType != JsonTokenType.StartArray)
+                    throw new JsonException($"Expected array in embeddings array, got {reader.TokenType}");
+
+                List<float> embedding = new List<float>();
+                while (reader.Read())
+                {
+                    if (reader.TokenType == JsonTokenType.EndArray)
+                        break;
+
+                    if (reader.TokenType != JsonTokenType.Number)
+                        throw new JsonException($"Expected number in embedding array, got {reader.TokenType}");
+
+                    embedding.Add((float)reader.GetDouble());
+                }
+
+                if (embedding.Count == 0)
+                    throw new JsonException("Embedding array cannot be empty");
+
+                embeddings.Add(embedding);
+            }
+
+            if (embeddings.Count == 0)
+                throw new JsonException("Embeddings array cannot be empty");
+
+            int firstDimension = embeddings[0].Count;
+            for (int i = 1; i < embeddings.Count; i++)
+            {
+                if (embeddings[i].Count != firstDimension)
+                {
+                    throw new JsonException($"All embeddings must have the same dimension. Expected {firstDimension}, got {embeddings[i].Count} at index {i}");
+                }
+            }
+
+            return embeddings;
+        }
+
+        /// <summary>
+        /// Write.
+        /// </summary>
+        /// <param name="writer">Writer.</param>
+        /// <param name="value">Value.</param>
+        /// <param name="options">Options.</param>
+        public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
+        {
+            if (value == null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            switch (value)
+            {
+                case List<float> singleEmbeddingList:
+                    WriteSingleEmbedding(writer, singleEmbeddingList);
+                    break;
+
+                case float[] singleEmbeddingArray:
+                    WriteSingleEmbedding(writer, singleEmbeddingArray);
+                    break;
+
+                case List<List<float>> multipleEmbeddingsList:
+                    WriteMultipleEmbeddings(writer, multipleEmbeddingsList);
+                    break;
+
+                case float[][] multipleEmbeddingsArray:
+                    WriteMultipleEmbeddings(writer, multipleEmbeddingsArray);
+                    break;
+
+                case List<float[]> multipleEmbeddingsMixed:
+                    WriteMultipleEmbeddings(writer, multipleEmbeddingsMixed);
+                    break;
+
+                case IEnumerable<float> singleEmbeddingEnumerable when !IsNestedEnumerable(singleEmbeddingEnumerable):
+                    WriteSingleEmbedding(writer, singleEmbeddingEnumerable);
+                    break;
+
+                case IEnumerable<IEnumerable<float>> multipleEmbeddingsEnumerable:
+                    WriteMultipleEmbeddings(writer, multipleEmbeddingsEnumerable);
+                    break;
+
+                default:
+                    throw new JsonException($"Cannot serialize type {value.GetType()}. Expected single embedding (float[] or List<float>) or multiple embeddings (float[][] or List<List<float>>).");
+            }
+        }
+
+        private bool IsNestedEnumerable(IEnumerable<float> enumerable)
+        {
+            return enumerable is IEnumerable<IEnumerable<float>>;
+        }
+
+        private void WriteSingleEmbedding(Utf8JsonWriter writer, IEnumerable<float> embedding)
+        {
+            writer.WriteStartArray();
+            foreach (float val in embedding)
+            {
+                writer.WriteNumberValue(val);
+            }
+            writer.WriteEndArray();
+        }
+
+        private void WriteMultipleEmbeddings(Utf8JsonWriter writer, IEnumerable<IEnumerable<float>> embeddings)
+        {
+            writer.WriteStartArray();
+            foreach (IEnumerable<float> embedding in embeddings)
+            {
+                writer.WriteStartArray();
+                foreach (float val in embedding)
+                {
+                    writer.WriteNumberValue(val);
+                }
+                writer.WriteEndArray();
+            }
+            writer.WriteEndArray();
+        }
+    }
+}
