@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useApiExplorer } from '../hooks/useApiExplorer';
 import ApiExplorerConfig from '../components/ApiExplorerConfig';
@@ -27,7 +27,7 @@ function ApiExplorer() {
         const config = JSON.parse(savedConfig);
         if (config.selectedVmrId && vmrs.length > 0) {
           const savedVmr = vmrs.find(v => v.Id === config.selectedVmrId);
-          if (savedVmr) {
+          if (savedVmr && !explorer.selectedVmr) {
             explorer.setSelectedVmr(savedVmr);
           }
         }
@@ -35,7 +35,7 @@ function ApiExplorer() {
         // Ignore parse errors
       }
     }
-  }, [vmrs, explorer]);
+  }, [vmrs, explorer.selectedVmr, explorer.setSelectedVmr]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -63,6 +63,24 @@ function ApiExplorer() {
   const vmrDefinitions = explorer.selectedVmr
     ? definitions.filter(d => (explorer.selectedVmr.ModelDefinitionIds || []).includes(d.Id))
     : [];
+
+  // Track previous VMR ID to detect changes
+  const previousVmrIdRef = useRef(null);
+
+  // Auto-populate model name when VMR changes
+  useEffect(() => {
+    const currentVmrId = explorer.selectedVmr?.Id || null;
+
+    // Only auto-populate when VMR actually changes (not on every render)
+    if (currentVmrId !== previousVmrIdRef.current) {
+      previousVmrIdRef.current = currentVmrId;
+
+      // If VMR is selected and has model definitions, set the first one as default
+      if (explorer.selectedVmr && vmrDefinitions.length > 0) {
+        explorer.setModelName(vmrDefinitions[0].Name);
+      }
+    }
+  }, [explorer.selectedVmr, vmrDefinitions, explorer.setModelName]);
 
   // Get credentials for the selected VMR's tenant
   // If VMR has no tenant, show all credentials; otherwise filter by tenant

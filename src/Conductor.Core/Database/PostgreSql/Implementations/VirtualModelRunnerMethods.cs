@@ -79,12 +79,16 @@ namespace Conductor.Core.Database.PostgreSql.Implementations
 
         /// <summary>
         /// Read a virtual model runner by base path.
+        /// Uses case-insensitive comparison and handles trailing slash differences.
         /// </summary>
         public async Task<VirtualModelRunner> ReadByBasePathAsync(string basePath, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(basePath)) throw new ArgumentNullException(nameof(basePath));
 
-            string query = "SELECT * FROM virtualmodelrunners WHERE basepath = '" + _Driver.Sanitize(basePath) + "' AND active = TRUE;";
+            // Normalize for comparison: lowercase, trim trailing slashes
+            string normalizedPath = basePath.ToLowerInvariant().TrimEnd('/');
+
+            string query = "SELECT * FROM virtualmodelrunners WHERE LOWER(RTRIM(basepath, '/')) = '" + _Driver.Sanitize(normalizedPath) + "' AND active = TRUE;";
             DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
 
             if (result == null || result.Rows.Count < 1) return null;

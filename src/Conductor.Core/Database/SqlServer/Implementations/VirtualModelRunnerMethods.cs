@@ -79,12 +79,17 @@ namespace Conductor.Core.Database.SqlServer.Implementations
 
         /// <summary>
         /// Read a virtual model runner by base path.
+        /// Uses case-insensitive comparison and handles trailing slash differences.
         /// </summary>
         public async Task<VirtualModelRunner> ReadByBasePathAsync(string basePath, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(basePath)) throw new ArgumentNullException(nameof(basePath));
 
-            string query = "SELECT * FROM virtualmodelrunners WHERE basepath = '" + _Driver.Sanitize(basePath) + "' AND active = 1;";
+            // Normalize for comparison: lowercase, trim trailing slashes
+            string normalizedPath = basePath.ToLowerInvariant().TrimEnd('/');
+
+            // SQL Server: use LOWER and remove trailing slash with CASE/SUBSTRING or simply compare both variants
+            string query = "SELECT * FROM virtualmodelrunners WHERE LOWER(CASE WHEN RIGHT(basepath, 1) = '/' THEN LEFT(basepath, LEN(basepath) - 1) ELSE basepath END) = '" + _Driver.Sanitize(normalizedPath) + "' AND active = 1;";
             DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
 
             if (result == null || result.Rows.Count < 1) return null;

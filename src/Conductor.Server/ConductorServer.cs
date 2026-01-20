@@ -1146,7 +1146,19 @@ namespace Conductor.Server
 
             #region Virtual-Model-Runner-Routes
 
-            _App.Rest.DefaultRoute = async (ctx) => { await proxyController.HandleRequest(ctx); };
+            _App.Rest.DefaultRoute = async (ctx) =>
+            {
+                DateTime startTime = DateTime.UtcNow;
+                await proxyController.HandleRequest(ctx);
+                double elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
+
+                _Logging.Debug(
+                    _Header
+                    + ctx.Request.Method + " " + ctx.Request.Url.RawWithQuery + " "
+                    + ctx.Response.StatusCode + " "
+                    + "Proxy "
+                    + "(" + elapsedMs.ToString("F2") + "ms)");
+            };
 
             #endregion
 
