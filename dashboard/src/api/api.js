@@ -419,13 +419,16 @@ class ConductorApi {
   }
 
   // Backup and Restore APIs
+  // These use the standard request method which works with both:
+  // - Bearer token authentication (users with IsAdmin=true)
+  // - Admin header authentication (system administrators)
 
   /**
    * Create a backup of all configuration data.
    * @returns {Promise<Object>} The backup package
    */
   async createBackup() {
-    return this.adminRequest('GET', '/v1.0/backup');
+    return this.request('GET', '/v1.0/backup');
   }
 
   /**
@@ -435,7 +438,7 @@ class ConductorApi {
    * @returns {Promise<Object>} Restore result
    */
   async restoreBackup(backup, options = {}) {
-    return this.adminRequest('POST', '/v1.0/backup/restore', {
+    return this.request('POST', '/v1.0/backup/restore', {
       Package: backup,
       Options: options
     });
@@ -447,7 +450,7 @@ class ConductorApi {
    * @returns {Promise<Object>} Validation result
    */
   async validateBackup(backup) {
-    return this.adminRequest('POST', '/v1.0/backup/validate', backup);
+    return this.request('POST', '/v1.0/backup/validate', backup);
   }
 }
 

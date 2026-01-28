@@ -1113,8 +1113,17 @@ namespace Conductor.Server
 
             _App.Rest.Get("/v1.0/backup", async (req) =>
             {
-                Services.AdminAuthenticationResult auth = (Services.AdminAuthenticationResult)req.Http.Metadata;
-                return await backupController.CreateBackup(auth.Administrator?.Email ?? "unknown");
+                // Support both admin auth and user auth (for users with IsAdmin=true)
+                string createdBy = "unknown";
+                if (req.Http.Metadata is Services.AdminAuthenticationResult adminAuth)
+                {
+                    createdBy = adminAuth.Administrator?.Email ?? "admin";
+                }
+                else if (req.Http.Metadata is Services.AuthenticationResult userAuth)
+                {
+                    createdBy = userAuth.User?.Email ?? "user";
+                }
+                return await backupController.CreateBackup(createdBy);
             },
             api => api
                 .WithTag("Backup")
