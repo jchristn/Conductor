@@ -18,7 +18,10 @@ import BackupRestore from './views/BackupRestore';
 import Login from './views/Login';
 
 function App() {
-  const { isConnected, isAdmin, error, setError } = useApp();
+  const { isConnected, isAdmin, currentUser, error, setError } = useApp();
+
+  // Allow backup access for system admins OR users with IsAdmin flag
+  const hasAdminAccess = isAdmin || currentUser?.IsAdmin;
 
   if (!isConnected) {
     return <Login />;
@@ -41,7 +44,7 @@ function App() {
           <Route path="/vmr" element={<VirtualModelRunners />} />
           <Route path="/api-explorer" element={<ApiExplorer />} />
           {isAdmin && <Route path="/administrators" element={<Administrators />} />}
-          {isAdmin && <Route path="/backup" element={<BackupRestore />} />}
+          {hasAdminAccess && <Route path="/backup" element={<BackupRestore />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

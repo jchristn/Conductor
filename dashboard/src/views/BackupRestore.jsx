@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
 function BackupRestore() {
-  const { api, isAdmin, setError } = useApp();
+  const { api, isAdmin, currentUser, setError } = useApp();
+
+  // Allow access for system admins OR users with IsAdmin flag
+  const hasAdminAccess = isAdmin || currentUser?.IsAdmin;
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(null);
 
@@ -118,11 +121,11 @@ function BackupRestore() {
     });
   };
 
-  if (!isAdmin) {
+  if (!hasAdminAccess) {
     return (
       <div className="view-container">
         <div className="error-banner">
-          Access denied. Administrator privileges required.
+          Access denied. Global administrator privileges required.
         </div>
       </div>
     );

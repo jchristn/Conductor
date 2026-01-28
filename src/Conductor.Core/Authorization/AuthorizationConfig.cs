@@ -33,10 +33,7 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.CreateTenant,
             RequestTypeEnum.UpdateTenant,
             RequestTypeEnum.DeleteTenant,
-            RequestTypeEnum.ListTenants,
-            RequestTypeEnum.CreateBackup,
-            RequestTypeEnum.RestoreBackup,
-            RequestTypeEnum.ValidateBackup
+            RequestTypeEnum.ListTenants
         };
 
         /// <summary>
@@ -46,7 +43,11 @@ namespace Conductor.Core.Authorization
         public static readonly HashSet<RequestTypeEnum> RequiresGlobalAdminAccess = new()
         {
             // Global admins can read tenants they don't belong to
-            RequestTypeEnum.ReadTenant
+            RequestTypeEnum.ReadTenant,
+            // Backup and restore operations
+            RequestTypeEnum.CreateBackup,
+            RequestTypeEnum.RestoreBackup,
+            RequestTypeEnum.ValidateBackup
         };
 
         /// <summary>

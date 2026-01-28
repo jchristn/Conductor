@@ -1049,7 +1049,7 @@ body {
   transition: all 0.15s ease;
 }
 
-.auth-type-btn:first-child {
+.auth-type-btn:not(:last-child) {
   border-right: 1px solid var(--input-border);
 }
 

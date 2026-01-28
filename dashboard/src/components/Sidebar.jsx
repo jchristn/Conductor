@@ -3,7 +3,10 @@ import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 function Sidebar() {
-  const { isAdmin } = useApp();
+  const { isAdmin, currentUser } = useApp();
+
+  // Show admin features for system admins OR users with IsAdmin flag
+  const hasAdminAccess = isAdmin || currentUser?.IsAdmin;
 
   const navItems = [
     {
@@ -90,7 +93,7 @@ function Sidebar() {
         </svg>
       )
     },
-    // Admin-only items
+    // Admin-only items (system admins only)
     ...(isAdmin ? [
       { divider: true },
       {
@@ -101,7 +104,11 @@ function Sidebar() {
             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
           </svg>
         )
-      },
+      }
+    ] : []),
+    // Global admin items (system admins OR users with IsAdmin flag)
+    ...(hasAdminAccess ? [
+      ...(!isAdmin ? [{ divider: true }] : []), // Add divider if not already added by admin section
       {
         path: '/backup',
         label: 'Backup & Restore',
