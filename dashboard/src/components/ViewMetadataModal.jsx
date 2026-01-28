@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import CopyableId from './CopyableId';
+import { copyToClipboard } from '../utils/clipboard';
 
 function ViewMetadataModal({ data, title, subtitle, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -14,12 +16,10 @@ function ViewMetadataModal({ data, title, subtitle, onClose }) {
   };
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(jsonString);
+    const success = await copyToClipboard(jsonString);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 
@@ -31,7 +31,7 @@ function ViewMetadataModal({ data, title, subtitle, onClose }) {
             <h2>{title || 'View Details'}</h2>
             {subtitle && (
               <div className="modal-subtitle">
-                <span className="subtitle-text">{subtitle}</span>
+                <CopyableId value={subtitle} />
               </div>
             )}
           </div>

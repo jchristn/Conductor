@@ -14,6 +14,7 @@ import ModelConfigurations from './views/ModelConfigurations';
 import VirtualModelRunners from './views/VirtualModelRunners';
 import ApiExplorer from './views/ApiExplorer';
 import Administrators from './views/Administrators';
+import BackupRestore from './views/BackupRestore';
 import Login from './views/Login';
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
           <Route path="/vmr" element={<VirtualModelRunners />} />
           <Route path="/api-explorer" element={<ApiExplorer />} />
           {isAdmin && <Route path="/administrators" element={<Administrators />} />}
+          {isAdmin && <Route path="/backup" element={<BackupRestore />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

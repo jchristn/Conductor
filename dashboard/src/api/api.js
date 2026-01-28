@@ -417,6 +417,38 @@ class ConductorApi {
   async deleteAdministrator(id) {
     return this.adminRequest('DELETE', `/v1.0/administrators/${id}`);
   }
+
+  // Backup and Restore APIs
+
+  /**
+   * Create a backup of all configuration data.
+   * @returns {Promise<Object>} The backup package
+   */
+  async createBackup() {
+    return this.adminRequest('GET', '/v1.0/backup');
+  }
+
+  /**
+   * Restore configuration from a backup file.
+   * @param {Object} backup - The parsed backup JSON
+   * @param {Object} options - Restore options
+   * @returns {Promise<Object>} Restore result
+   */
+  async restoreBackup(backup, options = {}) {
+    return this.adminRequest('POST', '/v1.0/backup/restore', {
+      Package: backup,
+      Options: options
+    });
+  }
+
+  /**
+   * Validate a backup file without applying changes.
+   * @param {Object} backup - The parsed backup JSON
+   * @returns {Promise<Object>} Validation result
+   */
+  async validateBackup(backup) {
+    return this.adminRequest('POST', '/v1.0/backup/validate', backup);
+  }
 }
 
 export const api = new ConductorApi();

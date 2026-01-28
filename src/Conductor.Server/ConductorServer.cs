@@ -140,6 +140,7 @@ namespace Conductor.Server
                 openApi.Tags.Add(new OpenApiTag("Model Configurations", "Model configuration management"));
                 openApi.Tags.Add(new OpenApiTag("Virtual Model Runners", "Virtual model runner management"));
                 openApi.Tags.Add(new OpenApiTag("Administrators", "Administrator management endpoints"));
+                openApi.Tags.Add(new OpenApiTag("Backup", "Backup and restore endpoints"));
 
                 // Define security scheme for bearer token authentication
                 openApi.SecuritySchemes["Bearer"] = OpenApiSecurityScheme.Bearer(
@@ -280,6 +281,7 @@ namespace Conductor.Server
             Controllers.AuthController authController = new Controllers.AuthController(_Database, _AuthService, _Serializer, _Logging, _Settings.AdminApiKeys);
             Controllers.ProxyController proxyController = new Controllers.ProxyController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService);
             Controllers.AdministratorController adminController = new Controllers.AdministratorController(_Database, _AuthService, _Serializer, _Logging);
+            Controllers.BackupController backupController = new Controllers.BackupController(_Database, _AuthService, _Serializer, _Logging);
 
             #endregion
 
@@ -1107,8 +1109,52 @@ namespace Conductor.Server
 
             #endregion
 
+            #region Backup-Routes
+
+            _App.Rest.Get("/v1.0/backup", async (req) =>
+            {
+                Services.AdminAuthenticationResult auth = (Services.AdminAuthenticationResult)req.Http.Metadata;
+                return await backupController.CreateBackup(auth.Administrator?.Email ?? "unknown");
+            },
+            api => api
+                .WithTag("Backup")
+                .WithSummary("Create backup")
+                .WithDescription("Create a complete backup of all Conductor configuration data")
+                .WithSecurity("Bearer")
+                .WithResponse(200, OpenApiResponseMetadata.Json<BackupPackage>("Complete backup package"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            requireAuthentication: true);
+
+            _App.Rest.Post<RestoreRequest>("/v1.0/backup/restore", async (req) =>
+                await backupController.RestoreBackup(req.Data as RestoreRequest),
+            api => api
+                .WithTag("Backup")
+                .WithSummary("Restore from backup")
+                .WithDescription("Restore configuration from a backup package")
+                .WithSecurity("Bearer")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<RestoreRequest>("Restore request with backup package and options", true))
+                .WithResponse(200, OpenApiResponseMetadata.Json<RestoreResult>("Restore operation result"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            requireAuthentication: true);
+
+            _App.Rest.Post<BackupPackage>("/v1.0/backup/validate", async (req) =>
+                await backupController.ValidateBackup(req.Data as BackupPackage),
+            api => api
+                .WithTag("Backup")
+                .WithSummary("Validate backup")
+                .WithDescription("Validate a backup package without applying changes")
+                .WithSecurity("Bearer")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json<BackupPackage>("Backup package to validate", true))
+                .WithResponse(200, OpenApiResponseMetadata.Json<ValidationResult>("Validation result with conflicts"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            requireAuthentication: true);
+
+            #endregion
+
             #region Login-Routes
-            
+
             _App.Rest.Post<Controllers.LoginCredentialRequest>("/v1.0/auth/login/credential", async (req) =>
                 await authController.LoginWithCredentials(req.Data as Controllers.LoginCredentialRequest),
             api => api

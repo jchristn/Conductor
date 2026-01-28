@@ -33,7 +33,10 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.CreateTenant,
             RequestTypeEnum.UpdateTenant,
             RequestTypeEnum.DeleteTenant,
-            RequestTypeEnum.ListTenants
+            RequestTypeEnum.ListTenants,
+            RequestTypeEnum.CreateBackup,
+            RequestTypeEnum.RestoreBackup,
+            RequestTypeEnum.ValidateBackup
         };
 
         /// <summary>

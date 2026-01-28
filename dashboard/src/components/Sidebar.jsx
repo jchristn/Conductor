@@ -101,6 +101,16 @@ function Sidebar() {
             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
           </svg>
         )
+      },
+      {
+        path: '/backup',
+        label: 'Backup & Restore',
+        icon: (
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+            <path fillRule="evenodd" d="M2 9v7a2 2 0 002 2h12a2 2 0 002-2V9H2zm6 2a1 1 0 012 0v3a1 1 0 11-2 0v-3zm5-1a1 1 0 00-1 1v3a1 1 0 102 0v-3a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+        )
       }
     ] : [])
   ];

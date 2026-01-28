@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
+import { copyToClipboard } from '../utils/clipboard';
 
 function CopyButton({ value, title = 'Copy to clipboard' }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async (e) => {
     e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(value);
+
+    const success = await copyToClipboard(value);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 

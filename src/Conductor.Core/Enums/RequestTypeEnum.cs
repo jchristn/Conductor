@@ -314,6 +314,23 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// Ollama show model info request.
         /// </summary>
-        OllamaShowModelInfo
+        OllamaShowModelInfo,
+
+        // ==================== Backup and Restore Operations ====================
+
+        /// <summary>
+        /// Create backup.
+        /// </summary>
+        CreateBackup,
+
+        /// <summary>
+        /// Restore from backup.
+        /// </summary>
+        RestoreBackup,
+
+        /// <summary>
+        /// Validate backup.
+        /// </summary>
+        ValidateBackup
     }
 }

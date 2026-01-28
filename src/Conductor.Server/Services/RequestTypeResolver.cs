@@ -87,7 +87,12 @@ namespace Conductor.Server.Services
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.ReadVirtualModelRunner },
             { new RouteKey("PUT", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.UpdateVirtualModelRunner },
             { new RouteKey("DELETE", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.DeleteVirtualModelRunner },
-            { new RouteKey("GET", "/v1.0/virtualmodelrunners"), RequestTypeEnum.ListVirtualModelRunners }
+            { new RouteKey("GET", "/v1.0/virtualmodelrunners"), RequestTypeEnum.ListVirtualModelRunners },
+
+            // Backup and Restore
+            { new RouteKey("GET", "/v1.0/backup"), RequestTypeEnum.CreateBackup },
+            { new RouteKey("POST", "/v1.0/backup/restore"), RequestTypeEnum.RestoreBackup },
+            { new RouteKey("POST", "/v1.0/backup/validate"), RequestTypeEnum.ValidateBackup }
         };
 
         /// <summary>

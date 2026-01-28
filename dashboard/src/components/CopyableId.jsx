@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
+import { copyToClipboard } from '../utils/clipboard';
 
 function CopyableId({ value }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async (e) => {
     e.stopPropagation(); // Prevent row click
-    try {
-      await navigator.clipboard.writeText(value);
+
+    const success = await copyToClipboard(value);
+    if (success) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 
