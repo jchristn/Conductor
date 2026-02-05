@@ -1,7 +1,6 @@
 namespace Conductor.Server.Controllers
 {
     using System;
-    using System.IO;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Serialization;
@@ -58,7 +57,6 @@ namespace Conductor.Server.Controllers
         /// <returns>Request body string.</returns>
         protected Task<string> ReadRequestBodyAsync(HttpContextBase ctx)
         {
-            // Use DataAsString which provides the raw request body directly
             return Task.FromResult(ctx.Request.DataAsString);
         }
 
@@ -84,20 +82,5 @@ namespace Conductor.Server.Controllers
             }
         }
 
-        /// <summary>
-        /// Read a stream to end and return as byte array.
-        /// </summary>
-        /// <param name="stream">Stream to read.</param>
-        /// <returns>Byte array contents.</returns>
-        protected async Task<byte[]> ReadStreamToEndAsync(Stream stream)
-        {
-            if (stream == null) return null;
-
-            using (MemoryStream ms = new MemoryStream())
-            {
-                await stream.CopyToAsync(ms);
-                return ms.ToArray();
-            }
-        }
     }
 }

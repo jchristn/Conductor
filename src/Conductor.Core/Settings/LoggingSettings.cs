@@ -36,6 +36,16 @@ namespace Conductor.Core.Settings
         }
 
         /// <summary>
+        /// Enable file logging.
+        /// </summary>
+        public bool FileLogging { get; set; } = true;
+
+        /// <summary>
+        /// Include date in log filename.
+        /// </summary>
+        public bool IncludeDateInFilename { get; set; } = true;
+
+        /// <summary>
         /// Enable console logging.
         /// </summary>
         public bool ConsoleLogging { get; set; } = true;

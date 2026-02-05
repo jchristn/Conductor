@@ -18,9 +18,16 @@
     "Filename": "/app/data/conductor.db"
   },
   "Logging": {
-    "Servers": [],
-    "LogDirectory": "/app/logs/",
+    "Servers": [
+      {
+          "Hostname": "127.0.0.1",
+          "Port": 514
+      }
+    ],
+    "LogDirectory": "./logs/",
     "LogFilename": "conductor.log",
+    "FileLogging": true,
+    "IncludeDateInFilename": true,
     "ConsoleLogging": true,
     "EnableColors": false,
     "MinimumSeverity": 0

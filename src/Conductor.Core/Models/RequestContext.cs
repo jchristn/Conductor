@@ -169,6 +169,14 @@ namespace Conductor.Core.Models
         /// </summary>
         public string ErrorMessage { get; set; } = null;
 
+        /// <summary>
+        /// Request body data, pre-read from the input stream when the request is received.
+        /// This ensures the stream is consumed exactly once and the body is available
+        /// to all downstream handlers without risk of double-reads or stream contention.
+        /// </summary>
+        [JsonIgnore]
+        public byte[] Data { get; set; } = null;
+
         private Dictionary<string, string> _Headers = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
 
         /// <summary>

@@ -8,6 +8,7 @@ namespace Conductor.Server.Controllers
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
+    using ConductorConstants = Conductor.Core.Constants;
     using Conductor.Core.Database;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
@@ -50,9 +51,11 @@ namespace Conductor.Server.Controllers
         /// Supports standard HTTP responses, chunked transfer encoding, and Server-Sent Events (SSE).
         /// </summary>
         /// <param name="ctx">The HTTP context.</param>
+        /// <param name="requestContext">Request context containing the pre-read request body.</param>
         /// <param name="cancellationToken">Cancellation token for the operation.</param>
+        /// <exception cref="ArgumentNullException">Thrown if requestContext is null.</exception>
         /// <exception cref="OperationCanceledException">Thrown if the operation is cancelled.</exception>
-        public async Task HandleRequest(HttpContextBase ctx, CancellationToken cancellationToken = default)
+        public async Task HandleRequest(HttpContextBase ctx, RequestContext requestContext, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -170,39 +173,53 @@ namespace Conductor.Server.Controllers
                     // Build the target URL
                     string targetUrl = BuildTargetUrl(endpoint, urlContext);
 
-                    // Read and optionally modify request body
-                    byte[] requestBody = null;
-                    if (ctx.Request.Data != null)
+                    string effectiveModel = null;
+                    if (requestContext.Data != null && requestContext.Data.Length > 0)
                     {
-                        requestBody = await ReadStreamToEndAsync(ctx.Request.Data);
-
                         // Apply model definition and configuration logic
-                        if (requestBody != null && requestBody.Length > 0)
+                        ModelResolutionResult resolution = await ApplyModelDefinitionAndConfigurationAsync(
+                            requestContext.Data, 
+                            vmr, 
+                            urlContext, ctx).ConfigureAwait(false);
+
+                        if (!resolution.Success)
                         {
-                            (bool success, byte[] modifiedBody) = await ApplyModelDefinitionAndConfigurationAsync(
-                                requestBody, vmr, urlContext, ctx).ConfigureAwait(false);
-
-                            if (!success)
-                            {
-                                // Error response already sent by the method
-                                return;
-                            }
-
-                            requestBody = modifiedBody;
+                            // Error response already sent by the method
+                            return;
                         }
 
+                        requestContext.Data = resolution.Body;
+                        effectiveModel = resolution.EffectiveModel;
+
                         // Apply pinning if this is an embeddings or completions request
-                        if (requestBody != null && requestBody.Length > 0 && vmr.ModelConfigurationIds != null && vmr.ModelConfigurationIds.Count > 0)
+                        if (requestContext.Data != null 
+                            && requestContext.Data.Length > 0 
+                            && vmr.ModelConfigurationIds != null 
+                            && vmr.ModelConfigurationIds.Count > 0)
                         {
-                            requestBody = await ApplyPinningAsync(requestBody, vmr, urlContext).ConfigureAwait(false);
+                            requestContext.Data = await ApplyPinningAsync(
+                                requestContext.Data, 
+                                vmr, 
+                                urlContext).ConfigureAwait(false);
                         }
                     }
 
                     // Forward the request and send response back
                     // Use using to ensure HttpResponseMessage is disposed after streaming completes
-                    using (HttpResponseMessage response = await ForwardRequestAsync(ctx, targetUrl, endpoint, requestBody, cancellationToken).ConfigureAwait(false))
+                    using (HttpResponseMessage response = await ForwardRequestAsync(
+                        ctx, 
+                        targetUrl, 
+                        endpoint, 
+                        requestContext.Data, 
+                        cancellationToken).ConfigureAwait(false))
                     {
-                        await SendProxyResponse(ctx, response, cancellationToken).ConfigureAwait(false);
+                        await SendProxyResponse(
+                            ctx, 
+                            response, 
+                            vmr.Id, 
+                            endpoint.Id, 
+                            effectiveModel, 
+                            cancellationToken).ConfigureAwait(false);
                     }
                 }
                 finally
@@ -301,12 +318,8 @@ namespace Conductor.Server.Controllers
         /// <param name="vmr">The virtual model runner.</param>
         /// <param name="urlContext">The URL context containing request type information.</param>
         /// <param name="ctx">HTTP context for sending error responses.</param>
-        /// <returns>
-        /// A tuple containing:
-        /// - Success: true if processing succeeded, false if an error response was sent
-        /// - Body: the modified request body (or original if no changes), null if error
-        /// </returns>
-        private async Task<(bool Success, byte[] Body)> ApplyModelDefinitionAndConfigurationAsync(
+        /// <returns>A ModelResolutionResult containing the success status, modified body, and resolved model name.</returns>
+        private async Task<ModelResolutionResult> ApplyModelDefinitionAndConfigurationAsync(
             byte[] requestBody,
             VirtualModelRunner vmr,
             UrlContext urlContext,
@@ -317,19 +330,19 @@ namespace Conductor.Server.Controllers
                 // Only process embeddings and completions requests
                 if (!urlContext.IsCompletionsRequest && !urlContext.IsEmbeddingsRequest)
                 {
-                    return (true, requestBody);
+                    return new ModelResolutionResult(true, requestBody, null);
                 }
 
                 if (requestBody == null || requestBody.Length == 0)
                 {
-                    return (true, requestBody);
+                    return new ModelResolutionResult(true, requestBody, null);
                 }
 
                 string bodyJson = Encoding.UTF8.GetString(requestBody);
                 Dictionary<string, object> bodyDict = Serializer.DeserializeJson<Dictionary<string, object>>(bodyJson);
                 if (bodyDict == null)
                 {
-                    return (true, requestBody);
+                    return new ModelResolutionResult(true, requestBody, null);
                 }
 
                 // Extract the current model from request
@@ -361,7 +374,7 @@ namespace Conductor.Server.Controllers
                         // No ModelDefinitions attached, reject all requests in strict mode
                         Logging.Warn(_Header + "strict mode enabled but no model definitions attached");
                         await SendUnauthorized(ctx, "No models available").ConfigureAwait(false);
-                        return (false, null);
+                        return new ModelResolutionResult(false, null, null);
                     }
 
                     if (String.IsNullOrEmpty(requestedModel))
@@ -369,7 +382,7 @@ namespace Conductor.Server.Controllers
                         // No model specified in request, reject in strict mode
                         Logging.Warn(_Header + "strict mode: no model specified in request");
                         await SendUnauthorized(ctx, "Model not specified").ConfigureAwait(false);
-                        return (false, null);
+                        return new ModelResolutionResult(false, null, null);
                     }
 
                     // Check if requested model is in the list of defined models
@@ -387,7 +400,7 @@ namespace Conductor.Server.Controllers
                     {
                         Logging.Warn(_Header + "strict mode: invalid model requested: " + requestedModel);
                         await SendUnauthorized(ctx, "Invalid model requested").ConfigureAwait(false);
-                        return (false, null);
+                        return new ModelResolutionResult(false, null, null);
                     }
                 }
 
@@ -408,7 +421,7 @@ namespace Conductor.Server.Controllers
                     {
                         Logging.Warn(_Header + "invalid model requested: (empty) - no model specified and multiple definitions available");
                         await SendUnauthorized(ctx, "Model not specified").ConfigureAwait(false);
-                        return (false, null);
+                        return new ModelResolutionResult(false, null, null);
                     }
 
                     bool modelFound = false;
@@ -426,7 +439,7 @@ namespace Conductor.Server.Controllers
                     {
                         Logging.Warn(_Header + "invalid model requested: " + requestedModel);
                         await SendUnauthorized(ctx, "Invalid model requested").ConfigureAwait(false);
-                        return (false, null);
+                        return new ModelResolutionResult(false, null, null);
                     }
                 }
 
@@ -485,12 +498,12 @@ namespace Conductor.Server.Controllers
 
                 // Serialize back to bytes
                 string modifiedJson = Serializer.SerializeJson(bodyDict, false);
-                return (true, Encoding.UTF8.GetBytes(modifiedJson));
+                return new ModelResolutionResult(true, Encoding.UTF8.GetBytes(modifiedJson), effectiveModel);
             }
             catch (Exception ex)
             {
                 Logging.Warn(_Header + "model definition/configuration exception:" + Environment.NewLine + ex.ToString());
-                return (true, requestBody);
+                return new ModelResolutionResult(true, requestBody, null);
             }
         }
 
@@ -599,6 +612,11 @@ namespace Conductor.Server.Controllers
             byte[] requestBody,
             CancellationToken cancellationToken)
         {
+            Logging.Info(
+                _Header + "forwarding " + ctx.Request.Method + " to " + targetUrl
+                + " endpoint " + endpoint.Id
+                + " (body: " + (requestBody != null ? requestBody.Length.ToString() : "null") + " bytes)");
+
             HttpRequestMessage request = new HttpRequestMessage();
             request.RequestUri = new Uri(targetUrl);
 
@@ -642,6 +660,29 @@ namespace Conductor.Server.Controllers
                 request.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
             }
 
+            // Add proxy headers
+            string clientIp = ctx.Request.Source.IpAddress;
+            string existingForwardedFor = ctx.Request.Headers.Get(ConductorConstants.HeaderXForwardedFor);
+            if (!String.IsNullOrEmpty(existingForwardedFor))
+            {
+                request.Headers.TryAddWithoutValidation(ConductorConstants.HeaderXForwardedFor, existingForwardedFor + ", " + clientIp);
+            }
+            else
+            {
+                request.Headers.TryAddWithoutValidation(ConductorConstants.HeaderXForwardedFor, clientIp);
+            }
+
+            string host = ctx.Request.Headers.Get("Host");
+            if (!String.IsNullOrEmpty(host))
+            {
+                request.Headers.TryAddWithoutValidation(ConductorConstants.HeaderXForwardedHost, host);
+            }
+
+            string proto = !String.IsNullOrEmpty(ctx.Request.Url.Scheme)
+                ? ctx.Request.Url.Scheme
+                : "http";
+            request.Headers.TryAddWithoutValidation(ConductorConstants.HeaderXForwardedProto, proto);
+
             // Create a cancellation token with timeout
             using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(endpoint.TimeoutMs)))
             using (CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
@@ -663,9 +704,31 @@ namespace Conductor.Server.Controllers
             }
         }
 
-        private async Task SendProxyResponse(HttpContextBase ctx, HttpResponseMessage response, CancellationToken cancellationToken)
+        private async Task SendProxyResponse(
+            HttpContextBase ctx,
+            HttpResponseMessage response,
+            string vmrId,
+            string endpointId,
+            string modelName,
+            CancellationToken cancellationToken)
         {
             ctx.Response.StatusCode = (int)response.StatusCode;
+
+            // Add Conductor identification headers
+            if (!String.IsNullOrEmpty(vmrId))
+            {
+                ctx.Response.Headers.Add(ConductorConstants.HeaderVmrId, vmrId);
+            }
+
+            if (!String.IsNullOrEmpty(endpointId))
+            {
+                ctx.Response.Headers.Add(ConductorConstants.HeaderEndpointId, endpointId);
+            }
+
+            if (!String.IsNullOrEmpty(modelName))
+            {
+                ctx.Response.Headers.Add(ConductorConstants.HeaderModelName, modelName);
+            }
 
             // Copy content type
             if (response.Content?.Headers?.ContentType != null)

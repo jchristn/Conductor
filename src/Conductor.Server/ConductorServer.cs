@@ -23,6 +23,7 @@ namespace Conductor.Server
     using System.Linq;
     using WatsonWebserver.Core;
     using ZstdSharp.Unsafe;
+    using System.Text;
 
     /// <summary>
     /// Conductor Server main program.
@@ -90,9 +91,23 @@ namespace Conductor.Server
                 _Logging = new LoggingModule();
 
             _Logging.Settings.EnableConsole = _Settings.Logging.ConsoleLogging;
-            _Logging.Settings.FileLogging = FileLoggingMode.FileWithDate;
-            _Logging.Settings.LogFilename = _Settings.Logging.LogFilename;
             _Logging.Settings.MinimumSeverity = (Severity)_Settings.Logging.MinimumSeverity;
+
+            if (_Settings.Logging.FileLogging
+                && !String.IsNullOrEmpty(_Settings.Logging.LogDirectory)
+                && !String.IsNullOrEmpty(_Settings.Logging.LogFilename))
+            {
+                _Logging.Settings.LogFilename = Path.Combine(_Settings.Logging.LogDirectory, _Settings.Logging.LogFilename);
+
+                if (_Settings.Logging.IncludeDateInFilename)
+                    _Logging.Settings.FileLogging = FileLoggingMode.FileWithDate;
+                else
+                    _Logging.Settings.FileLogging = FileLoggingMode.SingleLogFile;
+            }
+            else
+            {
+                _Logging.Settings.FileLogging = FileLoggingMode.Disabled;
+            }
 
             _Logging.Debug(_Header + "logging initialized");
 
@@ -1204,7 +1219,22 @@ namespace Conductor.Server
             _App.Rest.DefaultRoute = async (ctx) =>
             {
                 DateTime startTime = DateTime.UtcNow;
-                await proxyController.HandleRequest(ctx);
+
+                // Pre-read the request body from the stream once so all downstream
+                // handlers can access it without stream contention or double-reads
+                Console.WriteLine("Reading request body");
+
+                RequestContext req = new RequestContext();
+                req.Data = ctx.Request.DataAsBytes;
+
+                /*
+                if (req.Data != null)
+                    Console.WriteLine("Request body:" + Environment.NewLine + Encoding.UTF8.GetString(req.Data));
+                else
+                    Console.WriteLine("Request body: null");
+                 */
+
+                await proxyController.HandleRequest(ctx, req);
                 double elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
                 _Logging.Debug(
