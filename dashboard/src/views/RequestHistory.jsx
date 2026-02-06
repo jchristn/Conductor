@@ -436,7 +436,7 @@ function RequestHistory() {
         )}
       </div>
 
-      <DataTable data={entries} columns={columns} loading={loading} />
+      <DataTable data={entries} columns={columns} loading={loading} hidePagination={true} />
 
       <div className="pagination">
         <span className="pagination-info">

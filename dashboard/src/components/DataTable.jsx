@@ -5,7 +5,8 @@ function DataTable({
   columns = [],
   loading = false,
   pageSize: defaultPageSize = 25,
-  onRowClick = null
+  onRowClick = null,
+  hidePagination = false
 }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(defaultPageSize);
@@ -187,54 +188,56 @@ function DataTable({
         </tbody>
       </table>
 
-      <div className="pagination">
-        <div className="pagination-info">
-          Showing {filteredAndSortedData.length === 0 ? 0 : startIndex + 1} to{' '}
-          {endIndex} of {filteredAndSortedData.length} entries
+      {!hidePagination && (
+        <div className="pagination">
+          <div className="pagination-info">
+            Showing {filteredAndSortedData.length === 0 ? 0 : startIndex + 1} to{' '}
+            {endIndex} of {filteredAndSortedData.length} entries
+          </div>
+
+          <div className="pagination-controls">
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(0);
+                setPageInput('1');
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            <button onClick={() => goToPage(0)} disabled={currentPage === 0}>
+              First
+            </button>
+            <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
+              Prev
+            </button>
+
+            <span className="page-input-container">
+              Page{' '}
+              <input
+                type="text"
+                value={pageInput}
+                onChange={handlePageInputChange}
+                onKeyDown={handlePageInputSubmit}
+                className="page-input"
+              />{' '}
+              of {totalPages}
+            </span>
+
+            <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
+              Next
+            </button>
+            <button onClick={() => goToPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
+              Last
+            </button>
+          </div>
         </div>
-
-        <div className="pagination-controls">
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setCurrentPage(0);
-              setPageInput('1');
-            }}
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-
-          <button onClick={() => goToPage(0)} disabled={currentPage === 0}>
-            First
-          </button>
-          <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
-            Prev
-          </button>
-
-          <span className="page-input-container">
-            Page{' '}
-            <input
-              type="text"
-              value={pageInput}
-              onChange={handlePageInputChange}
-              onKeyDown={handlePageInputSubmit}
-              className="page-input"
-            />{' '}
-            of {totalPages}
-          </span>
-
-          <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
-            Next
-          </button>
-          <button onClick={() => goToPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
-            Last
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
