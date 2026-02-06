@@ -16,6 +16,7 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Load Balancing**: Round-robin, random, or first-available endpoint selection with weighted distribution and optional session affinity
 - **Health Checking**: Automatic background health monitoring of endpoints with configurable thresholds
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
+- **Request History**: Optional per-VMR request/response capture for debugging and auditing with configurable retention
 - **React Dashboard**: Full-featured UI for managing all entities including real-time health status
 
 ## Quick Start
@@ -86,6 +87,7 @@ Users have three permission levels:
 | Model Definition | `md_` | `/v1.0/modeldefinitions` |
 | Model Configuration | `mc_` | `/v1.0/modelconfigurations` |
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
+| Request History | `req_` | `/v1.0/requesthistory` |
 
 ### Virtual Model Runner Proxy
 
@@ -124,6 +126,14 @@ Virtual model runners expose an API at their configured base path. For example, 
     "LogFilename": "conductor.log",
     "ConsoleLogging": true,
     "MinimumSeverity": 0
+  },
+  "RequestHistory": {
+    "Enabled": true,
+    "Directory": "./request-history/",
+    "RetentionDays": 7,
+    "CleanupIntervalMinutes": 60,
+    "MaxRequestBodyBytes": 65536,
+    "MaxResponseBodyBytes": 65536
   }
 }
 ```
@@ -173,6 +183,21 @@ Cross-Origin Resource Sharing (CORS) can be enabled to allow browser-based appli
   }
 }
 ```
+
+### Request History Configuration
+
+Request history captures request/response data for Virtual Model Runners with `RequestHistoryEnabled` set to `true`. This is useful for debugging, auditing, and troubleshooting.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Enabled` | bool | `true` | Enable or disable request history globally |
+| `Directory` | string | `"./request-history/"` | Directory for storing request detail JSON files |
+| `RetentionDays` | int | `7` | Number of days to retain entries before cleanup (1-365) |
+| `CleanupIntervalMinutes` | int | `60` | Interval between cleanup runs in minutes (1-1440) |
+| `MaxRequestBodyBytes` | int | `65536` | Maximum request body bytes to capture (1-10485760) |
+| `MaxResponseBodyBytes` | int | `65536` | Maximum response body bytes to capture (1-10485760) |
+
+**Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property).
 
 ## Configuration Pinning
 

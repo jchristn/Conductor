@@ -29,6 +29,14 @@
     "ConsoleLogging": true,
     "MinimumSeverity": 0
   },
+  "RequestHistory": {
+    "Enabled": true,
+    "Directory": "./request-history/",
+    "RetentionDays": 7,
+    "CleanupIntervalMinutes": 60,
+    "MaxRequestBodyBytes": 65536,
+    "MaxResponseBodyBytes": 65536
+  },
   "AdminApiKeys": [
     "conductoradmin"
   ]

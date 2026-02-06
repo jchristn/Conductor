@@ -92,6 +92,27 @@ namespace Conductor.Core.Helpers
         }
 
         /// <summary>
+        /// Get a nullable long value from a DataRow.
+        /// </summary>
+        /// <param name="row">DataRow.</param>
+        /// <param name="columnName">Column name.</param>
+        /// <returns>Long value or null.</returns>
+        public static long? GetNullableLongValue(DataRow row, string columnName)
+        {
+            if (row == null) return null;
+            if (String.IsNullOrEmpty(columnName)) return null;
+            if (!row.Table.Columns.Contains(columnName)) return null;
+            if (row[columnName] == null || row[columnName] == DBNull.Value) return null;
+
+            object val = row[columnName];
+            if (val is long longVal) return longVal;
+            if (val is int intVal) return intVal;
+
+            if (Int64.TryParse(val.ToString(), out long result)) return result;
+            return null;
+        }
+
+        /// <summary>
         /// Get a decimal value from a DataRow.
         /// </summary>
         /// <param name="row">DataRow.</param>

@@ -200,6 +200,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 sessionaffinityheader VARCHAR(255),
                 sessiontimeoutms INT NOT NULL DEFAULT 600000,
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
+                requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 0,
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 createdutc DATETIME(3) NOT NULL,
                 lastupdateutc DATETIME(3) NOT NULL,
@@ -229,6 +230,48 @@ namespace Conductor.Core.Database.MySql.Queries
                 INDEX idx_administrators_email (email),
                 INDEX idx_administrators_active (active)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create request history table.
+        /// </summary>
+        public static readonly string CreateRequestHistoryTable = @"
+            CREATE TABLE IF NOT EXISTS requesthistory (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantguid VARCHAR(48) NOT NULL,
+                virtualmodelrunnerguid VARCHAR(48) NOT NULL,
+                virtualmodelrunnername VARCHAR(255) NOT NULL,
+                modelendpointguid VARCHAR(48),
+                modelendpointname VARCHAR(255),
+                modelendpointurl VARCHAR(512),
+                modeldefinitionguid VARCHAR(48),
+                modeldefinitionname VARCHAR(255),
+                modelconfigurationguid VARCHAR(48),
+                requestorsourceip VARCHAR(64) NOT NULL,
+                httpmethod VARCHAR(16) NOT NULL,
+                httpurl VARCHAR(2048) NOT NULL,
+                requestbodylength BIGINT NOT NULL,
+                responsebodylength BIGINT,
+                httpstatus INT,
+                responsetimems INT,
+                objectkey VARCHAR(512) NOT NULL,
+                createdutc DATETIME(6) NOT NULL,
+                completedutc DATETIME(6),
+                INDEX idx_requesthistory_tenantguid (tenantguid),
+                INDEX idx_requesthistory_vmrguid (virtualmodelrunnerguid),
+                INDEX idx_requesthistory_createdutc (createdutc),
+                INDEX idx_requesthistory_httpstatus (httpstatus),
+                INDEX idx_requesthistory_requestorsourceip (requestorsourceip),
+                FOREIGN KEY (tenantguid) REFERENCES tenants(id),
+                FOREIGN KEY (virtualmodelrunnerguid) REFERENCES virtualmodelrunners(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddRequestHistoryEnabledColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 0;
         ";
     }
 }

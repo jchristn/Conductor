@@ -37,6 +37,7 @@ namespace Conductor.Core.Database.SqlServer
             ModelConfiguration = new ModelConfigurationMethods(this);
             VirtualModelRunner = new VirtualModelRunnerMethods(this);
             Administrator = new AdministratorMethods(this);
+            RequestHistory = new RequestHistoryMethods(this);
         }
 
         /// <summary>
@@ -55,10 +56,52 @@ namespace Conductor.Core.Database.SqlServer
                 TableQueries.CreateModelDefinitionsTable,
                 TableQueries.CreateModelConfigurationsTable,
                 TableQueries.CreateVirtualModelRunnersTable,
-                TableQueries.CreateAdministratorsTable
+                TableQueries.CreateAdministratorsTable,
+                TableQueries.CreateRequestHistoryTable
             };
 
             await ExecuteQueriesAsync(queries, false, token).ConfigureAwait(false);
+
+            // Run migrations for existing databases
+            await RunMigrationsAsync(token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Run migrations for existing databases.
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        private async Task RunMigrationsAsync(CancellationToken token = default)
+        {
+            // Check if requesthistoryenabled column exists in virtualmodelrunners
+            bool columnExists = await ColumnExistsAsync("virtualmodelrunners", "requesthistoryenabled", token).ConfigureAwait(false);
+            if (!columnExists)
+            {
+                try
+                {
+                    await ExecuteQueryAsync(TableQueries.AddRequestHistoryEnabledColumn, false, token).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Column may already exist in some edge cases, ignore the error
+                }
+            }
+        }
+
+        /// <summary>
+        /// Check if a column exists in a table.
+        /// </summary>
+        /// <param name="tableName">Table name.</param>
+        /// <param name="columnName">Column name.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>True if the column exists.</returns>
+        private async Task<bool> ColumnExistsAsync(string tableName, string columnName, CancellationToken token = default)
+        {
+            string query = "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '" + Sanitize(tableName) + "' AND COLUMN_NAME = '" + Sanitize(columnName) + "';";
+            DataTable result = await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return false;
+            return Convert.ToInt32(result.Rows[0]["cnt"]) > 0;
         }
 
         /// <summary>

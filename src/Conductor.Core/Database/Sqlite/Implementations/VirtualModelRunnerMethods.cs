@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
             vmr.CreatedUtc = DateTime.UtcNow;
             vmr.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(vmr.Id) + "', " +
                            "'" + _Driver.Sanitize(vmr.TenantId) + "', " +
                            "'" + _Driver.Sanitize(vmr.Name) + "', " +
@@ -55,6 +55,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            _Driver.FormatNullableString(vmr.SessionAffinityHeader) + ", " +
                            vmr.SessionTimeoutMs + ", " +
                            vmr.SessionMaxEntries + ", " +
+                           _Driver.FormatBoolean(vmr.RequestHistoryEnabled) + ", " +
                            _Driver.FormatBoolean(vmr.Active) + ", " +
                            "'" + _Driver.FormatDateTime(vmr.CreatedUtc) + "', " +
                            "'" + _Driver.FormatDateTime(vmr.LastUpdateUtc) + "', " +
@@ -140,6 +141,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "sessionaffinityheader = " + _Driver.FormatNullableString(vmr.SessionAffinityHeader) + ", " +
                            "sessiontimeoutms = " + vmr.SessionTimeoutMs + ", " +
                            "sessionmaxentries = " + vmr.SessionMaxEntries + ", " +
+                           "requesthistoryenabled = " + _Driver.FormatBoolean(vmr.RequestHistoryEnabled) + ", " +
                            "active = " + _Driver.FormatBoolean(vmr.Active) + ", " +
                            "lastupdateutc = '" + _Driver.FormatDateTime(vmr.LastUpdateUtc) + "', " +
                            "labels = " + _Driver.FormatNullableString(vmr.LabelsJson) + ", " +

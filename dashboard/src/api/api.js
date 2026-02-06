@@ -452,6 +452,76 @@ class ConductorApi {
   async validateBackup(backup) {
     return this.request('POST', '/v1.0/backup/validate', backup);
   }
+
+  // Request History APIs
+  /**
+   * Search request history entries with pagination.
+   * @param {Object} params - Search parameters
+   * @param {string} params.vmrGuid - Filter by Virtual Model Runner GUID
+   * @param {string} params.endpointGuid - Filter by Model Endpoint GUID
+   * @param {string} params.sourceIp - Filter by source IP
+   * @param {number} params.httpStatus - Filter by HTTP status code
+   * @param {number} params.page - Page number (1-based)
+   * @param {number} params.pageSize - Number of results per page
+   * @returns {Promise<Object>} Search result with Data, Page, PageSize, TotalCount, TotalPages
+   */
+  async searchRequestHistory(params = {}) {
+    const query = new URLSearchParams();
+    if (params.vmrGuid) query.append('vmrGuid', params.vmrGuid);
+    if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
+    if (params.sourceIp) query.append('sourceIp', params.sourceIp);
+    if (params.httpStatus) query.append('httpStatus', params.httpStatus);
+    if (params.page) query.append('page', params.page);
+    if (params.pageSize) query.append('pageSize', params.pageSize);
+    const queryString = query.toString() ? '?' + query.toString() : '';
+    return this.request('GET', `/v1.0/requesthistory${queryString}`);
+  }
+
+  /**
+   * Get a request history entry by ID.
+   * @param {string} id - The entry ID
+   * @returns {Promise<Object>} Request history entry
+   */
+  async getRequestHistoryEntry(id) {
+    return this.request('GET', `/v1.0/requesthistory/${id}`);
+  }
+
+  /**
+   * Get full request history detail including headers and bodies.
+   * @param {string} id - The entry ID
+   * @returns {Promise<Object>} Request history detail
+   */
+  async getRequestHistoryDetail(id) {
+    return this.request('GET', `/v1.0/requesthistory/${id}/detail`);
+  }
+
+  /**
+   * Delete a request history entry.
+   * @param {string} id - The entry ID
+   * @returns {Promise<void>}
+   */
+  async deleteRequestHistoryEntry(id) {
+    return this.request('DELETE', `/v1.0/requesthistory/${id}`);
+  }
+
+  /**
+   * Bulk delete request history entries matching filter.
+   * @param {Object} params - Filter parameters
+   * @param {string} params.vmrGuid - Filter by Virtual Model Runner GUID
+   * @param {string} params.endpointGuid - Filter by Model Endpoint GUID
+   * @param {string} params.sourceIp - Filter by source IP
+   * @param {number} params.httpStatus - Filter by HTTP status code
+   * @returns {Promise<Object>} Result with DeletedCount
+   */
+  async bulkDeleteRequestHistory(params = {}) {
+    const query = new URLSearchParams();
+    if (params.vmrGuid) query.append('vmrGuid', params.vmrGuid);
+    if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
+    if (params.sourceIp) query.append('sourceIp', params.sourceIp);
+    if (params.httpStatus) query.append('httpStatus', params.httpStatus);
+    const queryString = query.toString() ? '?' + query.toString() : '';
+    return this.request('DELETE', `/v1.0/requesthistory/bulk${queryString}`);
+  }
 }
 
 export const api = new ConductorApi();

@@ -12,6 +12,7 @@ import ModelRunnerEndpoints from './views/ModelRunnerEndpoints';
 import ModelDefinitions from './views/ModelDefinitions';
 import ModelConfigurations from './views/ModelConfigurations';
 import VirtualModelRunners from './views/VirtualModelRunners';
+import RequestHistory from './views/RequestHistory';
 import ApiExplorer from './views/ApiExplorer';
 import Administrators from './views/Administrators';
 import BackupRestore from './views/BackupRestore';
@@ -42,6 +43,7 @@ function App() {
           <Route path="/definitions" element={<ModelDefinitions />} />
           <Route path="/configurations" element={<ModelConfigurations />} />
           <Route path="/vmr" element={<VirtualModelRunners />} />
+          <Route path="/request-history" element={<RequestHistory />} />
           <Route path="/api-explorer" element={<ApiExplorer />} />
           {isAdmin && <Route path="/administrators" element={<Administrators />} />}
           {hasAdminAccess && <Route path="/backup" element={<BackupRestore />} />}

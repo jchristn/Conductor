@@ -45,6 +45,15 @@ namespace Conductor.Core.Settings
         }
 
         /// <summary>
+        /// Request history settings.
+        /// </summary>
+        public RequestHistorySettings RequestHistory
+        {
+            get => _RequestHistory;
+            set => _RequestHistory = (value != null ? value : new RequestHistorySettings());
+        }
+
+        /// <summary>
         /// Administrator API keys for initial access.
         /// </summary>
         public List<string> AdminApiKeys
@@ -57,6 +66,7 @@ namespace Conductor.Core.Settings
         private DatabaseSettings _Database = new DatabaseSettings();
         private LoggingSettings _Logging = new LoggingSettings();
         private DebugSettings _Debug = new DebugSettings();
+        private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
 
         private List<string> _AdminApiKeys = new List<string> { "conductoradmin" };
 

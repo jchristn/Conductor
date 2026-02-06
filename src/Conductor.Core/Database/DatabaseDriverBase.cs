@@ -53,6 +53,11 @@ namespace Conductor.Core.Database
         public IAdministratorMethods Administrator { get; protected set; }
 
         /// <summary>
+        /// Request history methods.
+        /// </summary>
+        public IRequestHistoryMethods RequestHistory { get; protected set; }
+
+        /// <summary>
         /// Connection string.
         /// </summary>
         protected string ConnectionString { get; set; }

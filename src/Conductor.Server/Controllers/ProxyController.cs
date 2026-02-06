@@ -2,6 +2,7 @@ namespace Conductor.Server.Controllers
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.IO;
     using System.Linq;
     using System.Net.Http;
@@ -32,6 +33,7 @@ namespace Conductor.Server.Controllers
         private static readonly Random _Random = new Random();
         private readonly HealthCheckService _HealthCheckService;
         private readonly SessionAffinityService _SessionAffinityService;
+        private readonly RequestHistoryService _RequestHistoryService;
 
         /// <summary>
         /// Buffer size for streaming responses. Default is 8KB.
@@ -41,11 +43,19 @@ namespace Conductor.Server.Controllers
         /// <summary>
         /// Instantiate the proxy controller.
         /// </summary>
-        public ProxyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, SessionAffinityService sessionAffinityService = null)
+        /// <param name="database">Database driver.</param>
+        /// <param name="authService">Authentication service.</param>
+        /// <param name="serializer">Serializer.</param>
+        /// <param name="logging">Logging module.</param>
+        /// <param name="healthCheckService">Health check service (optional).</param>
+        /// <param name="sessionAffinityService">Session affinity service (optional).</param>
+        /// <param name="requestHistoryService">Request history service (optional).</param>
+        public ProxyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, SessionAffinityService sessionAffinityService = null, RequestHistoryService requestHistoryService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
             _SessionAffinityService = sessionAffinityService;
+            _RequestHistoryService = requestHistoryService;
         }
 
         /// <summary>
@@ -59,6 +69,9 @@ namespace Conductor.Server.Controllers
         /// <exception cref="OperationCanceledException">Thrown if the operation is cancelled.</exception>
         public async Task HandleRequest(HttpContextBase ctx, RequestContext requestContext, CancellationToken cancellationToken = default)
         {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            RequestHistoryDetail historyDetail = null;
+
             try
             {
                 // Parse the URL to extract VMR base path
@@ -75,6 +88,22 @@ namespace Conductor.Server.Controllers
                 {
                     await SendNotFound(ctx);
                     return;
+                }
+
+                // Create request history entry if enabled
+                if (_RequestHistoryService != null && _RequestHistoryService.IsEnabled && vmr.RequestHistoryEnabled)
+                {
+                    Dictionary<string, string> requestHeaders = GetRequestHeaders(ctx);
+                    string requestBody = requestContext.Data != null ? Encoding.UTF8.GetString(requestContext.Data) : null;
+
+                    historyDetail = await _RequestHistoryService.CreateEntryAsync(
+                        vmr,
+                        ctx.Request.Source.IpAddress,
+                        ctx.Request.Method.ToString(),
+                        ctx.Request.Url.RawWithoutQuery,
+                        requestHeaders,
+                        requestBody,
+                        cancellationToken).ConfigureAwait(false);
                 }
 
                 // Check if request type is allowed
@@ -276,6 +305,36 @@ namespace Conductor.Server.Controllers
                         }
                     }
 
+                    // Resolve model definition and configuration for history tracking
+                    ModelDefinition modelDefinition = null;
+                    ModelConfiguration modelConfiguration = null;
+
+                    if (historyDetail != null && vmr.ModelDefinitionIds != null)
+                    {
+                        foreach (string defId in vmr.ModelDefinitionIds)
+                        {
+                            ModelDefinition def = await Database.ModelDefinition.ReadAsync(vmr.TenantId, defId).ConfigureAwait(false);
+                            if (def != null && (String.IsNullOrEmpty(effectiveModel) || String.Equals(def.Name, effectiveModel, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                modelDefinition = def;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (historyDetail != null && vmr.ModelConfigurationIds != null)
+                    {
+                        foreach (string configId in vmr.ModelConfigurationIds)
+                        {
+                            ModelConfiguration config = await Database.ModelConfiguration.ReadAsync(vmr.TenantId, configId).ConfigureAwait(false);
+                            if (config != null && (String.IsNullOrEmpty(config.Model) || String.Equals(config.Model, effectiveModel, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                modelConfiguration = config;
+                                break;
+                            }
+                        }
+                    }
+
                     // Forward the request and send response back
                     // Use using to ensure HttpResponseMessage is disposed after streaming completes
                     using (HttpResponseMessage response = await ForwardRequestAsync(
@@ -292,6 +351,11 @@ namespace Conductor.Server.Controllers
                             endpoint.Id,
                             effectiveModel,
                             sessionPinUsed,
+                            historyDetail,
+                            endpoint,
+                            modelDefinition,
+                            modelConfiguration,
+                            stopwatch,
                             cancellationToken).ConfigureAwait(false);
                     }
                 }
@@ -308,6 +372,21 @@ namespace Conductor.Server.Controllers
             {
                 Logging.Warn(_Header + "proxy exception:" + Environment.NewLine + ex.ToString());
                 await SendBadGateway(ctx, "Proxy error: " + ex.Message);
+
+                // Update request history with error
+                if (historyDetail != null && _RequestHistoryService != null)
+                {
+                    await _RequestHistoryService.UpdateWithResponseAsync(
+                        historyDetail,
+                        null,
+                        null,
+                        null,
+                        502,
+                        null,
+                        "Proxy error: " + ex.Message,
+                        stopwatch,
+                        cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 
@@ -784,6 +863,11 @@ namespace Conductor.Server.Controllers
             string endpointId,
             string modelName,
             bool sessionPinUsed,
+            RequestHistoryDetail historyDetail,
+            ModelRunnerEndpoint endpoint,
+            ModelDefinition modelDefinition,
+            ModelConfiguration modelConfiguration,
+            Stopwatch stopwatch,
             CancellationToken cancellationToken)
         {
             ctx.Response.StatusCode = (int)response.StatusCode;
@@ -815,16 +899,37 @@ namespace Conductor.Server.Controllers
 
             // Determine if this is a streaming response
             bool isStreaming = IsStreamingResponse(response);
+            string responseBodyString = null;
 
             if (isStreaming)
             {
                 await SendStreamingResponseAsync(ctx, response, cancellationToken).ConfigureAwait(false);
+                // For streaming responses, we don't capture the full body
+                responseBodyString = "[Streaming response - body not captured]";
             }
             else
             {
                 // Standard response - read entire body and send
                 byte[] responseBody = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
                 await ctx.Response.Send(responseBody).ConfigureAwait(false);
+                responseBodyString = responseBody != null ? Encoding.UTF8.GetString(responseBody) : null;
+            }
+
+            // Update request history with response
+            if (historyDetail != null && _RequestHistoryService != null)
+            {
+                Dictionary<string, string> responseHeaders = GetResponseHeaders(response);
+
+                await _RequestHistoryService.UpdateWithResponseAsync(
+                    historyDetail,
+                    endpoint,
+                    modelDefinition,
+                    modelConfiguration,
+                    (int)response.StatusCode,
+                    responseHeaders,
+                    responseBodyString,
+                    stopwatch,
+                    cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -980,6 +1085,64 @@ namespace Conductor.Server.Controllers
         private async Task SendUnauthorized(HttpContextBase ctx, string message)
         {
             await SendErrorResponse(ctx, ApiErrorResponse.Unauthorized(message));
+        }
+
+        private Dictionary<string, string> GetRequestHeaders(HttpContextBase ctx)
+        {
+            Dictionary<string, string> headers = new Dictionary<string, string>();
+            try
+            {
+                if (ctx.Request.Headers != null && ctx.Request.Headers.Count > 0)
+                {
+                    foreach (string key in ctx.Request.Headers.AllKeys)
+                    {
+                        if (!String.IsNullOrEmpty(key))
+                        {
+                            // Skip Authorization header for security
+                            if (String.Equals(key, "Authorization", StringComparison.OrdinalIgnoreCase))
+                            {
+                                headers[key] = "[REDACTED]";
+                            }
+                            else
+                            {
+                                headers[key] = ctx.Request.Headers.Get(key);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.Warn(_Header + "failed to extract request headers: " + ex.Message);
+            }
+            return headers;
+        }
+
+        private Dictionary<string, string> GetResponseHeaders(HttpResponseMessage response)
+        {
+            Dictionary<string, string> headers = new Dictionary<string, string>();
+            try
+            {
+                if (response.Headers != null)
+                {
+                    foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.IEnumerable<string>> header in response.Headers)
+                    {
+                        headers[header.Key] = String.Join(", ", header.Value);
+                    }
+                }
+                if (response.Content?.Headers != null)
+                {
+                    foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.IEnumerable<string>> header in response.Content.Headers)
+                    {
+                        headers[header.Key] = String.Join(", ", header.Value);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.Warn(_Header + "failed to extract response headers: " + ex.Message);
+            }
+            return headers;
         }
     }
 }

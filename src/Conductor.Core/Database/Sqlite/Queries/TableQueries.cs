@@ -200,6 +200,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 sessionaffinityheader TEXT,
                 sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
                 sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
+                requesthistoryenabled INTEGER NOT NULL DEFAULT 0,
                 active INTEGER NOT NULL DEFAULT 1,
                 createdutc TEXT NOT NULL,
                 lastupdateutc TEXT NOT NULL,
@@ -229,6 +230,48 @@ namespace Conductor.Core.Database.Sqlite.Queries
             );
             CREATE INDEX IF NOT EXISTS idx_administrators_email ON administrators(email);
             CREATE INDEX IF NOT EXISTS idx_administrators_active ON administrators(active);
+        ";
+
+        /// <summary>
+        /// Create request history table.
+        /// </summary>
+        public static readonly string CreateRequestHistoryTable = @"
+            CREATE TABLE IF NOT EXISTS requesthistory (
+                id TEXT PRIMARY KEY,
+                tenantguid TEXT NOT NULL,
+                virtualmodelrunnerguid TEXT NOT NULL,
+                virtualmodelrunnername TEXT NOT NULL,
+                modelendpointguid TEXT,
+                modelendpointname TEXT,
+                modelendpointurl TEXT,
+                modeldefinitionguid TEXT,
+                modeldefinitionname TEXT,
+                modelconfigurationguid TEXT,
+                requestorsourceip TEXT NOT NULL,
+                httpmethod TEXT NOT NULL,
+                httpurl TEXT NOT NULL,
+                requestbodylength INTEGER NOT NULL,
+                responsebodylength INTEGER,
+                httpstatus INTEGER,
+                responsetimems INTEGER,
+                objectkey TEXT NOT NULL,
+                createdutc TEXT NOT NULL,
+                completedutc TEXT,
+                FOREIGN KEY (tenantguid) REFERENCES tenants(id),
+                FOREIGN KEY (virtualmodelrunnerguid) REFERENCES virtualmodelrunners(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_tenantguid ON requesthistory(tenantguid);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_vmrguid ON requesthistory(virtualmodelrunnerguid);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_createdutc ON requesthistory(createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_httpstatus ON requesthistory(httpstatus);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_requestorsourceip ON requesthistory(requestorsourceip);
+        ";
+
+        /// <summary>
+        /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddRequestHistoryEnabledColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled INTEGER NOT NULL DEFAULT 0;
         ";
     }
 }

@@ -37,6 +37,8 @@ namespace Conductor.Server
         private static AuthenticationService _AuthService;
         private static HealthCheckService _HealthCheckService;
         private static SessionAffinityService _SessionAffinityService;
+        private static RequestHistoryService _RequestHistoryService;
+        private static RequestHistoryCleanupService _RequestHistoryCleanupService;
         private static Serializer _Serializer;
         private static SwiftStackApp _App;
         private static CancellationTokenSource _TokenSource;
@@ -134,6 +136,19 @@ namespace Conductor.Server
             _SessionAffinityService = new SessionAffinityService(_Logging);
             _Logging.Info(_Header + "session affinity service initialized");
 
+            // Initialize request history service
+            if (_Settings.RequestHistory.Enabled)
+            {
+                _RequestHistoryService = new RequestHistoryService(_Database, _Logging, _Settings.RequestHistory);
+                _RequestHistoryCleanupService = new RequestHistoryCleanupService(_Database, _Logging, _Settings.RequestHistory);
+                await _RequestHistoryCleanupService.StartAsync(_TokenSource.Token).ConfigureAwait(false);
+                _Logging.Info(_Header + "request history service started");
+            }
+            else
+            {
+                _Logging.Info(_Header + "request history service disabled");
+            }
+
             // Initialize webserver
             _Logging.Info(_Header + "initializing webserver");
             _App = new SwiftStackApp("Conductor Server");
@@ -161,6 +176,7 @@ namespace Conductor.Server
                 openApi.Tags.Add(new OpenApiTag("Virtual Model Runners", "Virtual model runner management"));
                 openApi.Tags.Add(new OpenApiTag("Administrators", "Administrator management endpoints"));
                 openApi.Tags.Add(new OpenApiTag("Backup", "Backup and restore endpoints"));
+                openApi.Tags.Add(new OpenApiTag("Request History", "Request history endpoints"));
 
                 // Define security scheme for bearer token authentication
                 openApi.SecuritySchemes["Bearer"] = OpenApiSecurityScheme.Bearer(
@@ -198,6 +214,14 @@ namespace Conductor.Server
             {
                 _SessionAffinityService.Dispose();
                 _Logging.Info(_Header + "session affinity service stopped");
+            }
+
+            // Stop and dispose request history cleanup service
+            if (_RequestHistoryCleanupService != null)
+            {
+                await _RequestHistoryCleanupService.StopAsync().ConfigureAwait(false);
+                _RequestHistoryCleanupService.Dispose();
+                _Logging.Info(_Header + "request history cleanup service stopped");
             }
 
             // Dispose cancellation token source
@@ -306,9 +330,12 @@ namespace Conductor.Server
             Controllers.ModelConfigurationController mcController = new Controllers.ModelConfigurationController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.VirtualModelRunnerController vmrController = new Controllers.VirtualModelRunnerController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService);
             Controllers.AuthController authController = new Controllers.AuthController(_Database, _AuthService, _Serializer, _Logging, _Settings.AdminApiKeys);
-            Controllers.ProxyController proxyController = new Controllers.ProxyController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService);
+            Controllers.ProxyController proxyController = new Controllers.ProxyController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService, _RequestHistoryService);
             Controllers.AdministratorController adminController = new Controllers.AdministratorController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.BackupController backupController = new Controllers.BackupController(_Database, _AuthService, _Serializer, _Logging);
+            Controllers.RequestHistoryController requestHistoryController = _RequestHistoryService != null
+                ? new Controllers.RequestHistoryController(_Database, _AuthService, _Serializer, _Logging, _RequestHistoryService)
+                : null;
 
             #endregion
 
@@ -1189,6 +1216,135 @@ namespace Conductor.Server
 
             #endregion
 
+            #region Request-History-Routes
+
+            if (requestHistoryController != null)
+            {
+                _App.Rest.Get("/v1.0/requesthistory", async (req) =>
+                {
+                    string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+
+                    int page = 1;
+                    string pageStr = req.Http.Request.Query.Elements.Get("page");
+                    if (!String.IsNullOrEmpty(pageStr) && Int32.TryParse(pageStr, out int p))
+                        page = p;
+
+                    int pageSize = 10;
+                    string pageSizeStr = req.Http.Request.Query.Elements.Get("pageSize");
+                    if (!String.IsNullOrEmpty(pageSizeStr) && Int32.TryParse(pageSizeStr, out int ps))
+                        pageSize = ps;
+
+                    int? httpStatus = null;
+                    string httpStatusStr = req.Http.Request.Query.Elements.Get("httpStatus");
+                    if (!String.IsNullOrEmpty(httpStatusStr) && Int32.TryParse(httpStatusStr, out int status))
+                        httpStatus = status;
+
+                    return await requestHistoryController.Search(
+                        tenantId,
+                        req.Http.Request.Query.Elements.Get("vmrGuid"),
+                        req.Http.Request.Query.Elements.Get("endpointGuid"),
+                        req.Http.Request.Query.Elements.Get("sourceIp"),
+                        httpStatus,
+                        page,
+                        pageSize);
+                },
+                api => api
+                    .WithTag("Request History")
+                    .WithSummary("Search request history")
+                    .WithDescription("Search request history entries with pagination and filtering")
+                    .WithSecurity("Bearer")
+                    .WithParameter(OpenApiParameterMetadata.Query("vmrGuid", "Filter by virtual model runner GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("endpointGuid", "Filter by model endpoint GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("sourceIp", "Filter by source IP", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("httpStatus", "Filter by HTTP status code", false, OpenApiSchemaMetadata.Integer()))
+                    .WithParameter(OpenApiParameterMetadata.Query("page", "Page number (1-based)", false, OpenApiSchemaMetadata.Integer()))
+                    .WithParameter(OpenApiParameterMetadata.Query("pageSize", "Page size (max 100)", false, OpenApiSchemaMetadata.Integer()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistorySearchResult>("Search results with pagination"))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+                requireAuthentication: true);
+
+                _App.Rest.Delete("/v1.0/requesthistory/bulk", async (req) =>
+                {
+                    string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+
+                    int? httpStatus = null;
+                    string httpStatusStr = req.Http.Request.Query.Elements.Get("httpStatus");
+                    if (!String.IsNullOrEmpty(httpStatusStr) && Int32.TryParse(httpStatusStr, out int status))
+                        httpStatus = status;
+
+                    return await requestHistoryController.DeleteBulk(
+                        tenantId,
+                        req.Http.Request.Query.Elements.Get("vmrGuid"),
+                        req.Http.Request.Query.Elements.Get("endpointGuid"),
+                        req.Http.Request.Query.Elements.Get("sourceIp"),
+                        httpStatus);
+                },
+                api => api
+                    .WithTag("Request History")
+                    .WithSummary("Bulk delete request history")
+                    .WithDescription("Delete all request history entries matching the filter")
+                    .WithSecurity("Bearer")
+                    .WithParameter(OpenApiParameterMetadata.Query("vmrGuid", "Filter by virtual model runner GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("endpointGuid", "Filter by model endpoint GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("sourceIp", "Filter by source IP", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("httpStatus", "Filter by HTTP status code", false, OpenApiSchemaMetadata.Integer()))
+                    .WithResponse(200, OpenApiResponseMetadata.Json<Controllers.BulkDeleteResult>("Number of deleted entries"))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+                requireAuthentication: true);
+
+                _App.Rest.Get("/v1.0/requesthistory/{id}/detail", async (req) =>
+                {
+                    string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                    return await requestHistoryController.ReadDetail(tenantId, req.Parameters["id"]);
+                },
+                api => api
+                    .WithTag("Request History")
+                    .WithSummary("Get request history detail")
+                    .WithDescription("Get full request history detail including headers and bodies")
+                    .WithSecurity("Bearer")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Request history entry ID"))
+                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistoryDetail>("Full request/response detail"))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+                requireAuthentication: true);
+
+                _App.Rest.Get("/v1.0/requesthistory/{id}", async (req) =>
+                {
+                    string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                    return await requestHistoryController.Read(tenantId, req.Parameters["id"]);
+                },
+                api => api
+                    .WithTag("Request History")
+                    .WithSummary("Get request history entry")
+                    .WithDescription("Get request history entry metadata")
+                    .WithSecurity("Bearer")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Request history entry ID"))
+                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistoryEntry>("Request history entry"))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+                requireAuthentication: true);
+
+                _App.Rest.Delete("/v1.0/requesthistory/{id}", async (req) =>
+                {
+                    string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                    req.Http.Response.StatusCode = 204;
+                    await requestHistoryController.Delete(tenantId, req.Parameters["id"]);
+                    return null;
+                },
+                api => api
+                    .WithTag("Request History")
+                    .WithSummary("Delete request history entry")
+                    .WithDescription("Delete a single request history entry")
+                    .WithSecurity("Bearer")
+                    .WithParameter(OpenApiParameterMetadata.Path("id", "Request history entry ID"))
+                    .WithResponse(204, OpenApiResponseMetadata.NoContent())
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                    .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+                requireAuthentication: true);
+            }
+
+            #endregion
+
             #region Login-Routes
 
             _App.Rest.Post<Controllers.LoginCredentialRequest>("/v1.0/auth/login/credential", async (req) =>
@@ -1231,10 +1387,6 @@ namespace Conductor.Server
             _App.Rest.DefaultRoute = async (ctx) =>
             {
                 DateTime startTime = DateTime.UtcNow;
-
-                // Pre-read the request body from the stream once so all downstream
-                // handlers can access it without stream contention or double-reads
-                Console.WriteLine("Reading request body");
 
                 RequestContext req = new RequestContext();
                 req.Data = ctx.Request.DataAsBytes;

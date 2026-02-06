@@ -49,6 +49,11 @@ namespace Conductor.Core.Helpers
         public const string AdministratorPrefix = "admin_";
 
         /// <summary>
+        /// Request history ID prefix.
+        /// </summary>
+        public const string RequestHistoryPrefix = "req_";
+
+        /// <summary>
         /// Default ID length including prefix.
         /// </summary>
         public const int DefaultIdLength = 48;
@@ -125,6 +130,15 @@ namespace Conductor.Core.Helpers
         public static string NewAdministratorId()
         {
             return _Generator.GenerateKSortable(AdministratorPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new request history ID.
+        /// </summary>
+        /// <returns>K-sortable request history ID.</returns>
+        public static string NewRequestHistoryId()
+        {
+            return _Generator.GenerateKSortable(RequestHistoryPrefix, DefaultIdLength);
         }
 
         /// <summary>

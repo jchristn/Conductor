@@ -200,6 +200,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 sessionaffinityheader VARCHAR(255),
                 sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
                 sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
+                requesthistoryenabled BOOLEAN NOT NULL DEFAULT FALSE,
                 active BOOLEAN NOT NULL DEFAULT TRUE,
                 createdutc TIMESTAMP NOT NULL,
                 lastupdateutc TIMESTAMP NOT NULL,
@@ -229,6 +230,48 @@ namespace Conductor.Core.Database.PostgreSql.Queries
             );
             CREATE INDEX IF NOT EXISTS idx_administrators_email ON administrators(email);
             CREATE INDEX IF NOT EXISTS idx_administrators_active ON administrators(active);
+        ";
+
+        /// <summary>
+        /// Create request history table.
+        /// </summary>
+        public static readonly string CreateRequestHistoryTable = @"
+            CREATE TABLE IF NOT EXISTS requesthistory (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantguid VARCHAR(48) NOT NULL,
+                virtualmodelrunnerguid VARCHAR(48) NOT NULL,
+                virtualmodelrunnername VARCHAR(255) NOT NULL,
+                modelendpointguid VARCHAR(48),
+                modelendpointname VARCHAR(255),
+                modelendpointurl VARCHAR(512),
+                modeldefinitionguid VARCHAR(48),
+                modeldefinitionname VARCHAR(255),
+                modelconfigurationguid VARCHAR(48),
+                requestorsourceip VARCHAR(64) NOT NULL,
+                httpmethod VARCHAR(16) NOT NULL,
+                httpurl VARCHAR(2048) NOT NULL,
+                requestbodylength BIGINT NOT NULL,
+                responsebodylength BIGINT,
+                httpstatus INTEGER,
+                responsetimems INTEGER,
+                objectkey VARCHAR(255) NOT NULL,
+                createdutc TIMESTAMP NOT NULL,
+                completedutc TIMESTAMP,
+                FOREIGN KEY (tenantguid) REFERENCES tenants(id),
+                FOREIGN KEY (virtualmodelrunnerguid) REFERENCES virtualmodelrunners(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_tenantguid ON requesthistory(tenantguid);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_vmrguid ON requesthistory(virtualmodelrunnerguid);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_createdutc ON requesthistory(createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_httpstatus ON requesthistory(httpstatus);
+            CREATE INDEX IF NOT EXISTS idx_requesthistory_requestorsourceip ON requesthistory(requestorsourceip);
+        ";
+
+        /// <summary>
+        /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddRequestHistoryEnabledColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled BOOLEAN NOT NULL DEFAULT FALSE;
         ";
     }
 }

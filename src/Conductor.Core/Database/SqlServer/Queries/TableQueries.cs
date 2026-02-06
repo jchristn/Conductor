@@ -229,6 +229,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 sessionaffinityheader NVARCHAR(255),
                 sessiontimeoutms INT NOT NULL DEFAULT 600000,
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
+                requesthistoryenabled BIT NOT NULL DEFAULT 0,
                 active BIT NOT NULL DEFAULT 1,
                 createdutc DATETIME2 NOT NULL,
                 lastupdateutc DATETIME2 NOT NULL,
@@ -264,6 +265,54 @@ namespace Conductor.Core.Database.SqlServer.Queries
             CREATE INDEX idx_administrators_email ON administrators(email);
             IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_administrators_active')
             CREATE INDEX idx_administrators_active ON administrators(active);
+        ";
+
+        /// <summary>
+        /// Create request history table.
+        /// </summary>
+        public static readonly string CreateRequestHistoryTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='requesthistory' AND xtype='U')
+            CREATE TABLE requesthistory (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantguid NVARCHAR(48) NOT NULL,
+                virtualmodelrunnerguid NVARCHAR(48) NOT NULL,
+                virtualmodelrunnername NVARCHAR(255) NOT NULL,
+                modelendpointguid NVARCHAR(48),
+                modelendpointname NVARCHAR(255),
+                modelendpointurl NVARCHAR(MAX),
+                modeldefinitionguid NVARCHAR(48),
+                modeldefinitionname NVARCHAR(255),
+                modelconfigurationguid NVARCHAR(48),
+                requestorsourceip NVARCHAR(64) NOT NULL,
+                httpmethod NVARCHAR(16) NOT NULL,
+                httpurl NVARCHAR(MAX) NOT NULL,
+                requestbodylength BIGINT NOT NULL,
+                responsebodylength BIGINT,
+                httpstatus INT,
+                responsetimems INT,
+                objectkey NVARCHAR(255) NOT NULL,
+                createdutc DATETIME2 NOT NULL,
+                completedutc DATETIME2,
+                FOREIGN KEY (tenantguid) REFERENCES tenants(id),
+                FOREIGN KEY (virtualmodelrunnerguid) REFERENCES virtualmodelrunners(id)
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requesthistory_tenantguid')
+            CREATE INDEX idx_requesthistory_tenantguid ON requesthistory(tenantguid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requesthistory_vmrguid')
+            CREATE INDEX idx_requesthistory_vmrguid ON requesthistory(virtualmodelrunnerguid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requesthistory_createdutc')
+            CREATE INDEX idx_requesthistory_createdutc ON requesthistory(createdutc);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requesthistory_httpstatus')
+            CREATE INDEX idx_requesthistory_httpstatus ON requesthistory(httpstatus);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requesthistory_requestorsourceip')
+            CREATE INDEX idx_requesthistory_requestorsourceip ON requesthistory(requestorsourceip);
+        ";
+
+        /// <summary>
+        /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddRequestHistoryEnabledColumn = @"
+            ALTER TABLE virtualmodelrunners ADD requesthistoryenabled BIT NOT NULL DEFAULT 0;
         ";
     }
 }

@@ -42,6 +42,7 @@ function VirtualModelRunners() {
     AllowCompletions: true,
     AllowModelManagement: false,
     StrictMode: false,
+    RequestHistoryEnabled: false,
     SessionAffinityMode: 'None',
     SessionAffinityHeader: '',
     SessionTimeoutMs: 600000,
@@ -95,6 +96,7 @@ function VirtualModelRunners() {
       AllowCompletions: true,
       AllowModelManagement: false,
       StrictMode: false,
+      RequestHistoryEnabled: false,
       SessionAffinityMode: 'None',
       SessionAffinityHeader: '',
       SessionTimeoutMs: 600000,
@@ -125,6 +127,7 @@ function VirtualModelRunners() {
       AllowCompletions: vmr.AllowCompletions !== false,
       AllowModelManagement: vmr.AllowModelManagement === true,
       StrictMode: vmr.StrictMode === true,
+      RequestHistoryEnabled: vmr.RequestHistoryEnabled === true,
       SessionAffinityMode: vmr.SessionAffinityMode || 'None',
       SessionAffinityHeader: vmr.SessionAffinityHeader || '',
       SessionTimeoutMs: vmr.SessionTimeoutMs || 600000,
@@ -244,6 +247,7 @@ function VirtualModelRunners() {
         AllowCompletions: formData.AllowCompletions,
         AllowModelManagement: formData.AllowModelManagement,
         StrictMode: formData.StrictMode,
+        RequestHistoryEnabled: formData.RequestHistoryEnabled,
         SessionAffinityMode: formData.SessionAffinityMode,
         SessionAffinityHeader: formData.SessionAffinityHeader || null,
         SessionTimeoutMs: parseInt(formData.SessionTimeoutMs),
@@ -717,6 +721,17 @@ function VirtualModelRunners() {
                 onChange={(e) => setFormData({ ...formData, StrictMode: e.target.checked })}
               />
               Strict Mode
+            </label>
+          </div>
+
+          <div className="form-group checkbox-group">
+            <label title="Capture request/response data for debugging and auditing">
+              <input
+                type="checkbox"
+                checked={formData.RequestHistoryEnabled}
+                onChange={(e) => setFormData({ ...formData, RequestHistoryEnabled: e.target.checked })}
+              />
+              Request History
             </label>
           </div>
 

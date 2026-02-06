@@ -37,6 +37,7 @@ namespace Conductor.Core.Database.Sqlite
             ModelConfiguration = new ModelConfigurationMethods(this);
             VirtualModelRunner = new VirtualModelRunnerMethods(this);
             Administrator = new AdministratorMethods(this);
+            RequestHistory = new RequestHistoryMethods(this);
         }
 
         /// <summary>
@@ -55,10 +56,14 @@ namespace Conductor.Core.Database.Sqlite
                 TableQueries.CreateModelDefinitionsTable,
                 TableQueries.CreateModelConfigurationsTable,
                 TableQueries.CreateVirtualModelRunnersTable,
-                TableQueries.CreateAdministratorsTable
+                TableQueries.CreateAdministratorsTable,
+                TableQueries.CreateRequestHistoryTable
             };
 
             await ExecuteQueriesAsync(queries, false, token).ConfigureAwait(false);
+
+            // Run migrations for existing databases
+            await RunMigrationsAsync(token).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -181,6 +186,61 @@ namespace Conductor.Core.Database.Sqlite
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Run migrations for existing databases.
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        private async Task RunMigrationsAsync(CancellationToken token = default)
+        {
+            // Check if requesthistoryenabled column exists in virtualmodelrunners
+            bool columnExists = await ColumnExistsAsync("virtualmodelrunners", "requesthistoryenabled", token).ConfigureAwait(false);
+            if (!columnExists)
+            {
+                try
+                {
+                    await ExecuteQueryAsync(TableQueries.AddRequestHistoryEnabledColumn, false, token).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Column may already exist in some edge cases, ignore the error
+                }
+            }
+        }
+
+        /// <summary>
+        /// Check if a column exists in a table.
+        /// </summary>
+        /// <param name="tableName">Table name.</param>
+        /// <param name="columnName">Column name.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>True if the column exists.</returns>
+        private async Task<bool> ColumnExistsAsync(string tableName, string columnName, CancellationToken token = default)
+        {
+            using (SqliteConnection conn = new SqliteConnection(ConnectionString))
+            {
+                await conn.OpenAsync(token).ConfigureAwait(false);
+
+                string query = "PRAGMA table_info(" + Sanitize(tableName) + ");";
+                using (SqliteCommand cmd = new SqliteCommand(query, conn))
+                {
+                    using (SqliteDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
+                    {
+                        while (await reader.ReadAsync(token).ConfigureAwait(false))
+                        {
+                            string name = reader["name"]?.ToString();
+                            if (String.Equals(name, columnName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return false;
         }
     }
 }
