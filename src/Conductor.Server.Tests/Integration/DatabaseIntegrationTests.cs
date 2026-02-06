@@ -540,6 +540,77 @@ namespace Conductor.Server.Tests.Integration
 
         #endregion
 
+        #region VirtualModelRunner-SessionAffinity-Tests
+
+        [Fact]
+        public async Task VirtualModelRunner_SessionAffinityFields_RoundTrip()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "Session Affinity VMR",
+                BasePath = $"/session/{Guid.NewGuid():N}/",
+                SessionAffinityMode = SessionAffinityModeEnum.SourceIP,
+                SessionAffinityHeader = "X-Custom-Session",
+                SessionTimeoutMs = 300000,
+                SessionMaxEntries = 5000
+            };
+
+            VirtualModelRunner created = await _Database.VirtualModelRunner.CreateAsync(vmr);
+            VirtualModelRunner read = await _Database.VirtualModelRunner.ReadAsync(_TestTenantId, created.Id);
+
+            read.Should().NotBeNull();
+            read.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.SourceIP);
+            read.SessionAffinityHeader.Should().Be("X-Custom-Session");
+            read.SessionTimeoutMs.Should().Be(300000);
+            read.SessionMaxEntries.Should().Be(5000);
+        }
+
+        [Fact]
+        public async Task VirtualModelRunner_SessionAffinityDefaults_RoundTrip()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "Default Session VMR",
+                BasePath = $"/default-session/{Guid.NewGuid():N}/"
+            };
+
+            VirtualModelRunner created = await _Database.VirtualModelRunner.CreateAsync(vmr);
+            VirtualModelRunner read = await _Database.VirtualModelRunner.ReadAsync(_TestTenantId, created.Id);
+
+            read.Should().NotBeNull();
+            read.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.None);
+            read.SessionAffinityHeader.Should().BeNull();
+            read.SessionTimeoutMs.Should().Be(600000);
+            read.SessionMaxEntries.Should().Be(10000);
+        }
+
+        [Fact]
+        public async Task VirtualModelRunner_SessionAffinityUpdate_PersistsChanges()
+        {
+            VirtualModelRunner vmr = await _Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "Update Session VMR",
+                BasePath = $"/update-session/{Guid.NewGuid():N}/",
+                SessionAffinityMode = SessionAffinityModeEnum.None
+            });
+
+            vmr.SessionAffinityMode = SessionAffinityModeEnum.ApiKey;
+            vmr.SessionTimeoutMs = 120000;
+            vmr.SessionMaxEntries = 2000;
+
+            VirtualModelRunner updated = await _Database.VirtualModelRunner.UpdateAsync(vmr);
+            VirtualModelRunner read = await _Database.VirtualModelRunner.ReadAsync(_TestTenantId, updated.Id);
+
+            read.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.ApiKey);
+            read.SessionTimeoutMs.Should().Be(120000);
+            read.SessionMaxEntries.Should().Be(2000);
+        }
+
+        #endregion
+
         #region Administrator-Tests
 
         [Fact]

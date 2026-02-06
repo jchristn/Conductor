@@ -40,6 +40,12 @@ namespace Conductor.Core
         /// </summary>
         public static string HeaderModelName = "X-Conductor-Model-Name";
 
+        /// <summary>
+        /// Response header indicating whether session affinity was applied to route the request.
+        /// Value is "true" when a pinned endpoint was used, "false" when load balancing was used.
+        /// </summary>
+        public static string HeaderSessionPinned = "X-Conductor-Session-Pinned";
+
         #endregion
 
         #region Proxy-Request-Headers

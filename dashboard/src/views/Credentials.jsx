@@ -160,16 +160,19 @@ function Credentials() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique identifier for this credential',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Name',
-      label: 'Name'
+      label: 'Name',
+      tooltip: 'Display name for this credential'
     },
     {
       key: 'BearerToken',
       label: 'Bearer Token',
+      tooltip: 'Auto-generated API token used for authentication in API requests',
       width: '200px',
       render: (item) => (
         <div className="token-cell">
@@ -181,6 +184,7 @@ function Credentials() {
     {
       key: 'Active',
       label: 'Status',
+      tooltip: 'Whether this credential can be used for authentication',
       width: '120px',
       render: (item) => <StatusIndicator active={item.Active} />,
       filterValue: (item) => item.Active ? 'active' : 'inactive'
@@ -188,6 +192,7 @@ function Credentials() {
     {
       key: 'CreatedUtc',
       label: 'Created',
+      tooltip: 'When this credential was generated',
       width: '180px',
       render: (item) => formatDate(item.CreatedUtc)
     },

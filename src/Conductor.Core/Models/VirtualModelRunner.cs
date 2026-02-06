@@ -174,6 +174,41 @@ namespace Conductor.Core.Models
         public bool StrictMode { get; set; } = false;
 
         /// <summary>
+        /// Session affinity mode controlling how client identity is derived for sticky session routing.
+        /// Default is <see cref="SessionAffinityModeEnum.None"/> (no session affinity).
+        /// </summary>
+        public SessionAffinityModeEnum SessionAffinityMode { get; set; } = SessionAffinityModeEnum.None;
+
+        /// <summary>
+        /// When <see cref="SessionAffinityMode"/> is <see cref="SessionAffinityModeEnum.Header"/>,
+        /// specifies the request header name to use as the client identity key (e.g., X-Session-Id).
+        /// Ignored for other modes. May be null.
+        /// </summary>
+        public string SessionAffinityHeader { get; set; } = null;
+
+        /// <summary>
+        /// Duration in milliseconds that a session pin remains active since last use.
+        /// Refreshed on each request. Minimum: 60000 (1 minute). Maximum: 86400000 (24 hours). Default: 600000 (10 minutes).
+        /// Values below minimum clamp to 600000. Values above maximum clamp to 86400000.
+        /// </summary>
+        public int SessionTimeoutMs
+        {
+            get => _SessionTimeoutMs;
+            set => _SessionTimeoutMs = (value < 60000 ? 600000 : (value > 86400000 ? 86400000 : value));
+        }
+
+        /// <summary>
+        /// Maximum number of concurrent session entries per VMR before oldest entries are evicted.
+        /// Minimum: 100. Maximum: 1000000. Default: 10000.
+        /// Values below minimum clamp to 10000. Values above maximum clamp to 1000000.
+        /// </summary>
+        public int SessionMaxEntries
+        {
+            get => _SessionMaxEntries;
+            set => _SessionMaxEntries = (value < 100 ? 10000 : (value > 1000000 ? 1000000 : value));
+        }
+
+        /// <summary>
         /// Boolean indicating if the virtual model runner is active.
         /// </summary>
         public bool Active { get; set; } = true;
@@ -263,6 +298,8 @@ namespace Conductor.Core.Models
         private List<string> _ModelDefinitionIds = new List<string>();
         private string _ModelDefinitionIdsJson = "[]";
         private int _TimeoutMs = 60000;
+        private int _SessionTimeoutMs = 600000;
+        private int _SessionMaxEntries = 10000;
         private List<string> _Labels = new List<string>();
         private Dictionary<string, string> _Tags = new Dictionary<string, string>();
 
@@ -304,6 +341,13 @@ namespace Conductor.Core.Models
 
             if (obj.TimeoutMs == 0) obj.TimeoutMs = 60000;
             if (String.IsNullOrEmpty(obj.BasePath)) obj.BasePath = "/v1.0/api/" + obj.Id + "/";
+
+            obj.SessionAffinityMode = DataTableHelper.GetEnumValue<SessionAffinityModeEnum>(row, "sessionaffinitymode", SessionAffinityModeEnum.None);
+            obj.SessionAffinityHeader = DataTableHelper.GetStringValue(row, "sessionaffinityheader");
+            obj.SessionTimeoutMs = DataTableHelper.GetIntValue(row, "sessiontimeoutms");
+            if (obj.SessionTimeoutMs == 0) obj.SessionTimeoutMs = 600000;
+            obj.SessionMaxEntries = DataTableHelper.GetIntValue(row, "sessionmaxentries");
+            if (obj.SessionMaxEntries == 0) obj.SessionMaxEntries = 10000;
 
             string endpointIdsJson = DataTableHelper.GetStringValue(row, "modelrunnerendpointids");
             if (!String.IsNullOrEmpty(endpointIdsJson))

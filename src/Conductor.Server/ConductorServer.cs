@@ -36,6 +36,7 @@ namespace Conductor.Server
         private static DatabaseDriverBase _Database;
         private static AuthenticationService _AuthService;
         private static HealthCheckService _HealthCheckService;
+        private static SessionAffinityService _SessionAffinityService;
         private static Serializer _Serializer;
         private static SwiftStackApp _App;
         private static CancellationTokenSource _TokenSource;
@@ -129,6 +130,10 @@ namespace Conductor.Server
             await _HealthCheckService.StartAsync(_TokenSource.Token).ConfigureAwait(false);
             _Logging.Info(_Header + "health check service started");
 
+            // Initialize session affinity service
+            _SessionAffinityService = new SessionAffinityService(_Logging);
+            _Logging.Info(_Header + "session affinity service initialized");
+
             // Initialize webserver
             _Logging.Info(_Header + "initializing webserver");
             _App = new SwiftStackApp("Conductor Server");
@@ -186,6 +191,13 @@ namespace Conductor.Server
                 await _HealthCheckService.StopAsync().ConfigureAwait(false);
                 _HealthCheckService.Dispose();
                 _Logging.Info(_Header + "health check service stopped");
+            }
+
+            // Dispose session affinity service
+            if (_SessionAffinityService != null)
+            {
+                _SessionAffinityService.Dispose();
+                _Logging.Info(_Header + "session affinity service stopped");
             }
 
             // Dispose cancellation token source
@@ -292,9 +304,9 @@ namespace Conductor.Server
             Controllers.ModelRunnerEndpointController mreController = new Controllers.ModelRunnerEndpointController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService);
             Controllers.ModelDefinitionController mdController = new Controllers.ModelDefinitionController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.ModelConfigurationController mcController = new Controllers.ModelConfigurationController(_Database, _AuthService, _Serializer, _Logging);
-            Controllers.VirtualModelRunnerController vmrController = new Controllers.VirtualModelRunnerController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService);
+            Controllers.VirtualModelRunnerController vmrController = new Controllers.VirtualModelRunnerController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService);
             Controllers.AuthController authController = new Controllers.AuthController(_Database, _AuthService, _Serializer, _Logging, _Settings.AdminApiKeys);
-            Controllers.ProxyController proxyController = new Controllers.ProxyController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService);
+            Controllers.ProxyController proxyController = new Controllers.ProxyController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService);
             Controllers.AdministratorController adminController = new Controllers.AdministratorController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.BackupController backupController = new Controllers.BackupController(_Database, _AuthService, _Serializer, _Logging);
 
@@ -615,6 +627,20 @@ namespace Conductor.Server
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             requireAuthentication: true);
 
+            _App.Rest.Get("/v1.0/modelrunnerendpoints/health", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.GetAllHealth(tenantId);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Get health status of all endpoints")
+                .WithDescription("Returns the health status of all model runner endpoints in the tenant")
+                .WithSecurity("Bearer")
+                .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of endpoint health statuses"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            requireAuthentication: true);
+
             _App.Rest.Get("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
@@ -692,20 +718,6 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
                 .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of model runner endpoints with pagination info"))
-                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
-
-            _App.Rest.Get("/v1.0/modelrunnerendpoints/health", async (req) =>
-            {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
-                return await mreController.GetAllHealth(tenantId);
-            },
-            api => api
-                .WithTag("Model Runner Endpoints")
-                .WithSummary("Get health status of all endpoints")
-                .WithDescription("Returns the health status of all model runner endpoints in the tenant")
-                .WithSecurity("Bearer")
-                .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of endpoint health statuses"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             requireAuthentication: true);
 
@@ -1227,12 +1239,13 @@ namespace Conductor.Server
                 RequestContext req = new RequestContext();
                 req.Data = ctx.Request.DataAsBytes;
 
-                /*
-                if (req.Data != null)
-                    Console.WriteLine("Request body:" + Environment.NewLine + Encoding.UTF8.GetString(req.Data));
-                else
-                    Console.WriteLine("Request body: null");
-                 */
+                if (_Settings.Debug.RequestBody)
+                {
+                    string logMessage = "request body debug: ";
+                    if (req.Data != null) logMessage += Environment.NewLine + Encoding.UTF8.GetString(req.Data);
+                    else logMessage += "(null)";
+                    _Logging.Debug(_Header + logMessage);
+                }
 
                 await proxyController.HandleRequest(ctx, req);
                 double elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;

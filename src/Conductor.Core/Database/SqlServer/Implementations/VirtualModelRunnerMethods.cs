@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             vmr.CreatedUtc = DateTime.UtcNow;
             vmr.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(vmr.Id) + "', " +
                            "'" + _Driver.Sanitize(vmr.TenantId) + "', " +
                            "'" + _Driver.Sanitize(vmr.Name) + "', " +
@@ -51,6 +51,10 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            _Driver.FormatBoolean(vmr.AllowCompletions) + ", " +
                            _Driver.FormatBoolean(vmr.AllowModelManagement) + ", " +
                            _Driver.FormatBoolean(vmr.StrictMode) + ", " +
+                           (int)vmr.SessionAffinityMode + ", " +
+                           _Driver.FormatNullableString(vmr.SessionAffinityHeader) + ", " +
+                           vmr.SessionTimeoutMs + ", " +
+                           vmr.SessionMaxEntries + ", " +
                            _Driver.FormatBoolean(vmr.Active) + ", " +
                            "'" + _Driver.FormatDateTime(vmr.CreatedUtc) + "', " +
                            "'" + _Driver.FormatDateTime(vmr.LastUpdateUtc) + "', " +
@@ -71,6 +75,20 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
 
             string query = "SELECT * FROM virtualmodelrunners WHERE tenantid = '" + _Driver.Sanitize(tenantId) + "' AND id = '" + _Driver.Sanitize(id) + "';";
+            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return null;
+            return VirtualModelRunner.FromDataRow(result.Rows[0]);
+        }
+
+        /// <summary>
+        /// Read a virtual model runner by ID without tenant filtering (admin use only).
+        /// </summary>
+        public async Task<VirtualModelRunner> ReadByIdAsync(string id, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+
+            string query = "SELECT * FROM virtualmodelrunners WHERE id = '" + _Driver.Sanitize(id) + "';";
             DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
 
             if (result == null || result.Rows.Count < 1) return null;
@@ -119,6 +137,10 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            "allowcompletions = " + _Driver.FormatBoolean(vmr.AllowCompletions) + ", " +
                            "allowmodelmanagement = " + _Driver.FormatBoolean(vmr.AllowModelManagement) + ", " +
                            "strictmode = " + _Driver.FormatBoolean(vmr.StrictMode) + ", " +
+                           "sessionaffinitymode = " + (int)vmr.SessionAffinityMode + ", " +
+                           "sessionaffinityheader = " + _Driver.FormatNullableString(vmr.SessionAffinityHeader) + ", " +
+                           "sessiontimeoutms = " + vmr.SessionTimeoutMs + ", " +
+                           "sessionmaxentries = " + vmr.SessionMaxEntries + ", " +
                            "active = " + _Driver.FormatBoolean(vmr.Active) + ", " +
                            "lastupdateutc = '" + _Driver.FormatDateTime(vmr.LastUpdateUtc) + "', " +
                            "labels = " + _Driver.FormatNullableString(vmr.LabelsJson) + ", " +

@@ -50,7 +50,12 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(id))
                 throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
 
-            ModelDefinition definition = await Database.ModelDefinition.ReadAsync(tenantId, id);
+            ModelDefinition definition;
+            if (String.IsNullOrEmpty(tenantId))
+                definition = await Database.ModelDefinition.ReadByIdAsync(id);
+            else
+                definition = await Database.ModelDefinition.ReadAsync(tenantId, id);
+
             if (definition == null)
                 throw new SwiftStackException(ApiResultEnum.NotFound);
 

@@ -12,7 +12,8 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Model Configurations**: Create reusable configurations with pinned properties for embeddings and completions
 - **Virtual Model Runners**: Combine endpoints and configurations into virtual endpoints with load balancing
 - **Configuration Pinning**: Automatically inject model parameters into requests (like OllamaFlow)
-- **Load Balancing**: Round-robin, random, or first-available endpoint selection with weighted distribution
+- **Session Affinity**: Pin clients to specific backend endpoints based on IP address, API key, or custom headers to minimize context drops and model swapping
+- **Load Balancing**: Round-robin, random, or first-available endpoint selection with weighted distribution and optional session affinity
 - **Health Checking**: Automatic background health monitoring of endpoints with configurable thresholds
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
 - **React Dashboard**: Full-featured UI for managing all entities including real-time health status

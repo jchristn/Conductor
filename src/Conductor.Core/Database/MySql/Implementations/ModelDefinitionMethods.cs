@@ -72,6 +72,20 @@ namespace Conductor.Core.Database.MySql.Implementations
         }
 
         /// <summary>
+        /// Read a model definition by ID without tenant filtering (admin use only).
+        /// </summary>
+        public async Task<ModelDefinition> ReadByIdAsync(string id, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+
+            string query = "SELECT * FROM modeldefinitions WHERE id = '" + _Driver.Sanitize(id) + "';";
+            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return null;
+            return ModelDefinition.FromDataRow(result.Rows[0]);
+        }
+
+        /// <summary>
         /// Update a model definition.
         /// </summary>
         public async Task<ModelDefinition> UpdateAsync(ModelDefinition definition, CancellationToken token = default)

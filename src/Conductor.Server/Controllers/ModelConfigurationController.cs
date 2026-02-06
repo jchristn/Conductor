@@ -50,7 +50,12 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(id))
                 throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
 
-            ModelConfiguration configuration = await Database.ModelConfiguration.ReadAsync(tenantId, id);
+            ModelConfiguration configuration;
+            if (String.IsNullOrEmpty(tenantId))
+                configuration = await Database.ModelConfiguration.ReadByIdAsync(id);
+            else
+                configuration = await Database.ModelConfiguration.ReadAsync(tenantId, id);
+
             if (configuration == null)
                 throw new SwiftStackException(ApiResultEnum.NotFound);
 

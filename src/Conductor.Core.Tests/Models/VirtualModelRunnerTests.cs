@@ -389,6 +389,124 @@ namespace Conductor.Core.Tests.Models
 
         #endregion
 
+        #region SessionAffinity-Default-Value-Tests
+
+        [Fact]
+        public void SessionAffinityMode_DefaultsToNone()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.None);
+        }
+
+        [Fact]
+        public void SessionAffinityMode_WhenSet_ReturnsExpectedValue()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+
+            vmr.SessionAffinityMode = SessionAffinityModeEnum.SourceIP;
+            vmr.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.SourceIP);
+
+            vmr.SessionAffinityMode = SessionAffinityModeEnum.ApiKey;
+            vmr.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.ApiKey);
+
+            vmr.SessionAffinityMode = SessionAffinityModeEnum.Header;
+            vmr.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.Header);
+
+            vmr.SessionAffinityMode = SessionAffinityModeEnum.None;
+            vmr.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.None);
+        }
+
+        [Fact]
+        public void SessionAffinityHeader_DefaultsToNull()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionAffinityHeader.Should().BeNull();
+        }
+
+        [Fact]
+        public void SessionAffinityHeader_WhenSet_ReturnsExpectedValue()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionAffinityHeader = "X-Session-Id";
+            vmr.SessionAffinityHeader.Should().Be("X-Session-Id");
+        }
+
+        [Fact]
+        public void SessionTimeoutMs_DefaultsTo600000()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionTimeoutMs.Should().Be(600000);
+        }
+
+        [Fact]
+        public void SessionTimeoutMs_WhenBelowMinimum_ClampsToDefault()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionTimeoutMs = 30000;
+            vmr.SessionTimeoutMs.Should().Be(600000);
+        }
+
+        [Fact]
+        public void SessionTimeoutMs_WhenAboveMaximum_ClampsToMaximum()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionTimeoutMs = 100000000;
+            vmr.SessionTimeoutMs.Should().Be(86400000);
+        }
+
+        [Fact]
+        public void SessionTimeoutMs_WhenValid_ReturnsExpectedValue()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionTimeoutMs = 120000;
+            vmr.SessionTimeoutMs.Should().Be(120000);
+
+            vmr.SessionTimeoutMs = 86400000;
+            vmr.SessionTimeoutMs.Should().Be(86400000);
+
+            vmr.SessionTimeoutMs = 60000;
+            vmr.SessionTimeoutMs.Should().Be(60000);
+        }
+
+        [Fact]
+        public void SessionMaxEntries_DefaultsTo10000()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionMaxEntries.Should().Be(10000);
+        }
+
+        [Fact]
+        public void SessionMaxEntries_WhenBelowMinimum_ClampsToDefault()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionMaxEntries = 50;
+            vmr.SessionMaxEntries.Should().Be(10000);
+        }
+
+        [Fact]
+        public void SessionMaxEntries_WhenAboveMaximum_ClampsToMaximum()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionMaxEntries = 2000000;
+            vmr.SessionMaxEntries.Should().Be(1000000);
+        }
+
+        [Fact]
+        public void SessionMaxEntries_WhenValid_ReturnsExpectedValue()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.SessionMaxEntries = 500;
+            vmr.SessionMaxEntries.Should().Be(500);
+
+            vmr.SessionMaxEntries = 1000000;
+            vmr.SessionMaxEntries.Should().Be(1000000);
+
+            vmr.SessionMaxEntries = 100;
+            vmr.SessionMaxEntries.Should().Be(100);
+        }
+
+        #endregion
+
         #region Helper-Methods
 
         private DataTable CreateTestDataTable()

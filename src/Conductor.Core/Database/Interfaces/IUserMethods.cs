@@ -28,6 +28,14 @@ namespace Conductor.Core.Database.Interfaces
         Task<UserMaster> ReadAsync(string tenantId, string id, CancellationToken token = default);
 
         /// <summary>
+        /// Read a user by ID without tenant filtering (admin use only).
+        /// </summary>
+        /// <param name="id">User ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>User or null if not found.</returns>
+        Task<UserMaster> ReadByIdAsync(string id, CancellationToken token = default);
+
+        /// <summary>
         /// Read a user by email.
         /// </summary>
         /// <param name="tenantId">Tenant ID.</param>

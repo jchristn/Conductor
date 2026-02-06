@@ -29,6 +29,14 @@ namespace Conductor.Core.Database.Interfaces
         Task<VirtualModelRunner> ReadAsync(string tenantId, string id, CancellationToken token = default);
 
         /// <summary>
+        /// Read a virtual model runner by ID without tenant filtering (admin use only).
+        /// </summary>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Virtual model runner or null if not found.</returns>
+        Task<VirtualModelRunner> ReadByIdAsync(string id, CancellationToken token = default);
+
+        /// <summary>
         /// Read a virtual model runner by base path.
         /// </summary>
         /// <param name="basePath">Base path.</param>

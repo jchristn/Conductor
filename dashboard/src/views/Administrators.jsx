@@ -113,22 +113,26 @@ function Administrators() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique identifier for this administrator',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Email',
-      label: 'Email'
+      label: 'Email',
+      tooltip: 'Email address used for dashboard login'
     },
     {
       key: 'Name',
       label: 'Name',
+      tooltip: 'Full name of the administrator',
       render: (item) => [item.FirstName, item.LastName].filter(Boolean).join(' ') || '-',
       filterValue: (item) => [item.FirstName, item.LastName].filter(Boolean).join(' ')
     },
     {
       key: 'Active',
       label: 'Status',
+      tooltip: 'Whether this administrator can log into the dashboard',
       width: '120px',
       render: (item) => <StatusIndicator active={item.Active} />,
       filterValue: (item) => item.Active ? 'active' : 'inactive'
@@ -136,6 +140,7 @@ function Administrators() {
     {
       key: 'CreatedUtc',
       label: 'Created',
+      tooltip: 'When this administrator account was created',
       width: '180px',
       render: (item) => formatDate(item.CreatedUtc)
     },

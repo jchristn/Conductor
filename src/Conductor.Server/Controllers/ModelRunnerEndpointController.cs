@@ -58,7 +58,12 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(id))
                 throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
 
-            ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id);
+            ModelRunnerEndpoint endpoint;
+            if (String.IsNullOrEmpty(tenantId))
+                endpoint = await Database.ModelRunnerEndpoint.ReadByIdAsync(id);
+            else
+                endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id);
+
             if (endpoint == null)
                 throw new SwiftStackException(ApiResultEnum.NotFound);
 
@@ -128,12 +133,12 @@ namespace Conductor.Server.Controllers
             if (_HealthCheckService == null)
                 return new List<EndpointHealthStatus>();
 
-            var healthStates = _HealthCheckService.GetAllHealthStates(tenantId);
-            var results = new List<EndpointHealthStatus>();
+            List<EndpointHealthState> healthStates = _HealthCheckService.GetAllHealthStates(tenantId);
+            List<EndpointHealthStatus> results = new List<EndpointHealthStatus>();
 
-            foreach (var state in healthStates)
+            foreach (EndpointHealthState state in healthStates)
             {
-                ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, state.EndpointId);
+                ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.ReadAsync(state.TenantId ?? tenantId, state.EndpointId);
                 results.Add(EndpointHealthStatus.FromState(state, endpoint));
             }
 

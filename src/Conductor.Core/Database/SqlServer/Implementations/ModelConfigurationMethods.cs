@@ -74,6 +74,20 @@ namespace Conductor.Core.Database.SqlServer.Implementations
         }
 
         /// <summary>
+        /// Read a model configuration by ID without tenant filtering (admin use only).
+        /// </summary>
+        public async Task<ModelConfiguration> ReadByIdAsync(string id, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+
+            string query = "SELECT * FROM modelconfigurations WHERE id = '" + _Driver.Sanitize(id) + "';";
+            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return null;
+            return ModelConfiguration.FromDataRow(result.Rows[0]);
+        }
+
+        /// <summary>
         /// Update a model configuration.
         /// </summary>
         public async Task<ModelConfiguration> UpdateAsync(ModelConfiguration configuration, CancellationToken token = default)

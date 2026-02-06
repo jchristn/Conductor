@@ -84,6 +84,20 @@ namespace Conductor.Core.Database.SqlServer.Implementations
         }
 
         /// <summary>
+        /// Read a model runner endpoint by ID without tenant filtering (admin use only).
+        /// </summary>
+        public async Task<ModelRunnerEndpoint> ReadByIdAsync(string id, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+
+            string query = "SELECT * FROM modelrunnerendpoints WHERE id = '" + _Driver.Sanitize(id) + "';";
+            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return null;
+            return ModelRunnerEndpoint.FromDataRow(result.Rows[0]);
+        }
+
+        /// <summary>
         /// Update a model runner endpoint.
         /// </summary>
         public async Task<ModelRunnerEndpoint> UpdateAsync(ModelRunnerEndpoint endpoint, CancellationToken token = default)

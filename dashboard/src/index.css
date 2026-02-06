@@ -1340,6 +1340,72 @@ body {
   animation: spin 1s linear infinite;
 }
 
+/* Health Summary Banner */
+.health-summary-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.health-summary-counts {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.health-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.health-count-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.health-count-dot.healthy {
+  background: var(--success-color);
+}
+
+.health-count-dot.unhealthy {
+  background: var(--danger-color);
+}
+
+.health-count-dot.pending {
+  background: var(--text-secondary);
+}
+
+.health-count.healthy {
+  color: var(--success-color);
+}
+
+.health-count.unhealthy {
+  color: var(--danger-color);
+}
+
+.health-count.pending {
+  color: var(--text-secondary);
+}
+
+.status-badge.pending {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-secondary);
+}
+
+.health-badge.pending {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-secondary);
+}
+
 .loading-spinner {
   text-align: center;
   padding: 40px;

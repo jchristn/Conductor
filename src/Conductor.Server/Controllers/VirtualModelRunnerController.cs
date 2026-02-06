@@ -19,14 +19,16 @@ namespace Conductor.Server.Controllers
     public class VirtualModelRunnerController : BaseController
     {
         private readonly HealthCheckService _HealthCheckService;
+        private readonly SessionAffinityService _SessionAffinityService;
 
         /// <summary>
         /// Instantiate the virtual model runner controller.
         /// </summary>
-        public VirtualModelRunnerController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null)
+        public VirtualModelRunnerController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, SessionAffinityService sessionAffinityService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
+            _SessionAffinityService = sessionAffinityService;
         }
 
         /// <summary>
@@ -55,7 +57,12 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(id))
                 throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
 
-            VirtualModelRunner vmr = await Database.VirtualModelRunner.ReadAsync(tenantId, id);
+            VirtualModelRunner vmr;
+            if (String.IsNullOrEmpty(tenantId))
+                vmr = await Database.VirtualModelRunner.ReadByIdAsync(id);
+            else
+                vmr = await Database.VirtualModelRunner.ReadAsync(tenantId, id);
+
             if (vmr == null)
                 throw new SwiftStackException(ApiResultEnum.NotFound);
 
@@ -132,7 +139,12 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(id))
                 throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
 
-            VirtualModelRunner vmr = await Database.VirtualModelRunner.ReadAsync(tenantId, id);
+            VirtualModelRunner vmr;
+            if (String.IsNullOrEmpty(tenantId))
+                vmr = await Database.VirtualModelRunner.ReadByIdAsync(id);
+            else
+                vmr = await Database.VirtualModelRunner.ReadAsync(tenantId, id);
+
             if (vmr == null)
                 throw new SwiftStackException(ApiResultEnum.NotFound);
 
@@ -152,7 +164,12 @@ namespace Conductor.Server.Controllers
                 foreach (string endpointId in vmr.ModelRunnerEndpointIds)
                 {
                     var state = _HealthCheckService.GetHealthState(endpointId);
-                    ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, endpointId);
+
+                    ModelRunnerEndpoint endpoint;
+                    if (String.IsNullOrEmpty(tenantId))
+                        endpoint = await Database.ModelRunnerEndpoint.ReadByIdAsync(endpointId);
+                    else
+                        endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, endpointId);
 
                     if (state != null)
                     {
@@ -178,6 +195,12 @@ namespace Conductor.Server.Controllers
             status.HealthyEndpointCount = healthyCount;
             status.TotalEndpointCount = totalCount;
             status.OverallHealthy = healthyCount == totalCount && totalCount > 0;
+
+            // Include active session count when session affinity is enabled
+            if (vmr.SessionAffinityMode != Core.Enums.SessionAffinityModeEnum.None && _SessionAffinityService != null)
+            {
+                status.ActiveSessionCount = _SessionAffinityService.GetSessionCount(vmr.Id);
+            }
 
             return status;
         }

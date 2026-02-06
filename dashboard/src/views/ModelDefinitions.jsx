@@ -175,31 +175,37 @@ function ModelDefinitions() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique identifier for this model definition',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Name',
-      label: 'Name'
+      label: 'Name',
+      tooltip: 'Model identifier as used in API requests'
     },
     {
       key: 'Family',
       label: 'Family',
+      tooltip: 'Model family name (e.g., llama, mistral, phi)',
       width: '120px'
     },
     {
       key: 'ParameterSize',
       label: 'Size',
+      tooltip: 'Number of model parameters (e.g., 3B, 7B, 70B)',
       width: '100px'
     },
     {
       key: 'QuantizationLevel',
       label: 'Quantization',
+      tooltip: 'Quantization format (e.g., Q4_0, Q8_0, FP16)',
       width: '100px'
     },
     {
       key: 'ModelType',
       label: 'Type',
+      tooltip: 'Supported inference types (completions and/or embeddings)',
       width: '120px',
       render: (item) => {
         const types = [];
@@ -217,6 +223,7 @@ function ModelDefinitions() {
     {
       key: 'Active',
       label: 'Status',
+      tooltip: 'Whether this definition is available for use in VMRs',
       width: '120px',
       render: (item) => <StatusIndicator active={item.Active} />,
       filterValue: (item) => item.Active ? 'active' : 'inactive'
@@ -224,6 +231,7 @@ function ModelDefinitions() {
     {
       key: 'CreatedUtc',
       label: 'Created',
+      tooltip: 'When this model definition was created',
       width: '180px',
       render: (item) => formatDate(item.CreatedUtc)
     },

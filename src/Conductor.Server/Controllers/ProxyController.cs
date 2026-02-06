@@ -31,6 +31,7 @@ namespace Conductor.Server.Controllers
         private static readonly object _RoundRobinLock = new object();
         private static readonly Random _Random = new Random();
         private readonly HealthCheckService _HealthCheckService;
+        private readonly SessionAffinityService _SessionAffinityService;
 
         /// <summary>
         /// Buffer size for streaming responses. Default is 8KB.
@@ -40,10 +41,11 @@ namespace Conductor.Server.Controllers
         /// <summary>
         /// Instantiate the proxy controller.
         /// </summary>
-        public ProxyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null)
+        public ProxyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, SessionAffinityService sessionAffinityService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
+            _SessionAffinityService = sessionAffinityService;
         }
 
         /// <summary>
@@ -94,6 +96,19 @@ namespace Conductor.Server.Controllers
                     return;
                 }
 
+                // Derive client key for session affinity
+                string clientKey = null;
+                bool sessionPinUsed = false;
+
+                if (vmr.SessionAffinityMode != Conductor.Core.Enums.SessionAffinityModeEnum.None)
+                {
+                    clientKey = DeriveClientKey(ctx, vmr.SessionAffinityMode, vmr.SessionAffinityHeader);
+                }
+
+                // Populate request context
+                requestContext.ClientIpAddress = ctx.Request.Source.IpAddress;
+                requestContext.ClientIdentifier = clientKey;
+
                 // Get all endpoint IDs
                 List<string> endpointIds = vmr.ModelRunnerEndpointIds;
                 if (endpointIds == null || endpointIds.Count == 0)
@@ -102,58 +117,115 @@ namespace Conductor.Server.Controllers
                     return;
                 }
 
-                // Filter endpoints by health and capacity
-                List<EndpointAvailability> availableEndpoints = new List<EndpointAvailability>();
-                bool anyUnhealthy = false;
-                bool anyAtCapacity = false;
+                // Attempt session affinity lookup before filtering
+                ModelRunnerEndpoint endpoint = null;
 
-                foreach (string endpointId in endpointIds)
+                if (!String.IsNullOrEmpty(clientKey) && _SessionAffinityService != null)
                 {
-                    ModelRunnerEndpoint ep = await Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, endpointId);
-                    if (ep == null || !ep.Active) continue;
-
-                    bool isHealthy = true;
-                    bool hasCapacity = true;
-
-                    if (_HealthCheckService != null)
+                    if (_SessionAffinityService.TryGetPinnedEndpoint(vmr.Id, clientKey, out string pinnedEndpointId))
                     {
-                        EndpointHealthState healthState = _HealthCheckService.GetHealthState(endpointId);
-                        if (healthState != null)
+                        // Verify the pinned endpoint is still valid
+                        ModelRunnerEndpoint pinnedEp = await Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, pinnedEndpointId);
+                        if (pinnedEp != null && pinnedEp.Active && endpointIds.Contains(pinnedEndpointId))
                         {
-                            isHealthy = healthState.IsHealthy;
-                            // Check capacity (0 = unlimited)
-                            if (ep.MaxParallelRequests > 0 && healthState.InFlightRequests >= ep.MaxParallelRequests)
+                            bool pinnedHealthy = true;
+                            bool pinnedHasCapacity = true;
+
+                            if (_HealthCheckService != null)
                             {
-                                hasCapacity = false;
+                                EndpointHealthState pinnedState = _HealthCheckService.GetHealthState(pinnedEndpointId);
+                                if (pinnedState != null)
+                                {
+                                    pinnedHealthy = pinnedState.IsHealthy;
+                                    if (pinnedEp.MaxParallelRequests > 0 && pinnedState.InFlightRequests >= pinnedEp.MaxParallelRequests)
+                                    {
+                                        pinnedHasCapacity = false;
+                                    }
+                                }
                             }
+
+                            if (pinnedHealthy && pinnedHasCapacity)
+                            {
+                                endpoint = pinnedEp;
+                                sessionPinUsed = true;
+                            }
+                            else
+                            {
+                                // Pinned endpoint failed checks, remove pin
+                                _SessionAffinityService.RemovePinnedEndpoint(vmr.Id, clientKey);
+                                Logging.Debug(_Header + "removed stale session pin for client " + clientKey + " to endpoint " + pinnedEndpointId);
+                            }
+                        }
+                        else
+                        {
+                            // Pinned endpoint no longer valid
+                            _SessionAffinityService.RemovePinnedEndpoint(vmr.Id, clientKey);
+                        }
+                    }
+                }
+
+                // If no pinned endpoint was used, proceed with normal load balancing
+                if (endpoint == null)
+                {
+                    // Filter endpoints by health and capacity
+                    List<EndpointAvailability> availableEndpoints = new List<EndpointAvailability>();
+                    bool anyUnhealthy = false;
+                    bool anyAtCapacity = false;
+
+                    foreach (string endpointId in endpointIds)
+                    {
+                        ModelRunnerEndpoint ep = await Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, endpointId);
+                        if (ep == null || !ep.Active) continue;
+
+                        bool isHealthy = true;
+                        bool hasCapacity = true;
+
+                        if (_HealthCheckService != null)
+                        {
+                            EndpointHealthState healthState = _HealthCheckService.GetHealthState(endpointId);
+                            if (healthState != null)
+                            {
+                                isHealthy = healthState.IsHealthy;
+                                // Check capacity (0 = unlimited)
+                                if (ep.MaxParallelRequests > 0 && healthState.InFlightRequests >= ep.MaxParallelRequests)
+                                {
+                                    hasCapacity = false;
+                                }
+                            }
+                        }
+
+                        if (!isHealthy) anyUnhealthy = true;
+                        if (!hasCapacity) anyAtCapacity = true;
+
+                        if (isHealthy && hasCapacity)
+                        {
+                            availableEndpoints.Add(new EndpointAvailability(ep, isHealthy, hasCapacity));
                         }
                     }
 
-                    if (!isHealthy) anyUnhealthy = true;
-                    if (!hasCapacity) anyAtCapacity = true;
-
-                    if (isHealthy && hasCapacity)
+                    // Check if we have any available endpoints
+                    if (availableEndpoints.Count == 0)
                     {
-                        availableEndpoints.Add(new EndpointAvailability(ep, isHealthy, hasCapacity));
+                        if (anyAtCapacity && !anyUnhealthy)
+                        {
+                            await SendTooManyRequests(ctx, "All endpoints at capacity");
+                        }
+                        else
+                        {
+                            await SendBadGateway(ctx, "No healthy endpoints available");
+                        }
+                        return;
+                    }
+
+                    // Select endpoint using load balancing (with weights)
+                    endpoint = SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode);
+
+                    // Pin the selected endpoint for this client
+                    if (!String.IsNullOrEmpty(clientKey) && _SessionAffinityService != null)
+                    {
+                        _SessionAffinityService.SetPinnedEndpoint(vmr.Id, clientKey, endpoint.Id, vmr.SessionTimeoutMs, vmr.SessionMaxEntries);
                     }
                 }
-
-                // Check if we have any available endpoints
-                if (availableEndpoints.Count == 0)
-                {
-                    if (anyAtCapacity && !anyUnhealthy)
-                    {
-                        await SendTooManyRequests(ctx, "All endpoints at capacity");
-                    }
-                    else
-                    {
-                        await SendBadGateway(ctx, "No healthy endpoints available");
-                    }
-                    return;
-                }
-
-                // Select endpoint using load balancing (with weights)
-                ModelRunnerEndpoint endpoint = SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode);
 
                 // Track in-flight request
                 bool incrementedInFlight = false;
@@ -207,18 +279,19 @@ namespace Conductor.Server.Controllers
                     // Forward the request and send response back
                     // Use using to ensure HttpResponseMessage is disposed after streaming completes
                     using (HttpResponseMessage response = await ForwardRequestAsync(
-                        ctx, 
-                        targetUrl, 
-                        endpoint, 
-                        requestContext.Data, 
+                        ctx,
+                        targetUrl,
+                        endpoint,
+                        requestContext.Data,
                         cancellationToken).ConfigureAwait(false))
                     {
                         await SendProxyResponse(
-                            ctx, 
-                            response, 
-                            vmr.Id, 
-                            endpoint.Id, 
-                            effectiveModel, 
+                            ctx,
+                            response,
+                            vmr.Id,
+                            endpoint.Id,
+                            effectiveModel,
+                            sessionPinUsed,
                             cancellationToken).ConfigureAwait(false);
                     }
                 }
@@ -710,6 +783,7 @@ namespace Conductor.Server.Controllers
             string vmrId,
             string endpointId,
             string modelName,
+            bool sessionPinUsed,
             CancellationToken cancellationToken)
         {
             ctx.Response.StatusCode = (int)response.StatusCode;
@@ -729,6 +803,9 @@ namespace Conductor.Server.Controllers
             {
                 ctx.Response.Headers.Add(ConductorConstants.HeaderModelName, modelName);
             }
+
+            // Add session affinity header
+            ctx.Response.Headers.Add(ConductorConstants.HeaderSessionPinned, sessionPinUsed ? "true" : "false");
 
             // Copy content type
             if (response.Content?.Headers?.ContentType != null)
@@ -834,6 +911,41 @@ namespace Conductor.Server.Controllers
 
                 // Send final empty chunk to signal end of stream
                 await ctx.Response.SendChunk(Array.Empty<byte>(), true, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        private string DeriveClientKey(HttpContextBase ctx, Conductor.Core.Enums.SessionAffinityModeEnum mode, string headerName)
+        {
+            switch (mode)
+            {
+                case Conductor.Core.Enums.SessionAffinityModeEnum.SourceIP:
+                    string forwardedFor = ctx.Request.Headers.Get(ConductorConstants.HeaderXForwardedFor);
+                    if (!String.IsNullOrEmpty(forwardedFor))
+                    {
+                        // Use the leftmost (original client) IP
+                        string firstIp = forwardedFor.Split(',')[0].Trim();
+                        if (!String.IsNullOrEmpty(firstIp)) return firstIp;
+                    }
+                    return ctx.Request.Source.IpAddress;
+
+                case Conductor.Core.Enums.SessionAffinityModeEnum.ApiKey:
+                    string authHeader = ctx.Request.Headers.Get("Authorization");
+                    if (!String.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string token = authHeader.Substring(7).Trim();
+                        if (!String.IsNullOrEmpty(token)) return token;
+                    }
+                    return null;
+
+                case Conductor.Core.Enums.SessionAffinityModeEnum.Header:
+                    if (String.IsNullOrEmpty(headerName)) return null;
+                    string headerValue = ctx.Request.Headers.Get(headerName);
+                    if (!String.IsNullOrEmpty(headerValue)) return headerValue;
+                    return null;
+
+                case Conductor.Core.Enums.SessionAffinityModeEnum.None:
+                default:
+                    return null;
             }
         }
 

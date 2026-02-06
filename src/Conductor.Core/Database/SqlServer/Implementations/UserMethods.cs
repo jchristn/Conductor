@@ -70,6 +70,20 @@ namespace Conductor.Core.Database.SqlServer.Implementations
         }
 
         /// <summary>
+        /// Read a user by ID without tenant filtering (admin use only).
+        /// </summary>
+        public async Task<UserMaster> ReadByIdAsync(string id, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+
+            string query = "SELECT * FROM users WHERE id = '" + _Driver.Sanitize(id) + "';";
+            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return null;
+            return UserMaster.FromDataRow(result.Rows[0]);
+        }
+
+        /// <summary>
         /// Read a user by email.
         /// </summary>
         public async Task<UserMaster> ReadByEmailAsync(string tenantId, string email, CancellationToken token = default)

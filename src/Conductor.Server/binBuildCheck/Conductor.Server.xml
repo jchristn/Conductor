@@ -1,0 +1,1210 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Conductor.Server</name>
+    </assembly>
+    <members>
+        <member name="T:Conductor.Server.Program">
+            <summary>
+            Conductor Server main program.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Program.Main(System.String[])">
+            <summary>
+            Main entry point.
+            </summary>
+            <param name="args">Command line arguments.</param>
+        </member>
+        <member name="M:Conductor.Server.Program.GetTenantIdFromAuth(System.Object,System.String)">
+            <summary>
+            Get tenant ID from auth metadata, falling back to request body for admin auth.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Program.GetUserIdFromAuth(System.Object,System.String)">
+            <summary>
+            Get user ID from auth metadata, falling back to request body for admin auth.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Program.CheckUserAuthorization(Conductor.Server.Services.AuthenticationResult,Conductor.Core.Enums.RequestTypeEnum)">
+            <summary>
+            Check if a user is authorized for a given request type.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Program.ApplyCorsHeaders(WatsonWebserver.Core.HttpResponseBase,WatsonWebserver.Core.HttpRequestBase)">
+            <summary>
+            Apply CORS headers to a response based on the configured settings.
+            </summary>
+            <param name="response">HTTP response.</param>
+            <param name="request">HTTP request.</param>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdministratorController">
+            <summary>
+            Administrator API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AdministratorController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the administrator controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AdministratorController.Create(Conductor.Server.Controllers.AdministratorCreateRequest)">
+            <summary>
+            Create an administrator.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AdministratorController.Read(System.String)">
+            <summary>
+            Read an administrator by ID.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AdministratorController.Update(System.String,Conductor.Server.Controllers.AdministratorUpdateRequest)">
+            <summary>
+            Update an administrator.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AdministratorController.Delete(System.String,System.String)">
+            <summary>
+            Delete an administrator.
+            </summary>
+            <param name="currentAdminId">ID of the currently authenticated admin (to prevent self-deletion).</param>
+            <param name="id">ID of the administrator to delete.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AdministratorController.Enumerate(System.Nullable{System.Int32},System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate administrators.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AdministratorController.ToResponse(Conductor.Core.Models.Administrator)">
+            <summary>
+            Convert administrator to response object (without password hash).
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdministratorCreateRequest">
+            <summary>
+            Request to create an administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorCreateRequest.Email">
+            <summary>
+            Email address for the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorCreateRequest.Password">
+            <summary>
+            Password for the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorCreateRequest.FirstName">
+            <summary>
+            First name of the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorCreateRequest.LastName">
+            <summary>
+            Last name of the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorCreateRequest.Active">
+            <summary>
+            Whether the administrator is active.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdministratorUpdateRequest">
+            <summary>
+            Request to update an administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorUpdateRequest.Email">
+            <summary>
+            Email address for the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorUpdateRequest.Password">
+            <summary>
+            Password for the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorUpdateRequest.FirstName">
+            <summary>
+            First name of the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorUpdateRequest.LastName">
+            <summary>
+            Last name of the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorUpdateRequest.Active">
+            <summary>
+            Whether the administrator is active.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdministratorResponse">
+            <summary>
+            Administrator response object (without password hash).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorResponse.Id">
+            <summary>
+            Unique identifier for the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorResponse.Email">
+            <summary>
+            Email address of the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorResponse.FirstName">
+            <summary>
+            First name of the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorResponse.LastName">
+            <summary>
+            Last name of the administrator.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorResponse.Active">
+            <summary>
+            Whether the administrator is active.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorResponse.CreatedUtc">
+            <summary>
+            Timestamp when the administrator was created (UTC).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdministratorResponse.LastUpdateUtc">
+            <summary>
+            Timestamp when the administrator was last updated (UTC).
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AuthController">
+            <summary>
+            Authentication API controller for login endpoints.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AuthController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule,System.Collections.Generic.List{System.String})">
+            <summary>
+            Instantiate the auth controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AuthController.LoginWithCredentials(Conductor.Server.Controllers.LoginCredentialRequest)">
+            <summary>
+            Login with credentials (tenant ID, email, password).
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AuthController.LoginWithApiKey(Conductor.Server.Controllers.LoginApiKeyRequest)">
+            <summary>
+            Login with API key (bearer token or admin API key).
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.AuthController.LoginAsAdmin(Conductor.Server.Controllers.AdminLoginRequest)">
+            <summary>
+            Login as administrator.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.LoginCredentialRequest">
+            <summary>
+            Login request with credentials.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginCredentialRequest.TenantId">
+            <summary>
+            Tenant identifier.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginCredentialRequest.Email">
+            <summary>
+            User email address.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginCredentialRequest.Password">
+            <summary>
+            User password.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.LoginApiKeyRequest">
+            <summary>
+            Login request with API key.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginApiKeyRequest.ApiKey">
+            <summary>
+            API key (bearer token).
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.LoginResponse">
+            <summary>
+            Login response.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginResponse.Success">
+            <summary>
+            Whether login was successful.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginResponse.BearerToken">
+            <summary>
+            Bearer token for subsequent requests.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginResponse.Tenant">
+            <summary>
+            Tenant information.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginResponse.User">
+            <summary>
+            User information.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.LoginTenantInfo">
+            <summary>
+            Tenant info in login response.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginTenantInfo.Id">
+            <summary>
+            Tenant identifier.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginTenantInfo.Name">
+            <summary>
+            Tenant name.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.LoginUserInfo">
+            <summary>
+            User info in login response.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginUserInfo.Id">
+            <summary>
+            User identifier.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginUserInfo.Email">
+            <summary>
+            User email address.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginUserInfo.FirstName">
+            <summary>
+            User first name.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginUserInfo.LastName">
+            <summary>
+            User last name.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginUserInfo.IsAdmin">
+            <summary>
+            Whether the user is a global admin with cross-tenant access.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.LoginUserInfo.IsTenantAdmin">
+            <summary>
+            Whether the user is a tenant admin who can manage users and credentials.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdminLoginRequest">
+            <summary>
+            Admin login request.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginRequest.Email">
+            <summary>
+            Administrator email address.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginRequest.Password">
+            <summary>
+            Administrator password.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdminLoginResponse">
+            <summary>
+            Admin login response.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginResponse.Success">
+            <summary>
+            Whether login was successful.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginResponse.Administrator">
+            <summary>
+            Administrator information.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdminLoginInfo">
+            <summary>
+            Administrator info in login response.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginInfo.Id">
+            <summary>
+            Administrator identifier.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginInfo.Email">
+            <summary>
+            Administrator email address.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginInfo.FirstName">
+            <summary>
+            Administrator first name.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminLoginInfo.LastName">
+            <summary>
+            Administrator last name.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.AdminApiKeyLoginResponse">
+            <summary>
+            Admin API key login response.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminApiKeyLoginResponse.Success">
+            <summary>
+            Whether login was successful.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminApiKeyLoginResponse.IsAdmin">
+            <summary>
+            Indicates this is an admin login.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.AdminApiKeyLoginResponse.ApiKey">
+            <summary>
+            The admin API key used.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.BackupController">
+            <summary>
+            Backup and restore API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.BackupController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the backup controller.
+            </summary>
+            <param name="database">Database driver.</param>
+            <param name="authService">Authentication service.</param>
+            <param name="serializer">Serializer.</param>
+            <param name="logging">Logging module.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.BackupController.CreateBackup(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Create a complete backup of all Conductor configuration data.
+            </summary>
+            <param name="createdBy">Email of the administrator creating the backup.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Complete backup package.</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when backup operation fails.</exception>
+        </member>
+        <member name="M:Conductor.Server.Controllers.BackupController.RestoreBackup(Conductor.Core.Models.RestoreRequest,System.Threading.CancellationToken)">
+            <summary>
+            Restore configuration from a backup package.
+            </summary>
+            <param name="restoreRequest">The restore request containing package and options.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Result of the restore operation.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when restore request is null.</exception>
+        </member>
+        <member name="M:Conductor.Server.Controllers.BackupController.ValidateBackup(Conductor.Core.Models.BackupPackage,System.Threading.CancellationToken)">
+            <summary>
+            Validate a backup package without applying changes.
+            </summary>
+            <param name="package">The backup package to validate.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Validation result including potential conflicts.</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when package is null.</exception>
+        </member>
+        <member name="T:Conductor.Server.Controllers.BaseController">
+            <summary>
+            Base controller with common functionality.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Controllers.BaseController.Database">
+            <summary>
+            Database driver.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Controllers.BaseController.AuthService">
+            <summary>
+            Authentication service.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Controllers.BaseController.Serializer">
+            <summary>
+            Serializer.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Controllers.BaseController.Logging">
+            <summary>
+            Logging module.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.BaseController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the base controller.
+            </summary>
+            <param name="database">Database driver.</param>
+            <param name="authService">Authentication service.</param>
+            <param name="serializer">Serializer.</param>
+            <param name="logging">Logging module.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.BaseController.ReadRequestBodyAsync(WatsonWebserver.Core.HttpContextBase)">
+            <summary>
+            Read request body as string.
+            </summary>
+            <param name="ctx">HTTP context.</param>
+            <returns>Request body string.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.BaseController.DeserializeRequestAsync``1(WatsonWebserver.Core.HttpContextBase)">
+            <summary>
+            Deserialize request body.
+            </summary>
+            <typeparam name="T">Type to deserialize to.</typeparam>
+            <param name="ctx">HTTP context.</param>
+            <returns>Deserialized object or null.</returns>
+        </member>
+        <member name="T:Conductor.Server.Controllers.CredentialController">
+            <summary>
+            Credential API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.CredentialController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the credential controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.CredentialController.Create(System.String,System.String,Conductor.Core.Models.Credential)">
+            <summary>
+            Create a credential.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="userId">User ID from auth.</param>
+            <param name="credential">Credential data.</param>
+            <returns>Created credential.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.CredentialController.Read(System.String,System.String)">
+            <summary>
+            Read a credential by ID.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="id">Credential ID.</param>
+            <returns>Credential.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.CredentialController.Update(System.String,System.String,Conductor.Core.Models.Credential)">
+            <summary>
+            Update a credential.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="id">Credential ID.</param>
+            <param name="credential">Credential data.</param>
+            <returns>Updated credential.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.CredentialController.Delete(System.String,System.String)">
+            <summary>
+            Delete a credential.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="id">Credential ID.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.CredentialController.Enumerate(System.String,System.Nullable{System.Int32},System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate credentials.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="maxResults">Max results.</param>
+            <param name="continuationToken">Continuation token.</param>
+            <param name="activeFilter">Active filter.</param>
+            <returns>Enumeration result.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.CredentialController.GenerateUniqueBearerTokenAsync">
+            <summary>
+            Generate a unique bearer token.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.ModelConfigurationController">
+            <summary>
+            Model Configuration API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelConfigurationController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the model configuration controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelConfigurationController.Create(System.String,Conductor.Core.Models.ModelConfiguration)">
+            <summary>
+            Create a model configuration.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelConfigurationController.Read(System.String,System.String)">
+            <summary>
+            Read a model configuration by ID.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelConfigurationController.Update(System.String,System.String,Conductor.Core.Models.ModelConfiguration)">
+            <summary>
+            Update a model configuration.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelConfigurationController.Delete(System.String,System.String)">
+            <summary>
+            Delete a model configuration and remove references from VMRs.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelConfigurationController.Enumerate(System.String,System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate model configurations.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.ModelDefinitionController">
+            <summary>
+            Model Definition API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelDefinitionController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the model definition controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelDefinitionController.Create(System.String,Conductor.Core.Models.ModelDefinition)">
+            <summary>
+            Create a model definition.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelDefinitionController.Read(System.String,System.String)">
+            <summary>
+            Read a model definition by ID.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelDefinitionController.Update(System.String,System.String,Conductor.Core.Models.ModelDefinition)">
+            <summary>
+            Update a model definition.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelDefinitionController.Delete(System.String,System.String)">
+            <summary>
+            Delete a model definition and remove references from VMRs.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelDefinitionController.Enumerate(System.String,System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate model definitions.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.ModelRunnerEndpointController">
+            <summary>
+            Model Runner Endpoint API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelRunnerEndpointController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule,Conductor.Server.Services.HealthCheckService)">
+            <summary>
+            Instantiate the model runner endpoint controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelRunnerEndpointController.Create(System.String,Conductor.Core.Models.ModelRunnerEndpoint)">
+            <summary>
+            Create a model runner endpoint.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelRunnerEndpointController.Read(System.String,System.String)">
+            <summary>
+            Read a model runner endpoint by ID.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelRunnerEndpointController.Update(System.String,System.String,Conductor.Core.Models.ModelRunnerEndpoint)">
+            <summary>
+            Update a model runner endpoint.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelRunnerEndpointController.Delete(System.String,System.String)">
+            <summary>
+            Delete a model runner endpoint and remove references from VMRs.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelRunnerEndpointController.GetAllHealth(System.String)">
+            <summary>
+            Get health status for all endpoints in a tenant.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ModelRunnerEndpointController.Enumerate(System.String,System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate model runner endpoints.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Controllers.ProxyController">
+            <summary>
+            Proxy controller for virtual model runner requests.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Controllers.ProxyController.StreamingBufferSize">
+            <summary>
+            Buffer size for streaming responses. Default is 8KB.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ProxyController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule,Conductor.Server.Services.HealthCheckService,Conductor.Server.Services.SessionAffinityService)">
+            <summary>
+            Instantiate the proxy controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ProxyController.HandleRequest(WatsonWebserver.Core.HttpContextBase,Conductor.Core.Models.RequestContext,System.Threading.CancellationToken)">
+            <summary>
+            Handle incoming proxy request.
+            Supports standard HTTP responses, chunked transfer encoding, and Server-Sent Events (SSE).
+            </summary>
+            <param name="ctx">The HTTP context.</param>
+            <param name="requestContext">Request context containing the pre-read request body.</param>
+            <param name="cancellationToken">Cancellation token for the operation.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown if requestContext is null.</exception>
+            <exception cref="T:System.OperationCanceledException">Thrown if the operation is cancelled.</exception>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ProxyController.ApplyModelDefinitionAndConfigurationAsync(System.Byte[],Conductor.Core.Models.VirtualModelRunner,Conductor.Core.Models.UrlContext,WatsonWebserver.Core.HttpContextBase)">
+            <summary>
+            Applies model definitions and configurations to the request body.
+            </summary>
+            <param name="requestBody">The original request body.</param>
+            <param name="vmr">The virtual model runner.</param>
+            <param name="urlContext">The URL context containing request type information.</param>
+            <param name="ctx">HTTP context for sending error responses.</param>
+            <returns>A ModelResolutionResult containing the success status, modified body, and resolved model name.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ProxyController.ApplyConfigurationToBody(System.Collections.Generic.Dictionary{System.String,System.Object},Conductor.Core.Models.ModelConfiguration,Conductor.Core.Models.UrlContext)">
+            <summary>
+            Applies configuration parameters to the request body dictionary.
+            </summary>
+            <param name="bodyDict">Request body dictionary to modify.</param>
+            <param name="config">Model configuration to apply.</param>
+            <param name="urlContext">URL context for request type information.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ProxyController.ApplyPinningAsync(System.Byte[],Conductor.Core.Models.VirtualModelRunner,Conductor.Core.Models.UrlContext)">
+            <summary>
+            Applies pinned properties from model configurations to the request body.
+            </summary>
+            <param name="requestBody">The original request body.</param>
+            <param name="vmr">The virtual model runner.</param>
+            <param name="urlContext">The URL context containing request type information.</param>
+            <returns>The modified request body with pinned properties merged in.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ProxyController.IsStreamingResponse(System.Net.Http.HttpResponseMessage)">
+            <summary>
+            Determines if the response should be streamed based on content type and transfer encoding.
+            </summary>
+            <param name="response">The HTTP response message.</param>
+            <returns>True if the response should be streamed, false otherwise.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.ProxyController.SendStreamingResponseAsync(WatsonWebserver.Core.HttpContextBase,System.Net.Http.HttpResponseMessage,System.Threading.CancellationToken)">
+            <summary>
+            Streams the response body to the client chunk by chunk.
+            Supports SSE (Server-Sent Events), chunked transfer encoding, and other streaming formats.
+            </summary>
+            <param name="ctx">The HTTP context.</param>
+            <param name="response">The upstream HTTP response.</param>
+            <param name="cancellationToken">Cancellation token.</param>
+        </member>
+        <member name="T:Conductor.Server.Controllers.TenantController">
+            <summary>
+            Tenant API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.TenantController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the tenant controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.TenantController.Create(Conductor.Core.Models.TenantMetadata)">
+            <summary>
+            Create a tenant.
+            </summary>
+            <param name="tenant">Tenant data.</param>
+            <returns>Created tenant.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.TenantController.Read(System.String)">
+            <summary>
+            Read a tenant by ID.
+            </summary>
+            <param name="id">Tenant ID.</param>
+            <returns>Tenant or null.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.TenantController.Update(System.String,Conductor.Core.Models.TenantMetadata)">
+            <summary>
+            Update a tenant.
+            </summary>
+            <param name="id">Tenant ID.</param>
+            <param name="tenant">Tenant data.</param>
+            <returns>Updated tenant.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.TenantController.Delete(System.String)">
+            <summary>
+            Delete a tenant and all associated data.
+            </summary>
+            <param name="id">Tenant ID.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.TenantController.DeleteAssociatedDataAsync(System.String)">
+            <summary>
+            Delete all data associated with a tenant.
+            </summary>
+            <param name="tenantId">Tenant ID.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.TenantController.Enumerate(System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate tenants.
+            </summary>
+            <param name="maxResults">Max results.</param>
+            <param name="continuationToken">Continuation token.</param>
+            <param name="nameFilter">Name filter.</param>
+            <param name="activeFilter">Active filter.</param>
+            <returns>Enumeration result.</returns>
+        </member>
+        <member name="T:Conductor.Server.Controllers.UserController">
+            <summary>
+            User API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.UserController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the user controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.UserController.Create(System.String,Conductor.Core.Models.UserMaster)">
+            <summary>
+            Create a user.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="user">User data.</param>
+            <returns>Created user.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.UserController.Read(System.String,System.String)">
+            <summary>
+            Read a user by ID.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="id">User ID.</param>
+            <returns>User.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.UserController.Update(System.String,System.String,Conductor.Core.Models.UserMaster)">
+            <summary>
+            Update a user.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="id">User ID.</param>
+            <param name="user">User data.</param>
+            <returns>Updated user.</returns>
+        </member>
+        <member name="M:Conductor.Server.Controllers.UserController.Delete(System.String,System.String)">
+            <summary>
+            Delete a user and associated credentials.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="id">User ID.</param>
+        </member>
+        <member name="M:Conductor.Server.Controllers.UserController.Enumerate(System.String,System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate users.
+            </summary>
+            <param name="tenantId">Tenant ID from auth.</param>
+            <param name="maxResults">Max results.</param>
+            <param name="continuationToken">Continuation token.</param>
+            <param name="nameFilter">Name filter.</param>
+            <param name="activeFilter">Active filter.</param>
+            <returns>Enumeration result.</returns>
+        </member>
+        <member name="T:Conductor.Server.Controllers.VirtualModelRunnerController">
+            <summary>
+            Virtual Model Runner API controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.VirtualModelRunnerController.#ctor(Conductor.Core.Database.DatabaseDriverBase,Conductor.Server.Services.AuthenticationService,Conductor.Core.Serialization.Serializer,SyslogLogging.LoggingModule,Conductor.Server.Services.HealthCheckService,Conductor.Server.Services.SessionAffinityService)">
+            <summary>
+            Instantiate the virtual model runner controller.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.VirtualModelRunnerController.Create(System.String,Conductor.Core.Models.VirtualModelRunner)">
+            <summary>
+            Create a virtual model runner.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.VirtualModelRunnerController.Read(System.String,System.String)">
+            <summary>
+            Read a virtual model runner by ID.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.VirtualModelRunnerController.Update(System.String,System.String,Conductor.Core.Models.VirtualModelRunner)">
+            <summary>
+            Update a virtual model runner.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.VirtualModelRunnerController.Delete(System.String,System.String)">
+            <summary>
+            Delete a virtual model runner.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.VirtualModelRunnerController.Enumerate(System.String,System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.Boolean})">
+            <summary>
+            Enumerate virtual model runners.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Controllers.VirtualModelRunnerController.GetHealth(System.String,System.String)">
+            <summary>
+            Get health status for a virtual model runner's endpoints.
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Services.AuthenticationService">
+            <summary>
+            Authentication service for validating requests.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.AuthenticationService.#ctor(Conductor.Core.Database.DatabaseDriverBase,SyslogLogging.LoggingModule,System.Collections.Generic.List{System.String})">
+            <summary>
+            Instantiate the authentication service.
+            </summary>
+            <param name="database">Database driver.</param>
+            <param name="logging">Logging module.</param>
+            <param name="adminApiKeys">Admin API keys from settings.</param>
+        </member>
+        <member name="M:Conductor.Server.Services.AuthenticationService.AuthenticateAsync(WatsonWebserver.Core.HttpContextBase,System.Threading.CancellationToken)">
+            <summary>
+            Authenticate a request using headers or bearer token.
+            </summary>
+            <param name="ctx">HTTP context.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Authentication result with tenant and user info.</returns>
+        </member>
+        <member name="M:Conductor.Server.Services.AuthenticationService.GetTenantIdFromHeaders(WatsonWebserver.Core.HttpContextBase)">
+            <summary>
+            Get tenant ID from request headers (for tenant-only validation).
+            </summary>
+            <param name="ctx">HTTP context.</param>
+            <returns>Tenant ID or null.</returns>
+        </member>
+        <member name="M:Conductor.Server.Services.AuthenticationService.AuthenticateAdminAsync(WatsonWebserver.Core.HttpContextBase,System.Threading.CancellationToken)">
+            <summary>
+            Authenticate an administrator request using headers or admin API key.
+            </summary>
+            <param name="ctx">HTTP context.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Admin authentication result.</returns>
+        </member>
+        <member name="T:Conductor.Server.Services.AuthenticationResult">
+            <summary>
+            Result of authentication attempt.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.IsAuthenticated">
+            <summary>
+            Whether authentication was successful.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.Tenant">
+            <summary>
+            Authenticated tenant.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.User">
+            <summary>
+            Authenticated user.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.Credential">
+            <summary>
+            Credential used (if bearer token auth).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.AuthMethod">
+            <summary>
+            Authentication method used.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.ErrorMessage">
+            <summary>
+            Error message if authentication failed.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.IsAdmin">
+            <summary>
+            Whether the user has global admin rights (cross-tenant access).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.IsTenantAdmin">
+            <summary>
+            Whether the user has tenant admin rights (can manage users/credentials in their tenant).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.HasCrossTenantAccess">
+            <summary>
+            Whether the user can access entities across tenants.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.CanManageUsers">
+            <summary>
+            Whether the user can manage users and credentials (either global admin or tenant admin).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AuthenticationResult.RequestType">
+            <summary>
+            The type of request being made (for authorization).
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Services.AdminAuthenticationResult">
+            <summary>
+            Result of administrator authentication attempt.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AdminAuthenticationResult.IsAuthenticated">
+            <summary>
+            Whether authentication was successful.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AdminAuthenticationResult.Administrator">
+            <summary>
+            Authenticated administrator (null if API key auth).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AdminAuthenticationResult.IsApiKeyAuth">
+            <summary>
+            Whether authentication was via admin API key.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AdminAuthenticationResult.ApiKey">
+            <summary>
+            Admin API key used for authentication (if IsApiKeyAuth is true).
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AdminAuthenticationResult.ErrorMessage">
+            <summary>
+            Error message if authentication failed.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.AdminAuthenticationResult.RequestType">
+            <summary>
+            The type of request being made (for authorization).
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Services.HealthCheckService">
+            <summary>
+            Service for monitoring health of model runner endpoints.
+            Implements IDisposable to properly clean up HttpClient and CancellationTokenSource resources.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.#ctor(Conductor.Core.Database.DatabaseDriverBase,SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the health check service.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.StartAsync(System.Threading.CancellationToken)">
+            <summary>
+            Start the health check service and begin monitoring all endpoints.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.StopAsync">
+            <summary>
+            Stop the health check service.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.GetHealthState(System.String)">
+            <summary>
+            Get the health state for a specific endpoint.
+            Includes current ongoing uptime/downtime since last state change.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.GetAllHealthStates(System.String)">
+            <summary>
+            Get all health states for a specific tenant.
+            Includes current ongoing uptime/downtime since last state change.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.OnEndpointCreated(Conductor.Core.Models.ModelRunnerEndpoint)">
+            <summary>
+            Called when an endpoint is created.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.OnEndpointUpdated(Conductor.Core.Models.ModelRunnerEndpoint)">
+            <summary>
+            Called when an endpoint is updated.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.OnEndpointDeleted(System.String)">
+            <summary>
+            Called when an endpoint is deleted.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.TryIncrementInFlight(System.String,System.Int32)">
+            <summary>
+            Try to increment the in-flight request count for an endpoint.
+            Returns true if successful, false if at capacity.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.DecrementInFlight(System.String)">
+            <summary>
+            Decrement the in-flight request count for an endpoint.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.Dispose">
+            <summary>
+            Disposes of managed resources including HttpClient and CancellationTokenSource instances.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.HealthCheckService.Dispose(System.Boolean)">
+            <summary>
+            Protected implementation of Dispose pattern.
+            </summary>
+            <param name="disposing">True if called from Dispose(), false if called from finalizer.</param>
+        </member>
+        <member name="T:Conductor.Server.Services.RequestTypeResolver">
+            <summary>
+            Resolves the RequestTypeEnum from HTTP method and URL path.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.RequestTypeResolver.Resolve(System.String,System.String)">
+            <summary>
+            Resolve the RequestTypeEnum from HTTP method and URL path.
+            </summary>
+            <param name="method">HTTP method (GET, POST, PUT, DELETE).</param>
+            <param name="path">URL path (e.g., /v1.0/users/usr_123).</param>
+            <returns>The resolved RequestTypeEnum, or Unknown if not matched.</returns>
+        </member>
+        <member name="M:Conductor.Server.Services.RequestTypeResolver.NormalizePathToPattern(System.String)">
+            <summary>
+            Normalize a URL path to a pattern by replacing ID segments with {id}.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.RequestTypeResolver.IsIdSegment(System.String)">
+            <summary>
+            Check if a URL segment appears to be an ID.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.RequestTypeResolver.ResolveProxiedApiType(System.String,System.String)">
+            <summary>
+            Resolve the RequestTypeEnum for proxied API requests (OpenAI/Ollama).
+            </summary>
+        </member>
+        <member name="T:Conductor.Server.Services.SessionAffinityService">
+            <summary>
+            Thread-safe, in-memory service that manages client-to-endpoint session pinning
+            for sticky session support on Virtual Model Runners.
+            Implements IDisposable to clean up the background cleanup timer.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.#ctor(SyslogLogging.LoggingModule)">
+            <summary>
+            Instantiate the session affinity service.
+            Starts a background cleanup timer that removes expired entries every 60 seconds.
+            </summary>
+            <param name="logging">Logging module. Must not be null.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown if logging is null.</exception>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.TryGetPinnedEndpoint(System.String,System.String,System.String@)">
+            <summary>
+            Attempt to retrieve the pinned endpoint for a client.
+            Returns false if no pin exists or the entry has expired.
+            Refreshes LastAccessUtc on hit.
+            </summary>
+            <param name="vmrId">Virtual model runner ID. Returns false if null or empty.</param>
+            <param name="clientKey">Client identity key. Returns false if null or empty.</param>
+            <param name="endpointId">The pinned endpoint ID if found.</param>
+            <returns>True if a valid, non-expired pin was found; false otherwise.</returns>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.SetPinnedEndpoint(System.String,System.String,System.String,System.Int32,System.Int32)">
+            <summary>
+            Create or update a session pin for a client to a specific endpoint.
+            If maxEntries is exceeded for the VMR, evicts the oldest entries by LastAccessUtc.
+            </summary>
+            <param name="vmrId">Virtual model runner ID.</param>
+            <param name="clientKey">Client identity key.</param>
+            <param name="endpointId">Endpoint ID to pin.</param>
+            <param name="timeoutMs">Session timeout in milliseconds.</param>
+            <param name="maxEntries">Maximum session entries for this VMR.</param>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.RemovePinnedEndpoint(System.String,System.String)">
+            <summary>
+            Explicitly remove a session pin for a client.
+            Does not throw if the entry does not exist.
+            </summary>
+            <param name="vmrId">Virtual model runner ID.</param>
+            <param name="clientKey">Client identity key.</param>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.RemoveAllForVmr(System.String)">
+            <summary>
+            Remove all session entries for a specific VMR.
+            Useful when VMR configuration changes.
+            </summary>
+            <param name="vmrId">Virtual model runner ID.</param>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.RemoveAllForEndpoint(System.String)">
+            <summary>
+            Remove all entries pinned to a specific endpoint across all VMRs.
+            Useful when an endpoint is deactivated or deleted.
+            </summary>
+            <param name="endpointId">Endpoint ID to remove pins for.</param>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.GetSessionCount(System.String)">
+            <summary>
+            Get the number of active (non-expired) sessions for a VMR.
+            </summary>
+            <param name="vmrId">Virtual model runner ID.</param>
+            <returns>Count of active sessions. Returns 0 if VMR has no sessions.</returns>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.Cleanup">
+            <summary>
+            Remove all expired entries across all VMRs.
+            Called periodically by the background cleanup timer.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.Dispose">
+            <summary>
+            Disposes of managed resources including the cleanup timer.
+            </summary>
+        </member>
+        <member name="M:Conductor.Server.Services.SessionAffinityService.Dispose(System.Boolean)">
+            <summary>
+            Protected implementation of Dispose pattern.
+            </summary>
+            <param name="disposing">True if called from Dispose(), false if called from finalizer.</param>
+        </member>
+        <member name="T:Conductor.Server.Services.SessionAffinityService.SessionEntry">
+            <summary>
+            Represents a single session pin entry mapping a client to an endpoint.
+            Thread safety: individual field mutations are protected by the Lock object.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Services.SessionAffinityService.SessionEntry.EndpointId">
+            <summary>
+            The pinned endpoint ID.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Services.SessionAffinityService.SessionEntry.TimeoutMs">
+            <summary>
+            Session timeout in milliseconds.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Services.SessionAffinityService.SessionEntry.CreatedUtc">
+            <summary>
+            When the pin was first established.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Services.SessionAffinityService.SessionEntry.LastAccessUtc">
+            <summary>
+            Refreshed on each use. Entries expire after TimeoutMs of inactivity.
+            </summary>
+        </member>
+        <member name="F:Conductor.Server.Services.SessionAffinityService.SessionEntry.Lock">
+            <summary>
+            Lock for thread-safe field mutation.
+            </summary>
+        </member>
+        <member name="P:Conductor.Server.Services.SessionAffinityService.SessionEntry.IsExpired">
+            <summary>
+            Whether this entry has expired based on LastAccessUtc and TimeoutMs.
+            </summary>
+        </member>
+    </members>
+</doc>

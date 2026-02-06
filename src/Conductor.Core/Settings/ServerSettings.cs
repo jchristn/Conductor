@@ -36,6 +36,15 @@ namespace Conductor.Core.Settings
         }
 
         /// <summary>
+        /// Debug settings.
+        /// </summary>
+        public DebugSettings Debug
+        {
+            get => _Debug;
+            set => _Debug = (value != null ? value : throw new ArgumentNullException(nameof(Debug)));
+        }
+
+        /// <summary>
         /// Administrator API keys for initial access.
         /// </summary>
         public List<string> AdminApiKeys
@@ -47,6 +56,8 @@ namespace Conductor.Core.Settings
         private WebserverSettings _Webserver = new WebserverSettings();
         private DatabaseSettings _Database = new DatabaseSettings();
         private LoggingSettings _Logging = new LoggingSettings();
+        private DebugSettings _Debug = new DebugSettings();
+
         private List<string> _AdminApiKeys = new List<string> { "conductoradmin" };
 
         /// <summary>

@@ -42,6 +42,10 @@ function VirtualModelRunners() {
     AllowCompletions: true,
     AllowModelManagement: false,
     StrictMode: false,
+    SessionAffinityMode: 'None',
+    SessionAffinityHeader: '',
+    SessionTimeoutMs: 600000,
+    SessionMaxEntries: 10000,
     Active: true,
     LabelsJson: '[]',
     TagsJson: '{}'
@@ -91,6 +95,10 @@ function VirtualModelRunners() {
       AllowCompletions: true,
       AllowModelManagement: false,
       StrictMode: false,
+      SessionAffinityMode: 'None',
+      SessionAffinityHeader: '',
+      SessionTimeoutMs: 600000,
+      SessionMaxEntries: 10000,
       Active: true,
       LabelsJson: '[]',
       TagsJson: '{}'
@@ -117,6 +125,10 @@ function VirtualModelRunners() {
       AllowCompletions: vmr.AllowCompletions !== false,
       AllowModelManagement: vmr.AllowModelManagement === true,
       StrictMode: vmr.StrictMode === true,
+      SessionAffinityMode: vmr.SessionAffinityMode || 'None',
+      SessionAffinityHeader: vmr.SessionAffinityHeader || '',
+      SessionTimeoutMs: vmr.SessionTimeoutMs || 600000,
+      SessionMaxEntries: vmr.SessionMaxEntries || 10000,
       Active: vmr.Active !== false,
       LabelsJson: JSON.stringify(vmr.Labels || [], null, 2),
       TagsJson: JSON.stringify(vmr.Tags || {}, null, 2)
@@ -232,6 +244,10 @@ function VirtualModelRunners() {
         AllowCompletions: formData.AllowCompletions,
         AllowModelManagement: formData.AllowModelManagement,
         StrictMode: formData.StrictMode,
+        SessionAffinityMode: formData.SessionAffinityMode,
+        SessionAffinityHeader: formData.SessionAffinityHeader || null,
+        SessionTimeoutMs: parseInt(formData.SessionTimeoutMs),
+        SessionMaxEntries: parseInt(formData.SessionMaxEntries),
         Active: formData.Active,
         Labels: labels,
         Tags: tags
@@ -303,16 +319,19 @@ function VirtualModelRunners() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique identifier for this virtual model runner',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Name',
-      label: 'Name'
+      label: 'Name',
+      tooltip: 'Display name for this virtual model runner'
     },
     {
       key: 'BasePath',
       label: 'Base Path',
+      tooltip: 'URL path prefix used to route requests to this VMR',
       width: '180px',
       render: (item) => (
         <div className="token-cell">
@@ -324,16 +343,27 @@ function VirtualModelRunners() {
     {
       key: 'ApiType',
       label: 'API Type',
+      tooltip: 'API format exposed by this VMR (OpenAI or Ollama compatible)',
       width: '100px'
     },
     {
       key: 'LoadBalancingMode',
       label: 'Load Balancing',
-      width: '120px'
+      tooltip: 'How requests are distributed across endpoints. Session affinity, if enabled, pins clients to specific endpoints.',
+      width: '140px',
+      render: (item) => (
+        <span>
+          {item.LoadBalancingMode}
+          {item.SessionAffinityMode && item.SessionAffinityMode !== 'None' && (
+            <small style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>(Pinned)</small>
+          )}
+        </span>
+      )
     },
     {
       key: 'Endpoints',
       label: 'Endpoints',
+      tooltip: 'Number of backend model runner endpoints attached to this VMR',
       width: '80px',
       render: (item) => (item.ModelRunnerEndpointIds || []).length,
       sortValue: (item) => (item.ModelRunnerEndpointIds || []).length
@@ -341,8 +371,13 @@ function VirtualModelRunners() {
     {
       key: 'Active',
       label: 'Status',
+      tooltip: 'Whether this VMR is accepting requests',
       width: '120px',
-      render: (item) => <StatusIndicator active={item.Active} />,
+      render: (item) => (
+        <span title={item.Active ? 'VMR is active and accepting requests' : 'VMR is inactive and rejecting all requests'}>
+          <StatusIndicator active={item.Active} />
+        </span>
+      ),
       filterValue: (item) => item.Active ? 'active' : 'inactive'
     },
     {
@@ -476,6 +511,60 @@ function VirtualModelRunners() {
                 step="1000"
               />
             </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="sessionAffinityMode" title="Pin subsequent requests from the same client to the same backend endpoint to minimize context drops">Session Affinity Mode</label>
+              <select
+                id="sessionAffinityMode"
+                value={formData.SessionAffinityMode}
+                onChange={(e) => setFormData({ ...formData, SessionAffinityMode: e.target.value })}
+              >
+                <option value="None">None</option>
+                <option value="SourceIP">Source IP</option>
+                <option value="ApiKey">API Key</option>
+                <option value="Header">Header</option>
+              </select>
+            </div>
+            {formData.SessionAffinityMode === 'Header' && (
+              <div className="form-group">
+                <label htmlFor="sessionAffinityHeader" title="Request header name whose value identifies the client session">Session Affinity Header</label>
+                <input
+                  type="text"
+                  id="sessionAffinityHeader"
+                  value={formData.SessionAffinityHeader}
+                  onChange={(e) => setFormData({ ...formData, SessionAffinityHeader: e.target.value })}
+                  placeholder="X-Session-Id"
+                />
+              </div>
+            )}
+            {formData.SessionAffinityMode !== 'None' && (
+              <div className="form-group">
+                <label htmlFor="sessionTimeoutMs" title="How long a session pin remains active since the client's last request (refreshed on each request)">Session Timeout (ms)</label>
+                <input
+                  type="number"
+                  id="sessionTimeoutMs"
+                  value={formData.SessionTimeoutMs}
+                  onChange={(e) => setFormData({ ...formData, SessionTimeoutMs: e.target.value })}
+                  min="60000"
+                  step="60000"
+                />
+              </div>
+            )}
+            {formData.SessionAffinityMode !== 'None' && (
+              <div className="form-group">
+                <label htmlFor="sessionMaxEntries" title="Maximum number of concurrent session-to-endpoint pins for this VMR">Max Session Entries</label>
+                <input
+                  type="number"
+                  id="sessionMaxEntries"
+                  value={formData.SessionMaxEntries}
+                  onChange={(e) => setFormData({ ...formData, SessionMaxEntries: e.target.value })}
+                  min="100"
+                  step="100"
+                />
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -683,11 +772,21 @@ function VirtualModelRunners() {
               <div className="health-summary">
                 <h3>{selectedVmr.Name}</h3>
                 {healthData && (
-                  <span className={`health-badge ${healthData.OverallHealthy ? 'healthy' : 'unhealthy'}`}>
+                  <span
+                    className={`health-badge ${healthData.OverallHealthy ? 'healthy' : 'unhealthy'}`}
+                    title={healthData.OverallHealthy
+                      ? `All ${healthData.TotalEndpointCount} endpoint(s) are passing health checks`
+                      : `${healthData.TotalEndpointCount - healthData.HealthyEndpointCount} of ${healthData.TotalEndpointCount} endpoint(s) are failing health checks`}
+                  >
                     {healthData.OverallHealthy ? 'All Healthy' : 'Issues Detected'}
                   </span>
                 )}
               </div>
+              {healthData && selectedVmr.SessionAffinityMode && selectedVmr.SessionAffinityMode !== 'None' && (
+                <span className="health-badge" style={{ marginLeft: '8px', fontSize: '0.85em' }} title="Active session affinity pins for this VMR">
+                  Sessions: {healthData.ActiveSessionCount ?? 0} / {selectedVmr.SessionMaxEntries}
+                </span>
+              )}
               <button className="btn-icon" onClick={refreshHealth} disabled={healthLoading} title="Refresh">
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" className={healthLoading ? 'spinning' : ''}>
                   <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
@@ -705,12 +804,12 @@ function VirtualModelRunners() {
               <table className="health-table">
                 <thead>
                   <tr>
-                    <th>Endpoint</th>
-                    <th>Status</th>
-                    <th>In-Flight</th>
-                    <th>Weight</th>
-                    <th>Uptime</th>
-                    <th>Last Check</th>
+                    <th title="Backend model runner endpoint name and any error details">Endpoint</th>
+                    <th title="Current health check status based on periodic monitoring">Status</th>
+                    <th title="Active requests being proxied vs. configured maximum (0 = unlimited)">In-Flight</th>
+                    <th title="Relative load balancing weight - higher values receive more traffic">Weight</th>
+                    <th title="Percentage of time this endpoint has been healthy since monitoring started">Uptime</th>
+                    <th title="When the most recent health check was performed">Last Check</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -719,25 +818,30 @@ function VirtualModelRunners() {
                       <td>
                         <div className="endpoint-info">
                           <strong>{ep.EndpointName || ep.EndpointId}</strong>
-                          {ep.LastError && <small className="error-text">{ep.LastError}</small>}
+                          {ep.LastError && <small className="error-text" title="Error from the most recent failed health check">{ep.LastError}</small>}
                         </div>
                       </td>
                       <td>
-                        <span className={`status-badge ${ep.IsHealthy ? 'healthy' : 'unhealthy'}`}>
+                        <span
+                          className={`status-badge ${ep.IsHealthy ? 'healthy' : 'unhealthy'}`}
+                          title={ep.IsHealthy
+                            ? `Passing health checks since ${ep.LastHealthyUtc ? new Date(ep.LastHealthyUtc).toLocaleString() : 'unknown'}`
+                            : `Failing health checks${ep.LastError ? ': ' + ep.LastError : ''}`}
+                        >
                           {ep.IsHealthy ? 'Healthy' : 'Unhealthy'}
                         </span>
                       </td>
-                      <td>
-                        {ep.InFlightRequests} / {ep.MaxParallelRequests === 0 ? '∞' : ep.MaxParallelRequests}
+                      <td title={`${ep.InFlightRequests} active request(s) of ${ep.MaxParallelRequests === 0 ? 'unlimited' : ep.MaxParallelRequests} maximum`}>
+                        {ep.InFlightRequests} / {ep.MaxParallelRequests === 0 ? '\u221E' : ep.MaxParallelRequests}
                       </td>
-                      <td>{ep.Weight}</td>
-                      <td>
+                      <td title="Relative weight for load balancing distribution">{ep.Weight}</td>
+                      <td title={`${ep.UptimePercentage !== undefined ? ep.UptimePercentage.toFixed(2) : 0}% uptime - total healthy time: ${formatDuration(ep.TotalUptimeMs)}`}>
                         {ep.UptimePercentage !== undefined ? `${ep.UptimePercentage.toFixed(1)}%` : '-'}
-                        <small style={{ color: 'var(--text-muted)', marginLeft: '4px' }}>
+                        <small style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>
                           ({formatDuration(ep.TotalUptimeMs)})
                         </small>
                       </td>
-                      <td>
+                      <td title={ep.LastCheckUtc ? `Full timestamp: ${new Date(ep.LastCheckUtc).toLocaleString()}` : 'No check performed yet'}>
                         {ep.LastCheckUtc ? new Date(ep.LastCheckUtc).toLocaleTimeString() : '-'}
                       </td>
                     </tr>

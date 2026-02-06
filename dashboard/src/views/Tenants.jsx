@@ -131,16 +131,19 @@ function Tenants() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique identifier for this tenant',
       width: '300px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Name',
-      label: 'Name'
+      label: 'Name',
+      tooltip: 'Display name for this tenant'
     },
     {
       key: 'Active',
       label: 'Status',
+      tooltip: 'Whether this tenant and its resources are enabled',
       width: '120px',
       render: (item) => <StatusIndicator active={item.Active} />,
       filterValue: (item) => item.Active ? 'active' : 'inactive'
@@ -148,6 +151,7 @@ function Tenants() {
     {
       key: 'CreatedUtc',
       label: 'Created',
+      tooltip: 'When this tenant was first created',
       width: '180px',
       render: (item) => formatDate(item.CreatedUtc)
     },

@@ -39,6 +39,12 @@ namespace Conductor.Core.Models
         public int TotalEndpointCount { get; set; }
 
         /// <summary>
+        /// Number of active session affinity entries for this VMR.
+        /// Only populated when session affinity is enabled. Null when session affinity is disabled.
+        /// </summary>
+        public int? ActiveSessionCount { get; set; } = null;
+
+        /// <summary>
         /// Health status for each endpoint.
         /// </summary>
         public List<EndpointHealthStatus> Endpoints { get; set; } = new List<EndpointHealthStatus>();

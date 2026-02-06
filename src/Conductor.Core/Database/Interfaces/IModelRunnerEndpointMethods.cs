@@ -28,6 +28,14 @@ namespace Conductor.Core.Database.Interfaces
         Task<ModelRunnerEndpoint> ReadAsync(string tenantId, string id, CancellationToken token = default);
 
         /// <summary>
+        /// Read a model runner endpoint by ID without tenant filtering (admin use only).
+        /// </summary>
+        /// <param name="id">Endpoint ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Endpoint or null if not found.</returns>
+        Task<ModelRunnerEndpoint> ReadByIdAsync(string id, CancellationToken token = default);
+
+        /// <summary>
         /// Update a model runner endpoint.
         /// </summary>
         /// <param name="endpoint">Endpoint to update.</param>

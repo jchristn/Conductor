@@ -28,6 +28,14 @@ namespace Conductor.Core.Database.Interfaces
         Task<ModelDefinition> ReadAsync(string tenantId, string id, CancellationToken token = default);
 
         /// <summary>
+        /// Read a model definition by ID without tenant filtering (admin use only).
+        /// </summary>
+        /// <param name="id">Definition ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Definition or null if not found.</returns>
+        Task<ModelDefinition> ReadByIdAsync(string id, CancellationToken token = default);
+
+        /// <summary>
         /// Update a model definition.
         /// </summary>
         /// <param name="definition">Definition to update.</param>

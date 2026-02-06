@@ -203,36 +203,43 @@ function ModelConfigurations() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique identifier for this configuration',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Name',
-      label: 'Name'
+      label: 'Name',
+      tooltip: 'Display name for this configuration'
     },
     {
       key: 'Model',
       label: 'Model',
+      tooltip: 'Specific model this configuration applies to (blank = all models)',
       render: (item) => item.Model || '-'
     },
     {
       key: 'Temperature',
       label: 'Temp',
+      tooltip: 'Controls randomness in output (0 = deterministic, 2 = highly creative)',
       width: '80px'
     },
     {
       key: 'MaxTokens',
       label: 'Max Tokens',
+      tooltip: 'Maximum tokens in generated response',
       width: '100px'
     },
     {
       key: 'ContextWindowSize',
       label: 'Context',
+      tooltip: 'Maximum tokens in conversation context window',
       width: '100px'
     },
     {
       key: 'Active',
       label: 'Status',
+      tooltip: 'Whether this configuration is applied to requests',
       width: '120px',
       render: (item) => <StatusIndicator active={item.Active} />,
       filterValue: (item) => item.Active ? 'active' : 'inactive'
@@ -240,6 +247,7 @@ function ModelConfigurations() {
     {
       key: 'CreatedUtc',
       label: 'Created',
+      tooltip: 'When this configuration was created',
       width: '180px',
       render: (item) => formatDate(item.CreatedUtc)
     },

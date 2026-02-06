@@ -28,6 +28,14 @@ namespace Conductor.Core.Database.Interfaces
         Task<Credential> ReadAsync(string tenantId, string id, CancellationToken token = default);
 
         /// <summary>
+        /// Read a credential by ID without tenant filtering (admin use only).
+        /// </summary>
+        /// <param name="id">Credential ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Credential or null if not found.</returns>
+        Task<Credential> ReadByIdAsync(string id, CancellationToken token = default);
+
+        /// <summary>
         /// Read a credential by bearer token.
         /// </summary>
         /// <param name="bearerToken">Bearer token.</param>

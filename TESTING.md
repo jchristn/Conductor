@@ -33,9 +33,9 @@ The solution contains two test projects:
 
 | Project | Location | Tests | Description |
 |---------|----------|-------|-------------|
-| `Conductor.Core.Tests` | `src/Conductor.Core.Tests/` | 516 | Unit tests for the Core library |
-| `Conductor.Server.Tests` | `src/Conductor.Server.Tests/` | 72 | Unit tests for Server components |
-| **Total** | | **588** | |
+| `Conductor.Core.Tests` | `src/Conductor.Core.Tests/` | 534 | Unit tests for the Core library |
+| `Conductor.Server.Tests` | `src/Conductor.Server.Tests/` | 246 | Unit tests for Server components |
+| **Total** | | **780** | |
 
 ### Running Individual Test Projects
 
@@ -71,7 +71,7 @@ Both test projects use the following packages:
 ```
 src/Conductor.Core.Tests/
 ├── Models/
-│   ├── VirtualModelRunnerTests.cs      # VMR validation, defaults, serialization
+│   ├── VirtualModelRunnerTests.cs      # VMR validation, defaults, serialization, session affinity defaults and clamping
 │   ├── ModelRunnerEndpointTests.cs     # Endpoint validation, URL construction
 │   ├── ModelConfigurationTests.cs      # Config pinning, case-insensitivity
 │   ├── ModelDefinitionTests.cs         # Definition validation, defaults
@@ -94,16 +94,24 @@ src/Conductor.Core.Tests/
 │   ├── CorsSettingsTests.cs            # CORS configuration
 │   └── ServerSettingsTests.cs          # Server configuration
 └── Enums/
-    └── EnumTests.cs                    # Enum value verification
+    └── EnumTests.cs                    # Enum value verification, SessionAffinityModeEnum values
 ```
 
 ### Conductor.Server.Tests Structure
 
 ```
 src/Conductor.Server.Tests/
-└── Services/
-    ├── AuthenticationServiceTests.cs   # Auth result classes
-    └── HealthCheckServiceTests.cs      # Health state management
+├── Services/
+│   ├── AuthenticationServiceTests.cs   # Auth result classes
+│   ├── HealthCheckServiceTests.cs      # Health state management
+│   └── SessionAffinityServiceTests.cs  # Session pin lifecycle, TTL, eviction, thread safety
+├── Controllers/
+│   ├── ControllerTestBase.cs           # Shared test infrastructure with SQLite
+│   ├── VirtualModelRunnerControllerTests.cs  # CRUD, enumeration, health, session affinity
+│   ├── ModelRunnerEndpointControllerTests.cs # Endpoint CRUD, port validation
+│   └── CredentialControllerTests.cs    # Credential CRUD, token management
+└── Integration/
+    └── DatabaseIntegrationTests.cs     # Database round-trip tests for all entities
 ```
 
 ---
@@ -412,23 +420,26 @@ As of the last test run:
 
 ```
 Test Run Successful.
-Total tests: 588
-     Passed: 588
+Total tests: 780
+     Passed: 780
      Failed: 0
      Skipped: 0
-Duration: ~5 seconds
+Duration: ~35 seconds
 ```
 
 ### Test Distribution
 
 | Category | Count |
 |----------|-------|
-| Model Tests | ~350 |
+| Model Tests | ~370 |
 | Helper Tests | ~50 |
 | Settings Tests | ~30 |
-| Enum Tests | ~25 |
+| Enum Tests | ~31 |
 | URL Parsing Tests | ~35 |
 | Service Result Tests | ~98 |
+| Session Affinity Tests | ~33 |
+| Controller Tests | ~75 |
+| Integration Tests | ~58 |
 
 ---
 

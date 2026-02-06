@@ -28,6 +28,14 @@ namespace Conductor.Core.Database.Interfaces
         Task<ModelConfiguration> ReadAsync(string tenantId, string id, CancellationToken token = default);
 
         /// <summary>
+        /// Read a model configuration by ID without tenant filtering (admin use only).
+        /// </summary>
+        /// <param name="id">Configuration ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Configuration or null if not found.</returns>
+        Task<ModelConfiguration> ReadByIdAsync(string id, CancellationToken token = default);
+
+        /// <summary>
         /// Update a model configuration.
         /// </summary>
         /// <param name="configuration">Configuration to update.</param>

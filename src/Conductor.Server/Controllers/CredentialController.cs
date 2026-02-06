@@ -69,7 +69,12 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(id))
                 throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
 
-            Credential credential = await Database.Credential.ReadAsync(tenantId, id);
+            Credential credential;
+            if (String.IsNullOrEmpty(tenantId))
+                credential = await Database.Credential.ReadByIdAsync(id);
+            else
+                credential = await Database.Credential.ReadAsync(tenantId, id);
+
             if (credential == null)
                 throw new SwiftStackException(ApiResultEnum.NotFound);
 

@@ -489,6 +489,119 @@ namespace Conductor.Server.Tests.Controllers
 
         #endregion
 
+        #region SessionAffinity-Tests
+
+        [Fact]
+        public async Task Create_WithSessionAffinity_ReturnsCreatedVmr()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                Name = "Session VMR",
+                BasePath = "/session",
+                SessionAffinityMode = SessionAffinityModeEnum.SourceIP,
+                SessionTimeoutMs = 300000,
+                SessionMaxEntries = 5000
+            };
+
+            VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
+
+            result.Should().NotBeNull();
+            result.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.SourceIP);
+            result.SessionTimeoutMs.Should().Be(300000);
+            result.SessionMaxEntries.Should().Be(5000);
+        }
+
+        [Fact]
+        public async Task Create_WithSessionAffinityHeader_ReturnsCreatedVmr()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                Name = "Header Session VMR",
+                BasePath = "/header-session",
+                SessionAffinityMode = SessionAffinityModeEnum.Header,
+                SessionAffinityHeader = "X-Session-Id"
+            };
+
+            VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
+
+            result.Should().NotBeNull();
+            result.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.Header);
+            result.SessionAffinityHeader.Should().Be("X-Session-Id");
+        }
+
+        [Fact]
+        public async Task Update_SessionAffinityMode_UpdatesSuccessfully()
+        {
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "VMR to Update Session",
+                BasePath = "/update-session",
+                SessionAffinityMode = SessionAffinityModeEnum.None
+            });
+
+            VirtualModelRunner updateRequest = new VirtualModelRunner
+            {
+                Name = "VMR to Update Session",
+                BasePath = "/update-session",
+                SessionAffinityMode = SessionAffinityModeEnum.ApiKey,
+                SessionTimeoutMs = 120000,
+                SessionMaxEntries = 2000
+            };
+
+            VirtualModelRunner result = await _Controller.Update(TestTenantId, created.Id, updateRequest);
+
+            result.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.ApiKey);
+            result.SessionTimeoutMs.Should().Be(120000);
+            result.SessionMaxEntries.Should().Be(2000);
+        }
+
+        [Fact]
+        public async Task Create_SetsDefaultSessionAffinityValues()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                Name = "Default Session VMR",
+                BasePath = "/default-session"
+            };
+
+            VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
+
+            result.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.None);
+            result.SessionAffinityHeader.Should().BeNull();
+            result.SessionTimeoutMs.Should().Be(600000);
+            result.SessionMaxEntries.Should().Be(10000);
+        }
+
+        [Fact]
+        public async Task Update_SessionAffinityFields_ReadBackCorrectly()
+        {
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Read Back VMR",
+                BasePath = "/readback"
+            });
+
+            VirtualModelRunner updateRequest = new VirtualModelRunner
+            {
+                Name = "Read Back VMR",
+                BasePath = "/readback",
+                SessionAffinityMode = SessionAffinityModeEnum.Header,
+                SessionAffinityHeader = "X-Custom",
+                SessionTimeoutMs = 86400000,
+                SessionMaxEntries = 100000
+            };
+
+            await _Controller.Update(TestTenantId, created.Id, updateRequest);
+            VirtualModelRunner read = await _Controller.Read(TestTenantId, created.Id);
+
+            read.SessionAffinityMode.Should().Be(SessionAffinityModeEnum.Header);
+            read.SessionAffinityHeader.Should().Be("X-Custom");
+            read.SessionTimeoutMs.Should().Be(86400000);
+            read.SessionMaxEntries.Should().Be(100000);
+        }
+
+        #endregion
+
         #region GetHealth-Tests
 
         [Fact]

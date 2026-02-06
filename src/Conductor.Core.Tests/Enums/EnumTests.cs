@@ -167,6 +167,48 @@ namespace Conductor.Core.Tests.Enums
 
         #endregion
 
+        #region SessionAffinityModeEnum-Tests
+
+        [Fact]
+        public void SessionAffinityModeEnum_None_HasValue0()
+        {
+            ((int)SessionAffinityModeEnum.None).Should().Be(0);
+        }
+
+        [Fact]
+        public void SessionAffinityModeEnum_SourceIP_HasValue1()
+        {
+            ((int)SessionAffinityModeEnum.SourceIP).Should().Be(1);
+        }
+
+        [Fact]
+        public void SessionAffinityModeEnum_ApiKey_HasValue2()
+        {
+            ((int)SessionAffinityModeEnum.ApiKey).Should().Be(2);
+        }
+
+        [Fact]
+        public void SessionAffinityModeEnum_Header_HasValue3()
+        {
+            ((int)SessionAffinityModeEnum.Header).Should().Be(3);
+        }
+
+        [Fact]
+        public void SessionAffinityModeEnum_HasExpectedMemberCount()
+        {
+            int memberCount = Enum.GetValues(typeof(SessionAffinityModeEnum)).Length;
+            memberCount.Should().Be(4);
+        }
+
+        [Fact]
+        public void SessionAffinityModeEnum_CanParse()
+        {
+            Enum.TryParse<SessionAffinityModeEnum>("SourceIP", out SessionAffinityModeEnum result).Should().BeTrue();
+            result.Should().Be(SessionAffinityModeEnum.SourceIP);
+        }
+
+        #endregion
+
         #region RequestTypeEnum-Tests
 
         [Fact]

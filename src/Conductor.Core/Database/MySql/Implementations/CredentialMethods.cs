@@ -67,6 +67,20 @@ namespace Conductor.Core.Database.MySql.Implementations
         }
 
         /// <summary>
+        /// Read a credential by ID without tenant filtering (admin use only).
+        /// </summary>
+        public async Task<Credential> ReadByIdAsync(string id, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+
+            string query = "SELECT * FROM credentials WHERE id = '" + _Driver.Sanitize(id) + "';";
+            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return null;
+            return Credential.FromDataRow(result.Rows[0]);
+        }
+
+        /// <summary>
         /// Read a credential by bearer token.
         /// </summary>
         public async Task<Credential> ReadByBearerTokenAsync(string bearerToken, CancellationToken token = default)

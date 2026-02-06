@@ -57,7 +57,12 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(id))
                 throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
 
-            UserMaster user = await Database.User.ReadAsync(tenantId, id);
+            UserMaster user;
+            if (String.IsNullOrEmpty(tenantId))
+                user = await Database.User.ReadByIdAsync(id);
+            else
+                user = await Database.User.ReadAsync(tenantId, id);
+
             if (user == null)
                 throw new SwiftStackException(ApiResultEnum.NotFound);
 

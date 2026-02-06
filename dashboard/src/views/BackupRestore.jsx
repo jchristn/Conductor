@@ -173,7 +173,7 @@ function BackupRestore() {
           <h2>Restore from Backup</h2>
 
           <div className="form-group">
-            <label>Select Backup File</label>
+            <label title="Choose a previously exported JSON backup file to restore">Select Backup File</label>
             <div className="file-input-wrapper">
               <input
                 type="file"
@@ -233,7 +233,7 @@ function BackupRestore() {
           {backupData && (
             <>
               <div className="form-group">
-                <label htmlFor="conflictResolution">Conflict Resolution</label>
+                <label htmlFor="conflictResolution" title="How to handle entities that already exist in the current system">Conflict Resolution</label>
                 <select
                   id="conflictResolution"
                   value={restoreOptions.ConflictResolution}
@@ -246,7 +246,7 @@ function BackupRestore() {
               </div>
 
               <div className="form-group checkbox-group">
-                <label>
+                <label title="Include API keys and bearer tokens from the backup - disable to skip sensitive credential data">
                   <input
                     type="checkbox"
                     checked={restoreOptions.RestoreCredentials}
@@ -257,7 +257,7 @@ function BackupRestore() {
               </div>
 
               <div className="form-group checkbox-group">
-                <label>
+                <label title="Include administrator accounts from the backup - use with caution as this may grant dashboard access">
                   <input
                     type="checkbox"
                     checked={restoreOptions.RestoreAdministrators}

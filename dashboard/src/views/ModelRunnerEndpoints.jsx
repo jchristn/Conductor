@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
@@ -19,6 +19,9 @@ function ModelRunnerEndpoints() {
   const [showMetadata, setShowMetadata] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [healthData, setHealthData] = useState({});
+  const [showHealthDetail, setShowHealthDetail] = useState(false);
+  const [healthDetailEndpoint, setHealthDetailEndpoint] = useState(null);
   const [formData, setFormData] = useState({
     TenantId: '',
     Name: '',
@@ -64,10 +67,79 @@ function ModelRunnerEndpoints() {
     }
   }, [api, setError]);
 
+  const fetchHealth = useCallback(async () => {
+    try {
+      const result = await api.getModelRunnerEndpointsHealth();
+      const healthMap = {};
+
+      // Handle both raw array and wrapped response formats
+      let healthList = null;
+      if (Array.isArray(result)) {
+        healthList = result;
+      } else if (result && Array.isArray(result.Data)) {
+        healthList = result.Data;
+      } else if (result && Array.isArray(result.Endpoints)) {
+        healthList = result.Endpoints;
+      }
+
+      if (healthList) {
+        healthList.forEach(h => {
+          const id = h.EndpointId || h.endpointId;
+          if (id) healthMap[id] = h;
+        });
+      }
+
+      setHealthData(healthMap);
+    } catch {
+      // Health data is supplementary; silently ignore errors
+    }
+  }, [api]);
+
   useEffect(() => {
     fetchEndpoints();
     fetchTenants();
   }, [fetchEndpoints, fetchTenants]);
+
+  useEffect(() => {
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 15000);
+    return () => clearInterval(interval);
+  }, [fetchHealth]);
+
+  const formatDuration = (ms) => {
+    if (!ms) return '-';
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${minutes % 60}m`;
+    if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+    return `${seconds}s`;
+  };
+
+  const getUptimeColor = (pct) => {
+    if (pct >= 99) return 'var(--success-color)';
+    if (pct >= 95) return 'var(--warning-color)';
+    return 'var(--danger-color)';
+  };
+
+  const healthSummary = useMemo(() => {
+    const activeEndpoints = endpoints.filter(e => e.Active);
+    let healthy = 0, unhealthy = 0, pending = 0;
+    activeEndpoints.forEach(ep => {
+      const h = healthData[ep.Id];
+      if (!h) { pending++; }
+      else if (h.IsHealthy) { healthy++; }
+      else { unhealthy++; }
+    });
+    return { healthy, unhealthy, pending, total: activeEndpoints.length };
+  }, [endpoints, healthData]);
+
+  const handleViewHealth = (endpoint) => {
+    setHealthDetailEndpoint(endpoint);
+    setShowHealthDetail(true);
+  };
 
   // Parse a URL or hostname string and extract components
   const parseEndpointUrl = (input) => {
@@ -277,36 +349,86 @@ function ModelRunnerEndpoints() {
     {
       key: 'Id',
       label: 'ID',
+      tooltip: 'Unique identifier for this endpoint',
       width: '280px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
       key: 'Name',
-      label: 'Name'
+      label: 'Name',
+      tooltip: 'Display name for this endpoint'
     },
     {
       key: 'Endpoint',
       label: 'Endpoint',
+      tooltip: 'URL of the model runner backend',
       render: (item) => `${item.UseSsl ? 'https' : 'http'}://${item.Hostname}:${item.Port}`,
       filterValue: (item) => `${item.Hostname}:${item.Port}`
     },
     {
       key: 'ApiType',
       label: 'API Type',
+      tooltip: 'API format used by this endpoint (Ollama or OpenAI compatible)',
       width: '100px'
     },
     {
       key: 'Active',
       label: 'Status',
-      width: '120px',
-      render: (item) => <StatusIndicator active={item.Active} />,
+      tooltip: 'Whether this endpoint is enabled for use in load balancing',
+      width: '100px',
+      render: (item) => (
+        <span title={item.Active ? 'Endpoint is enabled and available for routing' : 'Endpoint is disabled and excluded from routing'}>
+          <StatusIndicator active={item.Active} />
+        </span>
+      ),
       filterValue: (item) => item.Active ? 'active' : 'inactive'
     },
     {
-      key: 'CreatedUtc',
-      label: 'Created',
-      width: '180px',
-      render: (item) => formatDate(item.CreatedUtc)
+      key: 'Health',
+      label: 'Health',
+      tooltip: 'Live health check result from periodic monitoring',
+      width: '110px',
+      render: (item) => {
+        if (!item.Active) return <span className="status-badge pending" title="Inactive endpoints are not health-checked">Inactive</span>;
+        const h = healthData[item.Id];
+        if (!h) return <span className="status-badge pending" title="Awaiting first health check result">Awaiting Check</span>;
+        return h.IsHealthy
+          ? <span className="status-badge healthy" title={`Healthy since ${h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : 'unknown'}`}>Healthy</span>
+          : <span className="status-badge unhealthy" title={h.LastError || `Unhealthy since ${h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : 'unknown'}`}>Unhealthy</span>;
+      },
+      filterValue: (item) => {
+        if (!item.Active) return 'inactive';
+        const h = healthData[item.Id];
+        if (!h) return 'awaiting';
+        return h.IsHealthy ? 'healthy' : 'unhealthy';
+      }
+    },
+    {
+      key: 'Uptime',
+      label: 'Uptime',
+      tooltip: 'Percentage of time this endpoint has been healthy since monitoring started',
+      width: '90px',
+      render: (item) => {
+        const h = healthData[item.Id];
+        if (!h || !item.Active) return <span style={{ color: 'var(--text-secondary)' }} title="No uptime data available">-</span>;
+        const pct = h.UptimePercentage;
+        return (
+          <span
+            style={{ color: getUptimeColor(pct), fontWeight: 500 }}
+            title={`${pct.toFixed(2)}% uptime (${formatDuration(h.TotalUptimeMs)} up / ${formatDuration(h.TotalDowntimeMs)} down)`}
+          >
+            {pct.toFixed(1)}%
+          </span>
+        );
+      },
+      sortValue: (item) => {
+        const h = healthData[item.Id];
+        return h ? h.UptimePercentage : -1;
+      },
+      filterValue: (item) => {
+        const h = healthData[item.Id];
+        return h ? `${h.UptimePercentage.toFixed(1)}%` : '';
+      }
     },
     {
       key: 'actions',
@@ -319,6 +441,7 @@ function ModelRunnerEndpoints() {
         <ActionMenu
           actions={[
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
+            { label: 'View Health', onClick: () => handleViewHealth(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
             { divider: true },
             { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
@@ -333,7 +456,7 @@ function ModelRunnerEndpoints() {
       <div className="view-header">
         <h1>Model Runner Endpoints</h1>
         <div className="view-actions">
-          <button className="btn-icon" onClick={fetchEndpoints} title="Refresh">
+          <button className="btn-icon" onClick={() => { fetchEndpoints(); fetchHealth(); }} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
             </svg>
@@ -343,6 +466,30 @@ function ModelRunnerEndpoints() {
           </button>
         </div>
       </div>
+
+      {!loading && endpoints.length > 0 && (
+        <div className="health-summary-banner" title="Aggregate health status of all active endpoints based on periodic health checks">
+          <div className="health-summary-counts">
+            <span className="health-count healthy" title="Endpoints currently passing health checks">
+              <span className="health-count-dot healthy"></span>
+              {healthSummary.healthy} Healthy
+            </span>
+            <span className="health-count unhealthy" title="Endpoints currently failing health checks">
+              <span className="health-count-dot unhealthy"></span>
+              {healthSummary.unhealthy} Unhealthy
+            </span>
+            {healthSummary.pending > 0 && (
+              <span className="health-count pending" title="Active endpoints awaiting their first health check result">
+                <span className="health-count-dot pending"></span>
+                {healthSummary.pending} Awaiting Check
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }} title="Total number of endpoints with Active status enabled">
+            {healthSummary.total} active endpoint{healthSummary.total !== 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
 
       <DataTable data={endpoints} columns={columns} loading={loading} />
 
@@ -628,6 +775,139 @@ function ModelRunnerEndpoints() {
         entityType="endpoint"
         loading={deleteLoading}
       />
+
+      <Modal
+        isOpen={showHealthDetail}
+        onClose={() => { setShowHealthDetail(false); setHealthDetailEndpoint(null); }}
+        title="Endpoint Health Details"
+        wide
+      >
+        {healthDetailEndpoint && (() => {
+          const h = healthData[healthDetailEndpoint.Id];
+          const isActive = healthDetailEndpoint.Active;
+          return (
+            <div className="health-modal">
+              <div className="health-header">
+                <div className="health-summary">
+                  <div>
+                    <h3>{healthDetailEndpoint.Name}</h3>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: "'Monaco', 'Menlo', monospace" }}>
+                      {healthDetailEndpoint.UseSsl ? 'https' : 'http'}://{healthDetailEndpoint.Hostname}:{healthDetailEndpoint.Port}
+                    </div>
+                  </div>
+                  {h ? (
+                    <span
+                      className={`health-badge ${h.IsHealthy ? 'healthy' : 'unhealthy'}`}
+                      title={h.IsHealthy
+                        ? `Passing health checks since ${h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : 'unknown'}`
+                        : `Failing health checks since ${h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : 'unknown'}`}
+                    >
+                      {h.IsHealthy ? 'Healthy' : 'Unhealthy'}
+                    </span>
+                  ) : isActive ? (
+                    <span className="health-badge pending" title="This endpoint is active and being monitored, but no health check results have been received yet">
+                      Awaiting First Check
+                    </span>
+                  ) : (
+                    <span className="health-badge pending" title="Inactive endpoints are excluded from health monitoring">
+                      Not Monitored
+                    </span>
+                  )}
+                </div>
+                <button className="btn-icon" onClick={fetchHealth} title="Refresh health data">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+
+              {!h ? (
+                isActive ? (
+                  <p className="no-items">Awaiting first health check result. The server performs periodic checks based on the configured interval.</p>
+                ) : (
+                  <p className="no-items">This endpoint is inactive and is not being health-checked. Enable it to begin monitoring.</p>
+                )
+              ) : (
+                <>
+                  <div className="metrics-grid" style={{ marginBottom: '16px' }}>
+                    <div className="metric" title="Percentage of time this endpoint has been healthy since monitoring started">
+                      <span className="metric-label">Uptime</span>
+                      <span className="metric-value" style={{ color: getUptimeColor(h.UptimePercentage) }}>
+                        {h.UptimePercentage.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="metric" title="Active requests currently being proxied to this endpoint vs. the configured maximum (0 = unlimited)">
+                      <span className="metric-label">In-Flight</span>
+                      <span className="metric-value">
+                        {h.InFlightRequests} / {h.MaxParallelRequests === 0 ? '\u221E' : h.MaxParallelRequests}
+                      </span>
+                    </div>
+                    <div className="metric" title="Relative load balancing weight - higher values receive proportionally more traffic">
+                      <span className="metric-label">Weight</span>
+                      <span className="metric-value">{h.Weight}</span>
+                    </div>
+                    <div className="metric" title={`Consecutive successful health checks - endpoint becomes healthy after reaching the configured threshold`}>
+                      <span className="metric-label">Consecutive OK</span>
+                      <span className="metric-value" style={{ color: h.ConsecutiveSuccesses > 0 ? 'var(--success-color)' : 'var(--text-primary)' }}>
+                        {h.ConsecutiveSuccesses}
+                      </span>
+                    </div>
+                    <div className="metric" title={`Consecutive failed health checks - endpoint becomes unhealthy after reaching the configured threshold`}>
+                      <span className="metric-label">Consecutive Fail</span>
+                      <span className="metric-value" style={{ color: h.ConsecutiveFailures > 0 ? 'var(--danger-color)' : 'var(--text-primary)' }}>
+                        {h.ConsecutiveFailures}
+                      </span>
+                    </div>
+                  </div>
+
+                  <table className="health-table">
+                    <tbody>
+                      <tr title="When the most recent health check was performed">
+                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)', width: '160px' }}>Last Check</td>
+                        <td>{h.LastCheckUtc ? new Date(h.LastCheckUtc).toLocaleString() : '-'}</td>
+                      </tr>
+                      <tr title="When the endpoint last transitioned between healthy and unhealthy states">
+                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Last State Change</td>
+                        <td>{h.LastStateChangeUtc ? new Date(h.LastStateChangeUtc).toLocaleString() : '-'}</td>
+                      </tr>
+                      <tr title="When the endpoint most recently transitioned to healthy status">
+                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Last Healthy</td>
+                        <td>{h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : '-'}</td>
+                      </tr>
+                      <tr title="When the endpoint most recently transitioned to unhealthy status">
+                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Last Unhealthy</td>
+                        <td>{h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : '-'}</td>
+                      </tr>
+                      <tr title="When health monitoring began for this endpoint">
+                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Monitoring Since</td>
+                        <td>{h.FirstCheckUtc ? new Date(h.FirstCheckUtc).toLocaleString() : '-'}</td>
+                      </tr>
+                      <tr title="Cumulative time the endpoint has been in a healthy state">
+                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Total Uptime</td>
+                        <td>{formatDuration(h.TotalUptimeMs)}</td>
+                      </tr>
+                      <tr title="Cumulative time the endpoint has been in an unhealthy state">
+                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Total Downtime</td>
+                        <td>{formatDuration(h.TotalDowntimeMs)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {h.LastError && (
+                    <div
+                      style={{ marginTop: '16px', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                      title="The error message from the most recent failed health check"
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--danger-color)', marginBottom: '4px' }}>Last Error</div>
+                      <div style={{ fontSize: '13px', color: 'var(--danger-color)' }}>{h.LastError}</div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
     </div>
   );
 }
