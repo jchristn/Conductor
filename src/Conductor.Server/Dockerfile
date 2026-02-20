@@ -24,18 +24,21 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install networking and troubleshooting tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    iputils-ping \
-    net-tools \
-    traceroute \
-    wget \
-    curl \
-    vim \
-    dnsutils \
-    netcat-openbsd \
-    iproute2 \
-    tcpdump \
+# Install networking and troubleshooting tools (retry to handle transient mirror 403s)
+RUN for i in 1 2 3; do \
+        apt-get update && apt-get install -y --no-install-recommends \
+            iputils-ping \
+            net-tools \
+            traceroute \
+            wget \
+            curl \
+            vim \
+            dnsutils \
+            netcat-openbsd \
+            iproute2 \
+            tcpdump \
+        && break || { echo "Attempt $i failed, retrying..."; sleep 5; rm -rf /var/lib/apt/lists/*; }; \
+    done \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories for data and logs

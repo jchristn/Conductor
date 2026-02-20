@@ -23,6 +23,8 @@ services:
     container_name: conductor-ui
     ports:
       - "9100:9100"
+    environment:
+      - CONDUCTOR_SERVER_URL=http://conductor:9000
     depends_on:
       conductor:
         condition: service_healthy

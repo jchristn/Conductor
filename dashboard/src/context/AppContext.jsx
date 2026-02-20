@@ -5,7 +5,7 @@ const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const [serverUrl, setServerUrl] = useState(() =>
-    localStorage.getItem('conductor_server_url') || 'http://localhost:9000'
+    localStorage.getItem('conductor_server_url') || window.CONDUCTOR_SERVER_URL || 'http://localhost:9000'
   );
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);

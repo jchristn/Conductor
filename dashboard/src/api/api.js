@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'http://localhost:9000';
+const DEFAULT_API_URL = window.CONDUCTOR_SERVER_URL || 'http://localhost:9000';
 
 class ConductorApi {
   constructor() {
