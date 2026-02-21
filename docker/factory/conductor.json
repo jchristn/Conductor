@@ -1,0 +1,46 @@
+{
+  "Webserver": {
+    "Hostname": "*",
+    "Port": 9000,
+    "Ssl": false,
+    "Cors": {
+      "Enabled": true,
+      "AllowedOrigins": ["*"],
+      "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      "AllowedHeaders": ["Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password"],
+      "ExposedHeaders": [],
+      "AllowCredentials": false,
+      "MaxAgeSeconds": 86400
+    }
+  },
+  "Database": {
+    "Type": "Sqlite",
+    "Filename": "/app/data/conductor.db"
+  },
+  "Logging": {
+    "Servers": [
+      {
+          "Hostname": "127.0.0.1",
+          "Port": 514
+      }
+    ],
+    "LogDirectory": "./logs/",
+    "LogFilename": "conductor.log",
+    "FileLogging": true,
+    "IncludeDateInFilename": true,
+    "ConsoleLogging": true,
+    "EnableColors": false,
+    "MinimumSeverity": 0
+  },
+  "RequestHistory": {
+    "Enabled": true,
+    "Directory": "/app/data/request-history/",
+    "RetentionDays": 7,
+    "CleanupIntervalMinutes": 60,
+    "MaxRequestBodyBytes": 65536,
+    "MaxResponseBodyBytes": 65536
+  },
+  "AdminApiKeys": [
+    "conductoradmin"
+  ]
+}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
 import Modal from '../components/Modal';
@@ -10,6 +11,7 @@ import CopyableId from '../components/CopyableId';
 
 function ModelRunnerEndpoints() {
   const { api, setError } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [endpoints, setEndpoints] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -99,6 +101,13 @@ function ModelRunnerEndpoints() {
     fetchEndpoints();
     fetchTenants();
   }, [fetchEndpoints, fetchTenants]);
+
+  useEffect(() => {
+    if (pendingCreate === 'endpoint') {
+      clearPendingCreate();
+      handleCreate();
+    }
+  }, [pendingCreate]);
 
   useEffect(() => {
     fetchHealth();
@@ -332,6 +341,7 @@ function ModelRunnerEndpoints() {
         await api.updateModelRunnerEndpoint(selectedEndpoint.Id, data);
       } else {
         await api.createModelRunnerEndpoint(data);
+        onEntityCreated('endpoint');
       }
       setShowForm(false);
       fetchEndpoints();

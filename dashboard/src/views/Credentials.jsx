@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
 import Modal from '../components/Modal';
@@ -11,6 +12,7 @@ import CopyButton from '../components/CopyButton';
 
 function Credentials() {
   const { api, setError } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [credentials, setCredentials] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [users, setUsers] = useState([]);
@@ -65,6 +67,13 @@ function Credentials() {
     fetchTenants();
     fetchUsers();
   }, [fetchCredentials, fetchTenants, fetchUsers]);
+
+  useEffect(() => {
+    if (pendingCreate === 'credential') {
+      clearPendingCreate();
+      handleCreate();
+    }
+  }, [pendingCreate]);
 
   const handleCreate = () => {
     setEditMode(false);
@@ -143,6 +152,7 @@ function Credentials() {
         await api.updateCredential(selectedCredential.Id, data);
       } else {
         await api.createCredential(data);
+        onEntityCreated('credential');
       }
       setShowForm(false);
       fetchCredentials();

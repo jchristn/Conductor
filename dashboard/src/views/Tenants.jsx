@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
 import Modal from '../components/Modal';
@@ -10,6 +11,7 @@ import CopyableId from '../components/CopyableId';
 
 function Tenants() {
   const { api, setError } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -40,6 +42,13 @@ function Tenants() {
   useEffect(() => {
     fetchTenants();
   }, [fetchTenants]);
+
+  useEffect(() => {
+    if (pendingCreate === 'tenant') {
+      clearPendingCreate();
+      handleCreate();
+    }
+  }, [pendingCreate]);
 
   const handleCreate = () => {
     setEditMode(false);
@@ -114,6 +123,7 @@ function Tenants() {
         await api.updateTenant(selectedTenant.Id, data);
       } else {
         await api.createTenant(data);
+        onEntityCreated('tenant');
       }
       setShowForm(false);
       fetchTenants();

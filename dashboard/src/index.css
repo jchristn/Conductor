@@ -2639,3 +2639,437 @@ body {
   color: var(--text-secondary);
 }
 
+/* ===== Tour & Onboarding ===== */
+
+/* Tour overlay (for welcome modal) */
+.tour-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 20px;
+}
+
+/* Tour overlay background (for spotlight steps) */
+.tour-overlay-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1099;
+}
+
+/* Spotlight highlight */
+.tour-spotlight {
+  position: fixed;
+  z-index: 1100;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+/* Welcome modal */
+.tour-welcome-modal {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  z-index: 1101;
+}
+
+.tour-welcome-icon {
+  color: var(--primary-color);
+  margin-bottom: 16px;
+}
+
+.tour-welcome-modal h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.tour-welcome-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.tour-welcome-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+  text-align: left;
+}
+
+.tour-welcome-features li {
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tour-welcome-features li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.tour-welcome-subtext {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.tour-welcome-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* Tour tooltip */
+.tour-tooltip {
+  position: fixed;
+  z-index: 1101;
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 16px;
+  width: 320px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+}
+
+.tour-tooltip::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  transform: rotate(45deg);
+}
+
+.tour-tooltip.tour-arrow-top::before {
+  top: -7px;
+  left: 24px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.tour-tooltip.tour-arrow-bottom::before {
+  bottom: -7px;
+  left: 24px;
+  border-left: none;
+  border-top: none;
+}
+
+.tour-tooltip.tour-arrow-left::before {
+  left: -7px;
+  top: 20px;
+  border-top: none;
+  border-right: none;
+}
+
+.tour-tooltip.tour-arrow-right::before {
+  right: -7px;
+  top: 20px;
+  border-bottom: none;
+  border-left: none;
+}
+
+.tour-tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tour-step-indicator {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.tour-skip-btn {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tour-skip-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-color);
+}
+
+.tour-tooltip-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.tour-tooltip-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.tour-tooltip-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Tour wizard prompt (shown at last tour step) */
+.tour-wizard-prompt {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1102;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.tour-wizard-prompt p {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ===== Setup Wizard ===== */
+
+.wizard-layout {
+  display: flex;
+  min-height: 400px;
+}
+
+.wizard-step-list {
+  width: 220px;
+  border-right: 1px solid var(--border-color);
+  padding: 16px;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.wizard-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.wizard-step-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.wizard-step-item.done {
+  color: var(--success-color);
+}
+
+.wizard-step-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.wizard-step-item.active .wizard-step-indicator {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.wizard-step-item.done .wizard-step-indicator {
+  background: var(--success-color);
+  border-color: var(--success-color);
+  color: white;
+}
+
+.wizard-step-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wizard-content {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.wizard-content-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.wizard-progress {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.wizard-description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.wizard-intro-summary {
+  background: var(--bg-color);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.wizard-intro-summary p {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.wizard-entity-list {
+  padding-left: 24px;
+  margin-bottom: 12px;
+}
+
+.wizard-entity-list li {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding: 3px 0;
+}
+
+.wizard-intro-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.wizard-create-section {
+  margin-bottom: 16px;
+}
+
+.wizard-create-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+.wizard-complete-section {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.wizard-complete-icon {
+  color: var(--success-color);
+  margin-bottom: 16px;
+}
+
+.wizard-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.wizard-actions-left,
+.wizard-actions-right {
+  display: flex;
+  gap: 8px;
+}
+
+/* ===== Sidebar Footer ===== */
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-footer-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--sidebar-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-footer-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--sidebar-active);
+}
+
+.sidebar-footer-btn + .sidebar-footer-btn {
+  margin-top: 4px;
+}
+

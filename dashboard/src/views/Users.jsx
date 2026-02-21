@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
 import Modal from '../components/Modal';
@@ -10,6 +11,7 @@ import CopyableId from '../components/CopyableId';
 
 function Users() {
   const { api, setError } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [users, setUsers] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,13 @@ function Users() {
     fetchUsers();
     fetchTenants();
   }, [fetchUsers, fetchTenants]);
+
+  useEffect(() => {
+    if (pendingCreate === 'user') {
+      clearPendingCreate();
+      handleCreate();
+    }
+  }, [pendingCreate]);
 
   const handleCreate = () => {
     setEditMode(false);
@@ -146,6 +155,7 @@ function Users() {
         await api.updateUser(selectedUser.Id, data);
       } else {
         await api.createUser(data);
+        onEntityCreated('user');
       }
       setShowForm(false);
       fetchUsers();

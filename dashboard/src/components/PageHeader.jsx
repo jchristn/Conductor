@@ -7,7 +7,7 @@ function PageHeader() {
   return (
     <header className="page-header">
       <div className="page-header-left">
-        <span className="server-badge">
+        <span className="server-badge" data-tour-id="header-server">
           <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1a1 1 0 11-2 0 1 1 0 012 0zM2 13a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2zm14 1a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
           </svg>
@@ -59,6 +59,7 @@ function PageHeader() {
           className="header-btn"
           onClick={toggleTheme}
           title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          data-tour-id="header-theme"
         >
           {theme === 'light' ? (
             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -70,7 +71,7 @@ function PageHeader() {
             </svg>
           )}
         </button>
-        <button className="header-btn logout-btn" onClick={disconnect} title="Logout">
+        <button className="header-btn logout-btn" onClick={disconnect} title="Logout" data-tour-id="header-logout">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
           </svg>

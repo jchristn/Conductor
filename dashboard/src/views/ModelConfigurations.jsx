@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
 import Modal from '../components/Modal';
@@ -10,6 +11,7 @@ import CopyableId from '../components/CopyableId';
 
 function ModelConfigurations() {
   const { api, setError } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [configurations, setConfigurations] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,13 @@ function ModelConfigurations() {
     fetchConfigurations();
     fetchTenants();
   }, [fetchConfigurations, fetchTenants]);
+
+  useEffect(() => {
+    if (pendingCreate === 'configuration') {
+      clearPendingCreate();
+      handleCreate();
+    }
+  }, [pendingCreate]);
 
   const handleCreate = () => {
     setEditMode(false);
@@ -186,6 +195,7 @@ function ModelConfigurations() {
         await api.updateModelConfiguration(selectedConfiguration.Id, data);
       } else {
         await api.createModelConfiguration(data);
+        onEntityCreated('configuration');
       }
       setShowForm(false);
       fetchConfigurations();

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
 import Modal from '../components/Modal';
@@ -10,6 +11,7 @@ import CopyableId from '../components/CopyableId';
 
 function ModelDefinitions() {
   const { api, setError } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [definitions, setDefinitions] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +60,13 @@ function ModelDefinitions() {
     fetchDefinitions();
     fetchTenants();
   }, [fetchDefinitions, fetchTenants]);
+
+  useEffect(() => {
+    if (pendingCreate === 'definition') {
+      clearPendingCreate();
+      handleCreate();
+    }
+  }, [pendingCreate]);
 
   const handleCreate = () => {
     setEditMode(false);
@@ -158,6 +167,7 @@ function ModelDefinitions() {
         await api.updateModelDefinition(selectedDefinition.Id, data);
       } else {
         await api.createModelDefinition(data);
+        onEntityCreated('definition');
       }
       setShowForm(false);
       fetchDefinitions();

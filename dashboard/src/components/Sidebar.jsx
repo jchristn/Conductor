@@ -1,9 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 
 function Sidebar() {
   const { isAdmin, currentUser } = useApp();
+  const { startTour, startWizard } = useOnboarding();
 
   // Show admin features for system admins OR users with IsAdmin flag
   const hasAdminAccess = isAdmin || currentUser?.IsAdmin;
@@ -12,6 +14,7 @@ function Sidebar() {
     {
       path: '/',
       label: 'Dashboard',
+      tourId: 'nav-dashboard',
       tooltip: 'Overview of system resources and quick actions',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -22,6 +25,7 @@ function Sidebar() {
     {
       path: '/tenants',
       label: 'Tenants',
+      tourId: 'nav-tenants',
       tooltip: 'Manage organizational units for grouping resources',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -32,6 +36,7 @@ function Sidebar() {
     {
       path: '/users',
       label: 'Users',
+      tourId: 'nav-users',
       tooltip: 'Manage user accounts and permissions',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -42,6 +47,7 @@ function Sidebar() {
     {
       path: '/credentials',
       label: 'Credentials',
+      tourId: 'nav-credentials',
       tooltip: 'Manage API bearer tokens for authentication',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -53,6 +59,7 @@ function Sidebar() {
     {
       path: '/endpoints',
       label: 'Model Runner Endpoints',
+      tourId: 'nav-endpoints',
       tooltip: 'Manage backend inference servers and monitor health',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -63,6 +70,7 @@ function Sidebar() {
     {
       path: '/definitions',
       label: 'Model Definitions',
+      tourId: 'nav-definitions',
       tooltip: 'Manage model metadata describing available models',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -73,6 +81,7 @@ function Sidebar() {
     {
       path: '/configurations',
       label: 'Model Configurations',
+      tourId: 'nav-configurations',
       tooltip: 'Manage parameter presets for inference requests',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -84,6 +93,7 @@ function Sidebar() {
     {
       path: '/vmr',
       label: 'Virtual Model Runners',
+      tourId: 'nav-vmr',
       tooltip: 'Manage virtualized API endpoints with load balancing',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -95,6 +105,7 @@ function Sidebar() {
     {
       path: '/request-history',
       label: 'Request History',
+      tourId: 'nav-request-history',
       tooltip: 'View request and response history for Virtual Model Runners',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -105,6 +116,7 @@ function Sidebar() {
     {
       path: '/api-explorer',
       label: 'API Explorer',
+      tourId: 'nav-api-explorer',
       tooltip: 'Browse and test the Conductor REST API',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -118,6 +130,7 @@ function Sidebar() {
       {
         path: '/administrators',
         label: 'Administrators',
+        tourId: 'nav-administrators',
         tooltip: 'Manage dashboard administrator accounts',
         icon: (
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -132,6 +145,7 @@ function Sidebar() {
       {
         path: '/backup',
         label: 'Backup & Restore',
+        tourId: 'nav-backup',
         tooltip: 'Export and import system configuration data',
         icon: (
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -159,6 +173,7 @@ function Sidebar() {
                 to={item.path}
                 className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
                 title={item.tooltip || ''}
+                data-tour-id={item.tourId || undefined}
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
@@ -167,6 +182,20 @@ function Sidebar() {
           )
         )}
       </ul>
+      <div className="sidebar-footer">
+        <button className="sidebar-footer-btn" onClick={startTour} title="Take a guided tour of the interface">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+          Replay Tour
+        </button>
+        <button className="sidebar-footer-btn" onClick={startWizard} title="Walk through setup step by step">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+          </svg>
+          Setup Wizard
+        </button>
+      </div>
     </nav>
   );
 }

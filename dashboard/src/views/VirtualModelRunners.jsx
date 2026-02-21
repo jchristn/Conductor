@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
 import ActionMenu from '../components/ActionMenu';
 import Modal from '../components/Modal';
@@ -11,6 +12,7 @@ import CopyButton from '../components/CopyButton';
 
 function VirtualModelRunners() {
   const { api, setError, serverUrl } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [vmrs, setVmrs] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [endpoints, setEndpoints] = useState([]);
@@ -77,6 +79,13 @@ function VirtualModelRunners() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (pendingCreate === 'vmr') {
+      clearPendingCreate();
+      handleCreate();
+    }
+  }, [pendingCreate]);
 
   const handleCreate = () => {
     setEditMode(false);
@@ -261,6 +270,7 @@ function VirtualModelRunners() {
         await api.updateVirtualModelRunner(selectedVmr.Id, data);
       } else {
         await api.createVirtualModelRunner(data);
+        onEntityCreated('vmr');
       }
       setShowForm(false);
       fetchData();
