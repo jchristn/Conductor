@@ -60,15 +60,12 @@ namespace Conductor.Core.Models
             RequestType == RequestTypeEnum.OllamaChat;
 
         /// <summary>
-        /// Check if this is a model management request.
+        /// Check if this is a model management request (pulling or deleting models).
+        /// Read-only model listing and info requests are not considered model management.
         /// </summary>
         public bool IsModelManagementRequest =>
-            RequestType == RequestTypeEnum.OpenAIListModels ||
-            RequestType == RequestTypeEnum.OllamaListTags ||
             RequestType == RequestTypeEnum.OllamaPullModel ||
-            RequestType == RequestTypeEnum.OllamaDeleteModel ||
-            RequestType == RequestTypeEnum.OllamaListRunningModels ||
-            RequestType == RequestTypeEnum.OllamaShowModelInfo;
+            RequestType == RequestTypeEnum.OllamaDeleteModel;
 
         /// <summary>
         /// Instantiate the URL context.

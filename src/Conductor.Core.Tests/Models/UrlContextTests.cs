@@ -272,10 +272,10 @@ namespace Conductor.Core.Tests.Models
         #region IsModelManagementRequest-Tests
 
         [Fact]
-        public void IsModelManagementRequest_ForOllamaTags_ReturnsTrue()
+        public void IsModelManagementRequest_ForOllamaTags_ReturnsFalse()
         {
             UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/api/tags", "GET");
-            ctx.IsModelManagementRequest.Should().BeTrue();
+            ctx.IsModelManagementRequest.Should().BeFalse();
         }
 
         [Fact]
@@ -286,10 +286,31 @@ namespace Conductor.Core.Tests.Models
         }
 
         [Fact]
-        public void IsModelManagementRequest_ForOpenAIModels_ReturnsTrue()
+        public void IsModelManagementRequest_ForOllamaDelete_ReturnsTrue()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/api/delete", "DELETE");
+            ctx.IsModelManagementRequest.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsModelManagementRequest_ForOpenAIModels_ReturnsFalse()
         {
             UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1/models", "GET");
-            ctx.IsModelManagementRequest.Should().BeTrue();
+            ctx.IsModelManagementRequest.Should().BeFalse();
+        }
+
+        [Fact]
+        public void IsModelManagementRequest_ForOllamaListRunningModels_ReturnsFalse()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/api/ps", "GET");
+            ctx.IsModelManagementRequest.Should().BeFalse();
+        }
+
+        [Fact]
+        public void IsModelManagementRequest_ForOllamaShowModelInfo_ReturnsFalse()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/api/show", "POST");
+            ctx.IsModelManagementRequest.Should().BeFalse();
         }
 
         [Fact]
