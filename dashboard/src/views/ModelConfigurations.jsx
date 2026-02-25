@@ -284,7 +284,10 @@ function ModelConfigurations() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Model Configurations</h1>
+        <div>
+          <h1>Model Configurations</h1>
+          <p className="view-subtitle">Create configurations that bind model definitions to runner endpoints with specific parameters and routing rules.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchConfigurations} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">

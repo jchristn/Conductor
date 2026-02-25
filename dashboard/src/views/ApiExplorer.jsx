@@ -93,7 +93,10 @@ function ApiExplorer() {
   return (
     <div className="view-container api-explorer">
       <div className="view-header">
-        <h1>API Explorer</h1>
+        <div>
+          <h1>API Explorer</h1>
+          <p className="view-subtitle">Test and explore the Conductor API by sending requests to virtual model runners directly from the dashboard.</p>
+        </div>
         <div className="view-actions">
           <button
             className="btn-icon"

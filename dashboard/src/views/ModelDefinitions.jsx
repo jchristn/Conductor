@@ -268,7 +268,10 @@ function ModelDefinitions() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Model Definitions</h1>
+        <div>
+          <h1>Model Definitions</h1>
+          <p className="view-subtitle">Define the models available in your environment, including their names and capabilities.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchDefinitions} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">

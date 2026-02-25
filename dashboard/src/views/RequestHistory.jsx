@@ -108,9 +108,10 @@ function RequestHistory() {
   const [endpoints, setEndpoints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [pageInput, setPageInput] = useState('1');
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [detailData, setDetailData] = useState(null);
@@ -242,7 +243,8 @@ function RequestHistory() {
 
   const handleFilterChange = (key, value) => {
     setFilters({ ...filters, [key]: value });
-    setPage(1); // Reset to first page when filtering
+    setPage(1);
+    setPageInput('1');
   };
 
   const handleClearFilters = () => {
@@ -253,6 +255,7 @@ function RequestHistory() {
       httpStatus: ''
     });
     setPage(1);
+    setPageInput('1');
   };
 
   const formatDate = (dateString) => {
@@ -360,7 +363,10 @@ function RequestHistory() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Request History</h1>
+        <div>
+          <h1>Request History</h1>
+          <p className="view-subtitle">View and filter recent API requests including routing decisions, response details, and token usage.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchEntries} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
@@ -436,32 +442,65 @@ function RequestHistory() {
         )}
       </div>
 
-      <DataTable data={entries} columns={columns} loading={loading} hidePagination={true} />
-
       <div className="pagination">
-        <span className="pagination-info">
-          Showing {entries.length} of {totalCount} entries
-        </span>
+        <div className="pagination-info">
+          Showing {entries.length === 0 ? 0 : ((page - 1) * pageSize) + 1} to{' '}
+          {Math.min(page * pageSize, totalCount)} of {totalCount} entries
+        </div>
+
         <div className="pagination-controls">
-          <button
-            className="btn-secondary"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page <= 1}
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+              setPageInput('1');
+            }}
           >
-            Previous
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+
+          <button onClick={() => { setPage(1); setPageInput('1'); }} disabled={page <= 1}>
+            First
           </button>
-          <span className="pagination-page">
-            Page {page} of {totalPages}
+          <button onClick={() => { setPage(p => Math.max(1, p - 1)); setPageInput(String(Math.max(1, page - 1))); }} disabled={page <= 1}>
+            Prev
+          </button>
+
+          <span className="page-input-container">
+            Page{' '}
+            <input
+              type="text"
+              value={pageInput}
+              onChange={(e) => setPageInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const pageNum = parseInt(pageInput, 10);
+                  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                    setPage(pageNum);
+                  } else {
+                    setPageInput(String(page));
+                  }
+                }
+              }}
+              className="page-input"
+            />{' '}
+            of {totalPages}
           </span>
-          <button
-            className="btn-secondary"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-          >
+
+          <button onClick={() => { setPage(p => Math.min(totalPages, p + 1)); setPageInput(String(Math.min(totalPages, page + 1))); }} disabled={page >= totalPages}>
             Next
+          </button>
+          <button onClick={() => { setPage(totalPages); setPageInput(String(totalPages)); }} disabled={page >= totalPages}>
+            Last
           </button>
         </div>
       </div>
+
+      <DataTable data={entries} columns={columns} loading={loading} hidePagination={true} />
 
       <Modal
         isOpen={showDetail}

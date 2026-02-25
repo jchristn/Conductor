@@ -167,7 +167,10 @@ function Administrators() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Administrators</h1>
+        <div>
+          <h1>Administrators</h1>
+          <p className="view-subtitle">Manage administrator accounts that have full access to the Conductor dashboard and settings.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchAdministrators} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">

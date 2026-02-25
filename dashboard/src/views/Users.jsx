@@ -239,7 +239,10 @@ function Users() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Users</h1>
+        <div>
+          <h1>Users</h1>
+          <p className="view-subtitle">Manage user accounts and their API keys for authenticating requests to virtual model runners.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchUsers} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">

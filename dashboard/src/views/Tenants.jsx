@@ -188,7 +188,10 @@ function Tenants() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Tenants</h1>
+        <div>
+          <h1>Tenants</h1>
+          <p className="view-subtitle">Manage organizational tenants that group and isolate resources such as model runners, configurations, and users.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchTenants} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">

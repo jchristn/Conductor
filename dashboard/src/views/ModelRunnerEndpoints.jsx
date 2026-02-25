@@ -464,7 +464,10 @@ function ModelRunnerEndpoints() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Model Runner Endpoints</h1>
+        <div>
+          <h1>Model Runner Endpoints</h1>
+          <p className="view-subtitle">Register and monitor the backend model runner endpoints that serve inference requests.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={() => { fetchEndpoints(); fetchHealth(); }} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">

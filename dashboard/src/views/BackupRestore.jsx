@@ -134,7 +134,10 @@ function BackupRestore() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Backup & Restore</h1>
+        <div>
+          <h1>Backup & Restore</h1>
+          <p className="view-subtitle">Create full backups of your Conductor configuration or restore from a previous backup file.</p>
+        </div>
       </div>
 
       {success && (

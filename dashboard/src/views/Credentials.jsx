@@ -229,7 +229,10 @@ function Credentials() {
   return (
     <div className="view-container">
       <div className="view-header">
-        <h1>Credentials</h1>
+        <div>
+          <h1>Credentials</h1>
+          <p className="view-subtitle">Store and manage API credentials used to authenticate with Conductor.</p>
+        </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchCredentials} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">

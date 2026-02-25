@@ -24,6 +24,7 @@ function Dashboard() {
       <div className="view-header">
         <div>
           <h1>Dashboard</h1>
+          <p className="view-subtitle">Overview of your Conductor environment with quick access to all resource types.</p>
           <p className="server-url">Connected to: {serverUrl}</p>
         </div>
         <button className="btn-secondary" onClick={disconnect}>
