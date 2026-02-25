@@ -109,21 +109,24 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             string whereClause = BuildWhereClause(filter);
             int offset = (filter.Page - 1) * filter.PageSize;
 
-            // Count query
+            // Run count and data queries in parallel
             string countQuery = "SELECT COUNT(*) AS cnt FROM requesthistory " + whereClause + ";";
-            DataTable countResult = await _Driver.ExecuteQueryAsync(countQuery, false, token).ConfigureAwait(false);
+            string dataQuery = "SELECT * FROM requesthistory " + whereClause +
+                               " ORDER BY createdutc DESC OFFSET " + offset + " ROWS FETCH NEXT " + filter.PageSize + " ROWS ONLY;";
+
+            Task<DataTable> countTask = _Driver.ExecuteQueryAsync(countQuery, false, token);
+            Task<DataTable> dataTask = _Driver.ExecuteQueryAsync(dataQuery, false, token);
+
+            await Task.WhenAll(countTask, dataTask).ConfigureAwait(false);
+
+            DataTable countResult = countTask.Result;
             long totalCount = 0;
             if (countResult != null && countResult.Rows.Count > 0)
             {
                 totalCount = Convert.ToInt64(countResult.Rows[0]["cnt"]);
             }
 
-            // Data query with pagination using SQL Server syntax
-            string query = "SELECT * FROM requesthistory " + whereClause +
-                           " ORDER BY createdutc DESC OFFSET " + offset + " ROWS FETCH NEXT " + filter.PageSize + " ROWS ONLY;";
-            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
-
-            List<RequestHistoryEntry> data = RequestHistoryEntry.FromDataTable(result) ?? new List<RequestHistoryEntry>();
+            List<RequestHistoryEntry> data = RequestHistoryEntry.FromDataTable(dataTask.Result) ?? new List<RequestHistoryEntry>();
 
             return new RequestHistorySearchResult
             {
