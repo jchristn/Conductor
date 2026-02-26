@@ -271,6 +271,20 @@ function RequestHistory() {
     return '';
   };
 
+  const getTransferTypeLabel = (type) => {
+    switch (type) {
+      case 1: return 'Chunked';
+      case 2: return 'Server-Sent Events';
+      default: return 'Normal';
+    }
+  };
+
+  const getTransferTypeBadge = (type) => {
+    if (!type || type === 0) return null;
+    const label = type === 1 ? 'Chunked' : 'SSE';
+    return <span className="badge badge-info">{label}</span>;
+  };
+
   const getVmrName = (id) => {
     const vmr = virtualModelRunners.find(v => v.Id === id);
     return vmr ? vmr.Name : id || '-';
@@ -312,6 +326,13 @@ function RequestHistory() {
           {item.HttpStatus || '-'}
         </span>
       )
+    },
+    {
+      key: 'ResponseTransferType',
+      label: 'Type',
+      tooltip: 'Response transfer type (Normal, Chunked, or SSE)',
+      width: '80px',
+      render: (item) => getTransferTypeBadge(item.ResponseTransferType) || <span className="text-muted">Normal</span>
     },
     {
       key: 'ResponseTimeMs',
@@ -547,6 +568,14 @@ function RequestHistory() {
                   <span className={`http-status ${getStatusClass(detailData.HttpStatus)}`}>
                     {detailData.HttpStatus || '-'}
                   </span>
+                </div>
+                <div className="detail-item">
+                  <label>Request Transfer:</label>
+                  <span>{getTransferTypeLabel(detailData.RequestTransferType)}</span>
+                </div>
+                <div className="detail-item">
+                  <label>Response Transfer:</label>
+                  <span>{getTransferTypeLabel(detailData.ResponseTransferType)}</span>
                 </div>
                 <div className="detail-item">
                   <label>URL:</label>

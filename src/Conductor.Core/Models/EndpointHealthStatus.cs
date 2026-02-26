@@ -1,6 +1,7 @@
 namespace Conductor.Core.Models
 {
     using System;
+    using System.Collections.Generic;
 
     /// <summary>
     /// Health status for a model runner endpoint (API response model).
@@ -96,6 +97,16 @@ namespace Conductor.Core.Models
         public string LastError { get; set; }
 
         /// <summary>
+        /// UTC timestamp of the last state transition.
+        /// </summary>
+        public DateTime? LastStateChangeUtc { get; set; }
+
+        /// <summary>
+        /// History of recent health check results.
+        /// </summary>
+        public List<HealthCheckRecord> History { get; set; } = new List<HealthCheckRecord>();
+
+        /// <summary>
         /// Create an EndpointHealthStatus from an EndpointHealthState.
         /// </summary>
         public static EndpointHealthStatus FromState(EndpointHealthState state, ModelRunnerEndpoint endpoint)
@@ -116,7 +127,9 @@ namespace Conductor.Core.Models
                 InFlightRequests = state.InFlightRequests,
                 MaxParallelRequests = endpoint?.MaxParallelRequests ?? 0,
                 Weight = endpoint?.Weight ?? 1,
-                LastError = state.LastError
+                LastError = state.LastError,
+                LastStateChangeUtc = state.LastStateChangeUtc,
+                History = state.CheckHistory ?? new List<HealthCheckRecord>()
             };
         }
     }

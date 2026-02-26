@@ -1,6 +1,8 @@
 namespace Conductor.Core.Models
 {
     using System;
+    using System.Collections.Generic;
+    using System.Linq;
     using System.Text.Json.Serialization;
 
     /// <summary>
@@ -85,6 +87,19 @@ namespace Conductor.Core.Models
         public string LastError { get; set; }
 
         /// <summary>
+        /// History of recent health check results.
+        /// Thread-safe access requires holding the Lock.
+        /// </summary>
+        public List<HealthCheckRecord> CheckHistory { get; set; } = new List<HealthCheckRecord>();
+
+        /// <summary>
+        /// Maximum number of health check records to retain in history.
+        /// Default is 500.
+        /// </summary>
+        [JsonIgnore]
+        public int MaxHistoryRecords { get; set; } = 500;
+
+        /// <summary>
         /// Lock object for thread-safe operations.
         /// </summary>
         [JsonIgnore]
@@ -112,7 +127,8 @@ namespace Conductor.Core.Models
                 ConsecutiveSuccesses = this.ConsecutiveSuccesses,
                 ConsecutiveFailures = this.ConsecutiveFailures,
                 InFlightRequests = this.InFlightRequests,
-                LastError = this.LastError
+                LastError = this.LastError,
+                CheckHistory = this.CheckHistory.ToList()
             };
         }
     }

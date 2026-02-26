@@ -292,6 +292,8 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 responsetimems INT,
                 objectkey NVARCHAR(255) NOT NULL,
                 createdutc DATETIME2 NOT NULL,
+                requesttransfertype INT NOT NULL DEFAULT 0,
+                responsetransfertype INT NOT NULL DEFAULT 0,
                 completedutc DATETIME2,
                 FOREIGN KEY (tenantguid) REFERENCES tenants(id),
                 FOREIGN KEY (virtualmodelrunnerguid) REFERENCES virtualmodelrunners(id)
@@ -313,6 +315,20 @@ namespace Conductor.Core.Database.SqlServer.Queries
         /// </summary>
         public static readonly string AddRequestHistoryEnabledColumn = @"
             ALTER TABLE virtualmodelrunners ADD requesthistoryenabled BIT NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add requesttransfertype column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddRequestTransferTypeColumn = @"
+            ALTER TABLE requesthistory ADD requesttransfertype INT NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add responsetransfertype column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddResponseTransferTypeColumn = @"
+            ALTER TABLE requesthistory ADD responsetransfertype INT NOT NULL DEFAULT 0;
         ";
     }
 }

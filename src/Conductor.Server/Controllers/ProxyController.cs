@@ -351,6 +351,7 @@ namespace Conductor.Server.Controllers
                             endpoint.Id,
                             effectiveModel,
                             sessionPinUsed,
+                            requestContext,
                             historyDetail,
                             endpoint,
                             modelDefinition,
@@ -863,6 +864,7 @@ namespace Conductor.Server.Controllers
             string endpointId,
             string modelName,
             bool sessionPinUsed,
+            RequestContext requestContext,
             RequestHistoryDetail historyDetail,
             ModelRunnerEndpoint endpoint,
             ModelDefinition modelDefinition,
@@ -901,11 +903,44 @@ namespace Conductor.Server.Controllers
             bool isStreaming = IsStreamingResponse(response);
             string responseBodyString = null;
 
+            // Set transfer type indicators on history detail
+            if (historyDetail != null)
+            {
+                // Request transfer type
+                if (requestContext != null && requestContext.IsChunkedRequest)
+                {
+                    historyDetail.RequestTransferType = TransferTypeEnum.Chunked;
+                }
+
+                // Response transfer type
+                string responseContentType = response.Content?.Headers?.ContentType?.MediaType;
+                if (!String.IsNullOrEmpty(responseContentType) &&
+                    responseContentType.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase))
+                {
+                    historyDetail.ResponseTransferType = TransferTypeEnum.ServerSentEvents;
+                }
+                else if (response.Headers.TransferEncodingChunked == true ||
+                    (!String.IsNullOrEmpty(responseContentType) &&
+                     (responseContentType.Equals("application/x-ndjson", StringComparison.OrdinalIgnoreCase) ||
+                      responseContentType.Equals("application/stream+json", StringComparison.OrdinalIgnoreCase))))
+                {
+                    historyDetail.ResponseTransferType = TransferTypeEnum.Chunked;
+                }
+            }
+
             if (isStreaming)
             {
-                await SendStreamingResponseAsync(ctx, response, cancellationToken).ConfigureAwait(false);
-                // For streaming responses, we don't capture the full body
-                responseBodyString = "[Streaming response - body not captured]";
+                // Capture streaming body when request history is enabled
+                StringBuilder streamBody = null;
+                int maxCaptureBytes = 0;
+                if (historyDetail != null && _RequestHistoryService != null)
+                {
+                    maxCaptureBytes = _RequestHistoryService.MaxResponseBodyBytes;
+                    streamBody = new StringBuilder(Math.Min(maxCaptureBytes, 65536));
+                }
+
+                await SendStreamingResponseAsync(ctx, response, maxCaptureBytes, streamBody, cancellationToken).ConfigureAwait(false);
+                responseBodyString = streamBody != null ? streamBody.ToString() : null;
             }
             else
             {
@@ -975,8 +1010,15 @@ namespace Conductor.Server.Controllers
         /// </summary>
         /// <param name="ctx">The HTTP context.</param>
         /// <param name="response">The upstream HTTP response.</param>
+        /// <param name="maxCaptureBytes">Maximum number of bytes to capture for request history. Zero disables capture.</param>
+        /// <param name="capturedBody">StringBuilder to accumulate the captured body text. May be null to skip capture.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        private async Task SendStreamingResponseAsync(HttpContextBase ctx, HttpResponseMessage response, CancellationToken cancellationToken)
+        private async Task SendStreamingResponseAsync(
+            HttpContextBase ctx,
+            HttpResponseMessage response,
+            int maxCaptureBytes,
+            StringBuilder capturedBody,
+            CancellationToken cancellationToken)
         {
             // For SSE, set appropriate headers
             string contentType = response.Content?.Headers?.ContentType?.MediaType;
@@ -1003,6 +1045,16 @@ namespace Conductor.Server.Controllers
                     // Send this chunk to the client
                     byte[] chunk = new byte[bytesRead];
                     Buffer.BlockCopy(buffer, 0, chunk, 0, bytesRead);
+
+                    // Capture streaming body for request history
+                    if (capturedBody != null && capturedBody.Length < maxCaptureBytes)
+                    {
+                        string chunkText = Encoding.UTF8.GetString(chunk);
+                        int remaining = maxCaptureBytes - capturedBody.Length;
+                        capturedBody.Append(remaining >= chunkText.Length
+                            ? chunkText
+                            : chunkText.Substring(0, remaining));
+                    }
 
                     // SendChunk(data, isFinal, cancellationToken) - send non-final chunk
                     bool success = await ctx.Response.SendChunk(chunk, false, cancellationToken).ConfigureAwait(false);

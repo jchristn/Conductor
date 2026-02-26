@@ -1,6 +1,6 @@
 import React from 'react';
 
-function Modal({ isOpen, onClose, onDelete, title, children, wide = false, extraWide = false }) {
+function Modal({ isOpen, onClose, onDelete, title, children, wide = false, extraWide = false, className = '' }) {
   if (!isOpen) return null;
 
   const handleOverlayClick = (e) => {
@@ -9,7 +9,8 @@ function Modal({ isOpen, onClose, onDelete, title, children, wide = false, extra
     }
   };
 
-  const modalClass = extraWide ? 'modal modal-extra-wide' : wide ? 'modal modal-wide' : 'modal';
+  let modalClass = extraWide ? 'modal modal-extra-wide' : wide ? 'modal modal-wide' : 'modal';
+  if (className) modalClass += ' ' + className;
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>

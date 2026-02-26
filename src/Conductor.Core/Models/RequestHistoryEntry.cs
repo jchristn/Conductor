@@ -3,6 +3,7 @@ namespace Conductor.Core.Models
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using Conductor.Core.Enums;
     using Conductor.Core.Helpers;
 
     /// <summary>
@@ -129,6 +130,18 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Transfer type used for the request (Normal, Chunked, or ServerSentEvents).
+        /// Defaults to Normal.
+        /// </summary>
+        public TransferTypeEnum RequestTransferType { get; set; } = TransferTypeEnum.Normal;
+
+        /// <summary>
+        /// Transfer type used for the response (Normal, Chunked, or ServerSentEvents).
+        /// Defaults to Normal.
+        /// </summary>
+        public TransferTypeEnum ResponseTransferType { get; set; } = TransferTypeEnum.Normal;
+
+        /// <summary>
         /// Record creation timestamp (UTC).
         /// </summary>
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
@@ -182,6 +195,8 @@ namespace Conductor.Core.Models
                 HttpStatus = DataTableHelper.GetNullableIntValue(row, "httpstatus"),
                 ResponseTimeMs = DataTableHelper.GetNullableIntValue(row, "responsetimems"),
                 ObjectKey = DataTableHelper.GetStringValue(row, "objectkey"),
+                RequestTransferType = DataTableHelper.GetEnumValue<TransferTypeEnum>(row, "requesttransfertype", TransferTypeEnum.Normal),
+                ResponseTransferType = DataTableHelper.GetEnumValue<TransferTypeEnum>(row, "responsetransfertype", TransferTypeEnum.Normal),
                 CreatedUtc = DataTableHelper.GetDateTimeValue(row, "createdutc"),
                 CompletedUtc = DataTableHelper.GetNullableDateTimeValue(row, "completedutc")
             };

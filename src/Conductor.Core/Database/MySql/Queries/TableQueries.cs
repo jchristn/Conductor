@@ -256,6 +256,8 @@ namespace Conductor.Core.Database.MySql.Queries
                 responsetimems INT,
                 objectkey VARCHAR(512) NOT NULL,
                 createdutc DATETIME(6) NOT NULL,
+                requesttransfertype INT NOT NULL DEFAULT 0,
+                responsetransfertype INT NOT NULL DEFAULT 0,
                 completedutc DATETIME(6),
                 INDEX idx_requesthistory_tenantguid (tenantguid),
                 INDEX idx_requesthistory_vmrguid (virtualmodelrunnerguid),
@@ -272,6 +274,20 @@ namespace Conductor.Core.Database.MySql.Queries
         /// </summary>
         public static readonly string AddRequestHistoryEnabledColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add requesttransfertype column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddRequestTransferTypeColumn = @"
+            ALTER TABLE requesthistory ADD COLUMN requesttransfertype INT NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add responsetransfertype column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddResponseTransferTypeColumn = @"
+            ALTER TABLE requesthistory ADD COLUMN responsetransfertype INT NOT NULL DEFAULT 0;
         ";
     }
 }

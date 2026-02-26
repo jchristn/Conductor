@@ -668,6 +668,22 @@ namespace Conductor.Server
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             requireAuthentication: true);
 
+            _App.Rest.Get("/v1.0/modelrunnerendpoints/{id}/health", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.GetHealth(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Get health status of a single endpoint")
+                .WithDescription("Returns the detailed health status including check history for a specific model runner endpoint")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointHealthStatus>("Endpoint health status with history"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            requireAuthentication: true);
+
             _App.Rest.Get("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
@@ -1389,7 +1405,12 @@ namespace Conductor.Server
                 DateTime startTime = DateTime.UtcNow;
 
                 RequestContext req = new RequestContext();
+
+                // Note: .NET HttpListener decodes chunked transfer encoding at the transport
+                // layer, so DataAsBytes returns the decoded body regardless of transfer encoding.
+                // ReadChunk() is NOT usable here because the stream is already decoded.
                 req.Data = ctx.Request.DataAsBytes;
+                req.IsChunkedRequest = ctx.Request.ChunkedTransfer;
 
                 if (_Settings.Debug.RequestBody)
                 {

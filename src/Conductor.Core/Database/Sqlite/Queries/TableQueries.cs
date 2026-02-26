@@ -256,6 +256,8 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 responsetimems INTEGER,
                 objectkey TEXT NOT NULL,
                 createdutc TEXT NOT NULL,
+                requesttransfertype INTEGER NOT NULL DEFAULT 0,
+                responsetransfertype INTEGER NOT NULL DEFAULT 0,
                 completedutc TEXT,
                 FOREIGN KEY (tenantguid) REFERENCES tenants(id),
                 FOREIGN KEY (virtualmodelrunnerguid) REFERENCES virtualmodelrunners(id)
@@ -272,6 +274,20 @@ namespace Conductor.Core.Database.Sqlite.Queries
         /// </summary>
         public static readonly string AddRequestHistoryEnabledColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled INTEGER NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add requesttransfertype column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddRequestTransferTypeColumn = @"
+            ALTER TABLE requesthistory ADD COLUMN requesttransfertype INTEGER NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add responsetransfertype column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddResponseTransferTypeColumn = @"
+            ALTER TABLE requesthistory ADD COLUMN responsetransfertype INTEGER NOT NULL DEFAULT 0;
         ";
     }
 }

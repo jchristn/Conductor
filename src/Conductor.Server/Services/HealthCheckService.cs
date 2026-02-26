@@ -395,6 +395,19 @@ namespace Conductor.Server.Services
                 state.LastCheckUtc = now;
                 state.LastError = success ? null : error;
 
+                // Record the health check in history
+                state.CheckHistory.Add(new HealthCheckRecord
+                {
+                    TimestampUtc = now,
+                    Success = success
+                });
+
+                // Trim history if it exceeds the maximum
+                if (state.CheckHistory.Count > state.MaxHistoryRecords)
+                {
+                    state.CheckHistory.RemoveRange(0, state.CheckHistory.Count - state.MaxHistoryRecords);
+                }
+
                 if (success)
                 {
                     state.ConsecutiveSuccesses++;

@@ -405,7 +405,7 @@ function VirtualModelRunners() {
         <ActionMenu
           actions={[
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
-            { label: 'View Health', onClick: () => handleViewHealth(item) },
+            { label: 'Health Data', onClick: () => handleViewHealth(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
             { divider: true },
             { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }

@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
             string query = "INSERT INTO requesthistory (id, tenantguid, virtualmodelrunnerguid, virtualmodelrunnername, " +
                            "modelendpointguid, modelendpointname, modelendpointurl, modeldefinitionguid, modeldefinitionname, " +
                            "modelconfigurationguid, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
-                           "httpstatus, responsetimems, objectkey, createdutc, completedutc) " +
+                           "httpstatus, responsetimems, objectkey, requesttransfertype, responsetransfertype, createdutc, completedutc) " +
                            "VALUES ('" + _Driver.Sanitize(entry.Id) + "', " +
                            "'" + _Driver.Sanitize(entry.TenantGuid) + "', " +
                            "'" + _Driver.Sanitize(entry.VirtualModelRunnerGuid) + "', " +
@@ -54,6 +54,8 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            _Driver.FormatNullable(entry.HttpStatus) + ", " +
                            _Driver.FormatNullable(entry.ResponseTimeMs) + ", " +
                            "'" + _Driver.Sanitize(entry.ObjectKey) + "', " +
+                           (int)entry.RequestTransferType + ", " +
+                           (int)entry.ResponseTransferType + ", " +
                            "'" + _Driver.FormatDateTime(entry.CreatedUtc) + "', " +
                            (entry.CompletedUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.CompletedUtc.Value) + "'" : "NULL") + ");";
 
@@ -78,6 +80,8 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "responsebodylength = " + _Driver.FormatNullable(entry.ResponseBodyLength) + ", " +
                            "httpstatus = " + _Driver.FormatNullable(entry.HttpStatus) + ", " +
                            "responsetimems = " + _Driver.FormatNullable(entry.ResponseTimeMs) + ", " +
+                           "requesttransfertype = " + (int)entry.RequestTransferType + ", " +
+                           "responsetransfertype = " + (int)entry.ResponseTransferType + ", " +
                            "completedutc = " + (entry.CompletedUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.CompletedUtc.Value) + "'" : "NULL") + " " +
                            "WHERE id = '" + _Driver.Sanitize(entry.Id) + "';";
 

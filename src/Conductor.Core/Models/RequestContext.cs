@@ -150,6 +150,11 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Boolean indicating if the request used chunked transfer encoding.
+        /// </summary>
+        public bool IsChunkedRequest { get; set; } = false;
+
+        /// <summary>
         /// Boolean indicating if the request is streaming.
         /// </summary>
         public bool IsStreaming { get; set; } = false;

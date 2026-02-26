@@ -301,6 +301,10 @@ class ConductorApi {
     return this.request('GET', '/v1.0/modelrunnerendpoints/health');
   }
 
+  async getModelRunnerEndpointHealth(id) {
+    return this.request('GET', `/v1.0/modelrunnerendpoints/${id}/health`);
+  }
+
   // Model Definition APIs
   async listModelDefinitions(params = {}) {
     const query = this.buildQueryString(params);

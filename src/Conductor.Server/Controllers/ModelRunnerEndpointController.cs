@@ -146,6 +146,34 @@ namespace Conductor.Server.Controllers
         }
 
         /// <summary>
+        /// Get health status for a single endpoint.
+        /// </summary>
+        /// <param name="tenantId">The tenant identifier.</param>
+        /// <param name="id">The endpoint identifier.</param>
+        /// <returns>The endpoint health status, or null if not found.</returns>
+        /// <exception cref="SwiftStackException">Thrown when the endpoint is not found.</exception>
+        public async Task<EndpointHealthStatus> GetHealth(string tenantId, string id)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+
+            if (_HealthCheckService == null)
+                throw new SwiftStackException(ApiResultEnum.NotFound, "Health check service is not available");
+
+            EndpointHealthState state = _HealthCheckService.GetHealthState(id);
+            if (state == null)
+                throw new SwiftStackException(ApiResultEnum.NotFound, "No health data available for this endpoint");
+
+            ModelRunnerEndpoint endpoint;
+            if (String.IsNullOrEmpty(tenantId))
+                endpoint = await Database.ModelRunnerEndpoint.ReadByIdAsync(id);
+            else
+                endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id);
+
+            return EndpointHealthStatus.FromState(state, endpoint);
+        }
+
+        /// <summary>
         /// Enumerate model runner endpoints.
         /// </summary>
         public async Task<EnumerationResult<ModelRunnerEndpoint>> Enumerate(

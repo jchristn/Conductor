@@ -8,6 +8,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import HealthHistogram from '../components/HealthHistogram';
 
 function ModelRunnerEndpoints() {
   const { api, setError } = useApp();
@@ -145,9 +146,23 @@ function ModelRunnerEndpoints() {
     return { healthy, unhealthy, pending, total: activeEndpoints.length };
   }, [endpoints, healthData]);
 
-  const handleViewHealth = (endpoint) => {
+  const [healthDetailData, setHealthDetailData] = useState(null);
+  const [healthDetailLoading, setHealthDetailLoading] = useState(false);
+
+  const handleViewHealth = async (endpoint) => {
     setHealthDetailEndpoint(endpoint);
     setShowHealthDetail(true);
+    setHealthDetailLoading(true);
+    setHealthDetailData(null);
+    try {
+      const result = await api.getModelRunnerEndpointHealth(endpoint.Id);
+      setHealthDetailData(result);
+    } catch {
+      // Fall back to the bulk health data
+      setHealthDetailData(healthData[endpoint.Id] || null);
+    } finally {
+      setHealthDetailLoading(false);
+    }
   };
 
   // Parse a URL or hostname string and extract components
@@ -396,15 +411,26 @@ function ModelRunnerEndpoints() {
     {
       key: 'Health',
       label: 'Health',
-      tooltip: 'Live health check result from periodic monitoring',
-      width: '110px',
+      tooltip: 'Live health check result from periodic monitoring (click for details)',
+      width: '200px',
+      sortable: false,
       render: (item) => {
         if (!item.Active) return <span className="status-badge pending" title="Inactive endpoints are not health-checked">Inactive</span>;
         const h = healthData[item.Id];
         if (!h) return <span className="status-badge pending" title="Awaiting first health check result">Awaiting Check</span>;
-        return h.IsHealthy
-          ? <span className="status-badge healthy" title={`Healthy since ${h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : 'unknown'}`}>Healthy</span>
-          : <span className="status-badge unhealthy" title={h.LastError || `Unhealthy since ${h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : 'unknown'}`}>Unhealthy</span>;
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => handleViewHealth(item)}>
+            <span
+              className={`status-badge ${h.IsHealthy ? 'healthy' : 'unhealthy'}`}
+              title={h.IsHealthy
+                ? `Healthy since ${h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : 'unknown'}`
+                : (h.LastError || `Unhealthy since ${h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : 'unknown'}`)}
+            >
+              {h.IsHealthy ? 'Healthy' : 'Unhealthy'}
+            </span>
+            <HealthHistogram history={h.History || []} width={80} height={18} />
+          </div>
+        );
       },
       filterValue: (item) => {
         if (!item.Active) return 'inactive';
@@ -451,7 +477,7 @@ function ModelRunnerEndpoints() {
         <ActionMenu
           actions={[
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
-            { label: 'View Health', onClick: () => handleViewHealth(item) },
+            { label: 'Health Data', onClick: () => handleViewHealth(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
             { divider: true },
             { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
@@ -791,132 +817,99 @@ function ModelRunnerEndpoints() {
 
       <Modal
         isOpen={showHealthDetail}
-        onClose={() => { setShowHealthDetail(false); setHealthDetailEndpoint(null); }}
-        title="Endpoint Health Details"
+        onClose={() => { setShowHealthDetail(false); setHealthDetailEndpoint(null); setHealthDetailData(null); }}
+        title={`Health: ${healthDetailEndpoint?.Name || 'Endpoint'}`}
         wide
+        className="modal-health"
       >
         {healthDetailEndpoint && (() => {
-          const h = healthData[healthDetailEndpoint.Id];
+          const h = healthDetailData || healthData[healthDetailEndpoint.Id];
           const isActive = healthDetailEndpoint.Active;
+          const history = h?.History || [];
+          const historySpanMs = history.length > 0
+            ? new Date() - new Date([...history].sort((a, b) => new Date(a.TimestampUtc) - new Date(b.TimestampUtc))[0].TimestampUtc)
+            : 0;
+          const historySpanStr = historySpanMs > 0 ? formatDuration(historySpanMs) : 'No data';
+
           return (
             <div className="health-modal">
-              <div className="health-header">
-                <div className="health-summary">
-                  <div>
-                    <h3>{healthDetailEndpoint.Name}</h3>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: "'Monaco', 'Menlo', monospace" }}>
-                      {healthDetailEndpoint.UseSsl ? 'https' : 'http'}://{healthDetailEndpoint.Hostname}:{healthDetailEndpoint.Port}
-                    </div>
-                  </div>
-                  {h ? (
-                    <span
-                      className={`health-badge ${h.IsHealthy ? 'healthy' : 'unhealthy'}`}
-                      title={h.IsHealthy
-                        ? `Passing health checks since ${h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : 'unknown'}`
-                        : `Failing health checks since ${h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : 'unknown'}`}
-                    >
-                      {h.IsHealthy ? 'Healthy' : 'Unhealthy'}
-                    </span>
-                  ) : isActive ? (
-                    <span className="health-badge pending" title="This endpoint is active and being monitored, but no health check results have been received yet">
-                      Awaiting First Check
-                    </span>
-                  ) : (
-                    <span className="health-badge pending" title="Inactive endpoints are excluded from health monitoring">
-                      Not Monitored
-                    </span>
-                  )}
-                </div>
-                <button className="btn-icon" onClick={fetchHealth} title="Refresh health data">
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </div>
+              {healthDetailLoading && !h && (
+                <div className="loading-spinner">Loading health data...</div>
+              )}
 
-              {!h ? (
+              {!h && !healthDetailLoading ? (
                 isActive ? (
                   <p className="no-items">Awaiting first health check result. The server performs periodic checks based on the configured interval.</p>
                 ) : (
                   <p className="no-items">This endpoint is inactive and is not being health-checked. Enable it to begin monitoring.</p>
                 )
-              ) : (
+              ) : h ? (
                 <>
-                  <div className="metrics-grid" style={{ marginBottom: '16px' }}>
-                    <div className="metric" title="Percentage of time this endpoint has been healthy since monitoring started">
-                      <span className="metric-label">Uptime</span>
-                      <span className="metric-value" style={{ color: getUptimeColor(h.UptimePercentage) }}>
-                        {h.UptimePercentage.toFixed(1)}%
-                      </span>
+                  <div className="health-stats-row">
+                    <div className="health-stat-card" title="Current health check status">
+                      <div className="health-stat-label">Status</div>
+                      <div className="health-stat-value">
+                        <span className={`status-badge ${h.IsHealthy ? 'healthy' : 'unhealthy'}`}>
+                          {h.IsHealthy ? 'Healthy' : 'Unhealthy'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="metric" title="Active requests currently being proxied to this endpoint vs. the configured maximum (0 = unlimited)">
-                      <span className="metric-label">In-Flight</span>
-                      <span className="metric-value">
-                        {h.InFlightRequests} / {h.MaxParallelRequests === 0 ? '\u221E' : h.MaxParallelRequests}
-                      </span>
+                    <div className="health-stat-card" title="Percentage of time this endpoint has been healthy since monitoring started">
+                      <div className="health-stat-label">Uptime</div>
+                      <div className="health-stat-value" style={{ color: getUptimeColor(h.UptimePercentage) }}>
+                        {h.UptimePercentage.toFixed(2)}%
+                      </div>
                     </div>
-                    <div className="metric" title="Relative load balancing weight - higher values receive proportionally more traffic">
-                      <span className="metric-label">Weight</span>
-                      <span className="metric-value">{h.Weight}</span>
+                    <div className="health-stat-card" title="Time span covered by health check history">
+                      <div className="health-stat-label">History Span</div>
+                      <div className="health-stat-value">{historySpanStr}</div>
                     </div>
-                    <div className="metric" title={`Consecutive successful health checks - endpoint becomes healthy after reaching the configured threshold`}>
-                      <span className="metric-label">Consecutive OK</span>
-                      <span className="metric-value" style={{ color: h.ConsecutiveSuccesses > 0 ? 'var(--success-color)' : 'var(--text-primary)' }}>
-                        {h.ConsecutiveSuccesses}
-                      </span>
+                    <div className="health-stat-card" title="Consecutive successful health checks">
+                      <div className="health-stat-label">Consecutive OK</div>
+                      <div className="health-stat-value health-stat-success">{h.ConsecutiveSuccesses}</div>
                     </div>
-                    <div className="metric" title={`Consecutive failed health checks - endpoint becomes unhealthy after reaching the configured threshold`}>
-                      <span className="metric-label">Consecutive Fail</span>
-                      <span className="metric-value" style={{ color: h.ConsecutiveFailures > 0 ? 'var(--danger-color)' : 'var(--text-primary)' }}>
-                        {h.ConsecutiveFailures}
-                      </span>
+                    <div className="health-stat-card" title="Consecutive failed health checks">
+                      <div className="health-stat-label">Consecutive Fail</div>
+                      <div className="health-stat-value health-stat-danger">{h.ConsecutiveFailures}</div>
                     </div>
                   </div>
 
-                  <table className="health-table">
-                    <tbody>
-                      <tr title="When the most recent health check was performed">
-                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)', width: '160px' }}>Last Check</td>
-                        <td>{h.LastCheckUtc ? new Date(h.LastCheckUtc).toLocaleString() : '-'}</td>
-                      </tr>
-                      <tr title="When the endpoint last transitioned between healthy and unhealthy states">
-                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Last State Change</td>
-                        <td>{h.LastStateChangeUtc ? new Date(h.LastStateChangeUtc).toLocaleString() : '-'}</td>
-                      </tr>
-                      <tr title="When the endpoint most recently transitioned to healthy status">
-                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Last Healthy</td>
-                        <td>{h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : '-'}</td>
-                      </tr>
-                      <tr title="When the endpoint most recently transitioned to unhealthy status">
-                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Last Unhealthy</td>
-                        <td>{h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : '-'}</td>
-                      </tr>
-                      <tr title="When health monitoring began for this endpoint">
-                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Monitoring Since</td>
-                        <td>{h.FirstCheckUtc ? new Date(h.FirstCheckUtc).toLocaleString() : '-'}</td>
-                      </tr>
-                      <tr title="Cumulative time the endpoint has been in a healthy state">
-                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Total Uptime</td>
-                        <td>{formatDuration(h.TotalUptimeMs)}</td>
-                      </tr>
-                      <tr title="Cumulative time the endpoint has been in an unhealthy state">
-                        <td style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Total Downtime</td>
-                        <td>{formatDuration(h.TotalDowntimeMs)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
                   {h.LastError && (
-                    <div
-                      style={{ marginTop: '16px', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-                      title="The error message from the most recent failed health check"
-                    >
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--danger-color)', marginBottom: '4px' }}>Last Error</div>
-                      <div style={{ fontSize: '13px', color: 'var(--danger-color)' }}>{h.LastError}</div>
+                    <div className="health-error-box" title="The error message from the most recent failed health check">
+                      <div className="health-error-label">Last Error</div>
+                      <div className="health-error-message">{h.LastError}</div>
                     </div>
                   )}
+
+                  {history.length > 0 && (
+                    <div className="health-histogram-section">
+                      <div className="health-section-label">Health History</div>
+                      <div className="health-histogram-container">
+                        <HealthHistogram history={history} width={840} height={36} fill />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="health-timestamps">
+                    <div className="health-timestamp-item" title="When health monitoring began for this endpoint">
+                      <span className="health-timestamp-label">First check</span>
+                      <span className="health-timestamp-value">{h.FirstCheckUtc ? new Date(h.FirstCheckUtc).toLocaleString() : 'N/A'}</span>
+                    </div>
+                    <div className="health-timestamp-item" title="When the most recent health check was performed">
+                      <span className="health-timestamp-label">Last check</span>
+                      <span className="health-timestamp-value">{h.LastCheckUtc ? new Date(h.LastCheckUtc).toLocaleString() : 'N/A'}</span>
+                    </div>
+                    <div className="health-timestamp-item" title="When the endpoint most recently transitioned to healthy status">
+                      <span className="health-timestamp-label">Last healthy</span>
+                      <span className="health-timestamp-value">{h.LastHealthyUtc ? new Date(h.LastHealthyUtc).toLocaleString() : 'N/A'}</span>
+                    </div>
+                    <div className="health-timestamp-item" title="When the endpoint most recently transitioned to unhealthy status">
+                      <span className="health-timestamp-label">Last unhealthy</span>
+                      <span className="health-timestamp-value">{h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : 'N/A'}</span>
+                    </div>
+                  </div>
                 </>
-              )}
+              ) : null}
             </div>
           );
         })()}

@@ -87,6 +87,8 @@ namespace Conductor.Core.Models
                 HttpStatus = entry.HttpStatus,
                 ResponseTimeMs = entry.ResponseTimeMs,
                 ObjectKey = entry.ObjectKey,
+                RequestTransferType = entry.RequestTransferType,
+                ResponseTransferType = entry.ResponseTransferType,
                 CreatedUtc = entry.CreatedUtc,
                 CompletedUtc = entry.CompletedUtc
             };

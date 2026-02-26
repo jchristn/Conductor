@@ -86,6 +86,34 @@ namespace Conductor.Core.Database.SqlServer
                     // Column may already exist in some edge cases, ignore the error
                 }
             }
+
+            // Check if requesttransfertype column exists in requesthistory
+            bool requestTransferTypeExists = await ColumnExistsAsync("requesthistory", "requesttransfertype", token).ConfigureAwait(false);
+            if (!requestTransferTypeExists)
+            {
+                try
+                {
+                    await ExecuteQueryAsync(TableQueries.AddRequestTransferTypeColumn, false, token).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Column may already exist in some edge cases, ignore the error
+                }
+            }
+
+            // Check if responsetransfertype column exists in requesthistory
+            bool responseTransferTypeExists = await ColumnExistsAsync("requesthistory", "responsetransfertype", token).ConfigureAwait(false);
+            if (!responseTransferTypeExists)
+            {
+                try
+                {
+                    await ExecuteQueryAsync(TableQueries.AddResponseTransferTypeColumn, false, token).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Column may already exist in some edge cases, ignore the error
+                }
+            }
         }
 
         /// <summary>
