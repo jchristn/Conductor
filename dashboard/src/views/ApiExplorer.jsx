@@ -64,6 +64,16 @@ function ApiExplorer() {
     ? definitions.filter(d => (explorer.selectedVmr.ModelDefinitionIds || []).includes(d.Id))
     : [];
 
+  const getDefaultModelName = useCallback((vmr, defs) => {
+    if (!vmr) return '';
+    if (vmr.ApiType === 'Gemini') {
+      const explicitGeminiModel = defs.find(def =>
+        typeof def.Name === 'string' && def.Name.toLowerCase().startsWith('gemini-'));
+      return explicitGeminiModel?.Name || 'gemini-2.5-flash';
+    }
+    return defs[0]?.Name || '';
+  }, []);
+
   // Track previous VMR ID to detect changes
   const previousVmrIdRef = useRef(null);
 
@@ -75,12 +85,11 @@ function ApiExplorer() {
     if (currentVmrId !== previousVmrIdRef.current) {
       previousVmrIdRef.current = currentVmrId;
 
-      // If VMR is selected and has model definitions, set the first one as default
-      if (explorer.selectedVmr && vmrDefinitions.length > 0) {
-        explorer.setModelName(vmrDefinitions[0].Name);
+      if (explorer.selectedVmr) {
+        explorer.setModelName(getDefaultModelName(explorer.selectedVmr, vmrDefinitions));
       }
     }
-  }, [explorer.selectedVmr, vmrDefinitions, explorer.setModelName]);
+  }, [explorer.selectedVmr, vmrDefinitions, explorer.setModelName, getDefaultModelName]);
 
   // Get credentials for the selected VMR's tenant
   // If VMR has no tenant, show all credentials; otherwise filter by tenant
