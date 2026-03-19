@@ -36,7 +36,7 @@ namespace Conductor.Core.Tests.Models
         }
 
         [Fact]
-        public void Parse_NormalizesPathToLowercase()
+        public void Parse_NormalizesPathForDetectionWithoutChangingIdentifierCase()
         {
             UrlContext ctx = UrlContext.Parse("/V1.0/API/VMR_TEST/api/tags", "GET");
             ctx.VirtualModelRunnerId.Should().Be("vmr_test");
@@ -196,6 +196,7 @@ namespace Conductor.Core.Tests.Models
             ctx.RequestType.Should().Be(RequestTypeEnum.GeminiGenerateContent);
             ctx.ApiType.Should().Be(ApiTypeEnum.Gemini);
             ctx.RequestedModel.Should().Be("gemini-2.5-flash");
+            ctx.RelativePath.Should().Be("/v1beta/models/gemini-2.5-flash:generateContent");
         }
 
         [Fact]
@@ -453,10 +454,10 @@ namespace Conductor.Core.Tests.Models
         public void BuildTargetUrl_AppendsQueryString()
         {
             UrlContext ctx = new UrlContext();
-            ctx.RelativePath = "/v1beta/models/gemini-2.5-flash:streamgeneratecontent";
+            ctx.RelativePath = "/v1beta/models/gemini-2.5-flash:streamGenerateContent";
             ctx.QueryString = "?alt=sse";
             string targetUrl = ctx.BuildTargetUrl("https://generativelanguage.googleapis.com");
-            targetUrl.Should().Be("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamgeneratecontent?alt=sse");
+            targetUrl.Should().Be("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse");
         }
 
         #endregion

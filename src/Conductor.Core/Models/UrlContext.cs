@@ -109,19 +109,20 @@ namespace Conductor.Core.Models
                 path = path.Substring(0, queryIdx);
             }
 
-            // Normalize path
-            path = path.ToLowerInvariant();
+            // Normalize path shape without altering route casing, which matters for Gemini.
             if (!path.StartsWith("/")) path = "/" + path;
+            string normalizedPath = path.ToLowerInvariant();
 
             // Check for virtual model runner API pattern: /v1.0/api/{vmr_id}/...
-            if (path.StartsWith("/v1.0/api/"))
+            if (normalizedPath.StartsWith("/v1.0/api/"))
             {
                 string remaining = path.Substring(10); // Remove "/v1.0/api/"
+                string normalizedRemaining = normalizedPath.Substring(10);
                 int nextSlash = remaining.IndexOf('/');
 
                 if (nextSlash > 0)
                 {
-                    ctx.VirtualModelRunnerId = remaining.Substring(0, nextSlash);
+                    ctx.VirtualModelRunnerId = normalizedRemaining.Substring(0, nextSlash);
                     ctx.BasePath = "/v1.0/api/" + ctx.VirtualModelRunnerId + "/";
                     ctx.RelativePath = remaining.Substring(nextSlash);
                     ctx.IsValidVmrRequest = true;
@@ -132,7 +133,7 @@ namespace Conductor.Core.Models
                 else if (remaining.Length > 0)
                 {
                     // Path like /v1.0/api/vmr_xxx without trailing slash
-                    ctx.VirtualModelRunnerId = remaining.TrimEnd('/');
+                    ctx.VirtualModelRunnerId = normalizedRemaining.TrimEnd('/');
                     ctx.BasePath = "/v1.0/api/" + ctx.VirtualModelRunnerId + "/";
                     ctx.RelativePath = "/";
                     ctx.IsValidVmrRequest = true;
@@ -147,91 +148,91 @@ namespace Conductor.Core.Models
             if (String.IsNullOrEmpty(relativePath)) return;
 
             httpMethod = (httpMethod ?? "GET").ToUpperInvariant();
-            relativePath = relativePath.ToLowerInvariant();
+            string normalizedRelativePath = relativePath.ToLowerInvariant();
 
             // OpenAI-compatible API patterns
-            if (relativePath.StartsWith("/v1/"))
+            if (normalizedRelativePath.StartsWith("/v1/"))
             {
                 ctx.ApiType = ApiTypeEnum.OpenAI;
 
-                if (relativePath.StartsWith("/v1/chat/completions"))
+                if (normalizedRelativePath.StartsWith("/v1/chat/completions"))
                 {
                     ctx.RequestType = RequestTypeEnum.OpenAIChatCompletions;
                 }
-                else if (relativePath.StartsWith("/v1/completions"))
+                else if (normalizedRelativePath.StartsWith("/v1/completions"))
                 {
                     ctx.RequestType = RequestTypeEnum.OpenAICompletions;
                 }
-                else if (relativePath.StartsWith("/v1/models"))
+                else if (normalizedRelativePath.StartsWith("/v1/models"))
                 {
                     ctx.RequestType = RequestTypeEnum.OpenAIListModels;
                 }
-                else if (relativePath.StartsWith("/v1/embeddings"))
+                else if (normalizedRelativePath.StartsWith("/v1/embeddings"))
                 {
                     ctx.RequestType = RequestTypeEnum.OpenAIEmbeddings;
                 }
             }
             // Gemini API patterns
-            else if (relativePath.StartsWith("/v1beta/models"))
+            else if (normalizedRelativePath.StartsWith("/v1beta/models"))
             {
                 ctx.ApiType = ApiTypeEnum.Gemini;
 
-                if (relativePath.Equals("/v1beta/models") || relativePath.StartsWith("/v1beta/models?"))
+                if (normalizedRelativePath.Equals("/v1beta/models") || normalizedRelativePath.StartsWith("/v1beta/models?"))
                 {
                     ctx.RequestType = RequestTypeEnum.GeminiListModels;
                 }
-                else if (relativePath.StartsWith("/v1beta/models/"))
+                else if (normalizedRelativePath.StartsWith("/v1beta/models/"))
                 {
                     ctx.RequestedModel = ExtractGeminiModelSegment(relativePath);
 
-                    if (relativePath.Contains(":streamgeneratecontent"))
+                    if (normalizedRelativePath.Contains(":streamgeneratecontent"))
                     {
                         ctx.RequestType = RequestTypeEnum.GeminiStreamGenerateContent;
                     }
-                    else if (relativePath.Contains(":generatecontent"))
+                    else if (normalizedRelativePath.Contains(":generatecontent"))
                     {
                         ctx.RequestType = RequestTypeEnum.GeminiGenerateContent;
                     }
-                    else if (relativePath.Contains(":embedcontent"))
+                    else if (normalizedRelativePath.Contains(":embedcontent"))
                     {
                         ctx.RequestType = RequestTypeEnum.GeminiEmbedContent;
                     }
                 }
             }
             // Ollama API patterns
-            else if (relativePath.StartsWith("/api/"))
+            else if (normalizedRelativePath.StartsWith("/api/"))
             {
                 ctx.ApiType = ApiTypeEnum.Ollama;
 
-                if (relativePath.StartsWith("/api/generate"))
+                if (normalizedRelativePath.StartsWith("/api/generate"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaGenerate;
                 }
-                else if (relativePath.StartsWith("/api/chat"))
+                else if (normalizedRelativePath.StartsWith("/api/chat"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaChat;
                 }
-                else if (relativePath.StartsWith("/api/tags"))
+                else if (normalizedRelativePath.StartsWith("/api/tags"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaListTags;
                 }
-                else if (relativePath.StartsWith("/api/embeddings") || relativePath.StartsWith("/api/embed"))
+                else if (normalizedRelativePath.StartsWith("/api/embeddings") || normalizedRelativePath.StartsWith("/api/embed"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaEmbeddings;
                 }
-                else if (relativePath.StartsWith("/api/pull"))
+                else if (normalizedRelativePath.StartsWith("/api/pull"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaPullModel;
                 }
-                else if (relativePath.StartsWith("/api/delete"))
+                else if (normalizedRelativePath.StartsWith("/api/delete"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaDeleteModel;
                 }
-                else if (relativePath.StartsWith("/api/ps"))
+                else if (normalizedRelativePath.StartsWith("/api/ps"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaListRunningModels;
                 }
-                else if (relativePath.StartsWith("/api/show"))
+                else if (normalizedRelativePath.StartsWith("/api/show"))
                 {
                     ctx.RequestType = RequestTypeEnum.OllamaShowModelInfo;
                 }

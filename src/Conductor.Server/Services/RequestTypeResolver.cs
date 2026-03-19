@@ -169,27 +169,29 @@ namespace Conductor.Server.Services
         /// </summary>
         private static RequestTypeEnum ResolveProxiedApiType(string method, string path)
         {
+            string normalizedPath = path.ToLowerInvariant();
+
             // OpenAI API patterns
-            if (path.EndsWith("/v1/chat/completions")) return RequestTypeEnum.OpenAIChatCompletions;
-            if (path.EndsWith("/v1/completions")) return RequestTypeEnum.OpenAICompletions;
-            if (path.EndsWith("/v1/models")) return RequestTypeEnum.OpenAIListModels;
-            if (path.EndsWith("/v1/embeddings")) return RequestTypeEnum.OpenAIEmbeddings;
+            if (normalizedPath.EndsWith("/v1/chat/completions")) return RequestTypeEnum.OpenAIChatCompletions;
+            if (normalizedPath.EndsWith("/v1/completions")) return RequestTypeEnum.OpenAICompletions;
+            if (normalizedPath.EndsWith("/v1/models")) return RequestTypeEnum.OpenAIListModels;
+            if (normalizedPath.EndsWith("/v1/embeddings")) return RequestTypeEnum.OpenAIEmbeddings;
 
             // Gemini API patterns
-            if (path.Contains("/v1beta/models/") && path.EndsWith(":streamGenerateContent")) return RequestTypeEnum.GeminiStreamGenerateContent;
-            if (path.Contains("/v1beta/models/") && path.EndsWith(":generateContent")) return RequestTypeEnum.GeminiGenerateContent;
-            if (path.Contains("/v1beta/models/") && path.EndsWith(":embedContent")) return RequestTypeEnum.GeminiEmbedContent;
-            if (path.EndsWith("/v1beta/models")) return RequestTypeEnum.GeminiListModels;
+            if (normalizedPath.Contains("/v1beta/models/") && normalizedPath.EndsWith(":streamgeneratecontent")) return RequestTypeEnum.GeminiStreamGenerateContent;
+            if (normalizedPath.Contains("/v1beta/models/") && normalizedPath.EndsWith(":generatecontent")) return RequestTypeEnum.GeminiGenerateContent;
+            if (normalizedPath.Contains("/v1beta/models/") && normalizedPath.EndsWith(":embedcontent")) return RequestTypeEnum.GeminiEmbedContent;
+            if (normalizedPath.EndsWith("/v1beta/models")) return RequestTypeEnum.GeminiListModels;
 
             // Ollama API patterns
-            if (path.EndsWith("/api/generate")) return RequestTypeEnum.OllamaGenerate;
-            if (path.EndsWith("/api/chat")) return RequestTypeEnum.OllamaChat;
-            if (path.EndsWith("/api/tags")) return RequestTypeEnum.OllamaListTags;
-            if (path.EndsWith("/api/embed") || path.EndsWith("/api/embeddings")) return RequestTypeEnum.OllamaEmbeddings;
-            if (path.EndsWith("/api/pull")) return RequestTypeEnum.OllamaPullModel;
-            if (path.EndsWith("/api/delete")) return RequestTypeEnum.OllamaDeleteModel;
-            if (path.EndsWith("/api/ps")) return RequestTypeEnum.OllamaListRunningModels;
-            if (path.EndsWith("/api/show")) return RequestTypeEnum.OllamaShowModelInfo;
+            if (normalizedPath.EndsWith("/api/generate")) return RequestTypeEnum.OllamaGenerate;
+            if (normalizedPath.EndsWith("/api/chat")) return RequestTypeEnum.OllamaChat;
+            if (normalizedPath.EndsWith("/api/tags")) return RequestTypeEnum.OllamaListTags;
+            if (normalizedPath.EndsWith("/api/embed") || normalizedPath.EndsWith("/api/embeddings")) return RequestTypeEnum.OllamaEmbeddings;
+            if (normalizedPath.EndsWith("/api/pull")) return RequestTypeEnum.OllamaPullModel;
+            if (normalizedPath.EndsWith("/api/delete")) return RequestTypeEnum.OllamaDeleteModel;
+            if (normalizedPath.EndsWith("/api/ps")) return RequestTypeEnum.OllamaListRunningModels;
+            if (normalizedPath.EndsWith("/api/show")) return RequestTypeEnum.OllamaShowModelInfo;
 
             return RequestTypeEnum.Unknown;
         }
