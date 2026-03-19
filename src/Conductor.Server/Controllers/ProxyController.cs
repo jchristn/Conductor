@@ -7,6 +7,7 @@ namespace Conductor.Server.Controllers
     using System.Linq;
     using System.Net.Http;
     using System.Text;
+    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using ConductorConstants = Conductor.Core.Constants;
@@ -27,7 +28,8 @@ namespace Conductor.Server.Controllers
     public class ProxyController : BaseController
     {
         private static readonly string _Header = "[ProxyController] ";
-        private static readonly HttpClient _HttpClient = new HttpClient();
+        private static readonly Dictionary<string, HttpClientCacheEntry> _HttpClients = new Dictionary<string, HttpClientCacheEntry>();
+        private static readonly object _HttpClientLock = new object();
         private static int _RoundRobinIndex = 0;
         private static readonly object _RoundRobinLock = new object();
         private static readonly Random _Random = new Random();
@@ -75,7 +77,7 @@ namespace Conductor.Server.Controllers
             try
             {
                 // Parse the URL to extract VMR base path
-                UrlContext urlContext = UrlContext.Parse(ctx.Request.Url.RawWithoutQuery, ctx.Request.Method.ToString());
+                UrlContext urlContext = UrlContext.Parse(ctx.Request.Url.RawWithQuery, ctx.Request.Method.ToString());
                 if (urlContext == null || String.IsNullOrEmpty(urlContext.BasePath))
                 {
                     await SendNotFound(ctx);
@@ -274,7 +276,7 @@ namespace Conductor.Server.Controllers
                     // Build the target URL
                     string targetUrl = BuildTargetUrl(endpoint, urlContext);
 
-                    string effectiveModel = null;
+                    string effectiveModel = urlContext.ApiType == ApiTypeEnum.Gemini ? urlContext.RequestedModel : null;
                     if (requestContext.Data != null && requestContext.Data.Length > 0)
                     {
                         // Apply model definition and configuration logic
@@ -340,6 +342,7 @@ namespace Conductor.Server.Controllers
                     using (HttpResponseMessage response = await ForwardRequestAsync(
                         ctx,
                         targetUrl,
+                        vmr,
                         endpoint,
                         requestContext.Data,
                         cancellationToken).ConfigureAwait(false))
@@ -453,15 +456,7 @@ namespace Conductor.Server.Controllers
         {
             string scheme = endpoint.UseSsl ? "https" : "http";
             string baseUrl = scheme + "://" + endpoint.Hostname + ":" + endpoint.Port;
-
-            // Map the relative path based on API type
-            string relativePath = urlContext.RelativePath;
-            if (String.IsNullOrEmpty(relativePath))
-            {
-                relativePath = "/";
-            }
-
-            return baseUrl + relativePath;
+            return urlContext.BuildTargetUrl(baseUrl);
         }
 
         /// <summary>
@@ -500,7 +495,11 @@ namespace Conductor.Server.Controllers
 
                 // Extract the current model from request
                 string requestedModel = null;
-                if (bodyDict.TryGetValue("model", out object modelValue) && modelValue != null)
+                if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                {
+                    requestedModel = urlContext.RequestedModel;
+                }
+                else if (bodyDict.TryGetValue("model", out object modelValue) && modelValue != null)
                 {
                     requestedModel = modelValue.ToString();
                 }
@@ -564,7 +563,15 @@ namespace Conductor.Server.Controllers
                 {
                     // Step 1: If one ModelDefinition is found, apply the model from the ModelDefinition
                     effectiveModel = modelDefinitions[0].Name;
-                    bodyDict["model"] = effectiveModel;
+                    if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                    {
+                        urlContext.RelativePath = ReplaceGeminiModelInPath(urlContext.RelativePath, effectiveModel);
+                        urlContext.RequestedModel = effectiveModel;
+                    }
+                    else
+                    {
+                        bodyDict["model"] = effectiveModel;
+                    }
                 }
                 else if (modelDefinitions.Count > 1)
                 {
@@ -584,6 +591,11 @@ namespace Conductor.Server.Controllers
                         {
                             modelFound = true;
                             effectiveModel = def.Name;
+                            if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                            {
+                                urlContext.RelativePath = ReplaceGeminiModelInPath(urlContext.RelativePath, effectiveModel);
+                                urlContext.RequestedModel = effectiveModel;
+                            }
                             break;
                         }
                     }
@@ -671,25 +683,53 @@ namespace Conductor.Server.Controllers
             // Apply temperature if set
             if (config.Temperature.HasValue)
             {
-                bodyDict["temperature"] = config.Temperature.Value;
+                if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                {
+                    SetGeminiGenerationConfigValue(bodyDict, "temperature", config.Temperature.Value);
+                }
+                else
+                {
+                    bodyDict["temperature"] = config.Temperature.Value;
+                }
             }
 
             // Apply top_p if set
             if (config.TopP.HasValue)
             {
-                bodyDict["top_p"] = config.TopP.Value;
+                if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                {
+                    SetGeminiGenerationConfigValue(bodyDict, "topP", config.TopP.Value);
+                }
+                else
+                {
+                    bodyDict["top_p"] = config.TopP.Value;
+                }
             }
 
             // Apply top_k if set (for Ollama-style APIs)
             if (config.TopK.HasValue)
             {
-                bodyDict["top_k"] = config.TopK.Value;
+                if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                {
+                    SetGeminiGenerationConfigValue(bodyDict, "topK", config.TopK.Value);
+                }
+                else
+                {
+                    bodyDict["top_k"] = config.TopK.Value;
+                }
             }
 
             // Apply max_tokens if set
             if (config.MaxTokens.HasValue)
             {
-                bodyDict["max_tokens"] = config.MaxTokens.Value;
+                if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                {
+                    SetGeminiGenerationConfigValue(bodyDict, "maxOutputTokens", config.MaxTokens.Value);
+                }
+                else
+                {
+                    bodyDict["max_tokens"] = config.MaxTokens.Value;
+                }
             }
 
             // Apply repeat_penalty if set (for Ollama-style APIs)
@@ -702,7 +742,10 @@ namespace Conductor.Server.Controllers
             // Note: This is typically used in Ollama APIs as num_ctx
             if (config.ContextWindowSize.HasValue)
             {
-                bodyDict["num_ctx"] = config.ContextWindowSize.Value;
+                if (urlContext.ApiType != ApiTypeEnum.Gemini)
+                {
+                    bodyDict["num_ctx"] = config.ContextWindowSize.Value;
+                }
             }
         }
 
@@ -761,6 +804,7 @@ namespace Conductor.Server.Controllers
         private async Task<HttpResponseMessage> ForwardRequestAsync(
             HttpContextBase ctx,
             string targetUrl,
+            VirtualModelRunner vmr,
             ModelRunnerEndpoint endpoint,
             byte[] requestBody,
             CancellationToken cancellationToken)
@@ -803,7 +847,14 @@ namespace Conductor.Server.Controllers
             // Add API key if configured
             if (!String.IsNullOrEmpty(endpoint.ApiKey))
             {
-                request.Headers.Add("Authorization", "Bearer " + endpoint.ApiKey);
+                if (endpoint.ApiType == ApiTypeEnum.Gemini)
+                {
+                    request.Headers.Add("x-goog-api-key", endpoint.ApiKey);
+                }
+                else
+                {
+                    request.Headers.Add("Authorization", "Bearer " + endpoint.ApiKey);
+                }
             }
 
             // Forward relevant headers
@@ -836,15 +887,23 @@ namespace Conductor.Server.Controllers
                 : "http";
             request.Headers.TryAddWithoutValidation(ConductorConstants.HeaderXForwardedProto, proto);
 
+            int effectiveTimeoutMs = endpoint.TimeoutMs;
+            if (vmr != null && vmr.TimeoutMs > 0)
+            {
+                effectiveTimeoutMs = Math.Min(vmr.TimeoutMs, endpoint.TimeoutMs);
+            }
+
+            HttpClient httpClient = GetHttpClient(endpoint);
+
             // Create a cancellation token with timeout
-            using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(endpoint.TimeoutMs)))
+            using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeoutMs)))
             using (CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
             {
                 try
                 {
                     // Use ResponseHeadersRead to enable streaming - we get the response as soon as headers arrive
                     // rather than waiting for the entire response body
-                    return await _HttpClient.SendAsync(
+                    return await httpClient.SendAsync(
                         request,
                         HttpCompletionOption.ResponseHeadersRead,
                         linkedCts.Token).ConfigureAwait(false);
@@ -855,6 +914,87 @@ namespace Conductor.Server.Controllers
                     throw;
                 }
             }
+        }
+
+        private static HttpClient GetHttpClient(ModelRunnerEndpoint endpoint)
+        {
+            if (endpoint == null) throw new ArgumentNullException(nameof(endpoint));
+
+            lock (_HttpClientLock)
+            {
+                if (_HttpClients.TryGetValue(endpoint.Id, out HttpClientCacheEntry existing))
+                {
+                    if (existing.TimeoutMs == endpoint.TimeoutMs)
+                    {
+                        return existing.Client;
+                    }
+
+                    existing.Client.Dispose();
+                    _HttpClients.Remove(endpoint.Id);
+                }
+
+                HttpClient client = new HttpClient
+                {
+                    Timeout = TimeSpan.FromMilliseconds(endpoint.TimeoutMs)
+                };
+
+                _HttpClients[endpoint.Id] = new HttpClientCacheEntry
+                {
+                    Client = client,
+                    TimeoutMs = endpoint.TimeoutMs
+                };
+
+                return client;
+            }
+        }
+
+        private static string ReplaceGeminiModelInPath(string relativePath, string modelName)
+        {
+            if (String.IsNullOrEmpty(relativePath) || String.IsNullOrEmpty(modelName)) return relativePath;
+
+            const string prefix = "/v1beta/models/";
+            if (!relativePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return relativePath;
+            }
+
+            string remainder = relativePath.Substring(prefix.Length);
+            int separator = remainder.IndexOfAny(new[] { ':', '/', '?' });
+            if (separator < 0)
+            {
+                return prefix + modelName;
+            }
+
+            return prefix + modelName + remainder.Substring(separator);
+        }
+
+        private static void SetGeminiGenerationConfigValue(Dictionary<string, object> bodyDict, string key, object value)
+        {
+            if (bodyDict == null || String.IsNullOrEmpty(key)) return;
+
+            Dictionary<string, object> generationConfig = null;
+
+            if (bodyDict.TryGetValue("generationConfig", out object existing))
+            {
+                if (existing is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Object)
+                {
+                    generationConfig = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonElement.GetRawText());
+                }
+                else if (existing is Dictionary<string, object> dict)
+                {
+                    generationConfig = dict;
+                }
+            }
+
+            generationConfig ??= new Dictionary<string, object>();
+            generationConfig[key] = value;
+            bodyDict["generationConfig"] = generationConfig;
+        }
+
+        private class HttpClientCacheEntry
+        {
+            public HttpClient Client { get; set; }
+            public int TimeoutMs { get; set; }
         }
 
         private async Task SendProxyResponse(

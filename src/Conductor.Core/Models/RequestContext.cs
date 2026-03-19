@@ -113,7 +113,8 @@ namespace Conductor.Core.Models
             get
             {
                 return RequestType == RequestTypeEnum.OllamaEmbeddings
-                    || RequestType == RequestTypeEnum.OpenAIEmbeddings;
+                    || RequestType == RequestTypeEnum.OpenAIEmbeddings
+                    || RequestType == RequestTypeEnum.GeminiEmbedContent;
             }
         }
 
@@ -128,7 +129,9 @@ namespace Conductor.Core.Models
                 return RequestType == RequestTypeEnum.OllamaGenerate
                     || RequestType == RequestTypeEnum.OllamaChat
                     || RequestType == RequestTypeEnum.OpenAICompletions
-                    || RequestType == RequestTypeEnum.OpenAIChatCompletions;
+                    || RequestType == RequestTypeEnum.OpenAIChatCompletions
+                    || RequestType == RequestTypeEnum.GeminiGenerateContent
+                    || RequestType == RequestTypeEnum.GeminiStreamGenerateContent;
             }
         }
 
@@ -145,7 +148,8 @@ namespace Conductor.Core.Models
                     || RequestType == RequestTypeEnum.OllamaListTags
                     || RequestType == RequestTypeEnum.OllamaListRunningModels
                     || RequestType == RequestTypeEnum.OllamaShowModelInfo
-                    || RequestType == RequestTypeEnum.OpenAIListModels;
+                    || RequestType == RequestTypeEnum.OpenAIListModels
+                    || RequestType == RequestTypeEnum.GeminiListModels;
             }
         }
 

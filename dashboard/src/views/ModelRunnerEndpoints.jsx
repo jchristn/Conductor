@@ -9,6 +9,7 @@ import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import HealthHistogram from '../components/HealthHistogram';
+import SensitiveInput from '../components/SensitiveInput';
 
 function ModelRunnerEndpoints() {
   const { api, setError } = useApp();
@@ -48,6 +49,59 @@ function ModelRunnerEndpoints() {
     MaxParallelRequests: 4,
     Weight: 1
   });
+
+  const getApiTypeDefaults = (apiType) => {
+    switch (apiType) {
+      case 'OpenAI':
+        return {
+          Hostname: 'api.openai.com',
+          Port: 443,
+          UseSsl: true,
+          TimeoutMs: 300000,
+          HealthCheckUrl: '/v1/models',
+          HealthCheckMethod: 'GET',
+          HealthCheckExpectedStatusCode: 200,
+          HealthCheckUseAuth: true
+        };
+      case 'Gemini':
+        return {
+          Hostname: 'generativelanguage.googleapis.com',
+          Port: 443,
+          UseSsl: true,
+          TimeoutMs: 300000,
+          HealthCheckUrl: '/v1beta/models',
+          HealthCheckMethod: 'GET',
+          HealthCheckExpectedStatusCode: 200,
+          HealthCheckUseAuth: true
+        };
+      case 'Ollama':
+        return {
+          Hostname: 'localhost',
+          Port: 11434,
+          UseSsl: false,
+          TimeoutMs: 300000,
+          HealthCheckUrl: '/',
+          HealthCheckMethod: 'GET',
+          HealthCheckExpectedStatusCode: 200,
+          HealthCheckUseAuth: false
+        };
+      default:
+        return null;
+    }
+  };
+
+  const applyApiTypeDefaults = (currentFormData, apiType) => {
+    const defaults = getApiTypeDefaults(apiType);
+    if (!defaults) {
+      return { ...currentFormData, ApiType: apiType };
+    }
+
+    return {
+      ...currentFormData,
+      ...defaults,
+      ApiType: apiType
+    };
+  };
 
   const fetchEndpoints = useCallback(async () => {
     try {
@@ -213,6 +267,9 @@ function ModelRunnerEndpoints() {
       if (parsed.hostname.toLowerCase() === 'api.openai.com') {
         updates.HealthCheckUseAuth = true;
         updates.HealthCheckUrl = '/v1/models';
+      } else if (parsed.hostname.toLowerCase() === 'generativelanguage.googleapis.com') {
+        updates.HealthCheckUseAuth = true;
+        updates.HealthCheckUrl = '/v1beta/models';
       }
       setFormData(updates);
     } else {
@@ -222,6 +279,9 @@ function ModelRunnerEndpoints() {
       if (value.toLowerCase() === 'api.openai.com') {
         updates.HealthCheckUseAuth = true;
         updates.HealthCheckUrl = '/v1/models';
+      } else if (value.toLowerCase() === 'generativelanguage.googleapis.com') {
+        updates.HealthCheckUseAuth = true;
+        updates.HealthCheckUrl = '/v1beta/models';
       }
       setFormData(updates);
     }
@@ -253,6 +313,11 @@ function ModelRunnerEndpoints() {
       Weight: 1
     });
     setShowForm(true);
+  };
+
+  const handleApiTypeChange = (e) => {
+    const apiType = e.target.value;
+    setFormData((current) => applyApiTypeDefaults(current, apiType));
   };
 
   const handleEdit = (endpoint) => {
@@ -393,7 +458,7 @@ function ModelRunnerEndpoints() {
     {
       key: 'ApiType',
       label: 'API Type',
-      tooltip: 'API format used by this endpoint (Ollama or OpenAI compatible)',
+      tooltip: 'API format used by this endpoint (Ollama, OpenAI, vLLM, or Gemini)',
       width: '100px'
     },
     {
@@ -586,14 +651,16 @@ function ModelRunnerEndpoints() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="apiType" title="API format used by this endpoint (Ollama or OpenAI compatible)">API Type</label>
+              <label htmlFor="apiType" title="API format used by this endpoint (Ollama, OpenAI, vLLM, or Gemini)">API Type</label>
               <select
                 id="apiType"
                 value={formData.ApiType}
-                onChange={(e) => setFormData({ ...formData, ApiType: e.target.value })}
+                onChange={handleApiTypeChange}
               >
                 <option value="Ollama">Ollama</option>
                 <option value="OpenAI">OpenAI</option>
+                <option value="vLLM">vLLM</option>
+                <option value="Gemini">Gemini</option>
               </select>
             </div>
             <div className="form-group">
@@ -610,12 +677,12 @@ function ModelRunnerEndpoints() {
           </div>
           <div className="form-group">
             <label htmlFor="apiKey" title="Bearer token for authenticated endpoints">API Key (optional)</label>
-            <input
-              type="password"
+            <SensitiveInput
               id="apiKey"
               value={formData.ApiKey}
               onChange={(e) => setFormData({ ...formData, ApiKey: e.target.value })}
               placeholder="Leave blank if not required"
+              autoComplete="new-password"
             />
           </div>
 
@@ -705,7 +772,7 @@ function ModelRunnerEndpoints() {
           </div>
 
           <div className="form-group checkbox-group">
-            <label title="Include API key in health check requests (required for OpenAI API)">
+            <label title="Include API key in health check requests (required for OpenAI-compatible APIs and Gemini API)">
               <input
                 type="checkbox"
                 checked={formData.HealthCheckUseAuth}

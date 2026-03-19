@@ -195,12 +195,6 @@ function ModelDefinitions() {
       tooltip: 'Model identifier as used in API requests'
     },
     {
-      key: 'Family',
-      label: 'Family',
-      tooltip: 'Model family name (e.g., llama, mistral, phi)',
-      width: '120px'
-    },
-    {
       key: 'ParameterSize',
       label: 'Size',
       tooltip: 'Number of model parameters (e.g., 3B, 7B, 70B)',

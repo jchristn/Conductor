@@ -33,6 +33,34 @@ export const openaiTemplates = {
 };
 
 /**
+ * Gemini API request templates
+ */
+export const geminiTemplates = {
+  generateContent: (_modelName, _streamEnabled) => ({
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { text: 'Explain how AI works in a single paragraph.' }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024
+    }
+  }),
+
+  embedContent: () => ({
+    content: {
+      parts: [
+        { text: 'The quick brown fox jumps over the lazy dog.' }
+      ]
+    }
+  })
+};
+
+/**
  * Ollama API request templates
  */
 export const ollamaTemplates = {
@@ -111,6 +139,36 @@ export const openaiOperations = [
 ];
 
 /**
+ * API operation definitions for Gemini
+ */
+export const geminiOperations = [
+  {
+    id: 'generateContent',
+    label: 'Generate Content',
+    endpoint: '/v1beta/models/{model}:generateContent',
+    method: 'POST',
+    supportsStreaming: true,
+    getTemplate: geminiTemplates.generateContent
+  },
+  {
+    id: 'embedContent',
+    label: 'Embeddings',
+    endpoint: '/v1beta/models/{model}:embedContent',
+    method: 'POST',
+    supportsStreaming: false,
+    getTemplate: geminiTemplates.embedContent
+  },
+  {
+    id: 'listModels',
+    label: 'List Models',
+    endpoint: '/v1beta/models',
+    method: 'GET',
+    supportsStreaming: false,
+    getTemplate: null
+  }
+];
+
+/**
  * API operation definitions for Ollama
  */
 export const ollamaOperations = [
@@ -172,18 +230,25 @@ export const ollamaOperations = [
   }
 ];
 
+function isOpenAICompatibleApiType(apiType) {
+  return apiType === 'OpenAI' || apiType === 'vLLM';
+}
+
 /**
  * Get operations list based on API type
- * @param {string} apiType - 'OpenAI' or 'Ollama'
+ * @param {string} apiType - 'OpenAI', 'vLLM', 'Gemini', or 'Ollama'
  * @returns {Array} List of operation definitions
  */
 export function getOperationsForApiType(apiType) {
-  return apiType === 'Ollama' ? ollamaOperations : openaiOperations;
+  if (apiType === 'Ollama') return ollamaOperations;
+  if (apiType === 'Gemini') return geminiOperations;
+  if (isOpenAICompatibleApiType(apiType)) return openaiOperations;
+  return openaiOperations;
 }
 
 /**
  * Get a specific operation by ID and API type
- * @param {string} apiType - 'OpenAI' or 'Ollama'
+ * @param {string} apiType - provider API type
  * @param {string} operationId - The operation ID
  * @returns {Object|null} The operation definition or null
  */
@@ -194,7 +259,7 @@ export function getOperation(apiType, operationId) {
 
 /**
  * Generate a request body template for the given operation
- * @param {string} apiType - 'OpenAI' or 'Ollama'
+ * @param {string} apiType - provider API type
  * @param {string} operationId - The operation ID
  * @param {string} modelName - The model name to use
  * @param {boolean} streamEnabled - Whether streaming is enabled

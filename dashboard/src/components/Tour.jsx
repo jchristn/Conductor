@@ -45,7 +45,7 @@ function Tour() {
       {
         selector: '[data-tour-id="nav-endpoints"]',
         title: 'Model Runner Endpoints',
-        description: 'Backend inference servers like Ollama, OpenAI, or other compatible services that Conductor proxies requests to.',
+        description: 'Backend inference servers like Ollama, OpenAI, vLLM, Gemini, or other compatible services that Conductor proxies requests to.',
         position: 'right'
       },
       {
@@ -196,7 +196,7 @@ function Tour() {
             <li>Session affinity for stateful conversations</li>
             <li>Multi-tenancy for resource isolation</li>
             <li>Full observability and request history</li>
-            <li>OpenAI and Ollama compatible APIs</li>
+            <li>OpenAI, vLLM, Gemini, and Ollama support</li>
           </ul>
           <p className="tour-welcome-subtext">Let's take a quick tour of the interface to get you oriented.</p>
           <div className="tour-welcome-actions">

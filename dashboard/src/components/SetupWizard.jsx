@@ -37,7 +37,7 @@ const WIZARD_STEPS = [
   {
     key: 'endpoint',
     title: 'Add a Model Runner Endpoint',
-    description: 'Connect Conductor to a backend inference server such as Ollama, OpenAI, or any compatible service. This is where your AI models actually run.',
+    description: 'Connect Conductor to a backend inference server such as Ollama, OpenAI, vLLM, Gemini, or another compatible service. This is where your AI models actually run.',
     entityType: 'endpoint',
     route: '/endpoints',
     buttonLabel: 'Add Endpoint'

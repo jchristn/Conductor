@@ -68,6 +68,18 @@ function saveHistory(history) {
   }
 }
 
+function isOpenAICompatibleApiType(apiType) {
+  return apiType === 'OpenAI' || apiType === 'vLLM';
+}
+
+function extractGeminiText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return '';
+  return parts
+    .map(part => part?.text || '')
+    .join('');
+}
+
 /**
  * Custom hook for API Explorer state management and request handling
  * @param {string} serverUrl - The Conductor server URL
@@ -120,9 +132,14 @@ export function useApiExplorer(serverUrl) {
     if (!selectedVmr || !operation) return '';
     // Remove trailing slash from basePath and ensure endpoint starts with /
     const basePath = selectedVmr.BasePath.replace(/\/+$/, '');
-    const endpoint = operation.endpoint.startsWith('/') ? operation.endpoint : '/' + operation.endpoint;
+    let endpointTemplate = operation.endpoint.startsWith('/') ? operation.endpoint : '/' + operation.endpoint;
+    if (apiType === 'Gemini' && operation.id === 'generateContent' && streamEnabled) {
+      endpointTemplate = '/v1beta/models/{model}:streamGenerateContent?alt=sse';
+    }
+    const resolvedModel = encodeURIComponent(modelName || 'gemini-2.5-flash');
+    const endpoint = endpointTemplate.replace('{model}', resolvedModel);
     return `${serverUrl}${basePath}${endpoint}`;
-  }, [serverUrl, selectedVmr, operation]);
+  }, [serverUrl, selectedVmr, operation, modelName, apiType, streamEnabled]);
 
   // Save configuration when it changes
   useEffect(() => {
@@ -148,9 +165,9 @@ export function useApiExplorer(serverUrl) {
   useEffect(() => {
     const operations = getOperationsForApiType(apiType);
     const currentExists = operations.some(op => op.id === operationId);
-    if (!currentExists && operations.length > 0) {
-      setOperationId(operations[0].id);
-    }
+      if (!currentExists && operations.length > 0) {
+        setOperationId(operations[0].id);
+      }
   }, [apiType, operationId]);
 
   /**
@@ -202,10 +219,20 @@ export function useApiExplorer(serverUrl) {
           }
           return data.choices?.[0]?.message?.content || '';
         } else if (operationId === 'completions') {
-          if (isStreaming) {
-            return data.choices?.[0]?.text || '';
-          }
           return data.choices?.[0]?.text || '';
+        }
+      } else if (apiType === 'vLLM') {
+        if (operationId === 'chatCompletions') {
+          if (isStreaming) {
+            return data.choices?.[0]?.delta?.content || '';
+          }
+          return data.choices?.[0]?.message?.content || '';
+        } else if (operationId === 'completions') {
+          return data.choices?.[0]?.text || '';
+        }
+      } else if (apiType === 'Gemini') {
+        if (operationId === 'generateContent' || operationId === 'streamGenerateContent') {
+          return extractGeminiText(data);
         }
       } else if (apiType === 'Ollama') {
         if (operationId === 'chat') {
@@ -252,8 +279,8 @@ export function useApiExplorer(serverUrl) {
 
           try {
             let data;
-            if (apiType === 'OpenAI') {
-              // OpenAI uses SSE format: data: {...}
+            if (isOpenAICompatibleApiType(apiType) || apiType === 'Gemini') {
+              // OpenAI-compatible and Gemini streaming use SSE data frames.
               if (line.startsWith('data: ')) {
                 const jsonStr = line.slice(6);
                 if (jsonStr === '[DONE]') continue;
@@ -291,12 +318,12 @@ export function useApiExplorer(serverUrl) {
       if (buffer.trim()) {
         try {
           let data;
-          if (apiType === 'OpenAI' && buffer.startsWith('data: ')) {
+          if ((isOpenAICompatibleApiType(apiType) || apiType === 'Gemini') && buffer.startsWith('data: ')) {
             const jsonStr = buffer.slice(6);
             if (jsonStr !== '[DONE]') {
               data = JSON.parse(jsonStr);
             }
-          } else if (apiType !== 'OpenAI') {
+          } else if (!isOpenAICompatibleApiType(apiType) && apiType !== 'Gemini') {
             data = JSON.parse(buffer);
           }
           if (data) {
@@ -518,11 +545,11 @@ export function useApiExplorer(serverUrl) {
    * Handle VMR selection
    */
   const handleSelectVmr = useCallback((vmr) => {
-    setSelectedVmr(vmr);
-    setIsManuallyEdited(false); // Reset so template regenerates
-    if (vmr) {
-      setApiType(vmr.ApiType || 'OpenAI');
-    }
+      setSelectedVmr(vmr);
+      setIsManuallyEdited(false); // Reset so template regenerates
+      if (vmr) {
+        setApiType(vmr.ApiType || 'OpenAI');
+      }
   }, []);
 
   /**
@@ -530,6 +557,9 @@ export function useApiExplorer(serverUrl) {
    */
   const handleSetOperationId = useCallback((opId) => {
     setOperationId(opId);
+    if (opId === 'streamGenerateContent') {
+      setStreamEnabled(true);
+    }
     setIsManuallyEdited(false); // Reset so template regenerates
   }, []);
 

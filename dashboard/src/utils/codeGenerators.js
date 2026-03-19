@@ -18,6 +18,10 @@ function escapeString(str) {
     .replace(/\t/g, '\\t');
 }
 
+function isOpenAICompatibleApiType(apiType) {
+  return apiType === 'OpenAI' || apiType === 'vLLM';
+}
+
 /**
  * Format JSON for display in code with proper indentation
  * @param {string} json - JSON string
@@ -87,10 +91,12 @@ console.log(data);`;
   } else {
     // Determine what to log based on operation
     let logStatement = 'console.log(data);';
-    if (apiType === 'OpenAI' && (operationId === 'chatCompletions' || operationId === 'completions')) {
+    if (isOpenAICompatibleApiType(apiType) && (operationId === 'chatCompletions' || operationId === 'completions')) {
       logStatement = operationId === 'chatCompletions'
         ? 'console.log(data.choices[0].message.content);'
         : 'console.log(data.choices[0].text);';
+    } else if (apiType === 'Gemini' && (operationId === 'generateContent' || operationId === 'streamGenerateContent')) {
+      logStatement = 'console.log((data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join(""));';
     } else if (apiType === 'Ollama' && (operationId === 'chat' || operationId === 'generate')) {
       logStatement = operationId === 'chat'
         ? 'console.log(data.message.content);'
@@ -118,13 +124,24 @@ ${logStatement}`;
 export function generateJavaScriptStreaming(config) {
   const { url, method, headers, body, apiType } = config;
 
-  const extractContent = apiType === 'OpenAI'
+  const extractContent = isOpenAICompatibleApiType(apiType)
     ? `// OpenAI SSE format
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
           if (data === '[DONE]') continue;
           const parsed = JSON.parse(data);
           const content = parsed.choices?.[0]?.delta?.content || '';
+          process.stdout.write(content);
+        }`
+    : apiType === 'Gemini'
+    ? `// Gemini SSE format
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+          const parsed = JSON.parse(data);
+          const content = (parsed.candidates?.[0]?.content?.parts || [])
+            .map(part => part.text || '')
+            .join('');
           process.stdout.write(content);
         }`
     : `// Ollama JSON lines format
@@ -204,10 +221,12 @@ print(response.json())`;
 
     // Determine what to print based on operation
     let printStatement = 'print(response.json())';
-    if (apiType === 'OpenAI' && (operationId === 'chatCompletions' || operationId === 'completions')) {
+    if (isOpenAICompatibleApiType(apiType) && (operationId === 'chatCompletions' || operationId === 'completions')) {
       printStatement = operationId === 'chatCompletions'
         ? "print(response.json()['choices'][0]['message']['content'])"
         : "print(response.json()['choices'][0]['text'])";
+    } else if (apiType === 'Gemini' && (operationId === 'generateContent' || operationId === 'streamGenerateContent')) {
+      printStatement = "print(''.join(part.get('text', '') for part in response.json()['candidates'][0]['content'].get('parts', [])))";
     } else if (apiType === 'Ollama' && (operationId === 'chat' || operationId === 'generate')) {
       printStatement = operationId === 'chat'
         ? "print(response.json()['message']['content'])"
@@ -228,7 +247,7 @@ ${printStatement}`;
 }
 
 /**
- * Generate Python (OpenAI SDK) code - only for OpenAI API type
+ * Generate Python (OpenAI SDK) code - for OpenAI-compatible API types
  * @param {Object} config - Request configuration
  * @returns {string} Python code using OpenAI SDK
  */
@@ -386,13 +405,13 @@ export const codeGeneratorLanguages = [
 
 /**
  * Get available languages based on configuration
- * @param {string} apiType - 'OpenAI' or 'Ollama'
+ * @param {string} apiType - provider API type
  * @param {boolean} streamEnabled - Whether streaming is enabled
  * @returns {Array} List of available languages
  */
 export function getAvailableLanguages(apiType, streamEnabled) {
   return codeGeneratorLanguages.filter(lang => {
-    if (lang.openaiOnly && apiType !== 'OpenAI') return false;
+    if (lang.openaiOnly && !isOpenAICompatibleApiType(apiType)) return false;
     if (lang.streamingOnly && !streamEnabled) return false;
     return true;
   });

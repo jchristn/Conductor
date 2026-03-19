@@ -909,6 +909,41 @@ body {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.sensitive-input {
+  position: relative;
+}
+
+.sensitive-input input {
+  padding-right: 44px;
+}
+
+.sensitive-input-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.sensitive-input-toggle:hover {
+  color: var(--text-primary);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.sensitive-input-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
 .form-help {
   display: block;
   margin-top: 4px;
@@ -3167,4 +3202,3 @@ body {
 .sidebar-footer-btn + .sidebar-footer-btn {
   margin-top: 4px;
 }
-

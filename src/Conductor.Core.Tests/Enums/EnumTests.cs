@@ -136,10 +136,26 @@ namespace Conductor.Core.Tests.Enums
         }
 
         [Fact]
+        public void ApiTypeEnum_Gemini_HasValue2()
+        {
+            ((int)ApiTypeEnum.Gemini).Should().Be(2);
+        }
+
+        [Fact]
+        public void ApiTypeEnum_vLLM_HasValue3()
+        {
+            ((int)ApiTypeEnum.vLLM).Should().Be(3);
+        }
+
+        [Fact]
         public void ApiTypeEnum_CanParse()
         {
             Enum.TryParse<ApiTypeEnum>("OpenAI", out ApiTypeEnum result).Should().BeTrue();
             result.Should().Be(ApiTypeEnum.OpenAI);
+            Enum.TryParse<ApiTypeEnum>("Gemini", out result).Should().BeTrue();
+            result.Should().Be(ApiTypeEnum.Gemini);
+            Enum.TryParse<ApiTypeEnum>("vLLM", out result).Should().BeTrue();
+            result.Should().Be(ApiTypeEnum.vLLM);
         }
 
         #endregion
@@ -233,6 +249,15 @@ namespace Conductor.Core.Tests.Enums
             Enum.IsDefined(typeof(RequestTypeEnum), "OllamaChat").Should().BeTrue();
             Enum.IsDefined(typeof(RequestTypeEnum), "OllamaListTags").Should().BeTrue();
             Enum.IsDefined(typeof(RequestTypeEnum), "OllamaEmbeddings").Should().BeTrue();
+        }
+
+        [Fact]
+        public void RequestTypeEnum_HasGeminiOperations()
+        {
+            Enum.IsDefined(typeof(RequestTypeEnum), "GeminiGenerateContent").Should().BeTrue();
+            Enum.IsDefined(typeof(RequestTypeEnum), "GeminiStreamGenerateContent").Should().BeTrue();
+            Enum.IsDefined(typeof(RequestTypeEnum), "GeminiEmbedContent").Should().BeTrue();
+            Enum.IsDefined(typeof(RequestTypeEnum), "GeminiListModels").Should().BeTrue();
         }
 
         [Fact]

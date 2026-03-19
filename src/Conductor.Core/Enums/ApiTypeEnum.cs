@@ -15,6 +15,16 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// OpenAI API format.
         /// </summary>
-        OpenAI = 1
+        OpenAI = 1,
+
+        /// <summary>
+        /// Gemini API format.
+        /// </summary>
+        Gemini = 2,
+
+        /// <summary>
+        /// vLLM API format (OpenAI-compatible).
+        /// </summary>
+        vLLM = 3
     }
 }

@@ -127,6 +127,8 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
             onChange={handleApiTypeChange}
           >
             <option value="OpenAI">OpenAI</option>
+            <option value="vLLM">vLLM</option>
+            <option value="Gemini">Gemini</option>
             <option value="Ollama">Ollama</option>
           </select>
         </div>

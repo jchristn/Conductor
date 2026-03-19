@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import SensitiveInput from '../components/SensitiveInput';
 
 function Login() {
   const { loginWithCredential, loginWithApiKey, loginAsAdmin, loading, error, serverUrl, theme } = useApp();
@@ -121,13 +122,13 @@ function Login() {
           {authType === 'apikey' && (
             <div className="form-group">
               <label htmlFor="apiKey">API Key</label>
-              <input
-                type="password"
+              <SensitiveInput
                 id="apiKey"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="Enter your API key"
                 required
+                autoComplete="current-password"
               />
             </div>
           )}

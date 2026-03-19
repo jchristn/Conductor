@@ -357,7 +357,7 @@ function VirtualModelRunners() {
     {
       key: 'ApiType',
       label: 'API Type',
-      tooltip: 'API format exposed by this VMR (OpenAI or Ollama compatible)',
+      tooltip: 'API format exposed by this VMR (OpenAI, vLLM, Gemini, or Ollama)',
       width: '100px'
     },
     {
@@ -420,7 +420,7 @@ function VirtualModelRunners() {
       <div className="view-header">
         <div>
           <h1>Virtual Model Runners</h1>
-          <p className="view-subtitle">Configure virtual model runners that expose model configurations to the network via OpenAI or Ollama compatible APIs.</p>
+          <p className="view-subtitle">Configure virtual model runners that expose model configurations to the network via OpenAI, vLLM, Gemini, or Ollama compatible APIs.</p>
         </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchData} title="Refresh">
@@ -495,13 +495,15 @@ function VirtualModelRunners() {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="apiType" title="API format exposed by this VMR (OpenAI or Ollama compatible)">API Type</label>
+              <label htmlFor="apiType" title="API format exposed by this VMR (OpenAI, vLLM, Gemini, or Ollama)">API Type</label>
               <select
                 id="apiType"
                 value={formData.ApiType}
                 onChange={(e) => setFormData({ ...formData, ApiType: e.target.value })}
               >
                 <option value="OpenAI">OpenAI</option>
+                <option value="vLLM">vLLM</option>
+                <option value="Gemini">Gemini</option>
                 <option value="Ollama">Ollama</option>
               </select>
             </div>
@@ -716,7 +718,7 @@ function VirtualModelRunners() {
           </div>
 
           <div className="form-group checkbox-group">
-            <label title="Enable pull, push, and delete model operations (Ollama API only)">
+            <label title="Enable pull, push, and delete model operations (Ollama API only in the current implementation)">
               <input
                 type="checkbox"
                 checked={formData.AllowModelManagement}

@@ -232,7 +232,7 @@ namespace Conductor.McpServer
                     {
                         tenant_id = new { type = "string", description = "Tenant ID" },
                         name = new { type = "string", description = "Name for the VMR" },
-                        api_type = new { type = "string", description = "API type: 'Ollama' or 'OpenAI' (default: Ollama)" },
+                        api_type = new { type = "string", description = "API type: 'Ollama', 'OpenAI', 'vLLM', or 'Gemini' (default: Ollama)" },
                         endpoint_ids = new { type = "array", items = new { type = "string" }, description = "List of endpoint IDs to include" },
                         configuration_ids = new { type = "array", items = new { type = "string" }, description = "List of configuration IDs to apply (optional)" },
                         load_balancing = new { type = "string", description = "Load balancing mode: 'RoundRobin', 'Random', or 'FirstAvailable' (default: RoundRobin)" },

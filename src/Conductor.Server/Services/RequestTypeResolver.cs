@@ -123,7 +123,7 @@ namespace Conductor.Server.Services
             if (_RouteMap.TryGetValue(new RouteKey(method, pattern), out RequestTypeEnum patternMatch))
                 return patternMatch;
 
-            // Check for proxied API paths (OpenAI/Ollama)
+            // Check for proxied API paths (OpenAI/Gemini/Ollama)
             if (path.Contains("/v1.0/api/"))
                 return ResolveProxiedApiType(method, path);
 
@@ -165,7 +165,7 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
-        /// Resolve the RequestTypeEnum for proxied API requests (OpenAI/Ollama).
+        /// Resolve the RequestTypeEnum for proxied API requests (OpenAI/Gemini/Ollama).
         /// </summary>
         private static RequestTypeEnum ResolveProxiedApiType(string method, string path)
         {
@@ -174,6 +174,12 @@ namespace Conductor.Server.Services
             if (path.EndsWith("/v1/completions")) return RequestTypeEnum.OpenAICompletions;
             if (path.EndsWith("/v1/models")) return RequestTypeEnum.OpenAIListModels;
             if (path.EndsWith("/v1/embeddings")) return RequestTypeEnum.OpenAIEmbeddings;
+
+            // Gemini API patterns
+            if (path.Contains("/v1beta/models/") && path.EndsWith(":streamGenerateContent")) return RequestTypeEnum.GeminiStreamGenerateContent;
+            if (path.Contains("/v1beta/models/") && path.EndsWith(":generateContent")) return RequestTypeEnum.GeminiGenerateContent;
+            if (path.Contains("/v1beta/models/") && path.EndsWith(":embedContent")) return RequestTypeEnum.GeminiEmbedContent;
+            if (path.EndsWith("/v1beta/models")) return RequestTypeEnum.GeminiListModels;
 
             // Ollama API patterns
             if (path.EndsWith("/api/generate")) return RequestTypeEnum.OllamaGenerate;

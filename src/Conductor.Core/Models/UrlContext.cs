@@ -24,9 +24,19 @@ namespace Conductor.Core.Models
         public string RelativePath { get; set; } = null;
 
         /// <summary>
+        /// Query string after the path, including the leading question mark when present.
+        /// </summary>
+        public string QueryString { get; set; } = null;
+
+        /// <summary>
         /// Virtual model runner identifier extracted from the path.
         /// </summary>
         public string VirtualModelRunnerId { get; set; } = null;
+
+        /// <summary>
+        /// Requested model extracted from the URL path when the provider embeds the model in the route.
+        /// </summary>
+        public string RequestedModel { get; set; } = null;
 
         /// <summary>
         /// API type determined from the URL.
@@ -48,6 +58,7 @@ namespace Conductor.Core.Models
         /// </summary>
         public bool IsEmbeddingsRequest =>
             RequestType == RequestTypeEnum.OpenAIEmbeddings ||
+            RequestType == RequestTypeEnum.GeminiEmbedContent ||
             RequestType == RequestTypeEnum.OllamaEmbeddings;
 
         /// <summary>
@@ -56,6 +67,8 @@ namespace Conductor.Core.Models
         public bool IsCompletionsRequest =>
             RequestType == RequestTypeEnum.OpenAIChatCompletions ||
             RequestType == RequestTypeEnum.OpenAICompletions ||
+            RequestType == RequestTypeEnum.GeminiGenerateContent ||
+            RequestType == RequestTypeEnum.GeminiStreamGenerateContent ||
             RequestType == RequestTypeEnum.OllamaGenerate ||
             RequestType == RequestTypeEnum.OllamaChat;
 
@@ -88,6 +101,13 @@ namespace Conductor.Core.Models
             };
 
             if (String.IsNullOrEmpty(path)) return ctx;
+
+            int queryIdx = path.IndexOf('?');
+            if (queryIdx >= 0)
+            {
+                ctx.QueryString = path.Substring(queryIdx);
+                path = path.Substring(0, queryIdx);
+            }
 
             // Normalize path
             path = path.ToLowerInvariant();
@@ -129,7 +149,7 @@ namespace Conductor.Core.Models
             httpMethod = (httpMethod ?? "GET").ToUpperInvariant();
             relativePath = relativePath.ToLowerInvariant();
 
-            // OpenAI API patterns
+            // OpenAI-compatible API patterns
             if (relativePath.StartsWith("/v1/"))
             {
                 ctx.ApiType = ApiTypeEnum.OpenAI;
@@ -149,6 +169,33 @@ namespace Conductor.Core.Models
                 else if (relativePath.StartsWith("/v1/embeddings"))
                 {
                     ctx.RequestType = RequestTypeEnum.OpenAIEmbeddings;
+                }
+            }
+            // Gemini API patterns
+            else if (relativePath.StartsWith("/v1beta/models"))
+            {
+                ctx.ApiType = ApiTypeEnum.Gemini;
+
+                if (relativePath.Equals("/v1beta/models") || relativePath.StartsWith("/v1beta/models?"))
+                {
+                    ctx.RequestType = RequestTypeEnum.GeminiListModels;
+                }
+                else if (relativePath.StartsWith("/v1beta/models/"))
+                {
+                    ctx.RequestedModel = ExtractGeminiModelSegment(relativePath);
+
+                    if (relativePath.Contains(":streamgeneratecontent"))
+                    {
+                        ctx.RequestType = RequestTypeEnum.GeminiStreamGenerateContent;
+                    }
+                    else if (relativePath.Contains(":generatecontent"))
+                    {
+                        ctx.RequestType = RequestTypeEnum.GeminiGenerateContent;
+                    }
+                    else if (relativePath.Contains(":embedcontent"))
+                    {
+                        ctx.RequestType = RequestTypeEnum.GeminiEmbedContent;
+                    }
                 }
             }
             // Ollama API patterns
@@ -191,6 +238,23 @@ namespace Conductor.Core.Models
             }
         }
 
+        private static string ExtractGeminiModelSegment(string relativePath)
+        {
+            if (String.IsNullOrEmpty(relativePath)) return null;
+
+            const string prefix = "/v1beta/models/";
+            if (!relativePath.StartsWith(prefix)) return null;
+
+            string remaining = relativePath.Substring(prefix.Length);
+            int separator = remaining.IndexOfAny(new[] { ':', '/', '?' });
+            if (separator >= 0)
+            {
+                return remaining.Substring(0, separator);
+            }
+
+            return remaining;
+        }
+
         /// <summary>
         /// Build the target URL for a backend endpoint.
         /// </summary>
@@ -205,7 +269,7 @@ namespace Conductor.Core.Models
             string path = RelativePath;
             if (!path.StartsWith("/")) path = "/" + path;
 
-            return baseUrl + path;
+            return baseUrl + path + (QueryString ?? String.Empty);
         }
     }
 }

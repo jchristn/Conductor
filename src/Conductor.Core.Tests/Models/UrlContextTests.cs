@@ -187,6 +187,53 @@ namespace Conductor.Core.Tests.Models
 
         #endregion
 
+        #region Parse-Gemini-Request-Types
+
+        [Fact]
+        public void Parse_WithGeminiGenerateContent_SetsCorrectRequestType()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/gemini-2.5-flash:generateContent", "POST");
+            ctx.RequestType.Should().Be(RequestTypeEnum.GeminiGenerateContent);
+            ctx.ApiType.Should().Be(ApiTypeEnum.Gemini);
+            ctx.RequestedModel.Should().Be("gemini-2.5-flash");
+        }
+
+        [Fact]
+        public void Parse_WithGeminiStreamGenerateContent_SetsCorrectRequestType()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/gemini-2.5-flash:streamGenerateContent", "POST");
+            ctx.RequestType.Should().Be(RequestTypeEnum.GeminiStreamGenerateContent);
+            ctx.ApiType.Should().Be(ApiTypeEnum.Gemini);
+        }
+
+        [Fact]
+        public void Parse_WithGeminiStreamGenerateContentQuery_PreservesQueryString()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse", "POST");
+            ctx.RequestType.Should().Be(RequestTypeEnum.GeminiStreamGenerateContent);
+            ctx.ApiType.Should().Be(ApiTypeEnum.Gemini);
+            ctx.QueryString.Should().Be("?alt=sse");
+        }
+
+        [Fact]
+        public void Parse_WithGeminiEmbedContent_SetsCorrectRequestType()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/text-embedding-004:embedContent", "POST");
+            ctx.RequestType.Should().Be(RequestTypeEnum.GeminiEmbedContent);
+            ctx.ApiType.Should().Be(ApiTypeEnum.Gemini);
+            ctx.RequestedModel.Should().Be("text-embedding-004");
+        }
+
+        [Fact]
+        public void Parse_WithGeminiModels_SetsCorrectRequestType()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models", "GET");
+            ctx.RequestType.Should().Be(RequestTypeEnum.GeminiListModels);
+            ctx.ApiType.Should().Be(ApiTypeEnum.Gemini);
+        }
+
+        #endregion
+
         #region ApiType-Detection-Tests
 
         [Fact]
@@ -201,6 +248,13 @@ namespace Conductor.Core.Tests.Models
         {
             UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1/chat/completions", "POST");
             ctx.ApiType.Should().Be(ApiTypeEnum.OpenAI);
+        }
+
+        [Fact]
+        public void DetermineApiType_ForGeminiPaths_ReturnsGemini()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/gemini-2.5-flash:generateContent", "POST");
+            ctx.ApiType.Should().Be(ApiTypeEnum.Gemini);
         }
 
         #endregion
@@ -218,6 +272,13 @@ namespace Conductor.Core.Tests.Models
         public void IsEmbeddingsRequest_ForOpenAIEmbeddings_ReturnsTrue()
         {
             UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1/embeddings", "POST");
+            ctx.IsEmbeddingsRequest.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsEmbeddingsRequest_ForGeminiEmbeddings_ReturnsTrue()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/text-embedding-004:embedContent", "POST");
             ctx.IsEmbeddingsRequest.Should().BeTrue();
         }
 
@@ -257,6 +318,20 @@ namespace Conductor.Core.Tests.Models
         public void IsCompletionsRequest_ForOpenAICompletions_ReturnsTrue()
         {
             UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1/completions", "POST");
+            ctx.IsCompletionsRequest.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsCompletionsRequest_ForGeminiGenerateContent_ReturnsTrue()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/gemini-2.5-flash:generateContent", "POST");
+            ctx.IsCompletionsRequest.Should().BeTrue();
+        }
+
+        [Fact]
+        public void IsCompletionsRequest_ForGeminiStreamGenerateContent_ReturnsTrue()
+        {
+            UrlContext ctx = UrlContext.Parse("/v1.0/api/vmr_test/v1beta/models/gemini-2.5-flash:streamGenerateContent", "POST");
             ctx.IsCompletionsRequest.Should().BeTrue();
         }
 
@@ -372,6 +447,16 @@ namespace Conductor.Core.Tests.Models
             ctx.RelativePath = "api/generate";
             string targetUrl = ctx.BuildTargetUrl("http://localhost:11434");
             targetUrl.Should().Be("http://localhost:11434/api/generate");
+        }
+
+        [Fact]
+        public void BuildTargetUrl_AppendsQueryString()
+        {
+            UrlContext ctx = new UrlContext();
+            ctx.RelativePath = "/v1beta/models/gemini-2.5-flash:streamgeneratecontent";
+            ctx.QueryString = "?alt=sse";
+            string targetUrl = ctx.BuildTargetUrl("https://generativelanguage.googleapis.com");
+            targetUrl.Should().Be("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamgeneratecontent?alt=sse");
         }
 
         #endregion

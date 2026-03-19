@@ -2,12 +2,12 @@
 
 # Conductor
 
-Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network via OpenAI or Ollama compatible APIs.
+Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network via OpenAI, vLLM, Gemini, or Ollama compatible APIs.
 
 ## Features
 
 - **Multi-tenant Architecture**: Full tenant isolation with tenant-scoped data access
-- **Model Runner Endpoints**: Define and manage connections to Ollama or OpenAI-compatible model runners
+- **Model Runner Endpoints**: Define and manage connections to Ollama, OpenAI-compatible backends such as vLLM, and Gemini model runners
 - **Model Definitions**: Catalog your models with metadata like family, parameter size, and quantization
 - **Model Configurations**: Create reusable configurations with pinned properties for embeddings and completions
 - **Virtual Model Runners**: Combine endpoints and configurations into virtual endpoints with load balancing
@@ -94,6 +94,8 @@ Users have three permission levels:
 Virtual model runners expose an API at their configured base path. For example, a VMR with base path `/v1.0/api/my-vmr/` would expose:
 
 - **OpenAI API**: `/v1.0/api/my-vmr/v1/chat/completions`, `/v1.0/api/my-vmr/v1/embeddings`
+- **vLLM API**: `/v1.0/api/my-vmr/v1/chat/completions`, `/v1.0/api/my-vmr/v1/embeddings`
+- **Gemini API**: `/v1.0/api/my-vmr/v1beta/models/gemini-2.5-flash:generateContent`, `/v1.0/api/my-vmr/v1beta/models/text-embedding-004:embedContent`
 - **Ollama API**: `/v1.0/api/my-vmr/api/generate`, `/v1.0/api/my-vmr/api/chat`
 
 ## Configuration
@@ -238,7 +240,9 @@ Model Runner Endpoints support comprehensive health checking with the following 
 | `MaxParallelRequests` | int | `4` | Maximum concurrent requests (0 = unlimited) |
 | `Weight` | int | `1` | Relative weight for load balancing (1-1000) |
 
-**Note for OpenAI API**: When using `api.openai.com`, set `HealthCheckUseAuth` to `true` and `HealthCheckUrl` to `/v1/models` to properly authenticate health check requests.
+**Note for OpenAI and vLLM APIs**: When using `api.openai.com` or another OpenAI-compatible backend that requires authentication for model listing, set `HealthCheckUseAuth` to `true` and `HealthCheckUrl` to `/v1/models`.
+
+**Note for Gemini API**: When using `generativelanguage.googleapis.com`, set `HealthCheckUseAuth` to `true` and `HealthCheckUrl` to `/v1beta/models`. Gemini uses the `x-goog-api-key` header rather than bearer token authentication.
 
 ### Health Check Behavior
 

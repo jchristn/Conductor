@@ -274,6 +274,28 @@ namespace Conductor.Core.Enums
         /// </summary>
         OpenAIEmbeddings,
 
+        // ==================== Proxied API Operations (Gemini) ====================
+
+        /// <summary>
+        /// Gemini content generation request.
+        /// </summary>
+        GeminiGenerateContent,
+
+        /// <summary>
+        /// Gemini streaming content generation request.
+        /// </summary>
+        GeminiStreamGenerateContent,
+
+        /// <summary>
+        /// Gemini embeddings request.
+        /// </summary>
+        GeminiEmbedContent,
+
+        /// <summary>
+        /// Gemini list models request.
+        /// </summary>
+        GeminiListModels,
+
         // ==================== Proxied API Operations (Ollama) ====================
 
         /// <summary>

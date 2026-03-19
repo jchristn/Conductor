@@ -365,7 +365,14 @@ namespace Conductor.Server.Services
             {
                 if (endpoint.HealthCheckUseAuth && !String.IsNullOrEmpty(endpoint.ApiKey))
                 {
-                    request.Headers.Add("Authorization", "Bearer " + endpoint.ApiKey);
+                    if (endpoint.ApiType == ApiTypeEnum.Gemini)
+                    {
+                        request.Headers.Add("x-goog-api-key", endpoint.ApiKey);
+                    }
+                    else
+                    {
+                        request.Headers.Add("Authorization", "Bearer " + endpoint.ApiKey);
+                    }
                 }
 
                 using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token))

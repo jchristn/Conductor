@@ -7,7 +7,7 @@ import ApiExplorerResponse from '../components/ApiExplorerResponse';
 
 /**
  * API Explorer page component.
- * Allows users to test and interact with Virtual Model Runners through OpenAI or Ollama compatible APIs.
+ * Allows users to test and interact with Virtual Model Runners through OpenAI, vLLM, Gemini, or Ollama compatible APIs.
  */
 function ApiExplorer() {
   const { api, setError, serverUrl } = useApp();
