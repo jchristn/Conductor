@@ -457,6 +457,26 @@ class ConductorApi {
     return this.request('POST', '/v1.0/backup/validate', backup);
   }
 
+  // Request History Summary API
+  /**
+   * Get aggregated request history summary with time-bucketed success/failure counts.
+   * @param {Object} params - Summary parameters
+   * @param {string} params.vmrGuid - Filter by Virtual Model Runner GUID
+   * @param {string} params.startUtc - Start of time range (UTC, ISO 8601)
+   * @param {string} params.endUtc - End of time range (UTC, ISO 8601)
+   * @param {string} params.interval - Bucket interval: "hour" or "day"
+   * @returns {Promise<Object>} Summary result with Data (array of buckets), StartUtc, EndUtc, Interval, TotalSuccess, TotalFailure, TotalRequests
+   */
+  async getRequestHistorySummary(params = {}) {
+    const parts = [];
+    if (params.vmrGuid) parts.push('vmrGuid=' + encodeURIComponent(params.vmrGuid));
+    if (params.startUtc) parts.push('startUtc=' + params.startUtc);
+    if (params.endUtc) parts.push('endUtc=' + params.endUtc);
+    if (params.interval) parts.push('interval=' + params.interval);
+    const queryString = parts.length > 0 ? '?' + parts.join('&') : '';
+    return this.request('GET', `/v1.0/requesthistory/summary${queryString}`);
+  }
+
   // Request History APIs
   /**
    * Search request history entries with pagination.

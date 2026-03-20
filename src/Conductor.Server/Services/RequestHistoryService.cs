@@ -254,6 +254,17 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Get aggregated request history summary with time-bucketed counts.
+        /// </summary>
+        /// <param name="filter">Summary filter specifying time range, interval, and optional VMR filter.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Summary result with time-bucketed success/failure counts.</returns>
+        public async Task<RequestHistorySummaryResult> GetSummaryAsync(RequestHistorySummaryFilter filter, CancellationToken token = default)
+        {
+            return await _Database.RequestHistory.GetSummaryAsync(filter, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Delete a request history entry and its associated file.
         /// </summary>
         /// <param name="id">Entry ID.</param>

@@ -19,12 +19,12 @@ namespace Conductor.Core.Settings
 
         /// <summary>
         /// Number of days to retain request history records.
-        /// Minimum: 1. Maximum: 365. Default: 1.
+        /// Minimum: 1. Maximum: 365. Default: 30.
         /// </summary>
         public int RetentionDays
         {
             get => _RetentionDays;
-            set => _RetentionDays = (value < 1 ? 7 : (value > 365 ? 365 : value));
+            set => _RetentionDays = (value < 1 ? 30 : (value > 365 ? 365 : value));
         }
 
         /// <summary>
@@ -68,7 +68,7 @@ namespace Conductor.Core.Settings
         }
 
         private bool _Enabled = false;
-        private int _RetentionDays = 1;
+        private int _RetentionDays = 30;
         private string _Directory = "./request-history";
         private int _CleanupIntervalMinutes = 5;
         private int _MaxRequestBodyBytes = 65536;

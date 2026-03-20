@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import RequestHistoryChart from '../components/RequestHistoryChart';
 
 function Dashboard() {
-  const { counts, fetchCounts, serverUrl, disconnect } = useApp();
+  const { counts, fetchCounts } = useApp();
 
   useEffect(() => {
     fetchCounts();
@@ -25,26 +26,10 @@ function Dashboard() {
         <div>
           <h1>Dashboard</h1>
           <p className="view-subtitle">Overview of your Conductor environment with quick access to all resource types.</p>
-          <p className="server-url">Connected to: {serverUrl}</p>
         </div>
-        <button className="btn-secondary" onClick={disconnect}>
-          Disconnect
-        </button>
       </div>
 
-      <div className="stats-grid">
-        {cards.map((card) => (
-          <Link to={card.path} key={card.path} className="stat-card" title={card.tooltip}>
-            <div className="stat-icon" style={{ backgroundColor: card.color + '20', color: card.color }}>
-              <span>{card.count}</span>
-            </div>
-            <div className="stat-info">
-              <h3>{card.label}</h3>
-              <p>Total count</p>
-            </div>
-          </Link>
-        ))}
-      </div>
+      <RequestHistoryChart />
 
       <div className="dashboard-sections">
         <section className="dashboard-section">
@@ -64,6 +49,20 @@ function Dashboard() {
             </Link>
           </div>
         </section>
+      </div>
+
+      <div className="stats-grid">
+        {cards.map((card) => (
+          <Link to={card.path} key={card.path} className="stat-card" title={card.tooltip}>
+            <div className="stat-icon" style={{ backgroundColor: card.color + '20', color: card.color }}>
+              <span>{card.count}</span>
+            </div>
+            <div className="stat-info">
+              <h3>{card.label}</h3>
+              <p>Total count</p>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

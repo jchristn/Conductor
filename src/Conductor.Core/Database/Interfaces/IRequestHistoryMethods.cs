@@ -82,5 +82,13 @@ namespace Conductor.Core.Database.Interfaces
         /// <param name="token">Cancellation token.</param>
         /// <returns>List of object keys.</returns>
         Task<List<string>> GetExpiredObjectKeysAsync(DateTime cutoff, CancellationToken token = default);
+
+        /// <summary>
+        /// Get aggregated request counts grouped by time buckets.
+        /// </summary>
+        /// <param name="filter">Summary filter specifying time range, interval, and optional VMR filter.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Summary result with time-bucketed counts.</returns>
+        Task<RequestHistorySummaryResult> GetSummaryAsync(RequestHistorySummaryFilter filter, CancellationToken token = default);
     }
 }

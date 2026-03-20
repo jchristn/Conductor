@@ -1,6 +1,7 @@
 namespace Conductor.Server.Controllers
 {
     using System;
+    using System.Globalization;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Models;
@@ -157,6 +158,46 @@ namespace Conductor.Server.Controllers
             }
 
             await _RequestHistoryService.DeleteAsync(id).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get aggregated request history summary with time-bucketed success/failure counts.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID (from auth).</param>
+        /// <param name="vmrGuid">Filter by virtual model runner GUID.</param>
+        /// <param name="startUtc">Start of time range (UTC, ISO 8601).</param>
+        /// <param name="endUtc">End of time range (UTC, ISO 8601).</param>
+        /// <param name="interval">Bucket interval: "hour" or "day".</param>
+        /// <returns>Summary result with time-bucketed counts.</returns>
+        public async Task<RequestHistorySummaryResult> Summary(
+            string tenantId,
+            string vmrGuid,
+            string startUtc,
+            string endUtc,
+            string interval)
+        {
+            DateTime start = DateTime.UtcNow.AddHours(-1);
+            if (!String.IsNullOrEmpty(startUtc) && DateTime.TryParse(startUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsedStart))
+            {
+                start = parsedStart.ToUniversalTime();
+            }
+
+            DateTime end = DateTime.UtcNow;
+            if (!String.IsNullOrEmpty(endUtc) && DateTime.TryParse(endUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsedEnd))
+            {
+                end = parsedEnd.ToUniversalTime();
+            }
+
+            RequestHistorySummaryFilter filter = new RequestHistorySummaryFilter
+            {
+                TenantGuid = tenantId,
+                VirtualModelRunnerGuid = vmrGuid,
+                StartUtc = start,
+                EndUtc = end,
+                Interval = interval ?? "hour"
+            };
+
+            return await _RequestHistoryService.GetSummaryAsync(filter).ConfigureAwait(false);
         }
 
         /// <summary>

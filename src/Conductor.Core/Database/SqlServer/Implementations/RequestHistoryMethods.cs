@@ -235,6 +235,81 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             return keys;
         }
 
+        /// <summary>
+        /// Get aggregated request counts grouped by time buckets.
+        /// </summary>
+        public async Task<RequestHistorySummaryResult> GetSummaryAsync(RequestHistorySummaryFilter filter, CancellationToken token = default)
+        {
+            if (filter == null) filter = new RequestHistorySummaryFilter();
+
+            string startStr = _Driver.FormatDateTime(filter.StartUtc);
+            string endStr = _Driver.FormatDateTime(filter.EndUtc);
+
+            string dateTrunc;
+            switch (filter.Interval)
+            {
+                case "minute":
+                    dateTrunc = "DATEADD(MINUTE, DATEDIFF(MINUTE, 0, createdutc), 0)";
+                    break;
+                case "15minute":
+                    dateTrunc = "DATEADD(MINUTE, (DATEDIFF(MINUTE, 0, createdutc) / 15) * 15, 0)";
+                    break;
+                case "6hour":
+                    dateTrunc = "DATEADD(HOUR, (DATEDIFF(HOUR, 0, createdutc) / 6) * 6, 0)";
+                    break;
+                case "day":
+                    dateTrunc = "CAST(CAST(createdutc AS DATE) AS DATETIME)";
+                    break;
+                default:
+                    dateTrunc = "DATEADD(HOUR, DATEDIFF(HOUR, 0, createdutc), 0)";
+                    break;
+            }
+
+            List<string> conditions = new List<string>();
+            conditions.Add("createdutc >= '" + startStr + "'");
+            conditions.Add("createdutc < '" + endStr + "'");
+
+            if (!String.IsNullOrEmpty(filter.TenantGuid))
+            {
+                conditions.Add("tenantguid = '" + _Driver.Sanitize(filter.TenantGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.VirtualModelRunnerGuid))
+            {
+                conditions.Add("virtualmodelrunnerguid = '" + _Driver.Sanitize(filter.VirtualModelRunnerGuid) + "'");
+            }
+
+            string whereClause = "WHERE " + String.Join(" AND ", conditions);
+
+            string query = "SELECT " + dateTrunc + " AS bucket_time, " +
+                           "SUM(CASE WHEN httpstatus IS NOT NULL AND httpstatus >= 100 AND httpstatus < 400 THEN 1 ELSE 0 END) AS success_count, " +
+                           "SUM(CASE WHEN httpstatus IS NULL OR httpstatus >= 400 THEN 1 ELSE 0 END) AS failure_count " +
+                           "FROM requesthistory " + whereClause + " " +
+                           "GROUP BY " + dateTrunc + " " +
+                           "ORDER BY bucket_time ASC;";
+
+            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            List<RequestHistorySummaryBucket> buckets = RequestHistorySummaryBucket.FromDataTable(result) ?? new List<RequestHistorySummaryBucket>();
+
+            long totalSuccess = 0;
+            long totalFailure = 0;
+            foreach (RequestHistorySummaryBucket bucket in buckets)
+            {
+                totalSuccess += bucket.SuccessCount;
+                totalFailure += bucket.FailureCount;
+            }
+
+            return new RequestHistorySummaryResult
+            {
+                Data = buckets,
+                StartUtc = filter.StartUtc,
+                EndUtc = filter.EndUtc,
+                Interval = filter.Interval,
+                TotalSuccess = totalSuccess,
+                TotalFailure = totalFailure
+            };
+        }
+
         private string BuildWhereClause(RequestHistorySearchFilter filter)
         {
             List<string> conditions = new List<string>();

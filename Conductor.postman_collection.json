@@ -1,0 +1,820 @@
+{
+  "info": {
+    "name": "Conductor API",
+    "description": "Conductor API collection for managing models, model runners, configurations, virtual model runners, and request history.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9000",
+      "type": "string"
+    },
+    {
+      "key": "bearerToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bearerToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login with Credential",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Email\": \"{{email}}\",\n  \"Password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/auth/login/credential",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "auth", "login", "credential"]
+            }
+          }
+        },
+        {
+          "name": "Login with API Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ApiKey\": \"{{apiKey}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/auth/login/apikey",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "auth", "login", "apikey"]
+            }
+          }
+        },
+        {
+          "name": "Login as Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Email\": \"{{adminEmail}}\",\n  \"Password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/auth/login/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "auth", "login", "admin"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "List Tenants",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "tenants"]
+            }
+          }
+        },
+        {
+          "name": "Get Tenant",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "tenants", "{{tenantId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"My Tenant\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "tenants"]
+            }
+          }
+        },
+        {
+          "name": "Update Tenant",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated Tenant\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "tenants", "{{tenantId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Tenant",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "tenants", "{{tenantId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "users"]
+            }
+          }
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "users", "{{userId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Email\": \"user@example.com\",\n  \"Password\": \"password123\",\n  \"Name\": \"Test User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "users"]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "users", "{{userId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "users", "{{userId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Credentials",
+      "item": [
+        {
+          "name": "List Credentials",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/credentials",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "credentials"]
+            }
+          }
+        },
+        {
+          "name": "Get Credential",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "credentials", "{{credentialId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Credential",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"My API Key\",\n  \"UserId\": \"{{userId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/credentials",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "credentials"]
+            }
+          }
+        },
+        {
+          "name": "Delete Credential",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "credentials", "{{credentialId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Runner Endpoints",
+      "item": [
+        {
+          "name": "List Model Runner Endpoints",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints"]
+            }
+          }
+        },
+        {
+          "name": "Get Model Runner Endpoint",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Model Runner Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"My Ollama Server\",\n  \"EndpointType\": \"Ollama\",\n  \"Hostname\": \"localhost\",\n  \"Port\": 11434,\n  \"Ssl\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints"]
+            }
+          }
+        },
+        {
+          "name": "Update Model Runner Endpoint",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated Endpoint\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Model Runner Endpoint",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}"]
+            }
+          }
+        },
+        {
+          "name": "Check Endpoint Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Definitions",
+      "item": [
+        {
+          "name": "List Model Definitions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modeldefinitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modeldefinitions"]
+            }
+          }
+        },
+        {
+          "name": "Get Model Definition",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modeldefinitions/{{definitionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modeldefinitions", "{{definitionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Model Definition",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"llama3:8b\",\n  \"Family\": \"LLaMA\",\n  \"ParameterSize\": \"8B\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modeldefinitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modeldefinitions"]
+            }
+          }
+        },
+        {
+          "name": "Update Model Definition",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated Definition\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modeldefinitions/{{definitionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modeldefinitions", "{{definitionId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Model Definition",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modeldefinitions/{{definitionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modeldefinitions", "{{definitionId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Configurations",
+      "item": [
+        {
+          "name": "List Model Configurations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelconfigurations",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelconfigurations"]
+            }
+          }
+        },
+        {
+          "name": "Get Model Configuration",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelconfigurations/{{configurationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelconfigurations", "{{configurationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Model Configuration",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Low Temperature\",\n  \"PinnedCompletionsProperties\": {\n    \"temperature\": 0.3\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelconfigurations",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelconfigurations"]
+            }
+          }
+        },
+        {
+          "name": "Update Model Configuration",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated Configuration\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelconfigurations/{{configurationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelconfigurations", "{{configurationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Model Configuration",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelconfigurations/{{configurationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelconfigurations", "{{configurationId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Virtual Model Runners",
+      "item": [
+        {
+          "name": "List Virtual Model Runners",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners"]
+            }
+          }
+        },
+        {
+          "name": "Get Virtual Model Runner",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Virtual Model Runner",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners"]
+            }
+          }
+        },
+        {
+          "name": "Update Virtual Model Runner",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated VMR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Virtual Model Runner",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}"]
+            }
+          }
+        },
+        {
+          "name": "Check VMR Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Request History",
+      "item": [
+        {
+          "name": "Search Request History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "10" },
+                { "key": "vmrGuid", "value": "", "disabled": true },
+                { "key": "endpointGuid", "value": "", "disabled": true },
+                { "key": "sourceIp", "value": "", "disabled": true },
+                { "key": "httpStatus", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Search request history entries with pagination and filtering."
+          }
+        },
+        {
+          "name": "Get Request History Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/summary?interval=hour",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory", "summary"],
+              "query": [
+                { "key": "startUtc", "value": "", "disabled": true, "description": "Start of time range (UTC, ISO 8601). Default: 1 hour ago" },
+                { "key": "endUtc", "value": "", "disabled": true, "description": "End of time range (UTC, ISO 8601). Default: now" },
+                { "key": "interval", "value": "hour", "description": "Bucket interval: 'minute', '15minute', 'hour', '6hour', or 'day'. Default: 'hour'" },
+                { "key": "vmrGuid", "value": "", "disabled": true, "description": "Filter by Virtual Model Runner GUID" }
+              ]
+            },
+            "description": "Get aggregated request counts grouped by time buckets with success/failure breakdown. Returns time-bucketed data suitable for charting."
+          }
+        },
+        {
+          "name": "Get Request History Entry",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}"]
+            },
+            "description": "Get request history entry metadata by ID."
+          }
+        },
+        {
+          "name": "Get Request History Detail",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}/detail",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}", "detail"]
+            },
+            "description": "Get full request history detail including request/response headers and bodies."
+          }
+        },
+        {
+          "name": "Delete Request History Entry",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}"]
+            },
+            "description": "Delete a single request history entry by ID."
+          }
+        },
+        {
+          "name": "Bulk Delete Request History",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/bulk",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory", "bulk"],
+              "query": [
+                { "key": "vmrGuid", "value": "", "disabled": true },
+                { "key": "endpointGuid", "value": "", "disabled": true },
+                { "key": "sourceIp", "value": "", "disabled": true },
+                { "key": "httpStatus", "value": "", "disabled": true }
+              ]
+            },
+            "description": "Delete all request history entries matching the filter criteria."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Administrators",
+      "item": [
+        {
+          "name": "List Administrators",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/administrators",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "administrators"]
+            }
+          }
+        },
+        {
+          "name": "Get Administrator",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/administrators/{{adminId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "administrators", "{{adminId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Administrator",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Email\": \"admin@example.com\",\n  \"Password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/administrators",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "administrators"]
+            }
+          }
+        },
+        {
+          "name": "Delete Administrator",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/administrators/{{adminId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "administrators", "{{adminId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backup & Restore",
+      "item": [
+        {
+          "name": "Create Backup",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/backup",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "backup"]
+            },
+            "description": "Export all data as a JSON backup."
+          }
+        },
+        {
+          "name": "Restore Backup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/backup/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "backup", "restore"]
+            },
+            "description": "Restore from a JSON backup. Pass the backup JSON as the request body."
+          }
+        },
+        {
+          "name": "Validate Backup",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/backup/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "backup", "validate"]
+            },
+            "description": "Validate a backup file without applying changes."
+          }
+        }
+      ]
+    }
+  ]
+}

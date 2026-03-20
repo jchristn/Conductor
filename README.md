@@ -99,6 +99,7 @@ Users have three permission levels:
 | Model Configuration | `mc_` | `/v1.0/modelconfigurations` |
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
 | Request History | `req_` | `/v1.0/requesthistory` |
+| Request History Summary | - | `/v1.0/requesthistory/summary` |
 
 ### Virtual Model Runner Proxy
 
@@ -205,12 +206,49 @@ Request history captures request/response data for Virtual Model Runners with `R
 |----------|------|---------|-------------|
 | `Enabled` | bool | `true` | Enable or disable request history globally |
 | `Directory` | string | `"./request-history/"` | Directory for storing request detail JSON files |
-| `RetentionDays` | int | `7` | Number of days to retain entries before cleanup (1-365) |
+| `RetentionDays` | int | `30` | Number of days to retain entries before cleanup (1-365) |
 | `CleanupIntervalMinutes` | int | `60` | Interval between cleanup runs in minutes (1-1440) |
 | `MaxRequestBodyBytes` | int | `65536` | Maximum request body bytes to capture (1-10485760) |
 | `MaxResponseBodyBytes` | int | `65536` | Maximum response body bytes to capture (1-10485760) |
 
 **Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property).
+
+### Request History Summary API
+
+The summary endpoint returns aggregated request counts grouped by time buckets, useful for charting request volume and success/failure rates over time.
+
+```
+GET /v1.0/requesthistory/summary?startUtc={ISO8601}&endUtc={ISO8601}&interval={hour|day}&vmrGuid={guid}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `startUtc` | string | No | Start of time range (UTC, ISO 8601). Default: 1 hour ago |
+| `endUtc` | string | No | End of time range (UTC, ISO 8601). Default: now |
+| `interval` | string | No | Bucket interval: `minute`, `15minute`, `hour`, `6hour`, or `day`. Default: `hour` |
+| `vmrGuid` | string | No | Filter by Virtual Model Runner GUID |
+
+**Response:**
+```json
+{
+  "Data": [
+    {
+      "TimestampUtc": "2026-03-20T10:00:00Z",
+      "SuccessCount": 42,
+      "FailureCount": 3,
+      "TotalCount": 45
+    }
+  ],
+  "StartUtc": "2026-03-20T10:00:00Z",
+  "EndUtc": "2026-03-20T11:00:00Z",
+  "Interval": "hour",
+  "TotalSuccess": 42,
+  "TotalFailure": 3,
+  "TotalRequests": 45
+}
+```
+
+Success is defined as HTTP status 100-399; failure is HTTP status 400-599 or null (incomplete requests).
 
 ## Configuration Pinning
 

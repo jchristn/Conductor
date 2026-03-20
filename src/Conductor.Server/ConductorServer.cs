@@ -1236,6 +1236,30 @@ namespace Conductor.Server
 
             if (requestHistoryController != null)
             {
+                _App.Rest.Get("/v1.0/requesthistory/summary", async (req) =>
+                {
+                    string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+
+                    return await requestHistoryController.Summary(
+                        tenantId,
+                        req.Http.Request.Query.Elements.Get("vmrGuid"),
+                        req.Http.Request.Query.Elements.Get("startUtc"),
+                        req.Http.Request.Query.Elements.Get("endUtc"),
+                        req.Http.Request.Query.Elements.Get("interval"));
+                },
+                api => api
+                    .WithTag("Request History")
+                    .WithSummary("Get request history summary")
+                    .WithDescription("Get aggregated request counts grouped by time buckets with success/failure breakdown")
+                    .WithSecurity("Bearer")
+                    .WithParameter(OpenApiParameterMetadata.Query("vmrGuid", "Filter by virtual model runner GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("startUtc", "Start of time range (UTC, ISO 8601)", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("endUtc", "End of time range (UTC, ISO 8601)", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("interval", "Bucket interval: 'hour' or 'day' (default: 'hour')", false))
+                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistorySummaryResult>("Summary with time-bucketed counts"))
+                    .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+                requireAuthentication: true);
+
                 _App.Rest.Get("/v1.0/requesthistory", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
