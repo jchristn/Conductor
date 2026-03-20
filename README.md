@@ -2,12 +2,12 @@
 
 # Conductor
 
-Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network via OpenAI, vLLM, Gemini, or Ollama compatible APIs.
+Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
 ## Features
 
 - **Multi-tenant Architecture**: Full tenant isolation with tenant-scoped data access
-- **Model Runner Endpoints**: Define and manage connections to Ollama, OpenAI-compatible backends such as vLLM, and Gemini model runners
+- **Model Runner Endpoints**: Define and manage first-class endpoint types for OpenAI, vLLM, Gemini, and Ollama model runners
 - **Model Definitions**: Catalog your models with metadata like family, parameter size, and quantization
 - **Model Configurations**: Create reusable configurations with pinned properties for embeddings and completions
 - **Virtual Model Runners**: Combine endpoints and configurations into virtual endpoints with load balancing
@@ -53,6 +53,17 @@ npm run dev
 ```
 
 ## API Overview
+
+### Supported Provider Types
+
+Conductor currently supports four model runner provider types in both the backend proxy and the dashboard:
+
+| Provider Type | Runner Type in UI | Proxied API Shape | Notes |
+|---------------|-------------------|-------------------|-------|
+| OpenAI | `OpenAI` | OpenAI REST API | Supports OpenAI-style chat, embeddings, and model listing |
+| vLLM | `vLLM` | OpenAI-compatible REST API | First-class runner type in the UI; uses the OpenAI-compatible API surface |
+| Gemini | `Gemini` | Gemini REST API | Supports Gemini-style `models/{model}:generateContent`, streaming, embeddings, and model listing |
+| Ollama | `Ollama` | Ollama REST API | Supports Ollama-style `/api/generate`, `/api/chat`, and embeddings flows |
 
 ### Authentication
 
