@@ -735,7 +735,10 @@ namespace Conductor.Server.Controllers
             // Apply repeat_penalty if set (for Ollama-style APIs)
             if (config.RepeatPenalty.HasValue)
             {
-                bodyDict["repeat_penalty"] = config.RepeatPenalty.Value;
+                if (urlContext.ApiType != ApiTypeEnum.Gemini)
+                {
+                    bodyDict["repeat_penalty"] = config.RepeatPenalty.Value;
+                }
             }
 
             // Apply context window size if set
@@ -791,6 +794,11 @@ namespace Conductor.Server.Controllers
                 // Merge pinned properties into request body
                 string pinnedJson = Serializer.SerializeJson(pinnedProps, false);
                 string mergedJson = JsonMerger.MergeJson(bodyJson, pinnedJson);
+
+                if (urlContext.ApiType == ApiTypeEnum.Gemini)
+                {
+                    mergedJson = SanitizeGeminiJson(mergedJson);
+                }
 
                 return Encoding.UTF8.GetBytes(mergedJson);
             }
@@ -989,6 +997,26 @@ namespace Conductor.Server.Controllers
             generationConfig ??= new Dictionary<string, object>();
             generationConfig[key] = value;
             bodyDict["generationConfig"] = generationConfig;
+        }
+
+        private string SanitizeGeminiJson(string bodyJson)
+        {
+            if (String.IsNullOrEmpty(bodyJson)) return bodyJson;
+
+            try
+            {
+                Dictionary<string, object> bodyDict = Serializer.DeserializeJson<Dictionary<string, object>>(bodyJson);
+                if (bodyDict == null) return bodyJson;
+
+                bodyDict.Remove("repeat_penalty");
+                bodyDict.Remove("num_ctx");
+
+                return Serializer.SerializeJson(bodyDict, false);
+            }
+            catch
+            {
+                return bodyJson;
+            }
         }
 
         private class HttpClientCacheEntry
