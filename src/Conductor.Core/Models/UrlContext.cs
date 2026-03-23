@@ -260,8 +260,15 @@ namespace Conductor.Core.Models
         /// Build the target URL for a backend endpoint.
         /// </summary>
         /// <param name="baseUrl">Base URL of the backend endpoint.</param>
+        /// <param name="endpointApiKey">
+        /// When not null, replaces the value of the <c>key</c> query parameter with
+        /// the endpoint's own API key.  This is used for Gemini-compatible clients that
+        /// authenticate to Conductor via <c>?key=</c>; the Conductor credential must be
+        /// swapped for the real upstream key before forwarding.
+        /// When null the query string is forwarded unchanged.
+        /// </param>
         /// <returns>Full target URL.</returns>
-        public string BuildTargetUrl(string baseUrl)
+        public string BuildTargetUrl(string baseUrl, string endpointApiKey = null)
         {
             if (String.IsNullOrEmpty(baseUrl)) return null;
             if (String.IsNullOrEmpty(RelativePath)) return baseUrl;
@@ -270,7 +277,47 @@ namespace Conductor.Core.Models
             string path = RelativePath;
             if (!path.StartsWith("/")) path = "/" + path;
 
-            return baseUrl + path + (QueryString ?? String.Empty);
+            string queryString = QueryString ?? String.Empty;
+
+            // Replace the ?key= value with the endpoint's API key for Gemini forwarding
+            if (!String.IsNullOrEmpty(endpointApiKey) && !String.IsNullOrEmpty(queryString))
+            {
+                queryString = ReplaceQueryParameter(queryString, "key", endpointApiKey);
+            }
+
+            return baseUrl + path + queryString;
+        }
+
+        /// <summary>
+        /// Replace the value of a query string parameter, preserving all other parameters.
+        /// </summary>
+        /// <param name="queryString">Query string including the leading '?'.</param>
+        /// <param name="paramName">Parameter name to replace.</param>
+        /// <param name="newValue">New value for the parameter.</param>
+        /// <returns>Updated query string.</returns>
+        private static string ReplaceQueryParameter(string queryString, string paramName, string newValue)
+        {
+            if (String.IsNullOrEmpty(queryString)) return queryString;
+
+            // Remove leading '?'
+            string qs = queryString.StartsWith("?") ? queryString.Substring(1) : queryString;
+            string[] pairs = qs.Split('&');
+            bool found = false;
+
+            for (int i = 0; i < pairs.Length; i++)
+            {
+                int eqIdx = pairs[i].IndexOf('=');
+                string name = eqIdx >= 0 ? pairs[i].Substring(0, eqIdx) : pairs[i];
+                if (String.Equals(name, paramName, StringComparison.OrdinalIgnoreCase))
+                {
+                    pairs[i] = name + "=" + Uri.EscapeDataString(newValue);
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) return queryString;
+            return "?" + String.Join("&", pairs);
         }
     }
 }

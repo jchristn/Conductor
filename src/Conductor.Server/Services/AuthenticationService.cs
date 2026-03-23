@@ -41,28 +41,36 @@ namespace Conductor.Server.Services
             AuthenticationResult result = new AuthenticationResult();
 
             // Try bearer token first
+            string bearerToken = null;
             string authHeader = ctx.Request.Headers.Get("Authorization");
             if (!String.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
-                string bearerToken = authHeader.Substring(7).Trim();
-                if (!String.IsNullOrEmpty(bearerToken))
+                bearerToken = authHeader.Substring(7).Trim();
+            }
+
+            // Fall back to ?key= query parameter (used by Gemini-compatible clients)
+            if (String.IsNullOrEmpty(bearerToken))
+            {
+                bearerToken = ctx.Request.Query.Elements.Get("key");
+            }
+
+            if (!String.IsNullOrEmpty(bearerToken))
+            {
+                Credential credential = await _Database.Credential.ReadByBearerTokenAsync(bearerToken, token).ConfigureAwait(false);
+                if (credential != null && credential.Active)
                 {
-                    Credential credential = await _Database.Credential.ReadByBearerTokenAsync(bearerToken, token).ConfigureAwait(false);
-                    if (credential != null && credential.Active)
+                    UserMaster user = await _Database.User.ReadAsync(credential.TenantId, credential.UserId, token).ConfigureAwait(false);
+                    if (user != null && user.Active)
                     {
-                        UserMaster user = await _Database.User.ReadAsync(credential.TenantId, credential.UserId, token).ConfigureAwait(false);
-                        if (user != null && user.Active)
+                        TenantMetadata tenant = await _Database.Tenant.ReadAsync(credential.TenantId, token).ConfigureAwait(false);
+                        if (tenant != null && tenant.Active)
                         {
-                            TenantMetadata tenant = await _Database.Tenant.ReadAsync(credential.TenantId, token).ConfigureAwait(false);
-                            if (tenant != null && tenant.Active)
-                            {
-                                result.IsAuthenticated = true;
-                                result.Tenant = tenant;
-                                result.User = user;
-                                result.Credential = credential;
-                                result.AuthMethod = "Bearer";
-                                return result;
-                            }
+                            result.IsAuthenticated = true;
+                            result.Tenant = tenant;
+                            result.User = user;
+                            result.Credential = credential;
+                            result.AuthMethod = "Bearer";
+                            return result;
                         }
                     }
                 }

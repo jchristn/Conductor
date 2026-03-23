@@ -456,7 +456,11 @@ namespace Conductor.Server.Controllers
         {
             string scheme = endpoint.UseSsl ? "https" : "http";
             string baseUrl = scheme + "://" + endpoint.Hostname + ":" + endpoint.Port;
-            return urlContext.BuildTargetUrl(baseUrl);
+
+            // For Gemini endpoints, replace the ?key= query parameter (which holds the
+            // Conductor credential) with the endpoint's own upstream API key.
+            string endpointApiKey = endpoint.ApiType == ApiTypeEnum.Gemini ? endpoint.ApiKey : null;
+            return urlContext.BuildTargetUrl(baseUrl, endpointApiKey);
         }
 
         /// <summary>
