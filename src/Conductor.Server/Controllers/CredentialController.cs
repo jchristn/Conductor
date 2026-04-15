@@ -8,8 +8,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Credential API controller.
@@ -34,7 +34,7 @@ namespace Conductor.Server.Controllers
         public async Task<Credential> Create(string tenantId, string userId, Credential credential)
         {
             if (credential == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             credential.Id = IdGenerator.NewCredentialId();
             credential.TenantId = tenantId;
@@ -50,7 +50,7 @@ namespace Conductor.Server.Controllers
                 // Check if provided bearer token is unique
                 Credential existing = await Database.Credential.ReadByBearerTokenAsync(credential.BearerToken);
                 if (existing != null)
-                    throw new SwiftStackException(ApiResultEnum.BadRequest, "API key already exists. Please use a unique API key.");
+                    throw new WebserverException(ApiResultEnum.BadRequest, "API key already exists. Please use a unique API key.");
             }
 
             credential = await Database.Credential.CreateAsync(credential);
@@ -67,7 +67,7 @@ namespace Conductor.Server.Controllers
         public async Task<Credential> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             Credential credential;
             if (String.IsNullOrEmpty(tenantId))
@@ -76,7 +76,7 @@ namespace Conductor.Server.Controllers
                 credential = await Database.Credential.ReadAsync(tenantId, id);
 
             if (credential == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return credential;
         }
@@ -91,14 +91,14 @@ namespace Conductor.Server.Controllers
         public async Task<Credential> Update(string tenantId, string id, Credential credential)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             Credential existing = await Database.Credential.ReadAsync(tenantId, id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (credential == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             credential.Id = id;
             credential.TenantId = tenantId;
@@ -115,7 +115,7 @@ namespace Conductor.Server.Controllers
                 // Check if new bearer token is unique
                 Credential tokenCheck = await Database.Credential.ReadByBearerTokenAsync(credential.BearerToken);
                 if (tokenCheck != null)
-                    throw new SwiftStackException(ApiResultEnum.BadRequest, "API key already exists. Please use a unique API key.");
+                    throw new WebserverException(ApiResultEnum.BadRequest, "API key already exists. Please use a unique API key.");
             }
 
             credential = await Database.Credential.UpdateAsync(credential);
@@ -131,11 +131,11 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             bool exists = await Database.Credential.ExistsAsync(tenantId, id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             await Database.Credential.DeleteAsync(tenantId, id);
         }

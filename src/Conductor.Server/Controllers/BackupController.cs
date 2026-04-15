@@ -10,8 +10,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Backup and restore API controller.
@@ -125,7 +125,7 @@ namespace Conductor.Server.Controllers
                 throw new ArgumentNullException(nameof(restoreRequest));
 
             if (restoreRequest.Package == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Backup package is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Backup package is required");
 
             BackupPackage package = restoreRequest.Package;
             RestoreOptions options = restoreRequest.Options ?? new RestoreOptions();

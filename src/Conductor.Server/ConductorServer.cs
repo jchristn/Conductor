@@ -17,13 +17,12 @@ namespace Conductor.Server
     using Conductor.Core.Settings;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
-    using SwiftStack.Rest.OpenApi;
     using System.Linq;
-    using WatsonWebserver.Core;
-    using ZstdSharp.Unsafe;
     using System.Text;
+    using WatsonWebserver;
+    using WatsonWebserver.Core;
+    using WatsonWebserver.Core.OpenApi;
+    using WatsonWebserver.Core.Routing;
 
     /// <summary>
     /// Conductor Server main program.
@@ -40,7 +39,8 @@ namespace Conductor.Server
         private static RequestHistoryService _RequestHistoryService;
         private static RequestHistoryCleanupService _RequestHistoryCleanupService;
         private static Serializer _Serializer;
-        private static SwiftStackApp _App;
+        private static Webserver _App;
+        private static Controllers.ProxyController _ProxyController;
         private static CancellationTokenSource _TokenSource;
 
         /// <summary>
@@ -151,44 +151,65 @@ namespace Conductor.Server
 
             // Initialize webserver
             _Logging.Info(_Header + "initializing webserver");
-            _App = new SwiftStackApp("Conductor Server");
-            _App.Rest.WebserverSettings.Hostname = _Settings.Webserver.Hostname;
-            _App.Rest.WebserverSettings.Port = _Settings.Webserver.Port;
-            _App.Rest.WebserverSettings.Ssl.Enable = _Settings.Webserver.Ssl;
+
+            // Proxy controller must be constructed before the Webserver because Watson 7 requires
+            // a default route at construction time; the default route is the proxy handler.
+            _ProxyController = new Controllers.ProxyController(
+                _Database, _AuthService, _Serializer, _Logging,
+                _HealthCheckService, _SessionAffinityService, _RequestHistoryService);
+
+            WatsonWebserver.Core.WebserverSettings webSettings = new WatsonWebserver.Core.WebserverSettings(
+                _Settings.Webserver.Hostname,
+                _Settings.Webserver.Port,
+                _Settings.Webserver.Ssl);
+
+            _App = new Webserver(webSettings, DefaultRoute);
+
+            // Wire Conductor's serializer (includes JsonStringEnumConverter and case-insensitive
+            // property matching) into Watson's API-route pipeline.
+            _App.Serializer = new ConductorSerializationHelper(_Serializer);
 
             // Configure OpenAPI
-            _App.Rest.UseOpenApi(openApi =>
+            _App.UseOpenApi(openApi =>
             {
                 openApi.Info.Title = "Conductor API";
                 openApi.Info.Version = "1.0.0";
                 openApi.Info.Description = "Conductor - Inference Virtualization Platform API";
-                openApi.Info.Contact = new OpenApiContact("Conductor Support", "support@conductor.local");
+                openApi.Info.Contact = new OpenApiContact
+                {
+                    Name = "Conductor Support",
+                    Email = "support@conductor.local"
+                };
 
                 // Define tags for grouping endpoints
-                openApi.Tags.Add(new OpenApiTag("Health", "Health check endpoints"));
-                openApi.Tags.Add(new OpenApiTag("Authentication", "Login and authentication endpoints"));
-                openApi.Tags.Add(new OpenApiTag("Tenants", "Tenant management endpoints"));
-                openApi.Tags.Add(new OpenApiTag("Users", "User management endpoints"));
-                openApi.Tags.Add(new OpenApiTag("Credentials", "API credential management endpoints"));
-                openApi.Tags.Add(new OpenApiTag("Model Runner Endpoints", "Model runner endpoint management"));
-                openApi.Tags.Add(new OpenApiTag("Model Definitions", "Model definition management"));
-                openApi.Tags.Add(new OpenApiTag("Model Configurations", "Model configuration management"));
-                openApi.Tags.Add(new OpenApiTag("Virtual Model Runners", "Virtual model runner management"));
-                openApi.Tags.Add(new OpenApiTag("Administrators", "Administrator management endpoints"));
-                openApi.Tags.Add(new OpenApiTag("Backup", "Backup and restore endpoints"));
-                openApi.Tags.Add(new OpenApiTag("Request History", "Request history endpoints"));
+                openApi.Tags.Add(new OpenApiTag { Name = "Health", Description = "Health check endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Authentication", Description = "Login and authentication endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Tenants", Description = "Tenant management endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Users", Description = "User management endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Credentials", Description = "API credential management endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Model Runner Endpoints", Description = "Model runner endpoint management" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Model Definitions", Description = "Model definition management" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Model Configurations", Description = "Model configuration management" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Virtual Model Runners", Description = "Virtual model runner management" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Administrators", Description = "Administrator management endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Backup", Description = "Backup and restore endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Request History", Description = "Request history endpoints" });
 
                 // Define security scheme for bearer token authentication
-                openApi.SecuritySchemes["Bearer"] = OpenApiSecurityScheme.Bearer(
-                    "Bearer Token",
-                    "Enter your API bearer token");
+                openApi.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
+                {
+                    Type = "http",
+                    Scheme = "bearer",
+                    BearerFormat = "Bearer Token",
+                    Description = "Enter your API bearer token"
+                };
             });
 
             // Register routes
             RegisterRoutes();
 
             _Logging.Info(_Header + "starting webserver on " + _Settings.Webserver.Hostname + ":" + _Settings.Webserver.Port);
-            _ = Task.Run(() => _App.Rest.Run(_TokenSource.Token), _TokenSource.Token);
+            _ = Task.Run(() => _App.StartAsync(_TokenSource.Token), _TokenSource.Token);
 
             Console.WriteLine("Press CTRL+C to exit");
             Console.CancelKeyPress += (sender, e) =>
@@ -249,42 +270,51 @@ namespace Conductor.Server
         {
             #region General-Routes
 
-            _App.Rest.AuthenticationRoute = AuthenticationRoute;
+            _App.Routes.AuthenticateApiRequest = AuthenticationRoute;
 
-            _App.Rest.PreRoutingRoute = async (ctx) =>
+            // Preflight route - Watson 7 invokes this exclusively for OPTIONS requests.
+            _App.Routes.Preflight = async (ctx) =>
             {
-                ctx.Response.ContentType = Constants.JsonContentType;
+                ctx.Response.ContentType = "application/json";
 
-                // Handle CORS if enabled
                 if (_Settings.Webserver.Cors != null && _Settings.Webserver.Cors.Enabled)
                 {
                     ApplyCorsHeaders(ctx.Response, ctx.Request);
-
-                    // Handle preflight OPTIONS requests
-                    if (ctx.Request.Method == HttpMethod.OPTIONS)
-                    {
-                        ctx.Response.StatusCode = 204;
-                        ctx.Response.Send().Wait();
-                        return;
-                    }
                 }
+
+                ctx.Response.StatusCode = 204;
+                await ctx.Response.Send(ctx.Token).ConfigureAwait(false);
             };
 
-            _App.Rest.PostRoutingRoute = async (ctx) => {
-                RequestContext req = null;
-                if (ctx.Metadata != null) req = ((RequestContext)ctx.Metadata);
+            // Pre-routing runs before the matched route for all non-OPTIONS requests.
+            _App.Routes.PreRouting = async (ctx) =>
+            {
+                ctx.Response.ContentType = "application/json";
 
-                ctx.Timestamp.End = DateTime.UtcNow;
+                if (_Settings.Webserver.Cors != null && _Settings.Webserver.Cors.Enabled)
+                {
+                    ApplyCorsHeaders(ctx.Response, ctx.Request);
+                }
+
+                await Task.CompletedTask.ConfigureAwait(false);
+            };
+
+            _App.Routes.PostRouting = async (ctx) =>
+            {
+                RequestContext req = null;
+                if (ctx.Metadata != null && ctx.Metadata is RequestContext rc) req = rc;
 
                 _Logging.Debug(
                     _Header
                     + ctx.Request.Method + " " + ctx.Request.Url.RawWithQuery + " "
                     + ctx.Response.StatusCode + " "
                     + (req != null ? req.RequestType.ToString() : "Unknown") + " "
-                    + "(" + ctx.Response.Timestamp.TotalMs.Value.ToString("F2") + "ms)");
+                    + "(" + ctx.Timestamp.TotalMs.Value.ToString("F2") + "ms)");
+
+                await Task.CompletedTask.ConfigureAwait(false);
             };
 
-            _App.Rest.Get("/health", async (req) =>
+            _App.Get("/health", async (req) =>
             {
                 req.Http.Response.StatusCode = 200;
                 return "{\"status\":\"healthy\"}";
@@ -293,9 +323,9 @@ namespace Conductor.Server
                 .WithTag("Health")
                 .WithSummary("Health check")
                 .WithDescription("Returns the health status of the Conductor server")
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("Health status response")));
+                .WithResponse(200, Api.JsonResponse<object>("Health status response")));
 
-            _App.Rest.Get("/", async (req) =>
+            _App.Get("/", async (req) =>
             {
                 req.Http.Response.StatusCode = 200;
                 return null;
@@ -306,7 +336,7 @@ namespace Conductor.Server
                 .WithDescription("Returns 200 OK to indicate the server is running")
                 .WithResponse(200, OpenApiResponseMetadata.NoContent()));
 
-            _App.Rest.Head("/", async (req) =>
+            _App.Head("/", async (req) =>
             {
                 req.Http.Response.StatusCode = 200;
                 return null;
@@ -330,7 +360,6 @@ namespace Conductor.Server
             Controllers.ModelConfigurationController mcController = new Controllers.ModelConfigurationController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.VirtualModelRunnerController vmrController = new Controllers.VirtualModelRunnerController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService);
             Controllers.AuthController authController = new Controllers.AuthController(_Database, _AuthService, _Serializer, _Logging, _Settings.AdminApiKeys);
-            Controllers.ProxyController proxyController = new Controllers.ProxyController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService, _RequestHistoryService);
             Controllers.AdministratorController adminController = new Controllers.AdministratorController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.BackupController backupController = new Controllers.BackupController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.RequestHistoryController requestHistoryController = _RequestHistoryService != null
@@ -341,7 +370,7 @@ namespace Conductor.Server
 
             #region Tenant-Routes
 
-            _App.Rest.Post<TenantMetadata>("/v1.0/tenants", async (req) =>
+            _App.Post<TenantMetadata>("/v1.0/tenants", async (req) =>
             {
                 req.Http.Response.StatusCode = 201;
                 return await tenantController.Create(req.Data as TenantMetadata);
@@ -350,32 +379,32 @@ namespace Conductor.Server
                 .WithTag("Tenants")
                 .WithSummary("Create tenant")
                 .WithDescription("Create a new tenant in the system")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<TenantMetadata>("Tenant to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<TenantMetadata>("Created tenant"))
+                .WithRequestBody(Api.JsonRequestBody<TenantMetadata>("Tenant to create", true))
+                .WithResponse(201, Api.JsonResponse<TenantMetadata>("Created tenant"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest()));
 
-            _App.Rest.Get("/v1.0/tenants/{id}", async (req) =>
+            _App.Get("/v1.0/tenants/{id}", async (req) =>
                 await tenantController.Read(req.Parameters["id"]),
             api => api
                 .WithTag("Tenants")
                 .WithSummary("Get tenant by ID")
                 .WithDescription("Retrieve a specific tenant by its unique identifier")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The tenant ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<TenantMetadata>("Tenant details"))
+                .WithResponse(200, Api.JsonResponse<TenantMetadata>("Tenant details"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()));
 
-            _App.Rest.Put<TenantMetadata>("/v1.0/tenants/{id}", async (req) =>
+            _App.Put<TenantMetadata>("/v1.0/tenants/{id}", async (req) =>
                 await tenantController.Update(req.Parameters["id"], req.Data as TenantMetadata),
             api => api
                 .WithTag("Tenants")
                 .WithSummary("Update tenant")
                 .WithDescription("Update an existing tenant")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The tenant ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<TenantMetadata>("Updated tenant data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<TenantMetadata>("Updated tenant"))
+                .WithRequestBody(Api.JsonRequestBody<TenantMetadata>("Updated tenant data", true))
+                .WithResponse(200, Api.JsonResponse<TenantMetadata>("Updated tenant"))
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()));
 
-            _App.Rest.Delete("/v1.0/tenants/{id}", async (req) =>
+            _App.Delete("/v1.0/tenants/{id}", async (req) =>
             {
                 req.Http.Response.StatusCode = 204;
                 await tenantController.Delete(req.Parameters["id"]);
@@ -389,7 +418,7 @@ namespace Conductor.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()));
 
-            _App.Rest.Get("/v1.0/tenants", async (req) =>
+            _App.Get("/v1.0/tenants", async (req) =>
             {
                 int? maxResults = null;
                 string maxResultsStr = req.Http.Request.Query.Elements.Get("maxResults");
@@ -415,13 +444,13 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter tenants by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of tenants with pagination info")));
+                .WithResponse(200, Api.JsonResponse<object>("List of tenants with pagination info")));
 
             #endregion
 
             #region User-Routes
 
-            _App.Rest.Post<UserMaster>("/v1.0/users", async (req) =>
+            _App.Post<UserMaster>("/v1.0/users", async (req) =>
             {
                 UserMaster user = req.Data as UserMaster;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, user?.TenantId);
@@ -433,13 +462,13 @@ namespace Conductor.Server
                 .WithSummary("Create user")
                 .WithDescription("Create a new user within the authenticated tenant")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<UserMaster>("User to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<UserMaster>("Created user"))
+                .WithRequestBody(Api.JsonRequestBody<UserMaster>("User to create", true))
+                .WithResponse(201, Api.JsonResponse<UserMaster>("Created user"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/users/{id}", async (req) =>
+            _App.Get("/v1.0/users/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await userController.Read(tenantId, req.Parameters["id"]);
@@ -450,12 +479,12 @@ namespace Conductor.Server
                 .WithDescription("Retrieve a specific user by their unique identifier")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The user ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<UserMaster>("User details"))
+                .WithResponse(200, Api.JsonResponse<UserMaster>("User details"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Put<UserMaster>("/v1.0/users/{id}", async (req) =>
+            _App.Put<UserMaster>("/v1.0/users/{id}", async (req) =>
             {
                 UserMaster user = req.Data as UserMaster;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, user?.TenantId);
@@ -467,13 +496,13 @@ namespace Conductor.Server
                 .WithDescription("Update an existing user")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The user ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<UserMaster>("Updated user data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<UserMaster>("Updated user"))
+                .WithRequestBody(Api.JsonRequestBody<UserMaster>("Updated user data", true))
+                .WithResponse(200, Api.JsonResponse<UserMaster>("Updated user"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Delete("/v1.0/users/{id}", async (req) =>
+            _App.Delete("/v1.0/users/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
@@ -489,9 +518,9 @@ namespace Conductor.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/users", async (req) =>
+            _App.Get("/v1.0/users", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
 
@@ -521,15 +550,15 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter users by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of users with pagination info"))
+                .WithResponse(200, Api.JsonResponse<object>("List of users with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
             #region Credential-Routes
 
-            _App.Rest.Post<Credential>("/v1.0/credentials", async (req) =>
+            _App.Post<Credential>("/v1.0/credentials", async (req) =>
             {
                 Credential credential = req.Data as Credential;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, credential?.TenantId);
@@ -542,13 +571,13 @@ namespace Conductor.Server
                 .WithSummary("Create credential")
                 .WithDescription("Create a new API credential (bearer token) for the authenticated user")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Credential>("Credential to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<Credential>("Created credential with bearer token"))
+                .WithRequestBody(Api.JsonRequestBody<Credential>("Credential to create", true))
+                .WithResponse(201, Api.JsonResponse<Credential>("Created credential with bearer token"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/credentials/{id}", async (req) =>
+            _App.Get("/v1.0/credentials/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await credentialController.Read(tenantId, req.Parameters["id"]);
@@ -559,12 +588,12 @@ namespace Conductor.Server
                 .WithDescription("Retrieve a specific credential by its unique identifier")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The credential ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Credential>("Credential details"))
+                .WithResponse(200, Api.JsonResponse<Credential>("Credential details"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Put<Credential>("/v1.0/credentials/{id}", async (req) =>
+            _App.Put<Credential>("/v1.0/credentials/{id}", async (req) =>
             {
                 Credential credential = req.Data as Credential;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, credential?.TenantId);
@@ -576,13 +605,13 @@ namespace Conductor.Server
                 .WithDescription("Update an existing credential")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The credential ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Credential>("Updated credential data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Credential>("Updated credential"))
+                .WithRequestBody(Api.JsonRequestBody<Credential>("Updated credential data", true))
+                .WithResponse(200, Api.JsonResponse<Credential>("Updated credential"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Delete("/v1.0/credentials/{id}", async (req) =>
+            _App.Delete("/v1.0/credentials/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
@@ -598,9 +627,9 @@ namespace Conductor.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/credentials", async (req) =>
+            _App.Get("/v1.0/credentials", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
 
@@ -628,15 +657,15 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("maxResults", "Maximum number of results to return", false, OpenApiSchemaMetadata.Integer()))
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of credentials with pagination info"))
+                .WithResponse(200, Api.JsonResponse<object>("List of credentials with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
             #region Model-Runner-Routes
 
-            _App.Rest.Post<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints", async (req) =>
+            _App.Post<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints", async (req) =>
             {
                 ModelRunnerEndpoint mre = req.Data as ModelRunnerEndpoint;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
@@ -648,13 +677,13 @@ namespace Conductor.Server
                 .WithSummary("Create model runner endpoint")
                 .WithDescription("Create a new model runner endpoint (e.g., Ollama, vLLM, or other inference server)")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<ModelRunnerEndpoint>("Model runner endpoint to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<ModelRunnerEndpoint>("Created model runner endpoint"))
+                .WithRequestBody(Api.JsonRequestBody<ModelRunnerEndpoint>("Model runner endpoint to create", true))
+                .WithResponse(201, Api.JsonResponse<ModelRunnerEndpoint>("Created model runner endpoint"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modelrunnerendpoints/health", async (req) =>
+            _App.Get("/v1.0/modelrunnerendpoints/health", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.GetAllHealth(tenantId);
@@ -664,11 +693,11 @@ namespace Conductor.Server
                 .WithSummary("Get health status of all endpoints")
                 .WithDescription("Returns the health status of all model runner endpoints in the tenant")
                 .WithSecurity("Bearer")
-                .WithResponse(200, OpenApiResponseMetadata.Json<List<EndpointHealthStatus>>("List of endpoint health statuses"))
+                .WithResponse(200, Api.JsonResponse<List<EndpointHealthStatus>>("List of endpoint health statuses"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modelrunnerendpoints/{id}/health", async (req) =>
+            _App.Get("/v1.0/modelrunnerendpoints/{id}/health", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.GetHealth(tenantId, req.Parameters["id"]);
@@ -679,12 +708,12 @@ namespace Conductor.Server
                 .WithDescription("Returns the detailed health status including check history for a specific model runner endpoint")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<EndpointHealthStatus>("Endpoint health status with history"))
+                .WithResponse(200, Api.JsonResponse<EndpointHealthStatus>("Endpoint health status with history"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modelrunnerendpoints/{id}", async (req) =>
+            _App.Get("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.Read(tenantId, req.Parameters["id"]);
@@ -695,12 +724,12 @@ namespace Conductor.Server
                 .WithDescription("Retrieve a specific model runner endpoint by its unique identifier")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<ModelRunnerEndpoint>("Model runner endpoint details"))
+                .WithResponse(200, Api.JsonResponse<ModelRunnerEndpoint>("Model runner endpoint details"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Put<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints/{id}", async (req) =>
+            _App.Put<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
                 ModelRunnerEndpoint mre = req.Data as ModelRunnerEndpoint;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
@@ -712,13 +741,13 @@ namespace Conductor.Server
                 .WithDescription("Update an existing model runner endpoint")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<ModelRunnerEndpoint>("Updated model runner endpoint data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<ModelRunnerEndpoint>("Updated model runner endpoint"))
+                .WithRequestBody(Api.JsonRequestBody<ModelRunnerEndpoint>("Updated model runner endpoint data", true))
+                .WithResponse(200, Api.JsonResponse<ModelRunnerEndpoint>("Updated model runner endpoint"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Delete("/v1.0/modelrunnerendpoints/{id}", async (req) =>
+            _App.Delete("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
@@ -734,9 +763,9 @@ namespace Conductor.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modelrunnerendpoints", async (req) =>
+            _App.Get("/v1.0/modelrunnerendpoints", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 int? maxResults = null;
@@ -760,15 +789,15 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of model runner endpoints with pagination info"))
+                .WithResponse(200, Api.JsonResponse<object>("List of model runner endpoints with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
             #region Model-Definition-Routes
 
-            _App.Rest.Post<ModelDefinition>("/v1.0/modeldefinitions", async (req) =>
+            _App.Post<ModelDefinition>("/v1.0/modeldefinitions", async (req) =>
             {
                 ModelDefinition md = req.Data as ModelDefinition;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
@@ -780,13 +809,13 @@ namespace Conductor.Server
                 .WithSummary("Create model definition")
                 .WithDescription("Create a new model definition (describes a model available on a runner endpoint)")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<ModelDefinition>("Model definition to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<ModelDefinition>("Created model definition"))
+                .WithRequestBody(Api.JsonRequestBody<ModelDefinition>("Model definition to create", true))
+                .WithResponse(201, Api.JsonResponse<ModelDefinition>("Created model definition"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modeldefinitions/{id}", async (req) =>
+            _App.Get("/v1.0/modeldefinitions/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mdController.Read(tenantId, req.Parameters["id"]);
@@ -797,12 +826,12 @@ namespace Conductor.Server
                 .WithDescription("Retrieve a specific model definition by its unique identifier")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model definition ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<ModelDefinition>("Model definition details"))
+                .WithResponse(200, Api.JsonResponse<ModelDefinition>("Model definition details"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Put<ModelDefinition>("/v1.0/modeldefinitions/{id}", async (req) =>
+            _App.Put<ModelDefinition>("/v1.0/modeldefinitions/{id}", async (req) =>
             {
                 ModelDefinition md = req.Data as ModelDefinition;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
@@ -814,13 +843,13 @@ namespace Conductor.Server
                 .WithDescription("Update an existing model definition")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model definition ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<ModelDefinition>("Updated model definition data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<ModelDefinition>("Updated model definition"))
+                .WithRequestBody(Api.JsonRequestBody<ModelDefinition>("Updated model definition data", true))
+                .WithResponse(200, Api.JsonResponse<ModelDefinition>("Updated model definition"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Delete("/v1.0/modeldefinitions/{id}", async (req) =>
+            _App.Delete("/v1.0/modeldefinitions/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
@@ -836,9 +865,9 @@ namespace Conductor.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modeldefinitions", async (req) =>
+            _App.Get("/v1.0/modeldefinitions", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 int? maxResults = null;
@@ -862,15 +891,15 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of model definitions with pagination info"))
+                .WithResponse(200, Api.JsonResponse<object>("List of model definitions with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
             #region Model-Configuration-Routes
 
-            _App.Rest.Post<ModelConfiguration>("/v1.0/modelconfigurations", async (req) =>
+            _App.Post<ModelConfiguration>("/v1.0/modelconfigurations", async (req) =>
             {
                 ModelConfiguration mc = req.Data as ModelConfiguration;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
@@ -882,13 +911,13 @@ namespace Conductor.Server
                 .WithSummary("Create model configuration")
                 .WithDescription("Create a new model configuration (links model definitions to virtual model runners)")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<ModelConfiguration>("Model configuration to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<ModelConfiguration>("Created model configuration"))
+                .WithRequestBody(Api.JsonRequestBody<ModelConfiguration>("Model configuration to create", true))
+                .WithResponse(201, Api.JsonResponse<ModelConfiguration>("Created model configuration"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modelconfigurations/{id}", async (req) =>
+            _App.Get("/v1.0/modelconfigurations/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mcController.Read(tenantId, req.Parameters["id"]);
@@ -899,12 +928,12 @@ namespace Conductor.Server
                 .WithDescription("Retrieve a specific model configuration by its unique identifier")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model configuration ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<ModelConfiguration>("Model configuration details"))
+                .WithResponse(200, Api.JsonResponse<ModelConfiguration>("Model configuration details"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Put<ModelConfiguration>("/v1.0/modelconfigurations/{id}", async (req) =>
+            _App.Put<ModelConfiguration>("/v1.0/modelconfigurations/{id}", async (req) =>
             {
                 ModelConfiguration mc = req.Data as ModelConfiguration;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
@@ -916,13 +945,13 @@ namespace Conductor.Server
                 .WithDescription("Update an existing model configuration")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model configuration ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<ModelConfiguration>("Updated model configuration data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<ModelConfiguration>("Updated model configuration"))
+                .WithRequestBody(Api.JsonRequestBody<ModelConfiguration>("Updated model configuration data", true))
+                .WithResponse(200, Api.JsonResponse<ModelConfiguration>("Updated model configuration"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Delete("/v1.0/modelconfigurations/{id}", async (req) =>
+            _App.Delete("/v1.0/modelconfigurations/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
@@ -938,9 +967,9 @@ namespace Conductor.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/modelconfigurations", async (req) =>
+            _App.Get("/v1.0/modelconfigurations", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 int? maxResults = null;
@@ -964,15 +993,15 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of model configurations with pagination info"))
+                .WithResponse(200, Api.JsonResponse<object>("List of model configurations with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
             #region Virtual-Model-Runner-Routes
 
-            _App.Rest.Post<VirtualModelRunner>("/v1.0/virtualmodelrunners", async (req) =>
+            _App.Post<VirtualModelRunner>("/v1.0/virtualmodelrunners", async (req) =>
             {
                 VirtualModelRunner vmr = req.Data as VirtualModelRunner;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
@@ -984,13 +1013,13 @@ namespace Conductor.Server
                 .WithSummary("Create virtual model runner")
                 .WithDescription("Create a new virtual model runner (exposes a unified API endpoint for model inference)")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<VirtualModelRunner>("Virtual model runner to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<VirtualModelRunner>("Created virtual model runner"))
+                .WithRequestBody(Api.JsonRequestBody<VirtualModelRunner>("Virtual model runner to create", true))
+                .WithResponse(201, Api.JsonResponse<VirtualModelRunner>("Created virtual model runner"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/virtualmodelrunners/{id}", async (req) =>
+            _App.Get("/v1.0/virtualmodelrunners/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await vmrController.Read(tenantId, req.Parameters["id"]);
@@ -1001,12 +1030,12 @@ namespace Conductor.Server
                 .WithDescription("Retrieve a specific virtual model runner by its unique identifier")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<VirtualModelRunner>("Virtual model runner details"))
+                .WithResponse(200, Api.JsonResponse<VirtualModelRunner>("Virtual model runner details"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Put<VirtualModelRunner>("/v1.0/virtualmodelrunners/{id}", async (req) =>
+            _App.Put<VirtualModelRunner>("/v1.0/virtualmodelrunners/{id}", async (req) =>
             {
                 VirtualModelRunner vmr = req.Data as VirtualModelRunner;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
@@ -1018,13 +1047,13 @@ namespace Conductor.Server
                 .WithDescription("Update an existing virtual model runner")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<VirtualModelRunner>("Updated virtual model runner data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<VirtualModelRunner>("Updated virtual model runner"))
+                .WithRequestBody(Api.JsonRequestBody<VirtualModelRunner>("Updated virtual model runner data", true))
+                .WithResponse(200, Api.JsonResponse<VirtualModelRunner>("Updated virtual model runner"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Delete("/v1.0/virtualmodelrunners/{id}", async (req) =>
+            _App.Delete("/v1.0/virtualmodelrunners/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
@@ -1040,9 +1069,9 @@ namespace Conductor.Server
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/virtualmodelrunners", async (req) =>
+            _App.Get("/v1.0/virtualmodelrunners", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 int? maxResults = null;
@@ -1066,11 +1095,11 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of virtual model runners with pagination info"))
+                .WithResponse(200, Api.JsonResponse<object>("List of virtual model runners with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/virtualmodelrunners/{id}/health", async (req) =>
+            _App.Get("/v1.0/virtualmodelrunners/{id}/health", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await vmrController.GetHealth(tenantId, req.Parameters["id"]);
@@ -1081,16 +1110,16 @@ namespace Conductor.Server
                 .WithDescription("Returns the health status of all endpoints associated with a virtual model runner")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<VirtualModelRunnerHealthStatus>("Virtual model runner health status"))
+                .WithResponse(200, Api.JsonResponse<VirtualModelRunnerHealthStatus>("Virtual model runner health status"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
             #region Administrator-Routes
 
-            _App.Rest.Post<Controllers.AdministratorCreateRequest>("/v1.0/administrators", async (req) =>
+            _App.Post<Controllers.AdministratorCreateRequest>("/v1.0/administrators", async (req) =>
             {
                 req.Http.Response.StatusCode = 201;
                 return await adminController.Create(req.Data as Controllers.AdministratorCreateRequest);
@@ -1100,13 +1129,13 @@ namespace Conductor.Server
                 .WithSummary("Create administrator")
                 .WithDescription("Create a new system administrator account")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Controllers.AdministratorCreateRequest>("Administrator to create", true))
-                .WithResponse(201, OpenApiResponseMetadata.Json<Controllers.AdministratorResponse>("Created administrator"))
+                .WithRequestBody(Api.JsonRequestBody<Controllers.AdministratorCreateRequest>("Administrator to create", true))
+                .WithResponse(201, Api.JsonResponse<Controllers.AdministratorResponse>("Created administrator"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/administrators/{id}", async (req) =>
+            _App.Get("/v1.0/administrators/{id}", async (req) =>
                 await adminController.Read(req.Parameters["id"]),
             api => api
                 .WithTag("Administrators")
@@ -1114,12 +1143,12 @@ namespace Conductor.Server
                 .WithDescription("Retrieve a specific administrator by their unique identifier")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The administrator ID"))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Controllers.AdministratorResponse>("Administrator details"))
+                .WithResponse(200, Api.JsonResponse<Controllers.AdministratorResponse>("Administrator details"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Put<Controllers.AdministratorUpdateRequest>("/v1.0/administrators/{id}", async (req) =>
+            _App.Put<Controllers.AdministratorUpdateRequest>("/v1.0/administrators/{id}", async (req) =>
                 await adminController.Update(req.Parameters["id"], req.Data as Controllers.AdministratorUpdateRequest),
             api => api
                 .WithTag("Administrators")
@@ -1127,13 +1156,13 @@ namespace Conductor.Server
                 .WithDescription("Update an existing administrator")
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The administrator ID"))
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Controllers.AdministratorUpdateRequest>("Updated administrator data", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Controllers.AdministratorResponse>("Updated administrator"))
+                .WithRequestBody(Api.JsonRequestBody<Controllers.AdministratorUpdateRequest>("Updated administrator data", true))
+                .WithResponse(200, Api.JsonResponse<Controllers.AdministratorResponse>("Updated administrator"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Delete("/v1.0/administrators/{id}", async (req) =>
+            _App.Delete("/v1.0/administrators/{id}", async (req) =>
             {
                 Services.AdminAuthenticationResult auth = (Services.AdminAuthenticationResult)req.Http.Metadata;
                 req.Http.Response.StatusCode = 204;
@@ -1150,9 +1179,9 @@ namespace Conductor.Server
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Get("/v1.0/administrators", async (req) =>
+            _App.Get("/v1.0/administrators", async (req) =>
             {
                 int? maxResults = null;
                 string maxResultsStr = req.Http.Request.Query.Elements.Get("maxResults");
@@ -1173,15 +1202,15 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("maxResults", "Maximum number of results to return", false, OpenApiSchemaMetadata.Integer()))
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, OpenApiResponseMetadata.Json<object>("List of administrators with pagination info"))
+                .WithResponse(200, Api.JsonResponse<object>("List of administrators with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
             #region Backup-Routes
 
-            _App.Rest.Get("/v1.0/backup", async (req) =>
+            _App.Get("/v1.0/backup", async (req) =>
             {
                 // Support both admin auth and user auth (for users with IsAdmin=true)
                 string createdBy = "unknown";
@@ -1200,35 +1229,35 @@ namespace Conductor.Server
                 .WithSummary("Create backup")
                 .WithDescription("Create a complete backup of all Conductor configuration data")
                 .WithSecurity("Bearer")
-                .WithResponse(200, OpenApiResponseMetadata.Json<BackupPackage>("Complete backup package"))
+                .WithResponse(200, Api.JsonResponse<BackupPackage>("Complete backup package"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Post<RestoreRequest>("/v1.0/backup/restore", async (req) =>
+            _App.Post<RestoreRequest>("/v1.0/backup/restore", async (req) =>
                 await backupController.RestoreBackup(req.Data as RestoreRequest),
             api => api
                 .WithTag("Backup")
                 .WithSummary("Restore from backup")
                 .WithDescription("Restore configuration from a backup package")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<RestoreRequest>("Restore request with backup package and options", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<RestoreResult>("Restore operation result"))
+                .WithRequestBody(Api.JsonRequestBody<RestoreRequest>("Restore request with backup package and options", true))
+                .WithResponse(200, Api.JsonResponse<RestoreResult>("Restore operation result"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
-            _App.Rest.Post<BackupPackage>("/v1.0/backup/validate", async (req) =>
+            _App.Post<BackupPackage>("/v1.0/backup/validate", async (req) =>
                 await backupController.ValidateBackup(req.Data as BackupPackage),
             api => api
                 .WithTag("Backup")
                 .WithSummary("Validate backup")
                 .WithDescription("Validate a backup package without applying changes")
                 .WithSecurity("Bearer")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<BackupPackage>("Backup package to validate", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<ValidationResult>("Validation result with conflicts"))
+                .WithRequestBody(Api.JsonRequestBody<BackupPackage>("Backup package to validate", true))
+                .WithResponse(200, Api.JsonResponse<ValidationResult>("Validation result with conflicts"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-            requireAuthentication: true);
+            auth: true);
 
             #endregion
 
@@ -1236,7 +1265,7 @@ namespace Conductor.Server
 
             if (requestHistoryController != null)
             {
-                _App.Rest.Get("/v1.0/requesthistory/summary", async (req) =>
+                _App.Get("/v1.0/requesthistory/summary", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
 
@@ -1256,11 +1285,11 @@ namespace Conductor.Server
                     .WithParameter(OpenApiParameterMetadata.Query("startUtc", "Start of time range (UTC, ISO 8601)", false))
                     .WithParameter(OpenApiParameterMetadata.Query("endUtc", "End of time range (UTC, ISO 8601)", false))
                     .WithParameter(OpenApiParameterMetadata.Query("interval", "Bucket interval: 'hour' or 'day' (default: 'hour')", false))
-                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistorySummaryResult>("Summary with time-bucketed counts"))
+                    .WithResponse(200, Api.JsonResponse<RequestHistorySummaryResult>("Summary with time-bucketed counts"))
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-                requireAuthentication: true);
+                auth: true);
 
-                _App.Rest.Get("/v1.0/requesthistory", async (req) =>
+                _App.Get("/v1.0/requesthistory", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
 
@@ -1299,11 +1328,11 @@ namespace Conductor.Server
                     .WithParameter(OpenApiParameterMetadata.Query("httpStatus", "Filter by HTTP status code", false, OpenApiSchemaMetadata.Integer()))
                     .WithParameter(OpenApiParameterMetadata.Query("page", "Page number (1-based)", false, OpenApiSchemaMetadata.Integer()))
                     .WithParameter(OpenApiParameterMetadata.Query("pageSize", "Page size (max 100)", false, OpenApiSchemaMetadata.Integer()))
-                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistorySearchResult>("Search results with pagination"))
+                    .WithResponse(200, Api.JsonResponse<RequestHistorySearchResult>("Search results with pagination"))
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-                requireAuthentication: true);
+                auth: true);
 
-                _App.Rest.Delete("/v1.0/requesthistory/bulk", async (req) =>
+                _App.Delete("/v1.0/requesthistory/bulk", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
 
@@ -1328,11 +1357,11 @@ namespace Conductor.Server
                     .WithParameter(OpenApiParameterMetadata.Query("endpointGuid", "Filter by model endpoint GUID", false))
                     .WithParameter(OpenApiParameterMetadata.Query("sourceIp", "Filter by source IP", false))
                     .WithParameter(OpenApiParameterMetadata.Query("httpStatus", "Filter by HTTP status code", false, OpenApiSchemaMetadata.Integer()))
-                    .WithResponse(200, OpenApiResponseMetadata.Json<Controllers.BulkDeleteResult>("Number of deleted entries"))
+                    .WithResponse(200, Api.JsonResponse<Controllers.BulkDeleteResult>("Number of deleted entries"))
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
-                requireAuthentication: true);
+                auth: true);
 
-                _App.Rest.Get("/v1.0/requesthistory/{id}/detail", async (req) =>
+                _App.Get("/v1.0/requesthistory/{id}/detail", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                     return await requestHistoryController.ReadDetail(tenantId, req.Parameters["id"]);
@@ -1343,12 +1372,12 @@ namespace Conductor.Server
                     .WithDescription("Get full request history detail including headers and bodies")
                     .WithSecurity("Bearer")
                     .WithParameter(OpenApiParameterMetadata.Path("id", "Request history entry ID"))
-                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistoryDetail>("Full request/response detail"))
+                    .WithResponse(200, Api.JsonResponse<RequestHistoryDetail>("Full request/response detail"))
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                     .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-                requireAuthentication: true);
+                auth: true);
 
-                _App.Rest.Get("/v1.0/requesthistory/{id}", async (req) =>
+                _App.Get("/v1.0/requesthistory/{id}", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                     return await requestHistoryController.Read(tenantId, req.Parameters["id"]);
@@ -1359,12 +1388,12 @@ namespace Conductor.Server
                     .WithDescription("Get request history entry metadata")
                     .WithSecurity("Bearer")
                     .WithParameter(OpenApiParameterMetadata.Path("id", "Request history entry ID"))
-                    .WithResponse(200, OpenApiResponseMetadata.Json<RequestHistoryEntry>("Request history entry"))
+                    .WithResponse(200, Api.JsonResponse<RequestHistoryEntry>("Request history entry"))
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                     .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-                requireAuthentication: true);
+                auth: true);
 
-                _App.Rest.Delete("/v1.0/requesthistory/{id}", async (req) =>
+                _App.Delete("/v1.0/requesthistory/{id}", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                     req.Http.Response.StatusCode = 204;
@@ -1380,84 +1409,102 @@ namespace Conductor.Server
                     .WithResponse(204, OpenApiResponseMetadata.NoContent())
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                     .WithResponse(404, OpenApiResponseMetadata.NotFound()),
-                requireAuthentication: true);
+                auth: true);
+            }
+            else
+            {
+                // Request history is disabled; still expose /summary so the dashboard chart gets
+                // an empty result instead of falling through to the proxy's 404 handler.
+                _App.Get("/v1.0/requesthistory/summary", async (req) =>
+                {
+                    await Task.CompletedTask.ConfigureAwait(false);
+                    return new RequestHistorySummaryResult
+                    {
+                        Interval = req.Http.Request.Query.Elements.Get("interval") ?? "hour"
+                    };
+                },
+                api => api
+                    .WithTag("Request History")
+                    .WithSummary("Get request history summary (disabled)")
+                    .WithDescription("Returns an empty summary when request history is disabled in server settings.")
+                    .WithSecurity("Bearer")
+                    .WithResponse(200, Api.JsonResponse<RequestHistorySummaryResult>("Empty summary result")),
+                auth: true);
             }
 
             #endregion
 
             #region Login-Routes
 
-            _App.Rest.Post<Controllers.LoginCredentialRequest>("/v1.0/auth/login/credential", async (req) =>
+            _App.Post<Controllers.LoginCredentialRequest>("/v1.0/auth/login/credential", async (req) =>
                 await authController.LoginWithCredentials(req.Data as Controllers.LoginCredentialRequest),
             api => api
                 .WithTag("Authentication")
                 .WithSummary("Login with credentials")
                 .WithDescription("Authenticate using tenant ID, email, and password to receive a bearer token")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Controllers.LoginCredentialRequest>("Login credentials", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Controllers.LoginResponse>("Login successful with bearer token"))
+                .WithRequestBody(Api.JsonRequestBody<Controllers.LoginCredentialRequest>("Login credentials", true))
+                .WithResponse(200, Api.JsonResponse<Controllers.LoginResponse>("Login successful with bearer token"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()));
 
-            _App.Rest.Post<Controllers.LoginApiKeyRequest>("/v1.0/auth/login/apikey", async (req) =>
+            _App.Post<Controllers.LoginApiKeyRequest>("/v1.0/auth/login/apikey", async (req) =>
                 await authController.LoginWithApiKey(req.Data as Controllers.LoginApiKeyRequest),
             api => api
                 .WithTag("Authentication")
                 .WithSummary("Login with API key")
                 .WithDescription("Authenticate using an existing API key (bearer token) to get user and tenant information")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Controllers.LoginApiKeyRequest>("API key", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Controllers.LoginResponse>("Login successful"))
+                .WithRequestBody(Api.JsonRequestBody<Controllers.LoginApiKeyRequest>("API key", true))
+                .WithResponse(200, Api.JsonResponse<Controllers.LoginResponse>("Login successful"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()));
 
-            _App.Rest.Post<Controllers.AdminLoginRequest>("/v1.0/auth/login/admin", async (req) =>
+            _App.Post<Controllers.AdminLoginRequest>("/v1.0/auth/login/admin", async (req) =>
                 await authController.LoginAsAdmin(req.Data as Controllers.AdminLoginRequest),
             api => api
                 .WithTag("Authentication")
                 .WithSummary("Login as administrator")
                 .WithDescription("Authenticate as a system administrator using email and password")
-                .WithRequestBody(OpenApiRequestBodyMetadata.Json<Controllers.AdminLoginRequest>("Administrator login credentials", true))
-                .WithResponse(200, OpenApiResponseMetadata.Json<Controllers.AdminLoginResponse>("Admin login successful"))
+                .WithRequestBody(Api.JsonRequestBody<Controllers.AdminLoginRequest>("Administrator login credentials", true))
+                .WithResponse(200, Api.JsonResponse<Controllers.AdminLoginResponse>("Admin login successful"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()));
 
             #endregion
 
-            #region Virtual-Model-Runner-Routes
-
-            _App.Rest.DefaultRoute = async (ctx) =>
-            {
-                DateTime startTime = DateTime.UtcNow;
-
-                RequestContext req = new RequestContext();
-
-                // Note: .NET HttpListener decodes chunked transfer encoding at the transport
-                // layer, so DataAsBytes returns the decoded body regardless of transfer encoding.
-                // ReadChunk() is NOT usable here because the stream is already decoded.
-                req.Data = ctx.Request.DataAsBytes;
-                req.IsChunkedRequest = ctx.Request.ChunkedTransfer;
-
-                if (_Settings.Debug.RequestBody)
-                {
-                    string logMessage = "request body debug: ";
-                    if (req.Data != null) logMessage += Environment.NewLine + Encoding.UTF8.GetString(req.Data);
-                    else logMessage += "(null)";
-                    _Logging.Debug(_Header + logMessage);
-                }
-
-                await proxyController.HandleRequest(ctx, req);
-                double elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
-
-                _Logging.Debug(
-                    _Header
-                    + ctx.Request.Method + " " + ctx.Request.Url.RawWithQuery + " "
-                    + ctx.Response.StatusCode + " "
-                    + "Proxy "
-                    + "(" + elapsedMs.ToString("F2") + "ms)");
-            };
-
-            #endregion
+            // Default route is registered with the Webserver at construction time;
+            // see DefaultRoute below.
 
             _Logging.Info(_Header + "routes registered");
+        }
+
+        private static async Task DefaultRoute(HttpContextBase ctx)
+        {
+            DateTime startTime = DateTime.UtcNow;
+
+            RequestContext req = new RequestContext();
+
+            // Watson 7's HTTP/1.1 transport decodes chunked transfer encoding at the transport
+            // layer, so DataAsBytes returns the decoded body regardless of transfer encoding.
+            req.Data = ctx.Request.DataAsBytes;
+            req.IsChunkedRequest = ctx.Request.ChunkedTransfer;
+
+            if (_Settings.Debug.RequestBody)
+            {
+                string logMessage = "request body debug: ";
+                if (req.Data != null) logMessage += Environment.NewLine + Encoding.UTF8.GetString(req.Data);
+                else logMessage += "(null)";
+                _Logging.Debug(_Header + logMessage);
+            }
+
+            await _ProxyController.HandleRequest(ctx, req).ConfigureAwait(false);
+            double elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
+
+            _Logging.Debug(
+                _Header
+                + ctx.Request.Method + " " + ctx.Request.Url.RawWithQuery + " "
+                + ctx.Response.StatusCode + " "
+                + "Proxy "
+                + "(" + elapsedMs.ToString("F2") + "ms)");
         }
 
         private static async Task WaitForExitAsync()

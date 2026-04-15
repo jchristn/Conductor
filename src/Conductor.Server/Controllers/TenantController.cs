@@ -8,8 +8,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Tenant API controller.
@@ -34,10 +34,10 @@ namespace Conductor.Server.Controllers
         public async Task<TenantMetadata> Create(TenantMetadata tenant)
         {
             if (tenant == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(tenant.Name))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Name is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Name is required");
 
             tenant.Id = IdGenerator.NewTenantId();
             tenant = await Database.Tenant.CreateAsync(tenant);
@@ -53,11 +53,11 @@ namespace Conductor.Server.Controllers
         public async Task<TenantMetadata> Read(string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             TenantMetadata tenant = await Database.Tenant.ReadAsync(id);
             if (tenant == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return tenant;
         }
@@ -71,14 +71,14 @@ namespace Conductor.Server.Controllers
         public async Task<TenantMetadata> Update(string id, TenantMetadata tenant)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             TenantMetadata existing = await Database.Tenant.ReadAsync(id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (tenant == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             tenant.Id = id;
             tenant.CreatedUtc = existing.CreatedUtc;
@@ -94,11 +94,11 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             bool exists = await Database.Tenant.ExistsAsync(id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             // Delete all associated data (cascade delete)
             await DeleteAssociatedDataAsync(id);

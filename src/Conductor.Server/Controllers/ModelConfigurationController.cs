@@ -8,8 +8,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Model Configuration API controller.
@@ -30,10 +30,10 @@ namespace Conductor.Server.Controllers
         public async Task<ModelConfiguration> Create(string tenantId, ModelConfiguration configuration)
         {
             if (configuration == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(configuration.Name))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Name is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Name is required");
 
             configuration.Id = IdGenerator.NewModelConfigurationId();
             configuration.TenantId = tenantId;
@@ -48,7 +48,7 @@ namespace Conductor.Server.Controllers
         public async Task<ModelConfiguration> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             ModelConfiguration configuration;
             if (String.IsNullOrEmpty(tenantId))
@@ -57,7 +57,7 @@ namespace Conductor.Server.Controllers
                 configuration = await Database.ModelConfiguration.ReadAsync(tenantId, id);
 
             if (configuration == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return configuration;
         }
@@ -68,14 +68,14 @@ namespace Conductor.Server.Controllers
         public async Task<ModelConfiguration> Update(string tenantId, string id, ModelConfiguration configuration)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             ModelConfiguration existing = await Database.ModelConfiguration.ReadAsync(tenantId, id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (configuration == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             configuration.Id = id;
             configuration.TenantId = tenantId;
@@ -91,11 +91,11 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             bool exists = await Database.ModelConfiguration.ExistsAsync(tenantId, id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             // Remove references from virtual model runners
             EnumerationResult<VirtualModelRunner> vmrs = await Database.VirtualModelRunner.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });

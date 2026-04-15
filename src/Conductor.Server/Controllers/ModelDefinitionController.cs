@@ -8,8 +8,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Model Definition API controller.
@@ -30,10 +30,10 @@ namespace Conductor.Server.Controllers
         public async Task<ModelDefinition> Create(string tenantId, ModelDefinition definition)
         {
             if (definition == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(definition.Name))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Name is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Name is required");
 
             definition.Id = IdGenerator.NewModelDefinitionId();
             definition.TenantId = tenantId;
@@ -48,7 +48,7 @@ namespace Conductor.Server.Controllers
         public async Task<ModelDefinition> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             ModelDefinition definition;
             if (String.IsNullOrEmpty(tenantId))
@@ -57,7 +57,7 @@ namespace Conductor.Server.Controllers
                 definition = await Database.ModelDefinition.ReadAsync(tenantId, id);
 
             if (definition == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return definition;
         }
@@ -68,14 +68,14 @@ namespace Conductor.Server.Controllers
         public async Task<ModelDefinition> Update(string tenantId, string id, ModelDefinition definition)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             ModelDefinition existing = await Database.ModelDefinition.ReadAsync(tenantId, id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (definition == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             definition.Id = id;
             definition.TenantId = tenantId;
@@ -91,11 +91,11 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             bool exists = await Database.ModelDefinition.ExistsAsync(tenantId, id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             // Remove references from virtual model runners
             EnumerationResult<VirtualModelRunner> vmrs = await Database.VirtualModelRunner.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });

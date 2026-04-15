@@ -8,8 +8,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Authentication API controller for login endpoints.
@@ -33,26 +33,26 @@ namespace Conductor.Server.Controllers
         public async Task<LoginResponse> LoginWithCredentials(LoginCredentialRequest request)
         {
             if (request == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(request.TenantId))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Tenant ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Tenant ID is required");
 
             if (String.IsNullOrEmpty(request.Email))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Email is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Email is required");
 
             if (String.IsNullOrEmpty(request.Password))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Password is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Password is required");
 
             // Validate tenant
             TenantMetadata tenant = await Database.Tenant.ReadAsync(request.TenantId);
             if (tenant == null || !tenant.Active)
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Invalid credentials");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Invalid credentials");
 
             // Validate user
             UserMaster user = await Database.User.ReadByEmailAsync(request.TenantId, request.Email);
             if (user == null || !user.Active || user.Password != request.Password)
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Invalid credentials");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Invalid credentials");
 
             // Find or create a credential for this user
             EnumerationResult<Credential> existingCredentials = await Database.Credential.EnumerateAsync(
@@ -104,10 +104,10 @@ namespace Conductor.Server.Controllers
         public async Task<object> LoginWithApiKey(LoginApiKeyRequest request)
         {
             if (request == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(request.ApiKey))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "API key is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "API key is required");
 
             // Check if it's an admin API key from settings
             if (_AdminApiKeys != null && _AdminApiKeys.Contains(request.ApiKey))
@@ -124,17 +124,17 @@ namespace Conductor.Server.Controllers
             // Validate as user credential API key
             Credential credential = await Database.Credential.ReadByBearerTokenAsync(request.ApiKey);
             if (credential == null || !credential.Active)
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Invalid API key");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Invalid API key");
 
             // Get user
             UserMaster user = await Database.User.ReadAsync(credential.TenantId, credential.UserId);
             if (user == null || !user.Active)
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Invalid API key");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Invalid API key");
 
             // Get tenant
             TenantMetadata tenant = await Database.Tenant.ReadAsync(credential.TenantId);
             if (tenant == null || !tenant.Active)
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Invalid API key");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Invalid API key");
 
             return new LoginResponse
             {
@@ -163,26 +163,26 @@ namespace Conductor.Server.Controllers
         public async Task<AdminLoginResponse> LoginAsAdmin(AdminLoginRequest request)
         {
             if (request == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(request.Email))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Email is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Email is required");
 
             if (String.IsNullOrEmpty(request.Password))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Password is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Password is required");
 
             // Look up administrator by email
             Administrator admin = await Database.Administrator.ReadByEmailAsync(request.Email);
             if (admin == null)
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Invalid credentials");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Invalid credentials");
 
             // Check if admin is active
             if (!admin.Active)
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Administrator account is inactive");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Administrator account is inactive");
 
             // Verify password
             if (!admin.VerifyPassword(request.Password))
-                throw new SwiftStackException(ApiResultEnum.NotAuthorized, "Invalid credentials");
+                throw new WebserverException(ApiResultEnum.NotAuthorized, "Invalid credentials");
 
             return new AdminLoginResponse
             {

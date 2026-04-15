@@ -10,8 +10,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Virtual Model Runner API controller.
@@ -37,10 +37,10 @@ namespace Conductor.Server.Controllers
         public async Task<VirtualModelRunner> Create(string tenantId, VirtualModelRunner vmr)
         {
             if (vmr == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(vmr.Name) || String.IsNullOrEmpty(vmr.BasePath))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Name and BasePath are required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Name and BasePath are required");
 
             vmr.Id = IdGenerator.NewVirtualModelRunnerId();
             vmr.TenantId = tenantId;
@@ -55,7 +55,7 @@ namespace Conductor.Server.Controllers
         public async Task<VirtualModelRunner> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             VirtualModelRunner vmr;
             if (String.IsNullOrEmpty(tenantId))
@@ -64,7 +64,7 @@ namespace Conductor.Server.Controllers
                 vmr = await Database.VirtualModelRunner.ReadAsync(tenantId, id);
 
             if (vmr == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return vmr;
         }
@@ -75,14 +75,14 @@ namespace Conductor.Server.Controllers
         public async Task<VirtualModelRunner> Update(string tenantId, string id, VirtualModelRunner vmr)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             VirtualModelRunner existing = await Database.VirtualModelRunner.ReadAsync(tenantId, id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (vmr == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             vmr.Id = id;
             vmr.TenantId = tenantId;
@@ -98,11 +98,11 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             bool exists = await Database.VirtualModelRunner.ExistsAsync(tenantId, id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             await Database.VirtualModelRunner.DeleteAsync(tenantId, id);
         }
@@ -137,7 +137,7 @@ namespace Conductor.Server.Controllers
         public async Task<VirtualModelRunnerHealthStatus> GetHealth(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             VirtualModelRunner vmr;
             if (String.IsNullOrEmpty(tenantId))
@@ -146,7 +146,7 @@ namespace Conductor.Server.Controllers
                 vmr = await Database.VirtualModelRunner.ReadAsync(tenantId, id);
 
             if (vmr == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             var status = new VirtualModelRunnerHealthStatus
             {

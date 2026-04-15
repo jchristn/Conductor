@@ -10,8 +10,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Model Runner Endpoint API controller.
@@ -35,10 +35,10 @@ namespace Conductor.Server.Controllers
         public async Task<ModelRunnerEndpoint> Create(string tenantId, ModelRunnerEndpoint endpoint)
         {
             if (endpoint == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(endpoint.Name) || String.IsNullOrEmpty(endpoint.Hostname))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Name and Hostname are required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Name and Hostname are required");
 
             endpoint.Id = IdGenerator.NewModelRunnerEndpointId();
             endpoint.TenantId = tenantId;
@@ -56,7 +56,7 @@ namespace Conductor.Server.Controllers
         public async Task<ModelRunnerEndpoint> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             ModelRunnerEndpoint endpoint;
             if (String.IsNullOrEmpty(tenantId))
@@ -65,7 +65,7 @@ namespace Conductor.Server.Controllers
                 endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id);
 
             if (endpoint == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return endpoint;
         }
@@ -76,14 +76,14 @@ namespace Conductor.Server.Controllers
         public async Task<ModelRunnerEndpoint> Update(string tenantId, string id, ModelRunnerEndpoint endpoint)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             ModelRunnerEndpoint existing = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (endpoint == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             endpoint.Id = id;
             endpoint.TenantId = tenantId;
@@ -102,11 +102,11 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             bool exists = await Database.ModelRunnerEndpoint.ExistsAsync(tenantId, id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             // Remove references from virtual model runners
             EnumerationResult<VirtualModelRunner> vmrs = await Database.VirtualModelRunner.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });
@@ -151,18 +151,18 @@ namespace Conductor.Server.Controllers
         /// <param name="tenantId">The tenant identifier.</param>
         /// <param name="id">The endpoint identifier.</param>
         /// <returns>The endpoint health status, or null if not found.</returns>
-        /// <exception cref="SwiftStackException">Thrown when the endpoint is not found.</exception>
+        /// <exception cref="WebserverException">Thrown when the endpoint is not found.</exception>
         public async Task<EndpointHealthStatus> GetHealth(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             if (_HealthCheckService == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound, "Health check service is not available");
+                throw new WebserverException(ApiResultEnum.NotFound, "Health check service is not available");
 
             EndpointHealthState state = _HealthCheckService.GetHealthState(id);
             if (state == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound, "No health data available for this endpoint");
+                throw new WebserverException(ApiResultEnum.NotFound, "No health data available for this endpoint");
 
             ModelRunnerEndpoint endpoint;
             if (String.IsNullOrEmpty(tenantId))

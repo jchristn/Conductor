@@ -8,8 +8,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Controller for request history endpoints.
@@ -79,24 +79,24 @@ namespace Conductor.Server.Controllers
         /// <param name="tenantId">Tenant ID (from auth).</param>
         /// <param name="id">Entry ID.</param>
         /// <returns>Request history entry.</returns>
-        /// <exception cref="SwiftStackException">Thrown when entry not found or access denied.</exception>
+        /// <exception cref="WebserverException">Thrown when entry not found or access denied.</exception>
         public async Task<RequestHistoryEntry> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
             {
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
             }
 
             RequestHistoryEntry entry = await _RequestHistoryService.GetEntryAsync(id).ConfigureAwait(false);
             if (entry == null)
             {
-                throw new SwiftStackException(ApiResultEnum.NotFound, "Request history entry not found");
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
             }
 
             // Check tenant access
             if (!String.IsNullOrEmpty(tenantId) && entry.TenantGuid != tenantId)
             {
-                throw new SwiftStackException(ApiResultEnum.NotFound, "Request history entry not found");
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
             }
 
             return entry;
@@ -108,24 +108,24 @@ namespace Conductor.Server.Controllers
         /// <param name="tenantId">Tenant ID (from auth).</param>
         /// <param name="id">Entry ID.</param>
         /// <returns>Request history detail.</returns>
-        /// <exception cref="SwiftStackException">Thrown when entry not found or access denied.</exception>
+        /// <exception cref="WebserverException">Thrown when entry not found or access denied.</exception>
         public async Task<RequestHistoryDetail> ReadDetail(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
             {
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
             }
 
             RequestHistoryDetail detail = await _RequestHistoryService.GetDetailAsync(id).ConfigureAwait(false);
             if (detail == null)
             {
-                throw new SwiftStackException(ApiResultEnum.NotFound, "Request history entry not found");
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
             }
 
             // Check tenant access
             if (!String.IsNullOrEmpty(tenantId) && detail.TenantGuid != tenantId)
             {
-                throw new SwiftStackException(ApiResultEnum.NotFound, "Request history entry not found");
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
             }
 
             return detail;
@@ -136,25 +136,25 @@ namespace Conductor.Server.Controllers
         /// </summary>
         /// <param name="tenantId">Tenant ID (from auth).</param>
         /// <param name="id">Entry ID.</param>
-        /// <exception cref="SwiftStackException">Thrown when entry not found or access denied.</exception>
+        /// <exception cref="WebserverException">Thrown when entry not found or access denied.</exception>
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
             {
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
             }
 
             // Check if entry exists and access is allowed
             RequestHistoryEntry entry = await _RequestHistoryService.GetEntryAsync(id).ConfigureAwait(false);
             if (entry == null)
             {
-                throw new SwiftStackException(ApiResultEnum.NotFound, "Request history entry not found");
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
             }
 
             // Check tenant access
             if (!String.IsNullOrEmpty(tenantId) && entry.TenantGuid != tenantId)
             {
-                throw new SwiftStackException(ApiResultEnum.NotFound, "Request history entry not found");
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
             }
 
             await _RequestHistoryService.DeleteAsync(id).ConfigureAwait(false);

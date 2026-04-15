@@ -9,8 +9,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// Administrator API controller.
@@ -31,15 +31,15 @@ namespace Conductor.Server.Controllers
         public async Task<AdministratorResponse> Create(AdministratorCreateRequest request)
         {
             if (request == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(request.Email) || String.IsNullOrEmpty(request.Password))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Email and Password are required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Email and Password are required");
 
             // Check if email already exists
             bool exists = await Database.Administrator.ExistsByEmailAsync(request.Email);
             if (exists)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "An administrator with this email already exists");
+                throw new WebserverException(ApiResultEnum.BadRequest, "An administrator with this email already exists");
 
             Administrator admin = new Administrator
             {
@@ -62,11 +62,11 @@ namespace Conductor.Server.Controllers
         public async Task<AdministratorResponse> Read(string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             Administrator admin = await Database.Administrator.ReadAsync(id);
             if (admin == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return ToResponse(admin);
         }
@@ -77,14 +77,14 @@ namespace Conductor.Server.Controllers
         public async Task<AdministratorResponse> Update(string id, AdministratorUpdateRequest request)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             Administrator existing = await Database.Administrator.ReadAsync(id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (request == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             // Check if changing email to one that already exists
             if (!String.IsNullOrEmpty(request.Email) &&
@@ -92,7 +92,7 @@ namespace Conductor.Server.Controllers
             {
                 bool emailExists = await Database.Administrator.ExistsByEmailAsync(request.Email);
                 if (emailExists)
-                    throw new SwiftStackException(ApiResultEnum.BadRequest, "An administrator with this email already exists");
+                    throw new WebserverException(ApiResultEnum.BadRequest, "An administrator with this email already exists");
                 existing.Email = request.Email;
             }
 
@@ -120,15 +120,15 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string currentAdminId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             // Prevent deleting yourself
             if (id.Equals(currentAdminId, StringComparison.OrdinalIgnoreCase))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Cannot delete your own administrator account");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Cannot delete your own administrator account");
 
             bool exists = await Database.Administrator.ExistsAsync(id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             await Database.Administrator.DeleteAsync(id);
         }

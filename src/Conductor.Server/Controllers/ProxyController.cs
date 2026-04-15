@@ -18,7 +18,6 @@ namespace Conductor.Server.Controllers
     using Conductor.Server.Services;
     using JsonMerge;
     using SyslogLogging;
-    using SwiftStack;
     using WatsonWebserver.Core;
 
     using HttpMethod = WatsonWebserver.Core.HttpMethod;
@@ -1278,7 +1277,7 @@ namespace Conductor.Server.Controllers
             }
         }
 
-        private async Task SendErrorResponse(HttpContextBase ctx, ApiErrorResponse error)
+        private async Task SendErrorResponse(HttpContextBase ctx, Conductor.Core.Models.ApiErrorResponse error)
         {
             ctx.Response.StatusCode = error.StatusCode;
             ctx.Response.ContentType = "application/json";
@@ -1288,27 +1287,27 @@ namespace Conductor.Server.Controllers
 
         private async Task SendBadGateway(HttpContextBase ctx, string message)
         {
-            await SendErrorResponse(ctx, ApiErrorResponse.BadGateway(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.BadGateway(message));
         }
 
         private async Task SendForbidden(HttpContextBase ctx, string message)
         {
-            await SendErrorResponse(ctx, ApiErrorResponse.Forbidden(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Forbidden(message));
         }
 
         private async Task SendNotFound(HttpContextBase ctx)
         {
-            await SendErrorResponse(ctx, ApiErrorResponse.NotFound());
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.NotFound());
         }
 
         private async Task SendTooManyRequests(HttpContextBase ctx, string message)
         {
-            await SendErrorResponse(ctx, ApiErrorResponse.TooManyRequests(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.TooManyRequests(message));
         }
 
         private async Task SendUnauthorized(HttpContextBase ctx, string message)
         {
-            await SendErrorResponse(ctx, ApiErrorResponse.Unauthorized(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Unauthorized(message));
         }
 
         private Dictionary<string, string> GetRequestHeaders(HttpContextBase ctx)

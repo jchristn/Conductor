@@ -8,8 +8,8 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
-    using SwiftStack;
-    using SwiftStack.Rest;
+    using WatsonWebserver.Core;
+    
 
     /// <summary>
     /// User API controller.
@@ -33,11 +33,11 @@ namespace Conductor.Server.Controllers
         public async Task<UserMaster> Create(string tenantId, UserMaster user)
         {
             if (user == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             if (String.IsNullOrEmpty(user.FirstName) || String.IsNullOrEmpty(user.LastName) ||
                 String.IsNullOrEmpty(user.Email) || String.IsNullOrEmpty(user.Password))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "FirstName, LastName, Email, and Password are required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "FirstName, LastName, Email, and Password are required");
 
             user.Id = IdGenerator.NewUserId();
             user.TenantId = tenantId;
@@ -55,7 +55,7 @@ namespace Conductor.Server.Controllers
         public async Task<UserMaster> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             UserMaster user;
             if (String.IsNullOrEmpty(tenantId))
@@ -64,7 +64,7 @@ namespace Conductor.Server.Controllers
                 user = await Database.User.ReadAsync(tenantId, id);
 
             if (user == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             return user;
         }
@@ -79,14 +79,14 @@ namespace Conductor.Server.Controllers
         public async Task<UserMaster> Update(string tenantId, string id, UserMaster user)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             UserMaster existing = await Database.User.ReadAsync(tenantId, id);
             if (existing == null)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             if (user == null)
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "Invalid request body");
+                throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
             user.Id = id;
             user.TenantId = tenantId;
@@ -104,11 +104,11 @@ namespace Conductor.Server.Controllers
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
-                throw new SwiftStackException(ApiResultEnum.BadRequest, "ID is required");
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             bool exists = await Database.User.ExistsAsync(tenantId, id);
             if (!exists)
-                throw new SwiftStackException(ApiResultEnum.NotFound);
+                throw new WebserverException(ApiResultEnum.NotFound);
 
             // Delete all credentials associated with this user
             EnumerationResult<Credential> credentials = await Database.Credential.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });

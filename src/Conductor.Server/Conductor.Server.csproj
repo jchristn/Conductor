@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SwiftStack" Version="0.4.5" />
+    <PackageReference Include="Watson" Version="7.0.11" />
   </ItemGroup>
 
   <ItemGroup>
