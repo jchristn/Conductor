@@ -147,6 +147,7 @@ namespace Conductor.Server.Services
         /// <param name="responseBody">Response body (will be truncated if too large).</param>
         /// <param name="stopwatch">Stopwatch started at request beginning.</param>
         /// <param name="token">Cancellation token.</param>
+        /// <param name="firstTokenTimeMs">Time to first token/byte in milliseconds. If null, response time is used.</param>
         /// <returns>Task.</returns>
         public async Task UpdateWithResponseAsync(
             RequestHistoryDetail detail,
@@ -157,7 +158,8 @@ namespace Conductor.Server.Services
             Dictionary<string, string> responseHeaders,
             string responseBody,
             Stopwatch stopwatch,
-            CancellationToken token = default)
+            CancellationToken token = default,
+            int? firstTokenTimeMs = null)
         {
             if (detail == null) return;
 
@@ -186,6 +188,7 @@ namespace Conductor.Server.Services
                 detail.HttpStatus = httpStatus;
                 detail.ResponseBodyLength = responseBody?.Length ?? 0;
                 detail.ResponseTimeMs = (int)stopwatch.ElapsedMilliseconds;
+                detail.FirstTokenTimeMs = firstTokenTimeMs ?? detail.ResponseTimeMs;
                 detail.CompletedUtc = DateTime.UtcNow;
                 detail.ResponseHeaders = responseHeaders ?? new Dictionary<string, string>();
 

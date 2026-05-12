@@ -29,6 +29,7 @@ docker compose up -d
 ```
 
 The server will be available at `http://localhost:9000` and the dashboard at `http://localhost:9100`.
+The Compose file builds the server and dashboard from the local repository Dockerfiles.
 
 ### Building from Source
 
@@ -200,7 +201,7 @@ Cross-Origin Resource Sharing (CORS) can be enabled to allow browser-based appli
 
 ### Request History Configuration
 
-Request history captures request/response data for Virtual Model Runners with `RequestHistoryEnabled` set to `true`. This is useful for debugging, auditing, and troubleshooting.
+Request history captures request/response data for Virtual Model Runners with `RequestHistoryEnabled` set to `true`. This is useful for debugging, auditing, troubleshooting, and latency analysis. Each completed entry records total response time and time to first token/byte (`FirstTokenTimeMs`). For non-streaming responses, `FirstTokenTimeMs` is set to the same value as `ResponseTimeMs`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -212,6 +213,8 @@ Request history captures request/response data for Virtual Model Runners with `R
 | `MaxResponseBodyBytes` | int | `65536` | Maximum response body bytes to capture (1-10485760) |
 
 **Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property).
+
+Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), and time to first token/byte (`FirstTokenTimeMs`).
 
 ### Request History Summary API
 
@@ -334,10 +337,12 @@ Response includes:
 - Last check timestamp
 - Last error message (if any)
 
-## Docker Images
+## Docker
 
-- **Server**: `jchristn77/conductor:latest`
-- **Dashboard**: `jchristn77/conductor-ui:latest`
+The included Docker Compose setup uses local build contexts:
+
+- **Server**: `src/Conductor.Server/Dockerfile`
+- **Dashboard**: `dashboard/Dockerfile`
 
 ### Building Docker Images
 

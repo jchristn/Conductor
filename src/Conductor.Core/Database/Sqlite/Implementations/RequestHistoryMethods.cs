@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
             string query = "INSERT INTO requesthistory (id, tenantguid, virtualmodelrunnerguid, virtualmodelrunnername, " +
                            "modelendpointguid, modelendpointname, modelendpointurl, modeldefinitionguid, modeldefinitionname, " +
                            "modelconfigurationguid, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
-                           "httpstatus, responsetimems, objectkey, requesttransfertype, responsetransfertype, createdutc, completedutc) " +
+                           "httpstatus, firsttokentimems, responsetimems, objectkey, requesttransfertype, responsetransfertype, createdutc, completedutc) " +
                            "VALUES ('" + _Driver.Sanitize(entry.Id) + "', " +
                            "'" + _Driver.Sanitize(entry.TenantGuid) + "', " +
                            "'" + _Driver.Sanitize(entry.VirtualModelRunnerGuid) + "', " +
@@ -52,6 +52,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            entry.RequestBodyLength + ", " +
                            _Driver.FormatNullable(entry.ResponseBodyLength) + ", " +
                            _Driver.FormatNullable(entry.HttpStatus) + ", " +
+                           _Driver.FormatNullable(entry.FirstTokenTimeMs) + ", " +
                            _Driver.FormatNullable(entry.ResponseTimeMs) + ", " +
                            "'" + _Driver.Sanitize(entry.ObjectKey) + "', " +
                            (int)entry.RequestTransferType + ", " +
@@ -79,6 +80,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "modelconfigurationguid = " + _Driver.FormatNullableString(entry.ModelConfigurationGuid) + ", " +
                            "responsebodylength = " + _Driver.FormatNullable(entry.ResponseBodyLength) + ", " +
                            "httpstatus = " + _Driver.FormatNullable(entry.HttpStatus) + ", " +
+                           "firsttokentimems = " + _Driver.FormatNullable(entry.FirstTokenTimeMs) + ", " +
                            "responsetimems = " + _Driver.FormatNullable(entry.ResponseTimeMs) + ", " +
                            "requesttransfertype = " + (int)entry.RequestTransferType + ", " +
                            "responsetransfertype = " + (int)entry.ResponseTransferType + ", " +

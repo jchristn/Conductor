@@ -253,6 +253,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 requestbodylength BIGINT NOT NULL,
                 responsebodylength BIGINT,
                 httpstatus INT,
+                firsttokentimems INT,
                 responsetimems INT,
                 objectkey VARCHAR(512) NOT NULL,
                 createdutc DATETIME(6) NOT NULL,
@@ -288,6 +289,13 @@ namespace Conductor.Core.Database.MySql.Queries
         /// </summary>
         public static readonly string AddResponseTransferTypeColumn = @"
             ALTER TABLE requesthistory ADD COLUMN responsetransfertype INT NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add firsttokentimems column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddFirstTokenTimeMsColumn = @"
+            ALTER TABLE requesthistory ADD COLUMN firsttokentimems INT;
         ";
     }
 }

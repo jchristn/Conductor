@@ -1,6 +1,8 @@
 services:
   conductor:
-    image: jchristn77/conductor:latest
+    build:
+      context: ..
+      dockerfile: src/Conductor.Server/Dockerfile
     container_name: conductor
     ports:
       - "9000:9000"
@@ -19,7 +21,9 @@ services:
       start_period: 5s
 
   conductor-ui:
-    image: jchristn77/conductor-ui:latest
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
     container_name: conductor-ui
     ports:
       - "9100:9100"

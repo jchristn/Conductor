@@ -116,6 +116,12 @@ namespace Conductor.Core.Models
         public int? HttpStatus { get; set; } = null;
 
         /// <summary>
+        /// Time to first token/byte in milliseconds. For non-streaming responses, this matches ResponseTimeMs.
+        /// May be null if response not yet received.
+        /// </summary>
+        public int? FirstTokenTimeMs { get; set; } = null;
+
+        /// <summary>
         /// Response time in milliseconds. May be null if response not yet received.
         /// </summary>
         public int? ResponseTimeMs { get; set; } = null;
@@ -193,6 +199,7 @@ namespace Conductor.Core.Models
                 RequestBodyLength = DataTableHelper.GetLongValue(row, "requestbodylength"),
                 ResponseBodyLength = DataTableHelper.GetNullableLongValue(row, "responsebodylength"),
                 HttpStatus = DataTableHelper.GetNullableIntValue(row, "httpstatus"),
+                FirstTokenTimeMs = DataTableHelper.GetNullableIntValue(row, "firsttokentimems"),
                 ResponseTimeMs = DataTableHelper.GetNullableIntValue(row, "responsetimems"),
                 ObjectKey = DataTableHelper.GetStringValue(row, "objectkey"),
                 RequestTransferType = DataTableHelper.GetEnumValue<TransferTypeEnum>(row, "requesttransfertype", TransferTypeEnum.Normal),

@@ -253,6 +253,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 requestbodylength BIGINT NOT NULL,
                 responsebodylength BIGINT,
                 httpstatus INTEGER,
+                firsttokentimems INTEGER,
                 responsetimems INTEGER,
                 objectkey VARCHAR(255) NOT NULL,
                 createdutc TIMESTAMP NOT NULL,
@@ -288,6 +289,13 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         /// </summary>
         public static readonly string AddResponseTransferTypeColumn = @"
             ALTER TABLE requesthistory ADD COLUMN responsetransfertype INTEGER NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add firsttokentimems column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddFirstTokenTimeMsColumn = @"
+            ALTER TABLE requesthistory ADD COLUMN firsttokentimems INTEGER;
         ";
     }
 }

@@ -289,6 +289,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 requestbodylength BIGINT NOT NULL,
                 responsebodylength BIGINT,
                 httpstatus INT,
+                firsttokentimems INT,
                 responsetimems INT,
                 objectkey NVARCHAR(255) NOT NULL,
                 createdutc DATETIME2 NOT NULL,
@@ -329,6 +330,13 @@ namespace Conductor.Core.Database.SqlServer.Queries
         /// </summary>
         public static readonly string AddResponseTransferTypeColumn = @"
             ALTER TABLE requesthistory ADD responsetransfertype INT NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add firsttokentimems column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddFirstTokenTimeMsColumn = @"
+            ALTER TABLE requesthistory ADD firsttokentimems INT;
         ";
     }
 }

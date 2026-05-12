@@ -1073,6 +1073,7 @@ namespace Conductor.Server.Controllers
             // Determine if this is a streaming response
             bool isStreaming = IsStreamingResponse(response);
             string responseBodyString = null;
+            int? firstTokenTimeMs = null;
 
             // Set transfer type indicators on history detail
             if (historyDetail != null)
@@ -1110,7 +1111,7 @@ namespace Conductor.Server.Controllers
                     streamBody = new StringBuilder(Math.Min(maxCaptureBytes, 65536));
                 }
 
-                await SendStreamingResponseAsync(ctx, response, maxCaptureBytes, streamBody, cancellationToken).ConfigureAwait(false);
+                firstTokenTimeMs = await SendStreamingResponseAsync(ctx, response, maxCaptureBytes, streamBody, stopwatch, cancellationToken).ConfigureAwait(false);
                 responseBodyString = streamBody != null ? streamBody.ToString() : null;
             }
             else
@@ -1135,7 +1136,8 @@ namespace Conductor.Server.Controllers
                     responseHeaders,
                     responseBodyString,
                     stopwatch,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken,
+                    firstTokenTimeMs).ConfigureAwait(false);
             }
         }
 
@@ -1183,12 +1185,14 @@ namespace Conductor.Server.Controllers
         /// <param name="response">The upstream HTTP response.</param>
         /// <param name="maxCaptureBytes">Maximum number of bytes to capture for request history. Zero disables capture.</param>
         /// <param name="capturedBody">StringBuilder to accumulate the captured body text. May be null to skip capture.</param>
+        /// <param name="stopwatch">Stopwatch started at request beginning.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        private async Task SendStreamingResponseAsync(
+        private async Task<int?> SendStreamingResponseAsync(
             HttpContextBase ctx,
             HttpResponseMessage response,
             int maxCaptureBytes,
             StringBuilder capturedBody,
+            Stopwatch stopwatch,
             CancellationToken cancellationToken)
         {
             // For SSE, set appropriate headers
@@ -1208,10 +1212,16 @@ namespace Conductor.Server.Controllers
             {
                 byte[] buffer = new byte[StreamingBufferSize];
                 int bytesRead;
+                int? firstTokenTimeMs = null;
 
                 while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
+                    if (!firstTokenTimeMs.HasValue)
+                    {
+                        firstTokenTimeMs = (int)stopwatch.ElapsedMilliseconds;
+                    }
 
                     // Send this chunk to the client
                     byte[] chunk = new byte[bytesRead];
@@ -1239,6 +1249,8 @@ namespace Conductor.Server.Controllers
 
                 // Send final empty chunk to signal end of stream
                 await ctx.Response.SendChunk(Array.Empty<byte>(), true, cancellationToken).ConfigureAwait(false);
+
+                return firstTokenTimeMs ?? (int)stopwatch.ElapsedMilliseconds;
             }
         }
 

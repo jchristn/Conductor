@@ -85,6 +85,7 @@ namespace Conductor.Core.Models
                 RequestBodyLength = entry.RequestBodyLength,
                 ResponseBodyLength = entry.ResponseBodyLength,
                 HttpStatus = entry.HttpStatus,
+                FirstTokenTimeMs = entry.FirstTokenTimeMs,
                 ResponseTimeMs = entry.ResponseTimeMs,
                 ObjectKey = entry.ObjectKey,
                 RequestTransferType = entry.RequestTransferType,

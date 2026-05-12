@@ -342,6 +342,13 @@ function RequestHistory() {
       render: (item) => item.ResponseTimeMs != null ? `${item.ResponseTimeMs}` : '-'
     },
     {
+      key: 'FirstTokenTimeMs',
+      label: 'TTFT (ms)',
+      tooltip: 'Time to first token/byte in milliseconds. For non-streaming responses, this matches response time.',
+      width: '100px',
+      render: (item) => item.FirstTokenTimeMs != null ? `${item.FirstTokenTimeMs}` : '-'
+    },
+    {
       key: 'VirtualModelRunnerName',
       label: 'VMR',
       tooltip: 'Virtual Model Runner that handled this request',
@@ -558,6 +565,10 @@ function RequestHistory() {
                 <div className="detail-item">
                   <label>Response Time:</label>
                   <span>{detailData.ResponseTimeMs != null ? `${detailData.ResponseTimeMs} ms` : '-'}</span>
+                </div>
+                <div className="detail-item">
+                  <label>TTFT:</label>
+                  <span>{detailData.FirstTokenTimeMs != null ? `${detailData.FirstTokenTimeMs} ms` : '-'}</span>
                 </div>
                 <div className="detail-item">
                   <label>Source IP:</label>

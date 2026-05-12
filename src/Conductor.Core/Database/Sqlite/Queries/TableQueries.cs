@@ -253,6 +253,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 requestbodylength INTEGER NOT NULL,
                 responsebodylength INTEGER,
                 httpstatus INTEGER,
+                firsttokentimems INTEGER,
                 responsetimems INTEGER,
                 objectkey TEXT NOT NULL,
                 createdutc TEXT NOT NULL,
@@ -288,6 +289,13 @@ namespace Conductor.Core.Database.Sqlite.Queries
         /// </summary>
         public static readonly string AddResponseTransferTypeColumn = @"
             ALTER TABLE requesthistory ADD COLUMN responsetransfertype INTEGER NOT NULL DEFAULT 0;
+        ";
+
+        /// <summary>
+        /// Add firsttokentimems column to requesthistory table (migration).
+        /// </summary>
+        public static readonly string AddFirstTokenTimeMsColumn = @"
+            ALTER TABLE requesthistory ADD COLUMN firsttokentimems INTEGER;
         ";
     }
 }

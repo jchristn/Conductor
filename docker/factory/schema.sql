@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS requesthistory (
     requestbodylength INTEGER NOT NULL,
     responsebodylength INTEGER,
     httpstatus INTEGER,
+    firsttokentimems INTEGER,
     responsetimems INTEGER,
     objectkey TEXT NOT NULL,
     createdutc TEXT NOT NULL,

@@ -114,6 +114,20 @@ namespace Conductor.Core.Database.SqlServer
                     // Column may already exist in some edge cases, ignore the error
                 }
             }
+
+            // Check if firsttokentimems column exists in requesthistory
+            bool firstTokenTimeMsExists = await ColumnExistsAsync("requesthistory", "firsttokentimems", token).ConfigureAwait(false);
+            if (!firstTokenTimeMsExists)
+            {
+                try
+                {
+                    await ExecuteQueryAsync(TableQueries.AddFirstTokenTimeMsColumn, false, token).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Column may already exist in some edge cases, ignore the error
+                }
+            }
         }
 
         /// <summary>
