@@ -255,7 +255,7 @@ function Users() {
         </div>
       </div>
 
-      <DataTable data={users} columns={columns} loading={loading} />
+      <DataTable data={users} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit User' : 'Create User'}>
         <form onSubmit={handleSubmit}>

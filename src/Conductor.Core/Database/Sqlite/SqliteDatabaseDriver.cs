@@ -15,7 +15,7 @@ namespace Conductor.Core.Database.Sqlite
     /// </summary>
     public class SqliteDatabaseDriver : DatabaseDriverBase
     {
-        private readonly object _Lock = new object();
+        private readonly SemaphoreSlim _Gate = new SemaphoreSlim(1, 1);
 
         /// <summary>
         /// Instantiate the SQLite database driver.
@@ -79,46 +79,54 @@ namespace Conductor.Core.Database.Sqlite
 
             DataTable result = new DataTable();
 
-            using (SqliteConnection conn = new SqliteConnection(ConnectionString))
+            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            try
             {
-                await conn.OpenAsync(token).ConfigureAwait(false);
-
-                SqliteTransaction transaction = null;
-                if (isTransaction)
+                using (SqliteConnection conn = new SqliteConnection(ConnectionString))
                 {
-                    transaction = conn.BeginTransaction();
-                }
+                    await conn.OpenAsync(token).ConfigureAwait(false);
 
-                try
-                {
-                    using (SqliteCommand cmd = new SqliteCommand(query, conn, transaction))
+                    SqliteTransaction transaction = null;
+                    if (isTransaction)
                     {
-                        using (SqliteDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
+                        transaction = conn.BeginTransaction();
+                    }
+
+                    try
+                    {
+                        using (SqliteCommand cmd = new SqliteCommand(query, conn, transaction))
                         {
-                            result.Load(reader);
+                            using (SqliteDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
+                            {
+                                result.Load(reader);
+                            }
+                        }
+
+                        if (transaction != null)
+                        {
+                            await transaction.CommitAsync(token).ConfigureAwait(false);
                         }
                     }
-
-                    if (transaction != null)
+                    catch
                     {
-                        await transaction.CommitAsync(token).ConfigureAwait(false);
+                        if (transaction != null)
+                        {
+                            await transaction.RollbackAsync(token).ConfigureAwait(false);
+                        }
+                        throw;
+                    }
+                    finally
+                    {
+                        if (transaction != null)
+                        {
+                            transaction.Dispose();
+                        }
                     }
                 }
-                catch
-                {
-                    if (transaction != null)
-                    {
-                        await transaction.RollbackAsync(token).ConfigureAwait(false);
-                    }
-                    throw;
-                }
-                finally
-                {
-                    if (transaction != null)
-                    {
-                        transaction.Dispose();
-                    }
-                }
+            }
+            finally
+            {
+                _Gate.Release();
             }
 
             return result;
@@ -137,52 +145,60 @@ namespace Conductor.Core.Database.Sqlite
 
             DataTable result = new DataTable();
 
-            using (SqliteConnection conn = new SqliteConnection(ConnectionString))
+            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            try
             {
-                await conn.OpenAsync(token).ConfigureAwait(false);
-
-                SqliteTransaction transaction = null;
-                if (isTransaction)
+                using (SqliteConnection conn = new SqliteConnection(ConnectionString))
                 {
-                    transaction = conn.BeginTransaction();
-                }
+                    await conn.OpenAsync(token).ConfigureAwait(false);
 
-                try
-                {
-                    foreach (string query in queries)
+                    SqliteTransaction transaction = null;
+                    if (isTransaction)
                     {
-                        if (String.IsNullOrEmpty(query)) continue;
+                        transaction = conn.BeginTransaction();
+                    }
 
-                        using (SqliteCommand cmd = new SqliteCommand(query, conn, transaction))
+                    try
+                    {
+                        foreach (string query in queries)
                         {
-                            using (SqliteDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
+                            if (String.IsNullOrEmpty(query)) continue;
+
+                            using (SqliteCommand cmd = new SqliteCommand(query, conn, transaction))
                             {
-                                result = new DataTable();
-                                result.Load(reader);
+                                using (SqliteDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
+                                {
+                                    result = new DataTable();
+                                    result.Load(reader);
+                                }
                             }
                         }
-                    }
 
-                    if (transaction != null)
+                        if (transaction != null)
+                        {
+                            await transaction.CommitAsync(token).ConfigureAwait(false);
+                        }
+                    }
+                    catch
                     {
-                        await transaction.CommitAsync(token).ConfigureAwait(false);
+                        if (transaction != null)
+                        {
+                            await transaction.RollbackAsync(token).ConfigureAwait(false);
+                        }
+                        throw;
+                    }
+                    finally
+                    {
+                        if (transaction != null)
+                        {
+                            transaction.Dispose();
+                        }
                     }
                 }
-                catch
-                {
-                    if (transaction != null)
-                    {
-                        await transaction.RollbackAsync(token).ConfigureAwait(false);
-                    }
-                    throw;
-                }
-                finally
-                {
-                    if (transaction != null)
-                    {
-                        transaction.Dispose();
-                    }
-                }
+            }
+            finally
+            {
+                _Gate.Release();
             }
 
             return result;
@@ -261,25 +277,33 @@ namespace Conductor.Core.Database.Sqlite
         /// <returns>True if the column exists.</returns>
         private async Task<bool> ColumnExistsAsync(string tableName, string columnName, CancellationToken token = default)
         {
-            using (SqliteConnection conn = new SqliteConnection(ConnectionString))
+            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            try
             {
-                await conn.OpenAsync(token).ConfigureAwait(false);
-
-                string query = "PRAGMA table_info(" + Sanitize(tableName) + ");";
-                using (SqliteCommand cmd = new SqliteCommand(query, conn))
+                using (SqliteConnection conn = new SqliteConnection(ConnectionString))
                 {
-                    using (SqliteDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
+                    await conn.OpenAsync(token).ConfigureAwait(false);
+
+                    string query = "PRAGMA table_info(" + Sanitize(tableName) + ");";
+                    using (SqliteCommand cmd = new SqliteCommand(query, conn))
                     {
-                        while (await reader.ReadAsync(token).ConfigureAwait(false))
+                        using (SqliteDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
                         {
-                            string name = reader["name"]?.ToString();
-                            if (String.Equals(name, columnName, StringComparison.OrdinalIgnoreCase))
+                            while (await reader.ReadAsync(token).ConfigureAwait(false))
                             {
-                                return true;
+                                string name = reader["name"]?.ToString();
+                                if (String.Equals(name, columnName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return true;
+                                }
                             }
                         }
                     }
                 }
+            }
+            finally
+            {
+                _Gate.Release();
             }
 
             return false;

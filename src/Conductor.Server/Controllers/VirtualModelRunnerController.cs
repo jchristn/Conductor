@@ -18,6 +18,7 @@ namespace Conductor.Server.Controllers
     /// </summary>
     public class VirtualModelRunnerController : BaseController
     {
+        private const string VmrBasePathPrefix = "/v1.0/api/";
         private readonly HealthCheckService _HealthCheckService;
         private readonly SessionAffinityService _SessionAffinityService;
 
@@ -42,7 +43,11 @@ namespace Conductor.Server.Controllers
             if (String.IsNullOrEmpty(vmr.Name) || String.IsNullOrEmpty(vmr.BasePath))
                 throw new WebserverException(ApiResultEnum.BadRequest, "Name and BasePath are required");
 
+            bool useGeneratedBasePath = UsesGeneratedBasePath(vmr);
             vmr.Id = IdGenerator.NewVirtualModelRunnerId();
+            vmr.BasePath = useGeneratedBasePath
+                ? VmrBasePathPrefix + vmr.Id + "/"
+                : NormalizeBasePath(vmr.BasePath);
             vmr.TenantId = tenantId;
             vmr = await Database.VirtualModelRunner.CreateAsync(vmr);
 
@@ -84,9 +89,17 @@ namespace Conductor.Server.Controllers
             if (vmr == null)
                 throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
+            if (UsesGeneratedBasePath(vmr))
+            {
+                throw new WebserverException(
+                    ApiResultEnum.BadRequest,
+                    "BasePath must use the format /v1.0/api/{name}/");
+            }
+
             vmr.Id = id;
             vmr.TenantId = tenantId;
             vmr.CreatedUtc = existing.CreatedUtc;
+            vmr.BasePath = NormalizeBasePath(vmr.BasePath);
             vmr = await Database.VirtualModelRunner.UpdateAsync(vmr);
 
             return vmr;
@@ -203,6 +216,42 @@ namespace Conductor.Server.Controllers
             }
 
             return status;
+        }
+
+        private static bool UsesGeneratedBasePath(VirtualModelRunner vmr)
+        {
+            if (vmr == null || String.IsNullOrWhiteSpace(vmr.BasePath) || String.IsNullOrWhiteSpace(vmr.Id))
+                return true;
+
+            string generatedWithSlash = VmrBasePathPrefix + vmr.Id + "/";
+            string generatedWithoutSlash = VmrBasePathPrefix + vmr.Id;
+
+            return String.Equals(vmr.BasePath, generatedWithSlash, StringComparison.OrdinalIgnoreCase)
+                || String.Equals(vmr.BasePath, generatedWithoutSlash, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizeBasePath(string basePath)
+        {
+            if (String.IsNullOrWhiteSpace(basePath))
+                throw new WebserverException(ApiResultEnum.BadRequest, "BasePath is required");
+
+            string trimmed = basePath.Trim();
+            if (!trimmed.StartsWith(VmrBasePathPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new WebserverException(
+                    ApiResultEnum.BadRequest,
+                    "BasePath must use the format /v1.0/api/{name}/");
+            }
+
+            string suffix = trimmed.Substring(VmrBasePathPrefix.Length).Trim('/');
+            if (String.IsNullOrWhiteSpace(suffix) || suffix.Contains('/'))
+            {
+                throw new WebserverException(
+                    ApiResultEnum.BadRequest,
+                    "BasePath must use the format /v1.0/api/{name}/");
+            }
+
+            return VmrBasePathPrefix + suffix + "/";
         }
     }
 }

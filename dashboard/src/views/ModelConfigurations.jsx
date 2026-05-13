@@ -300,7 +300,7 @@ function ModelConfigurations() {
         </div>
       </div>
 
-      <DataTable data={configurations} columns={columns} loading={loading} />
+      <DataTable data={configurations} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Model Configuration' : 'Create Model Configuration'} wide>
         <form onSubmit={handleSubmit}>

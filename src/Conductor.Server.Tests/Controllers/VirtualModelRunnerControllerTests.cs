@@ -51,7 +51,7 @@ namespace Conductor.Server.Tests.Controllers
             // VirtualModelRunner has a default Name value, so it doesn't throw
             VirtualModelRunner vmr = new VirtualModelRunner
             {
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             };
 
             VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
@@ -73,7 +73,7 @@ namespace Conductor.Server.Tests.Controllers
 
             result.Should().NotBeNull();
             result.BasePath.Should().NotBeNullOrEmpty();
-            result.BasePath.Should().StartWith("/v1.0/api/");
+            result.BasePath.Should().Be($"/v1.0/api/{result.Id}/");
         }
 
         [Fact]
@@ -82,7 +82,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner vmr = new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             };
 
             VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
@@ -90,7 +90,7 @@ namespace Conductor.Server.Tests.Controllers
             result.Should().NotBeNull();
             result.Id.Should().StartWith("vmr_");
             result.Name.Should().Be("Test VMR");
-            result.BasePath.Should().Be("/test");
+            result.BasePath.Should().Be("/v1.0/api/test/");
             result.TenantId.Should().Be(TestTenantId);
         }
 
@@ -100,7 +100,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner vmr = new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             };
 
             VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
@@ -120,7 +120,7 @@ namespace Conductor.Server.Tests.Controllers
             {
                 TenantId = "wrong_tenant",
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             };
 
             VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
@@ -135,13 +135,25 @@ namespace Conductor.Server.Tests.Controllers
             {
                 Id = "existing_id",
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             };
 
             VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
 
             result.Id.Should().NotBe("existing_id");
             result.Id.Should().StartWith("vmr_");
+        }
+
+        [Fact]
+        public async Task Create_WithInvalidBasePath_ThrowsBadRequest()
+        {
+            Func<Task> act = async () => await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Invalid VMR",
+                BasePath = "/test"
+            });
+
+            await act.Should().ThrowAsync<Exception>();
         }
 
         #endregion
@@ -178,7 +190,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             VirtualModelRunner result = await _Controller.Read(TestTenantId, created.Id);
@@ -194,7 +206,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             Func<Task> act = async () => await _Controller.Read("wrong_tenant", created.Id);
@@ -228,7 +240,7 @@ namespace Conductor.Server.Tests.Controllers
             Func<Task> act = async () => await _Controller.Update(TestTenantId, "vmr_nonexistent", new VirtualModelRunner
             {
                 Name = "Updated",
-                BasePath = "/updated"
+                BasePath = "/v1.0/api/updated/"
             });
 
             await act.Should().ThrowAsync<Exception>();
@@ -240,7 +252,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             Func<Task> act = async () => await _Controller.Update(TestTenantId, created.Id, null);
@@ -254,13 +266,13 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             VirtualModelRunner updateRequest = new VirtualModelRunner
             {
                 Name = "Updated VMR",
-                BasePath = "/updated",
+                BasePath = "/v1.0/api/updated/",
                 CreatedUtc = DateTime.UtcNow.AddDays(-10) // Try to override
             };
 
@@ -275,14 +287,14 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test",
+                BasePath = "/v1.0/api/test/",
                 Active = true
             });
 
             VirtualModelRunner updateRequest = new VirtualModelRunner
             {
                 Name = "Updated VMR",
-                BasePath = "/updated",
+                BasePath = "/v1.0/api/updated/",
                 Active = false,
                 StrictMode = true,
                 TimeoutMs = 120000
@@ -291,7 +303,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner result = await _Controller.Update(TestTenantId, created.Id, updateRequest);
 
             result.Name.Should().Be("Updated VMR");
-            result.BasePath.Should().Be("/updated");
+            result.BasePath.Should().Be("/v1.0/api/updated/");
             result.Active.Should().BeFalse();
             result.StrictMode.Should().BeTrue();
             result.TimeoutMs.Should().Be(120000);
@@ -303,14 +315,14 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             VirtualModelRunner updateRequest = new VirtualModelRunner
             {
                 Id = "different_id",
                 Name = "Updated VMR",
-                BasePath = "/updated"
+                BasePath = "/v1.0/api/updated/"
             };
 
             VirtualModelRunner result = await _Controller.Update(TestTenantId, created.Id, updateRequest);
@@ -324,19 +336,54 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             VirtualModelRunner updateRequest = new VirtualModelRunner
             {
                 TenantId = "different_tenant",
                 Name = "Updated VMR",
-                BasePath = "/updated"
+                BasePath = "/v1.0/api/updated/"
             };
 
             VirtualModelRunner result = await _Controller.Update(TestTenantId, created.Id, updateRequest);
 
             result.TenantId.Should().Be(TestTenantId);
+        }
+
+        [Fact]
+        public async Task Update_WithInvalidBasePath_ThrowsBadRequest()
+        {
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Test VMR",
+                BasePath = "/v1.0/api/test/"
+            });
+
+            Func<Task> act = async () => await _Controller.Update(TestTenantId, created.Id, new VirtualModelRunner
+            {
+                Name = "Updated VMR",
+                BasePath = "/updated"
+            });
+
+            await act.Should().ThrowAsync<Exception>();
+        }
+
+        [Fact]
+        public async Task Update_WithoutExplicitBasePath_ThrowsBadRequest()
+        {
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Test VMR",
+                BasePath = "/v1.0/api/test/"
+            });
+
+            Func<Task> act = async () => await _Controller.Update(TestTenantId, created.Id, new VirtualModelRunner
+            {
+                Name = "Updated VMR"
+            });
+
+            await act.Should().ThrowAsync<Exception>();
         }
 
         #endregion
@@ -373,7 +420,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             await _Controller.Delete(TestTenantId, created.Id);
@@ -388,7 +435,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             Func<Task> act = async () => await _Controller.Delete("wrong_tenant", created.Id);
@@ -413,9 +460,9 @@ namespace Conductor.Server.Tests.Controllers
         [Fact]
         public async Task Enumerate_ReturnsAllVmrs()
         {
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 1", BasePath = "/vmr1" });
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 2", BasePath = "/vmr2" });
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 3", BasePath = "/vmr3" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 1", BasePath = "/v1.0/api/vmr1/" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 2", BasePath = "/v1.0/api/vmr2/" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 3", BasePath = "/v1.0/api/vmr3/" });
 
             EnumerationResult<VirtualModelRunner> result = await _Controller.Enumerate(TestTenantId);
 
@@ -425,9 +472,9 @@ namespace Conductor.Server.Tests.Controllers
         [Fact]
         public async Task Enumerate_WithMaxResults_LimitsResults()
         {
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 1", BasePath = "/vmr1" });
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 2", BasePath = "/vmr2" });
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 3", BasePath = "/vmr3" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 1", BasePath = "/v1.0/api/vmr1/" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 2", BasePath = "/v1.0/api/vmr2/" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 3", BasePath = "/v1.0/api/vmr3/" });
 
             EnumerationResult<VirtualModelRunner> result = await _Controller.Enumerate(TestTenantId, maxResults: 2);
 
@@ -437,9 +484,9 @@ namespace Conductor.Server.Tests.Controllers
         [Fact]
         public async Task Enumerate_WithNameFilter_FiltersResults()
         {
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "Alpha VMR", BasePath = "/alpha" });
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "Beta VMR", BasePath = "/beta" });
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "Alpha Runner", BasePath = "/runner" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "Alpha VMR", BasePath = "/v1.0/api/alpha/" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "Beta VMR", BasePath = "/v1.0/api/beta/" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "Alpha Runner", BasePath = "/v1.0/api/runner/" });
 
             EnumerationResult<VirtualModelRunner> result = await _Controller.Enumerate(TestTenantId, nameFilter: "Alpha");
 
@@ -453,21 +500,21 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner activeVmr = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Active VMR",
-                BasePath = "/active",
+                BasePath = "/v1.0/api/active/",
                 Active = true
             });
 
             VirtualModelRunner vmrToDeactivate = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Inactive VMR",
-                BasePath = "/inactive"
+                BasePath = "/v1.0/api/inactive/"
             });
 
             // Deactivate one VMR
             await _Controller.Update(TestTenantId, vmrToDeactivate.Id, new VirtualModelRunner
             {
                 Name = "Inactive VMR",
-                BasePath = "/inactive",
+                BasePath = "/v1.0/api/inactive/",
                 Active = false
             });
 
@@ -480,7 +527,7 @@ namespace Conductor.Server.Tests.Controllers
         [Fact]
         public async Task Enumerate_WrongTenant_ReturnsEmpty()
         {
-            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 1", BasePath = "/vmr1" });
+            await _Controller.Create(TestTenantId, new VirtualModelRunner { Name = "VMR 1", BasePath = "/v1.0/api/vmr1/" });
 
             EnumerationResult<VirtualModelRunner> result = await _Controller.Enumerate("wrong_tenant");
 
@@ -497,7 +544,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner vmr = new VirtualModelRunner
             {
                 Name = "Session VMR",
-                BasePath = "/session",
+                BasePath = "/v1.0/api/session/",
                 SessionAffinityMode = SessionAffinityModeEnum.SourceIP,
                 SessionTimeoutMs = 300000,
                 SessionMaxEntries = 5000
@@ -517,7 +564,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner vmr = new VirtualModelRunner
             {
                 Name = "Header Session VMR",
-                BasePath = "/header-session",
+                BasePath = "/v1.0/api/header-session/",
                 SessionAffinityMode = SessionAffinityModeEnum.Header,
                 SessionAffinityHeader = "X-Session-Id"
             };
@@ -535,14 +582,14 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "VMR to Update Session",
-                BasePath = "/update-session",
+                BasePath = "/v1.0/api/update-session/",
                 SessionAffinityMode = SessionAffinityModeEnum.None
             });
 
             VirtualModelRunner updateRequest = new VirtualModelRunner
             {
                 Name = "VMR to Update Session",
-                BasePath = "/update-session",
+                BasePath = "/v1.0/api/update-session/",
                 SessionAffinityMode = SessionAffinityModeEnum.ApiKey,
                 SessionTimeoutMs = 120000,
                 SessionMaxEntries = 2000
@@ -561,7 +608,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner vmr = new VirtualModelRunner
             {
                 Name = "Default Session VMR",
-                BasePath = "/default-session"
+                BasePath = "/v1.0/api/default-session/"
             };
 
             VirtualModelRunner result = await _Controller.Create(TestTenantId, vmr);
@@ -578,13 +625,13 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Read Back VMR",
-                BasePath = "/readback"
+                BasePath = "/v1.0/api/readback/"
             });
 
             VirtualModelRunner updateRequest = new VirtualModelRunner
             {
                 Name = "Read Back VMR",
-                BasePath = "/readback",
+                BasePath = "/v1.0/api/readback/",
                 SessionAffinityMode = SessionAffinityModeEnum.Header,
                 SessionAffinityHeader = "X-Custom",
                 SessionTimeoutMs = 86400000,
@@ -634,7 +681,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             VirtualModelRunnerHealthStatus result = await _Controller.GetHealth(TestTenantId, created.Id);
@@ -652,7 +699,7 @@ namespace Conductor.Server.Tests.Controllers
             VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "My Test VMR",
-                BasePath = "/test"
+                BasePath = "/v1.0/api/test/"
             });
 
             VirtualModelRunnerHealthStatus result = await _Controller.GetHealth(TestTenantId, created.Id);

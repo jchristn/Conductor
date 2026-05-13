@@ -215,6 +215,42 @@ namespace Conductor.Server.Tests.Integration
 
         #endregion
 
+        #region Sqlite-Tests
+
+        [Fact]
+        public async Task Sqlite_ConcurrentReads_DoNotThrow()
+        {
+            ModelDefinition definition = await _Database.ModelDefinition.CreateAsync(new ModelDefinition
+            {
+                TenantId = _TestTenantId,
+                Name = "gemma3:4b",
+                Active = true
+            });
+
+            ModelConfiguration configuration = await _Database.ModelConfiguration.CreateAsync(new ModelConfiguration
+            {
+                TenantId = _TestTenantId,
+                Name = "gemma3:4b-config",
+                Model = "gemma3:4b",
+                Active = true
+            });
+
+            List<Task> tasks = new List<Task>();
+            for (int i = 0; i < 25; i++)
+            {
+                tasks.Add(_Database.Tenant.ReadAsync(_TestTenantId));
+                tasks.Add(_Database.ModelDefinition.ReadAsync(_TestTenantId, definition.Id));
+                tasks.Add(_Database.ModelConfiguration.ReadAsync(_TestTenantId, configuration.Id));
+                tasks.Add(_Database.ModelDefinition.EnumerateAsync(_TestTenantId, new EnumerationRequest { MaxResults = 10 }));
+                tasks.Add(_Database.ModelConfiguration.EnumerateAsync(_TestTenantId, new EnumerationRequest { MaxResults = 10 }));
+            }
+
+            Func<Task> act = async () => await Task.WhenAll(tasks).ConfigureAwait(false);
+            await act.Should().NotThrowAsync();
+        }
+
+        #endregion
+
         #region Credential-Tests
 
         [Fact]

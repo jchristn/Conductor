@@ -183,7 +183,7 @@ function Administrators() {
         </div>
       </div>
 
-      <DataTable data={administrators} columns={columns} loading={loading} />
+      <DataTable data={administrators} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Administrator' : 'Create Administrator'}>
         <form onSubmit={handleSubmit}>

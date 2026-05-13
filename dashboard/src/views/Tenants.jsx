@@ -204,7 +204,7 @@ function Tenants() {
         </div>
       </div>
 
-      <DataTable data={tenants} columns={columns} loading={loading} />
+      <DataTable data={tenants} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Tenant' : 'Create Tenant'}>
         <form onSubmit={handleSubmit}>

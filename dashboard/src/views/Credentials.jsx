@@ -245,7 +245,7 @@ function Credentials() {
         </div>
       </div>
 
-      <DataTable data={credentials} columns={columns} loading={loading} />
+      <DataTable data={credentials} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Credential' : 'Create Credential'}>
         <form onSubmit={handleSubmit}>

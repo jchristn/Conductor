@@ -10,6 +10,32 @@ import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 
+const VMR_BASE_PATH_PREFIX = '/v1.0/api/';
+
+function getVmrBasePathValidationError(basePath) {
+  const trimmed = (basePath || '').trim();
+  if (!trimmed) return 'Base path is required.';
+  if (!trimmed.toLowerCase().startsWith(VMR_BASE_PATH_PREFIX)) {
+    return 'Base path must start with /v1.0/api/.';
+  }
+
+  const suffix = trimmed.slice(VMR_BASE_PATH_PREFIX.length).replace(/^\/+|\/+$/g, '');
+  if (!suffix || suffix.includes('/')) {
+    return 'Base path must use exactly one segment after /v1.0/api/.';
+  }
+
+  return '';
+}
+
+function normalizeVmrBasePath(basePath) {
+  const error = getVmrBasePathValidationError(basePath);
+  if (error) throw new Error(error);
+
+  const trimmed = basePath.trim();
+  const suffix = trimmed.slice(VMR_BASE_PATH_PREFIX.length).replace(/^\/+|\/+$/g, '');
+  return `${VMR_BASE_PATH_PREFIX}${suffix}/`;
+}
+
 function VirtualModelRunners() {
   const { api, setError, serverUrl } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
@@ -240,11 +266,19 @@ function VirtualModelRunners() {
         return;
       }
 
+      let normalizedBasePath = '';
+      try {
+        normalizedBasePath = normalizeVmrBasePath(formData.BasePath);
+      } catch (err) {
+        setError(err.message);
+        return;
+      }
+
       const data = {
         TenantId: formData.TenantId || null,
         Name: formData.Name,
         Hostname: formData.Hostname || null,
-        BasePath: formData.BasePath,
+        BasePath: normalizedBasePath,
         ApiType: formData.ApiType,
         LoadBalancingMode: formData.LoadBalancingMode,
         ModelRunnerEndpointIds: formData.ModelRunnerEndpointIds,
@@ -329,6 +363,8 @@ function VirtualModelRunners() {
     return new Date(dateString).toLocaleString();
   };
 
+  const basePathValidationError = getVmrBasePathValidationError(formData.BasePath);
+
   const columns = [
     {
       key: 'Id',
@@ -351,6 +387,11 @@ function VirtualModelRunners() {
         <div className="token-cell">
           <code>{item.BasePath}</code>
           <CopyButton value={`${serverUrl}${item.BasePath}`} title="Copy full URL" />
+          {getVmrBasePathValidationError(item.BasePath) && (
+            <small className="error-text" title="This VMR base path does not match the server's routable pattern.">
+              Invalid route
+            </small>
+          )}
         </div>
       )
     },
@@ -434,7 +475,7 @@ function VirtualModelRunners() {
         </div>
       </div>
 
-      <DataTable data={vmrs} columns={columns} loading={loading} />
+      <DataTable data={vmrs} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Virtual Model Runner' : 'Create Virtual Model Runner'} wide>
         <form onSubmit={handleSubmit}>
@@ -491,6 +532,13 @@ function VirtualModelRunners() {
               placeholder="/v1.0/api/my-vmr/"
               required
             />
+            <p className="form-help">
+              Use <code>/v1.0/api/&lt;name&gt;/</code>. Example request URL:
+              <code> {serverUrl}/v1.0/api/my-vmr/v1/chat/completions</code>
+            </p>
+            {basePathValidationError && (
+              <small className="error-text">{basePathValidationError}</small>
+            )}
           </div>
 
           <div className="form-row">

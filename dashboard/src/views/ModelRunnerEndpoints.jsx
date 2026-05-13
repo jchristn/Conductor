@@ -484,7 +484,14 @@ function ModelRunnerEndpoints() {
         const h = healthData[item.Id];
         if (!h) return <span className="status-badge pending" title="Awaiting first health check result">Awaiting Check</span>;
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => handleViewHealth(item)}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+            data-row-click-ignore="true"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleViewHealth(item);
+            }}
+          >
             <span
               className={`status-badge ${h.IsHealthy ? 'healthy' : 'unhealthy'}`}
               title={h.IsHealthy
@@ -595,7 +602,7 @@ function ModelRunnerEndpoints() {
         </div>
       )}
 
-      <DataTable data={endpoints} columns={columns} loading={loading} />
+      <DataTable data={endpoints} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Endpoint' : 'Create Endpoint'} wide>
         <form onSubmit={handleSubmit}>

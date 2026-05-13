@@ -278,7 +278,7 @@ function ModelDefinitions() {
         </div>
       </div>
 
-      <DataTable data={definitions} columns={columns} loading={loading} />
+      <DataTable data={definitions} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Model Definition' : 'Create Model Definition'} wide>
         <form onSubmit={handleSubmit}>

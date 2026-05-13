@@ -1,5 +1,17 @@
 import React, { useState, useMemo } from 'react';
 
+const INTERACTIVE_ROW_CLICK_SELECTOR = [
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  'label',
+  'summary',
+  '[role="button"]',
+  '[data-row-click-ignore="true"]'
+].join(', ');
+
 function DataTable({
   data = [],
   columns = [],
@@ -119,6 +131,19 @@ function DataTable({
     );
   };
 
+  const handleRowClick = (event, item) => {
+    if (!onRowClick) {
+      return;
+    }
+
+    const clickTarget = event.target instanceof Element ? event.target : event.currentTarget;
+    if (clickTarget.closest(INTERACTIVE_ROW_CLICK_SELECTOR)) {
+      return;
+    }
+
+    onRowClick(item);
+  };
+
   if (loading) {
     return (
       <div className="data-table-loading">
@@ -225,7 +250,7 @@ function DataTable({
             paginatedData.map((item, index) => (
               <tr
                 key={item.Id || index}
-                onClick={() => onRowClick && onRowClick(item)}
+                onClick={(event) => handleRowClick(event, item)}
                 className={onRowClick ? 'clickable' : ''}
               >
                 {columns.map((col) => (
