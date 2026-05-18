@@ -48,6 +48,11 @@ namespace Conductor.Core.Database
         public IVirtualModelRunnerMethods VirtualModelRunner { get; protected set; }
 
         /// <summary>
+        /// Load-balancing policy methods.
+        /// </summary>
+        public ILoadBalancingPolicyMethods LoadBalancingPolicy { get; protected set; }
+
+        /// <summary>
         /// Administrator methods.
         /// </summary>
         public IAdministratorMethods Administrator { get; protected set; }

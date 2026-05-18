@@ -176,6 +176,28 @@ namespace Conductor.Server.Controllers
         }
 
         /// <summary>
+        /// Get cached RigMonitor status for a single endpoint.
+        /// </summary>
+        public async Task<RigMonitorEndpointStatus> GetRigMonitor(string tenantId, string id)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            ModelRunnerEndpoint endpoint = String.IsNullOrEmpty(tenantId)
+                ? await Database.ModelRunnerEndpoint.ReadByIdAsync(id).ConfigureAwait(false)
+                : await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id).ConfigureAwait(false);
+
+            if (endpoint == null)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            RigMonitorEndpointStatus status = _HealthCheckService?.GetRigMonitorState(id);
+            status ??= new RigMonitorEndpointStatus();
+            status.Enabled = endpoint.RigMonitor?.Enabled ?? false;
+            status.BaseUrl = RigMonitorClient.GetBaseUrl(endpoint);
+            return status;
+        }
+
+        /// <summary>
         /// Enumerate model runner endpoints.
         /// </summary>
         public async Task<EnumerationResult<ModelRunnerEndpoint>> Enumerate(

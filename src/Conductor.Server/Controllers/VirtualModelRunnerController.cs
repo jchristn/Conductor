@@ -49,6 +49,7 @@ namespace Conductor.Server.Controllers
                 ? VmrBasePathPrefix + vmr.Id + "/"
                 : NormalizeBasePath(vmr.BasePath);
             vmr.TenantId = tenantId;
+            await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.CreateAsync(vmr);
 
             return vmr;
@@ -100,6 +101,7 @@ namespace Conductor.Server.Controllers
             vmr.TenantId = tenantId;
             vmr.CreatedUtc = existing.CreatedUtc;
             vmr.BasePath = NormalizeBasePath(vmr.BasePath);
+            await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.UpdateAsync(vmr);
 
             return vmr;
@@ -228,6 +230,20 @@ namespace Conductor.Server.Controllers
 
             return String.Equals(vmr.BasePath, generatedWithSlash, StringComparison.OrdinalIgnoreCase)
                 || String.Equals(vmr.BasePath, generatedWithoutSlash, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task ValidateLoadBalancingPolicyAsync(string tenantId, string policyId)
+        {
+            if (String.IsNullOrWhiteSpace(policyId)) return;
+
+            LoadBalancingPolicy policy = String.IsNullOrEmpty(tenantId)
+                ? await Database.LoadBalancingPolicy.ReadByIdAsync(policyId).ConfigureAwait(false)
+                : await Database.LoadBalancingPolicy.ReadAsync(tenantId, policyId).ConfigureAwait(false);
+
+            if (policy == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "LoadBalancingPolicyId must reference an existing policy in the same tenant.");
+            }
         }
 
         private static string NormalizeBasePath(string basePath)

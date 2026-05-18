@@ -29,9 +29,9 @@ namespace Conductor.Server.Services
             { new RouteKey("GET", "/health"), RequestTypeEnum.HealthCheck },
 
             // Authentication
-            { new RouteKey("POST", "/v1.0/auth/login"), RequestTypeEnum.UserLogin },
-            { new RouteKey("POST", "/v1.0/auth/apikey"), RequestTypeEnum.ApiKeyLogin },
-            { new RouteKey("POST", "/v1.0/auth/admin"), RequestTypeEnum.AdminLogin },
+            { new RouteKey("POST", "/v1.0/auth/login/credential"), RequestTypeEnum.UserLogin },
+            { new RouteKey("POST", "/v1.0/auth/login/apikey"), RequestTypeEnum.ApiKeyLogin },
+            { new RouteKey("POST", "/v1.0/auth/login/admin"), RequestTypeEnum.AdminLogin },
 
             // Administrators
             { new RouteKey("POST", "/v1.0/administrators"), RequestTypeEnum.CreateAdministrator },
@@ -63,7 +63,10 @@ namespace Conductor.Server.Services
 
             // Model Runner Endpoints
             { new RouteKey("POST", "/v1.0/modelrunnerendpoints"), RequestTypeEnum.CreateModelRunnerEndpoint },
+            { new RouteKey("GET", "/v1.0/modelrunnerendpoints/health"), RequestTypeEnum.ListModelRunnerEndpointHealth },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.ReadModelRunnerEndpoint },
+            { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}/health"), RequestTypeEnum.ReadModelRunnerEndpointHealth },
+            { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}/rigmonitor"), RequestTypeEnum.ReadModelRunnerEndpointRigMonitor },
             { new RouteKey("PUT", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.UpdateModelRunnerEndpoint },
             { new RouteKey("DELETE", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.DeleteModelRunnerEndpoint },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints"), RequestTypeEnum.ListModelRunnerEndpoints },
@@ -85,9 +88,18 @@ namespace Conductor.Server.Services
             // Virtual Model Runners
             { new RouteKey("POST", "/v1.0/virtualmodelrunners"), RequestTypeEnum.CreateVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.ReadVirtualModelRunner },
+            { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/health"), RequestTypeEnum.ReadVirtualModelRunnerHealth },
             { new RouteKey("PUT", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.UpdateVirtualModelRunner },
             { new RouteKey("DELETE", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.DeleteVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners"), RequestTypeEnum.ListVirtualModelRunners },
+
+            // Load Balancing Policies
+            { new RouteKey("POST", "/v1.0/loadbalancingpolicies"), RequestTypeEnum.CreateLoadBalancingPolicy },
+            { new RouteKey("GET", "/v1.0/loadbalancingpolicies/metrics"), RequestTypeEnum.ListLoadBalancingPolicyMetrics },
+            { new RouteKey("GET", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.ReadLoadBalancingPolicy },
+            { new RouteKey("PUT", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.UpdateLoadBalancingPolicy },
+            { new RouteKey("DELETE", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.DeleteLoadBalancingPolicy },
+            { new RouteKey("GET", "/v1.0/loadbalancingpolicies"), RequestTypeEnum.ListLoadBalancingPolicies },
 
             // Backup and Restore
             { new RouteKey("GET", "/v1.0/backup"), RequestTypeEnum.CreateBackup },
@@ -152,7 +164,7 @@ namespace Conductor.Server.Services
         /// </summary>
         private static bool IsIdSegment(string segment)
         {
-            // Matches patterns like: ten_xxx, usr_xxx, cred_xxx, mre_xxx, md_xxx, mc_xxx, vmr_xxx, adm_xxx
+            // Matches patterns like: ten_xxx, usr_xxx, cred_xxx, mre_xxx, md_xxx, mc_xxx, vmr_xxx, lbp_xxx, adm_xxx
             // Also matches GUIDs
             if (segment.Contains('_') && segment.Length > 4)
                 return true;

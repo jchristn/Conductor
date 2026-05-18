@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import SensitiveInput from '../components/SensitiveInput';
+import { DEFAULT_SERVER_URL } from '../config/serverUrl';
 
 function Login() {
   const { loginWithCredential, loginWithApiKey, loginAsAdmin, loading, error, serverUrl, theme } = useApp();
@@ -47,9 +48,12 @@ function Login() {
               id="serverUrl"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="http://localhost:9000"
+              placeholder={DEFAULT_SERVER_URL}
               required
             />
+            <p className="form-help">
+              Conductor defaults to <code>9000</code>. RigMonitor commonly uses port <code>9990</code> so both services can run on the same machine.
+            </p>
           </div>
 
           <div className="form-group">

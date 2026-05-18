@@ -89,6 +89,17 @@ function Sidebar() {
         </svg>
       )
     },
+    {
+      path: '/policies',
+      label: 'Load Balancing Policies',
+      tourId: 'nav-policies',
+      tooltip: 'Manage first-class routing policies backed by health and RigMonitor telemetry',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M4 3a1 1 0 011-1h10a1 1 0 011 1v3.2a4.5 4.5 0 01-1.318 3.182l-3.182 3.182V17a1 1 0 01-1.447.894l-2-1A1 1 0 017 16v-3.436L3.818 9.382A4.5 4.5 0 012.5 6.2V3a1 1 0 011-1h.5zm1 2v1.2a2.5 2.5 0 00.732 1.768L9 11.236l3.268-3.268A2.5 2.5 0 0013 6.2V5H5zm2 1a1 1 0 100 2h4a1 1 0 100-2H7z" clipRule="evenodd" />
+        </svg>
+      )
+    },
     { divider: true },
     {
       path: '/vmr',

@@ -63,6 +63,11 @@ namespace Conductor.Core.Models
         public LoadBalancingModeEnum LoadBalancingMode { get; set; } = LoadBalancingModeEnum.RoundRobin;
 
         /// <summary>
+        /// Optional load-balancing policy ID.
+        /// </summary>
+        public string LoadBalancingPolicyId { get; set; } = null;
+
+        /// <summary>
         /// List of model runner endpoint identifiers.
         /// </summary>
         public List<string> ModelRunnerEndpointIds
@@ -336,6 +341,7 @@ namespace Conductor.Core.Models
                 BasePath = DataTableHelper.GetStringValue(row, "basepath"),
                 ApiType = DataTableHelper.GetEnumValue<ApiTypeEnum>(row, "apitype", ApiTypeEnum.Ollama),
                 LoadBalancingMode = DataTableHelper.GetEnumValue<LoadBalancingModeEnum>(row, "loadbalancingmode", LoadBalancingModeEnum.RoundRobin),
+                LoadBalancingPolicyId = DataTableHelper.GetStringValue(row, "loadbalancingpolicyid"),
                 TimeoutMs = DataTableHelper.GetIntValue(row, "timeoutms"),
                 AllowEmbeddings = DataTableHelper.GetBooleanValue(row, "allowembeddings"),
                 AllowCompletions = DataTableHelper.GetBooleanValue(row, "allowcompletions"),

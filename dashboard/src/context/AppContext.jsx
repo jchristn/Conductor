@@ -1,12 +1,25 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import api from '../api/api';
+import { DEFAULT_SERVER_URL, resolveInitialServerUrl } from '../config/serverUrl';
 
 const AppContext = createContext(null);
 
+function buildLoginError(url, err) {
+  const targetUrl = url || DEFAULT_SERVER_URL;
+
+  if (err?.message === 'HTTP 404') {
+    return `Login failed: ${targetUrl} does not appear to be a Conductor API. Conductor defaults to port 9000; RigMonitor commonly uses port 9990.`;
+  }
+
+  if (err?.message === 'Failed to fetch') {
+    return `Login failed: could not reach ${targetUrl}. Verify the URL and allow CORS from the dashboard origin.`;
+  }
+
+  return 'Login failed: ' + (err?.message || 'Unknown error');
+}
+
 export function AppProvider({ children }) {
-  const [serverUrl, setServerUrl] = useState(() =>
-    localStorage.getItem('conductor_server_url') || window.CONDUCTOR_SERVER_URL || 'http://localhost:9000'
-  );
+  const [serverUrl, setServerUrl] = useState(() => resolveInitialServerUrl());
   const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -83,7 +96,7 @@ export function AppProvider({ children }) {
         return false;
       }
     } catch (err) {
-      setError('Login failed: ' + err.message);
+      setError(buildLoginError(url, err));
       setIsConnected(false);
       return false;
     } finally {
@@ -119,7 +132,7 @@ export function AppProvider({ children }) {
         return false;
       }
     } catch (err) {
-      setError('Login failed: ' + err.message);
+      setError(buildLoginError(url, err));
       setIsConnected(false);
       return false;
     } finally {
@@ -146,7 +159,7 @@ export function AppProvider({ children }) {
         return false;
       }
     } catch (err) {
-      setError('Login failed: ' + err.message);
+      setError(buildLoginError(url, err));
       setIsConnected(false);
       return false;
     } finally {

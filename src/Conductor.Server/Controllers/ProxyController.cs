@@ -35,6 +35,7 @@ namespace Conductor.Server.Controllers
         private readonly HealthCheckService _HealthCheckService;
         private readonly SessionAffinityService _SessionAffinityService;
         private readonly RequestHistoryService _RequestHistoryService;
+        private readonly LoadBalancingPolicyEvaluator _LoadBalancingPolicyEvaluator = new LoadBalancingPolicyEvaluator();
 
         /// <summary>
         /// Buffer size for streaming responses. Default is 8KB.
@@ -147,6 +148,21 @@ namespace Conductor.Server.Controllers
                     return;
                 }
 
+                LoadBalancingPolicy policy = null;
+                if (!String.IsNullOrWhiteSpace(vmr.LoadBalancingPolicyId))
+                {
+                    policy = await Database.LoadBalancingPolicy.ReadAsync(vmr.TenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
+                    if (policy != null && !policy.Active)
+                    {
+                        Logging.Debug(_Header + "load-balancing policy " + vmr.LoadBalancingPolicyId + " is inactive for VMR " + vmr.Id + ", using legacy mode");
+                        policy = null;
+                    }
+                    else if (policy == null)
+                    {
+                        Logging.Warn(_Header + "load-balancing policy " + vmr.LoadBalancingPolicyId + " was not found for VMR " + vmr.Id + ", using legacy mode");
+                    }
+                }
+
                 // Attempt session affinity lookup before filtering
                 ModelRunnerEndpoint endpoint = null;
 
@@ -160,10 +176,11 @@ namespace Conductor.Server.Controllers
                         {
                             bool pinnedHealthy = true;
                             bool pinnedHasCapacity = true;
+                            EndpointHealthState pinnedState = null;
 
                             if (_HealthCheckService != null)
                             {
-                                EndpointHealthState pinnedState = _HealthCheckService.GetHealthState(pinnedEndpointId);
+                                pinnedState = _HealthCheckService.GetHealthState(pinnedEndpointId);
                                 if (pinnedState != null)
                                 {
                                     pinnedHealthy = pinnedState.IsHealthy;
@@ -171,6 +188,15 @@ namespace Conductor.Server.Controllers
                                     {
                                         pinnedHasCapacity = false;
                                     }
+                                }
+                            }
+
+                            if (policy != null)
+                            {
+                                EndpointAvailability pinnedAvailability = new EndpointAvailability(pinnedEp, pinnedHealthy, pinnedHasCapacity);
+                                if (!_LoadBalancingPolicyEvaluator.IsEndpointEligible(policy, pinnedAvailability, pinnedState))
+                                {
+                                    pinnedHealthy = false;
                                 }
                             }
 
@@ -247,8 +273,35 @@ namespace Conductor.Server.Controllers
                         return;
                     }
 
+                    if (policy != null)
+                    {
+                        LoadBalancingPolicyEvaluator.EvaluationResult evaluation = _LoadBalancingPolicyEvaluator.Evaluate(
+                            policy,
+                            availableEndpoints,
+                            endpointId => _HealthCheckService?.GetHealthState(endpointId));
+
+                        if (evaluation.Success && evaluation.Candidates.Count > 0)
+                        {
+                            double topScore = evaluation.Candidates[0].Score;
+                            List<EndpointAvailability> tiedCandidates = evaluation.Candidates
+                                .Where(candidate => Math.Abs(candidate.Score - topScore) < 0.000001)
+                                .Select(candidate => candidate.Availability)
+                                .ToList();
+                            endpoint = SelectEndpointWithWeight(tiedCandidates, MapTieBreaker(policy.TieBreaker));
+                        }
+                        else if (policy.FallbackMode == LoadBalancingPolicyFallbackModeEnum.FailClosed)
+                        {
+                            await SendBadGateway(ctx, evaluation.FailureReason ?? "No endpoints satisfied the attached load-balancing policy");
+                            return;
+                        }
+                        else
+                        {
+                            Logging.Debug(_Header + "policy " + policy.Id + " could not select an endpoint for VMR " + vmr.Id + ": " + (evaluation.FailureReason ?? "unknown failure") + ", using legacy mode");
+                        }
+                    }
+
                     // Select endpoint using load balancing (with weights)
-                    endpoint = SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode);
+                    endpoint ??= SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode);
 
                     // Pin the selected endpoint for this client
                     if (!String.IsNullOrEmpty(clientKey) && _SessionAffinityService != null)
@@ -390,6 +443,20 @@ namespace Conductor.Server.Controllers
                         stopwatch,
                         cancellationToken).ConfigureAwait(false);
                 }
+            }
+        }
+
+        private static LoadBalancingModeEnum MapTieBreaker(LoadBalancingPolicyTieBreakerEnum tieBreaker)
+        {
+            switch (tieBreaker)
+            {
+                case LoadBalancingPolicyTieBreakerEnum.Random:
+                    return LoadBalancingModeEnum.Random;
+                case LoadBalancingPolicyTieBreakerEnum.FirstAvailable:
+                    return LoadBalancingModeEnum.FirstAvailable;
+                case LoadBalancingPolicyTieBreakerEnum.RoundRobin:
+                default:
+                    return LoadBalancingModeEnum.RoundRobin;
             }
         }
 

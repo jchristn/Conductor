@@ -14,6 +14,11 @@
       "key": "bearerToken",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "policyId",
+      "value": "",
+      "type": "string"
     }
   ],
   "auth": {
@@ -324,7 +329,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"My Ollama Server\",\n  \"EndpointType\": \"Ollama\",\n  \"Hostname\": \"localhost\",\n  \"Port\": 11434,\n  \"Ssl\": false\n}"
+              "raw": "{\n  \"Name\": \"My Ollama Server\",\n  \"ApiType\": \"Ollama\",\n  \"Hostname\": \"localhost\",\n  \"Port\": 11434,\n  \"UseSsl\": false,\n  \"HealthCheckUrl\": \"/\",\n  \"HealthCheckMethod\": \"GET\",\n  \"HealthCheckExpectedStatusCode\": 200,\n  \"RigMonitor\": {\n    \"Enabled\": true,\n    \"Port\": 9990,\n    \"UseSsl\": false,\n    \"CollectDuringHealthCheck\": true,\n    \"RequireReadyz\": true,\n    \"HealthAffectedByRigMonitor\": false,\n    \"TelemetryProfile\": \"GpuPlacement\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
@@ -342,7 +347,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated Endpoint\"\n}"
+              "raw": "{\n  \"Name\": \"Updated Endpoint\",\n  \"RigMonitor\": {\n    \"Enabled\": true,\n    \"HostnameOverride\": \"rigmonitor-host.local\",\n    \"Port\": 9990,\n    \"UseSsl\": false,\n    \"TimeoutMs\": 5000,\n    \"CollectDuringHealthCheck\": true,\n    \"RequireReadyz\": true,\n    \"HealthAffectedByRigMonitor\": false,\n    \"MaxTelemetryAgeMs\": 30000,\n    \"CapabilitiesRefreshIntervalMs\": 60000,\n    \"TelemetryProfile\": \"Custom\",\n    \"TelemetrySelectors\": [\"system\", \"cpu\", \"memory\", \"gpu\"]\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
@@ -370,6 +375,17 @@
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/health",
               "host": ["{{baseUrl}}"],
               "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "health"]
+            }
+          }
+        },
+        {
+          "name": "Get Cached RigMonitor Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/rigmonitor",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "rigmonitor"]
             }
           }
         }
@@ -524,6 +540,91 @@
       ]
     },
     {
+      "name": "Load Balancing Policies",
+      "item": [
+        {
+          "name": "List Load Balancing Policies",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "loadbalancingpolicies"]
+            }
+          }
+        },
+        {
+          "name": "Get Load Balancing Policy",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/{{policyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "loadbalancingpolicies", "{{policyId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Load Balancing Policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Lowest GPU Utilization\",\n  \"Description\": \"Prefer the healthiest GPU-capable endpoint with the lowest utilization.\",\n  \"MaxTelemetryAgeMs\": 30000,\n  \"Filters\": [\n    { \"Metric\": \"health.isHealthy\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"health.hasCapacity\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"rig.gpu.available\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" }\n  ],\n  \"Ranking\": [\n    { \"Metric\": \"rig.gpu.avgUtilizationPercent\", \"Direction\": \"Ascending\", \"Weight\": 1.0 }\n  ],\n  \"FallbackMode\": \"UseLegacyLoadBalancingMode\",\n  \"TieBreaker\": \"RoundRobin\",\n  \"Active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "loadbalancingpolicies"]
+            }
+          }
+        },
+        {
+          "name": "Update Load Balancing Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated GPU Policy\",\n  \"MaxTelemetryAgeMs\": 45000,\n  \"Filters\": [\n    { \"Metric\": \"health.isHealthy\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"health.hasCapacity\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" }\n  ],\n  \"Ranking\": [\n    { \"Metric\": \"rig.gpu.minFreeMemoryMegabytes\", \"Direction\": \"Descending\", \"Weight\": 0.7 },\n    { \"Metric\": \"health.inFlightRequests\", \"Direction\": \"Ascending\", \"Weight\": 0.3 }\n  ],\n  \"FallbackMode\": \"UseLegacyLoadBalancingMode\",\n  \"TieBreaker\": \"Random\",\n  \"Active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/{{policyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "loadbalancingpolicies", "{{policyId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Load Balancing Policy",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/{{policyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "loadbalancingpolicies", "{{policyId}}"]
+            }
+          }
+        },
+        {
+          "name": "List Supported Policy Metrics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "loadbalancingpolicies", "metrics"]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Virtual Model Runners",
       "item": [
         {
@@ -557,7 +658,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\"\n}"
+              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\",\n  \"LoadBalancingMode\": \"RoundRobin\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\",\n  \"ModelRunnerEndpointIds\": [\"{{endpointId}}\"]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
@@ -575,7 +676,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated VMR\"\n}"
+              "raw": "{\n  \"Name\": \"Updated VMR\",\n  \"LoadBalancingMode\": \"RoundRobin\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",

@@ -205,6 +205,15 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// RigMonitor integration settings for this endpoint.
+        /// </summary>
+        public RigMonitorConfiguration RigMonitor
+        {
+            get => _RigMonitor;
+            set => _RigMonitor = (value ?? new RigMonitorConfiguration());
+        }
+
+        /// <summary>
         /// JSON-serialized labels for database storage.
         /// </summary>
         [JsonIgnore]
@@ -234,6 +243,16 @@ namespace Conductor.Core.Models
             set => Metadata = (String.IsNullOrEmpty(value) ? null : _Serializer.DeserializeJson<object>(value));
         }
 
+        /// <summary>
+        /// JSON-serialized RigMonitor settings for database storage.
+        /// </summary>
+        [JsonIgnore]
+        public string RigMonitorJson
+        {
+            get => _Serializer.SerializeJson(_RigMonitor, false);
+            set => _RigMonitor = (String.IsNullOrEmpty(value) ? new RigMonitorConfiguration() : _Serializer.DeserializeJson<RigMonitorConfiguration>(value));
+        }
+
         private string _TenantId = null;
         private string _Name = "Default Endpoint";
         private string _Hostname = "localhost";
@@ -250,6 +269,7 @@ namespace Conductor.Core.Models
         private int _HealthyThreshold = 2;
         private int _MaxParallelRequests = 4;
         private int _Weight = 1;
+        private RigMonitorConfiguration _RigMonitor = new RigMonitorConfiguration();
 
         /// <summary>
         /// Instantiate the model runner endpoint.
@@ -329,6 +349,12 @@ namespace Conductor.Core.Models
             if (!String.IsNullOrEmpty(metadataJson))
             {
                 obj.Metadata = _Serializer.DeserializeJson<object>(metadataJson);
+            }
+
+            string rigMonitorJson = DataTableHelper.GetStringValue(row, "rigmonitor");
+            if (!String.IsNullOrEmpty(rigMonitorJson))
+            {
+                obj.RigMonitorJson = rigMonitorJson;
             }
 
             return obj;

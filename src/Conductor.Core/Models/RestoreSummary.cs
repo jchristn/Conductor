@@ -46,6 +46,11 @@ namespace Conductor.Core.Models
         public EntityRestoreCount Administrators { get; set; } = new EntityRestoreCount();
 
         /// <summary>
+        /// Count of load-balancing policy restore operations.
+        /// </summary>
+        public EntityRestoreCount LoadBalancingPolicies { get; set; } = new EntityRestoreCount();
+
+        /// <summary>
         /// Instantiate the restore summary.
         /// </summary>
         public RestoreSummary()

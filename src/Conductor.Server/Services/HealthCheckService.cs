@@ -23,6 +23,7 @@ namespace Conductor.Server.Services
         private readonly DatabaseDriverBase _Database;
         private readonly LoggingModule _Logging;
         private readonly HttpClient _HttpClient;
+        private readonly RigMonitorClient _RigMonitorClient;
         private readonly ConcurrentDictionary<string, EndpointHealthState> _HealthStates;
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _CancellationTokens;
         private readonly ConcurrentDictionary<string, Task> _RunningTasks;
@@ -37,6 +38,7 @@ namespace Conductor.Server.Services
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _HttpClient = new HttpClient();
+            _RigMonitorClient = new RigMonitorClient(_Logging);
             _HealthStates = new ConcurrentDictionary<string, EndpointHealthState>();
             _CancellationTokens = new ConcurrentDictionary<string, CancellationTokenSource>();
             _RunningTasks = new ConcurrentDictionary<string, Task>();
@@ -184,6 +186,23 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Get cached RigMonitor status for an endpoint.
+        /// </summary>
+        public RigMonitorEndpointStatus GetRigMonitorState(string endpointId)
+        {
+            if (String.IsNullOrEmpty(endpointId)) return null;
+            if (_HealthStates.TryGetValue(endpointId, out EndpointHealthState state))
+            {
+                lock (state.Lock)
+                {
+                    return state.RigMonitor?.DeepCopy();
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Called when an endpoint is created.
         /// </summary>
         public void OnEndpointCreated(ModelRunnerEndpoint endpoint)
@@ -274,7 +293,14 @@ namespace Conductor.Server.Services
                 TenantId = endpoint.TenantId,
                 IsHealthy = false, // Start unhealthy until proven healthy
                 FirstCheckUtc = DateTime.UtcNow,
-                LastStateChangeUtc = DateTime.UtcNow
+                LastStateChangeUtc = DateTime.UtcNow,
+                RigMonitor = endpoint.RigMonitor?.Enabled == true
+                    ? new RigMonitorEndpointStatus
+                    {
+                        Enabled = true,
+                        BaseUrl = RigMonitorClient.GetBaseUrl(endpoint)
+                    }
+                    : null
             };
             _HealthStates.AddOrUpdate(endpoint.Id, state, (k, v) => state);
 
@@ -334,6 +360,19 @@ namespace Conductor.Server.Services
                         _Logging.Debug(_Header + "health check failed for endpoint " + endpoint.Id + " (" + endpoint.Name + "): " + ex.Message);
                     }
 
+                    if (endpoint.RigMonitor?.Enabled == true)
+                    {
+                        (bool rigSuccess, string rigError) = await RefreshRigMonitorStatusAsync(endpoint, token).ConfigureAwait(false);
+                        if (endpoint.RigMonitor.HealthAffectedByRigMonitor)
+                        {
+                            success = success && rigSuccess;
+                            if (!rigSuccess && String.IsNullOrEmpty(error))
+                            {
+                                error = rigError;
+                            }
+                        }
+                    }
+
                     // Update state
                     UpdateHealthState(endpoint, success, error);
                 }
@@ -346,6 +385,123 @@ namespace Conductor.Server.Services
                     _Logging.Warn(_Header + "error for endpoint " + endpoint.Id + Environment.NewLine + ex.ToString());
                 }
             }
+        }
+
+        private async Task<(bool Success, string Error)> RefreshRigMonitorStatusAsync(ModelRunnerEndpoint endpoint, CancellationToken token)
+        {
+            if (endpoint == null || endpoint.RigMonitor == null || !endpoint.RigMonitor.Enabled)
+            {
+                return (true, null);
+            }
+
+            if (!_HealthStates.TryGetValue(endpoint.Id, out EndpointHealthState state))
+            {
+                return (false, "No endpoint health state is available.");
+            }
+
+            DateTime now = DateTime.UtcNow;
+            RigMonitorEndpointStatus rigState;
+            lock (state.Lock)
+            {
+                state.RigMonitor ??= new RigMonitorEndpointStatus();
+                rigState = state.RigMonitor;
+                rigState.Enabled = true;
+                rigState.BaseUrl = RigMonitorClient.GetBaseUrl(endpoint);
+            }
+
+            bool success = true;
+            string error = null;
+            RigMonitorReadyStatus readyStatus = null;
+            RigMonitorCapabilities capabilities = null;
+            RigMonitorTelemetrySnapshot telemetry = null;
+
+            try
+            {
+                readyStatus = await _RigMonitorClient.GetReadyStatusAsync(endpoint, token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                success = false;
+                error = ex.Message;
+            }
+
+            bool shouldRefreshCapabilities;
+            lock (state.Lock)
+            {
+                shouldRefreshCapabilities =
+                    !rigState.LastCapabilitiesUtc.HasValue ||
+                    (now - rigState.LastCapabilitiesUtc.Value).TotalMilliseconds >= endpoint.RigMonitor.CapabilitiesRefreshIntervalMs;
+            }
+
+            if (shouldRefreshCapabilities)
+            {
+                try
+                {
+                    capabilities = await _RigMonitorClient.GetCapabilitiesAsync(endpoint, token).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (String.IsNullOrEmpty(error))
+                    {
+                        error = ex.Message;
+                    }
+                }
+            }
+
+            bool readyForTelemetry = readyStatus?.Ready ?? false;
+            if (endpoint.RigMonitor.CollectDuringHealthCheck)
+            {
+                if (endpoint.RigMonitor.RequireReadyz && !readyForTelemetry)
+                {
+                    success = false;
+                    if (String.IsNullOrEmpty(error))
+                    {
+                        error = !String.IsNullOrEmpty(readyStatus?.Message) ? readyStatus.Message : "RigMonitor telemetry is not ready.";
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        telemetry = await _RigMonitorClient.GetTelemetryAsync(endpoint, token).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        success = false;
+                        if (String.IsNullOrEmpty(error))
+                        {
+                            error = ex.Message;
+                        }
+                    }
+                }
+            }
+
+            lock (state.Lock)
+            {
+                rigState.LastError = error;
+
+                if (readyStatus != null)
+                {
+                    rigState.Ready = readyStatus.Ready;
+                    rigState.ReadyStatus = readyStatus.Status;
+                    rigState.ReadyMessage = readyStatus.Message;
+                    rigState.LastReadyzUtc = readyStatus.TimestampUtc ?? DateTime.UtcNow;
+                }
+
+                if (capabilities != null)
+                {
+                    rigState.Capabilities = capabilities;
+                    rigState.LastCapabilitiesUtc = capabilities.CollectedUtc ?? DateTime.UtcNow;
+                }
+
+                if (telemetry != null)
+                {
+                    rigState.Telemetry = telemetry;
+                    rigState.LastTelemetryUtc = telemetry.CollectedUtc ?? DateTime.UtcNow;
+                }
+            }
+
+            return (success, error);
         }
 
         private async Task<bool> PerformHealthCheck(ModelRunnerEndpoint endpoint, CancellationToken token)
@@ -499,6 +655,7 @@ namespace Conductor.Server.Services
 
                 // Dispose HttpClient
                 _HttpClient?.Dispose();
+                _RigMonitorClient?.Dispose();
 
                 _HealthStates.Clear();
                 _RunningTasks.Clear();

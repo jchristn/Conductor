@@ -149,6 +149,34 @@ namespace Test.Shared.Server.Controllers
 
             await act.Should().ThrowAsync<Exception>();
         }
+        public async Task Create_WithUnknownLoadBalancingPolicyId_ThrowsBadRequest()
+        {
+            Func<Task> act = async () => await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Invalid Policy VMR",
+                BasePath = "/v1.0/api/invalid-policy/",
+                LoadBalancingPolicyId = "lbp_missing"
+            });
+
+            await act.Should().ThrowAsync<Exception>();
+        }
+        public async Task Create_WithValidLoadBalancingPolicyId_PersistsAttachment()
+        {
+            LoadBalancingPolicy policy = await Database.LoadBalancingPolicy.CreateAsync(new LoadBalancingPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "CPU Policy"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner result = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Policy VMR",
+                BasePath = "/v1.0/api/policy-vmr/",
+                LoadBalancingPolicyId = policy.Id
+            }).ConfigureAwait(false);
+
+            result.LoadBalancingPolicyId.Should().Be(policy.Id);
+        }
 
         #endregion
 
@@ -222,6 +250,46 @@ namespace Test.Shared.Server.Controllers
             });
 
             await act.Should().ThrowAsync<Exception>();
+        }
+        public async Task Update_WithUnknownLoadBalancingPolicyId_ThrowsBadRequest()
+        {
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Update Policy VMR",
+                BasePath = "/v1.0/api/update-policy/"
+            }).ConfigureAwait(false);
+
+            Func<Task> act = async () => await _Controller.Update(TestTenantId, created.Id, new VirtualModelRunner
+            {
+                Name = "Update Policy VMR",
+                BasePath = "/v1.0/api/update-policy/",
+                LoadBalancingPolicyId = "lbp_missing"
+            }).ConfigureAwait(false);
+
+            await act.Should().ThrowAsync<Exception>();
+        }
+        public async Task Update_WithValidLoadBalancingPolicyId_PersistsAttachment()
+        {
+            LoadBalancingPolicy policy = await Database.LoadBalancingPolicy.CreateAsync(new LoadBalancingPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Update Policy"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Update Policy VMR",
+                BasePath = "/v1.0/api/update-policy-valid/"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner result = await _Controller.Update(TestTenantId, created.Id, new VirtualModelRunner
+            {
+                Name = "Update Policy VMR",
+                BasePath = "/v1.0/api/update-policy-valid/",
+                LoadBalancingPolicyId = policy.Id
+            }).ConfigureAwait(false);
+
+            result.LoadBalancingPolicyId.Should().Be(policy.Id);
         }
         public async Task Update_WithNullBody_ThrowsBadRequest()
         {

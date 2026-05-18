@@ -7,7 +7,7 @@
       "Enabled": true,
       "AllowedOrigins": ["*"],
       "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      "AllowedHeaders": ["Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password"],
+      "AllowedHeaders": ["Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password", "x-admin-apikey", "x-admin-email", "x-admin-password"],
       "ExposedHeaders": [],
       "AllowCredentials": false,
       "MaxAgeSeconds": 86400

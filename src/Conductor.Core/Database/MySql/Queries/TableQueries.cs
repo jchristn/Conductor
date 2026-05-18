@@ -103,6 +103,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 healthcheckuseauth TINYINT(1) NOT NULL DEFAULT 0,
                 maxparallelrequests INT NOT NULL DEFAULT 4,
                 weight INT NOT NULL DEFAULT 1,
+                rigmonitor TEXT,
                 createdutc DATETIME(3) NOT NULL,
                 lastupdateutc DATETIME(3) NOT NULL,
                 labels TEXT,
@@ -176,6 +177,33 @@ namespace Conductor.Core.Database.MySql.Queries
         ";
 
         /// <summary>
+        /// Create load-balancing policies table.
+        /// </summary>
+        public static readonly string CreateLoadBalancingPoliciesTable = @"
+            CREATE TABLE IF NOT EXISTS loadbalancingpolicies (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                maxtelemetryagems INT NOT NULL DEFAULT 30000,
+                filters TEXT,
+                ranking TEXT,
+                fallbackmode INT NOT NULL DEFAULT 0,
+                tiebreaker INT NOT NULL DEFAULT 0,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                INDEX idx_lbp_tenantid (tenantid),
+                INDEX idx_lbp_active (active),
+                INDEX idx_lbp_name (name),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
         /// Create virtual model runners table.
         /// </summary>
         public static readonly string CreateVirtualModelRunnersTable = @"
@@ -201,6 +229,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 sessiontimeoutms INT NOT NULL DEFAULT 600000,
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
                 requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 0,
+                loadbalancingpolicyid VARCHAR(48),
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 createdutc DATETIME(3) NOT NULL,
                 lastupdateutc DATETIME(3) NOT NULL,
@@ -296,6 +325,20 @@ namespace Conductor.Core.Database.MySql.Queries
         /// </summary>
         public static readonly string AddFirstTokenTimeMsColumn = @"
             ALTER TABLE requesthistory ADD COLUMN firsttokentimems INT;
+        ";
+
+        /// <summary>
+        /// Add rigmonitor column to modelrunnerendpoints table (migration).
+        /// </summary>
+        public static readonly string AddRigMonitorColumn = @"
+            ALTER TABLE modelrunnerendpoints ADD COLUMN rigmonitor TEXT;
+        ";
+
+        /// <summary>
+        /// Add loadbalancingpolicyid column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddLoadBalancingPolicyIdColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN loadbalancingpolicyid VARCHAR(48);
         ";
     }
 }

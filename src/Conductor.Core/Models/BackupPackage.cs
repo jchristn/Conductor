@@ -11,7 +11,7 @@ namespace Conductor.Core.Models
         /// <summary>
         /// Schema version for forward/backward compatibility.
         /// </summary>
-        public string SchemaVersion { get; set; } = "1.0";
+        public string SchemaVersion { get; set; } = "1.1";
 
         /// <summary>
         /// UTC timestamp when the backup was created.
@@ -92,6 +92,15 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// All load-balancing policies.
+        /// </summary>
+        public List<LoadBalancingPolicy> LoadBalancingPolicies
+        {
+            get => _LoadBalancingPolicies;
+            set => _LoadBalancingPolicies = (value != null ? value : new List<LoadBalancingPolicy>());
+        }
+
+        /// <summary>
         /// All administrator records (passwords are hashed, not plaintext).
         /// Note: Only included when backup is created by an administrator.
         /// </summary>
@@ -108,6 +117,7 @@ namespace Conductor.Core.Models
         private List<ModelConfiguration> _ModelConfigurations = new List<ModelConfiguration>();
         private List<ModelRunnerEndpoint> _ModelRunnerEndpoints = new List<ModelRunnerEndpoint>();
         private List<VirtualModelRunner> _VirtualModelRunners = new List<VirtualModelRunner>();
+        private List<LoadBalancingPolicy> _LoadBalancingPolicies = new List<LoadBalancingPolicy>();
         private List<Administrator> _Administrators = new List<Administrator>();
 
         /// <summary>

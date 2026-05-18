@@ -92,6 +92,11 @@ namespace Conductor.Server.Controllers
                 EnumerationResult<VirtualModelRunner> vmrs = await Database.VirtualModelRunner
                     .EnumerateAsync(tenant.Id, request, token).ConfigureAwait(false);
                 package.VirtualModelRunners.AddRange(vmrs.Data);
+
+                // Load Balancing Policies
+                EnumerationResult<LoadBalancingPolicy> policies = await Database.LoadBalancingPolicy
+                    .EnumerateAsync(tenant.Id, request, token).ConfigureAwait(false);
+                package.LoadBalancingPolicies.AddRange(policies.Data);
             }
 
             // Administrators (global, not tenant-scoped)
@@ -107,6 +112,7 @@ namespace Conductor.Server.Controllers
                 package.ModelConfigurations.Count + " model configurations, " +
                 package.ModelRunnerEndpoints.Count + " model runner endpoints, " +
                 package.VirtualModelRunners.Count + " virtual model runners, " +
+                package.LoadBalancingPolicies.Count + " load-balancing policies, " +
                 package.Administrators.Count + " administrators");
 
             return package;
@@ -205,7 +211,15 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored model configurations: " + result.Summary.ModelConfigurations.Created + " created, " + result.Summary.ModelConfigurations.Updated + " updated, " + result.Summary.ModelConfigurations.Skipped + " skipped");
 
-                // 8. Virtual Model Runners (depends on Tenant + referenced IDs)
+                // 8. Load Balancing Policies (depends on Tenant)
+                foreach (LoadBalancingPolicy policy in package.LoadBalancingPolicies.Where(p => tenantIdsToRestore.Contains(p.TenantId)))
+                {
+                    token.ThrowIfCancellationRequested();
+                    await RestoreLoadBalancingPolicyAsync(policy, options.ConflictResolution, result.Summary.LoadBalancingPolicies, token).ConfigureAwait(false);
+                }
+                Logging.Debug(_Header + "restored load-balancing policies: " + result.Summary.LoadBalancingPolicies.Created + " created, " + result.Summary.LoadBalancingPolicies.Updated + " updated, " + result.Summary.LoadBalancingPolicies.Skipped + " skipped");
+
+                // 9. Virtual Model Runners (depends on Tenant + referenced IDs)
                 foreach (VirtualModelRunner vmr in package.VirtualModelRunners.Where(v => tenantIdsToRestore.Contains(v.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -257,7 +271,8 @@ namespace Conductor.Server.Controllers
                 ModelConfigurationCount = package.ModelConfigurations?.Count ?? 0,
                 ModelRunnerEndpointCount = package.ModelRunnerEndpoints?.Count ?? 0,
                 VirtualModelRunnerCount = package.VirtualModelRunners?.Count ?? 0,
-                AdministratorCount = package.Administrators?.Count ?? 0
+                AdministratorCount = package.Administrators?.Count ?? 0,
+                LoadBalancingPolicyCount = package.LoadBalancingPolicies?.Count ?? 0
             };
 
             // Validate schema version
@@ -367,6 +382,19 @@ namespace Conductor.Server.Controllers
                     if (await Database.VirtualModelRunner.ExistsAsync(vmr.TenantId, vmr.Id, token).ConfigureAwait(false))
                     {
                         result.Conflicts.Add("Virtual Model Runner '" + vmr.Name + "' (ID: " + vmr.Id + ") already exists.");
+                    }
+                }
+            }
+
+            // Check for load-balancing policy ID conflicts
+            if (package.LoadBalancingPolicies != null)
+            {
+                foreach (LoadBalancingPolicy policy in package.LoadBalancingPolicies)
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (await Database.LoadBalancingPolicy.ExistsAsync(policy.TenantId, policy.Id, token).ConfigureAwait(false))
+                    {
+                        result.Conflicts.Add("Load Balancing Policy '" + policy.Name + "' (ID: " + policy.Id + ") already exists.");
                     }
                 }
             }
@@ -596,6 +624,32 @@ namespace Conductor.Server.Controllers
             else
             {
                 await Database.VirtualModelRunner.CreateAsync(vmr, token).ConfigureAwait(false);
+                counter.Created++;
+            }
+        }
+
+        private async Task RestoreLoadBalancingPolicyAsync(LoadBalancingPolicy policy, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
+        {
+            bool exists = await Database.LoadBalancingPolicy.ExistsAsync(policy.TenantId, policy.Id, token).ConfigureAwait(false);
+
+            if (exists)
+            {
+                switch (conflictResolution)
+                {
+                    case ConflictResolutionMode.Skip:
+                        counter.Skipped++;
+                        break;
+                    case ConflictResolutionMode.Overwrite:
+                        await Database.LoadBalancingPolicy.UpdateAsync(policy, token).ConfigureAwait(false);
+                        counter.Updated++;
+                        break;
+                    case ConflictResolutionMode.Fail:
+                        throw new InvalidOperationException("Load Balancing Policy with ID '" + policy.Id + "' already exists.");
+                }
+            }
+            else
+            {
+                await Database.LoadBalancingPolicy.CreateAsync(policy, token).ConfigureAwait(false);
                 counter.Created++;
             }
         }

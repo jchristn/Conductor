@@ -103,6 +103,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 healthcheckuseauth BOOLEAN NOT NULL DEFAULT FALSE,
                 maxparallelrequests INTEGER NOT NULL DEFAULT 4,
                 weight INTEGER NOT NULL DEFAULT 1,
+                rigmonitor TEXT,
                 createdutc TIMESTAMP NOT NULL,
                 lastupdateutc TIMESTAMP NOT NULL,
                 labels TEXT,
@@ -176,6 +177,33 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         ";
 
         /// <summary>
+        /// Create load-balancing policies table.
+        /// </summary>
+        public static readonly string CreateLoadBalancingPoliciesTable = @"
+            CREATE TABLE IF NOT EXISTS loadbalancingpolicies (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                maxtelemetryagems INTEGER NOT NULL DEFAULT 30000,
+                filters TEXT,
+                ranking TEXT,
+                fallbackmode INTEGER NOT NULL DEFAULT 0,
+                tiebreaker INTEGER NOT NULL DEFAULT 0,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                createdutc TIMESTAMP NOT NULL,
+                lastupdateutc TIMESTAMP NOT NULL,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_lbp_tenantid ON loadbalancingpolicies(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_lbp_active ON loadbalancingpolicies(active);
+            CREATE INDEX IF NOT EXISTS idx_lbp_name ON loadbalancingpolicies(name);
+        ";
+
+        /// <summary>
         /// Create virtual model runners table.
         /// </summary>
         public static readonly string CreateVirtualModelRunnersTable = @"
@@ -201,6 +229,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
                 sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
                 requesthistoryenabled BOOLEAN NOT NULL DEFAULT FALSE,
+                loadbalancingpolicyid VARCHAR(48),
                 active BOOLEAN NOT NULL DEFAULT TRUE,
                 createdutc TIMESTAMP NOT NULL,
                 lastupdateutc TIMESTAMP NOT NULL,
@@ -296,6 +325,20 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         /// </summary>
         public static readonly string AddFirstTokenTimeMsColumn = @"
             ALTER TABLE requesthistory ADD COLUMN firsttokentimems INTEGER;
+        ";
+
+        /// <summary>
+        /// Add rigmonitor column to modelrunnerendpoints table (migration).
+        /// </summary>
+        public static readonly string AddRigMonitorColumn = @"
+            ALTER TABLE modelrunnerendpoints ADD COLUMN rigmonitor TEXT;
+        ";
+
+        /// <summary>
+        /// Add loadbalancingpolicyid column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddLoadBalancingPolicyIdColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN loadbalancingpolicyid VARCHAR(48);
         ";
     }
 }

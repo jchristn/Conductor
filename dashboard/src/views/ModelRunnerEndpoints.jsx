@@ -11,6 +11,36 @@ import CopyableId from '../components/CopyableId';
 import HealthHistogram from '../components/HealthHistogram';
 import SensitiveInput from '../components/SensitiveInput';
 
+function formatBytes(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return '-';
+  if (value === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const exponent = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  const size = value / (1024 ** exponent);
+  return `${size.toFixed(size >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
+
+function formatTelemetryAge(timestampUtc) {
+  if (!timestampUtc) return 'Not collected';
+  const ageMs = Date.now() - new Date(timestampUtc).getTime();
+  if (ageMs < 1000) return 'Just now';
+  if (ageMs < 60000) return `${Math.floor(ageMs / 1000)}s ago`;
+  if (ageMs < 3600000) return `${Math.floor(ageMs / 60000)}m ago`;
+  return `${Math.floor(ageMs / 3600000)}h ago`;
+}
+
+function formatDateTime(timestampUtc) {
+  if (!timestampUtc) return '-';
+  return new Date(timestampUtc).toLocaleString();
+}
+
+function parseTelemetrySelectors(value) {
+  return (value || '')
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function ModelRunnerEndpoints() {
   const { api, setError } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
@@ -47,7 +77,19 @@ function ModelRunnerEndpoints() {
     HealthyThreshold: 2,
     HealthCheckUseAuth: false,
     MaxParallelRequests: 4,
-    Weight: 1
+    Weight: 1,
+    RigMonitorEnabled: false,
+    RigMonitorHostnameOverride: '',
+    RigMonitorPort: 9990,
+    RigMonitorUseSsl: false,
+    RigMonitorTimeoutMs: 5000,
+    RigMonitorCollectDuringHealthCheck: true,
+    RigMonitorRequireReadyz: true,
+    RigMonitorHealthAffectedByRigMonitor: false,
+    RigMonitorMaxTelemetryAgeMs: 30000,
+    RigMonitorCapabilitiesRefreshIntervalMs: 60000,
+    RigMonitorTelemetryProfile: 'Basic',
+    RigMonitorTelemetrySelectors: ''
   });
 
   const getApiTypeDefaults = (apiType) => {
@@ -209,8 +251,25 @@ function ModelRunnerEndpoints() {
     setHealthDetailLoading(true);
     setHealthDetailData(null);
     try {
-      const result = await api.getModelRunnerEndpointHealth(endpoint.Id);
-      setHealthDetailData(result);
+      const [healthResult, rigResult] = await Promise.allSettled([
+        api.getModelRunnerEndpointHealth(endpoint.Id, endpoint.TenantId),
+        api.getModelRunnerEndpointRigMonitor(endpoint.Id, endpoint.TenantId)
+      ]);
+
+      const health = healthResult.status === 'fulfilled' ? healthResult.value : (healthData[endpoint.Id] || null);
+      const rig = rigResult.status === 'fulfilled' ? rigResult.value : (health?.RigMonitor || null);
+      setHealthDetailData(health
+        ? { ...health, RigMonitor: rig }
+        : (rig
+            ? {
+                IsHealthy: false,
+                UptimePercentage: 0,
+                ConsecutiveSuccesses: 0,
+                ConsecutiveFailures: 0,
+                History: [],
+                RigMonitor: rig
+              }
+            : null));
     } catch {
       // Fall back to the bulk health data
       setHealthDetailData(healthData[endpoint.Id] || null);
@@ -310,7 +369,19 @@ function ModelRunnerEndpoints() {
       HealthyThreshold: 2,
       HealthCheckUseAuth: false,
       MaxParallelRequests: 4,
-      Weight: 1
+      Weight: 1,
+      RigMonitorEnabled: false,
+      RigMonitorHostnameOverride: '',
+      RigMonitorPort: 9990,
+      RigMonitorUseSsl: false,
+      RigMonitorTimeoutMs: 5000,
+      RigMonitorCollectDuringHealthCheck: true,
+      RigMonitorRequireReadyz: true,
+      RigMonitorHealthAffectedByRigMonitor: false,
+      RigMonitorMaxTelemetryAgeMs: 30000,
+      RigMonitorCapabilitiesRefreshIntervalMs: 60000,
+      RigMonitorTelemetryProfile: 'Basic',
+      RigMonitorTelemetrySelectors: ''
     });
     setShowForm(true);
   };
@@ -344,7 +415,19 @@ function ModelRunnerEndpoints() {
       HealthyThreshold: endpoint.HealthyThreshold || 2,
       HealthCheckUseAuth: endpoint.HealthCheckUseAuth || false,
       MaxParallelRequests: endpoint.MaxParallelRequests ?? 4,
-      Weight: endpoint.Weight || 1
+      Weight: endpoint.Weight || 1,
+      RigMonitorEnabled: endpoint.RigMonitor?.Enabled === true,
+      RigMonitorHostnameOverride: endpoint.RigMonitor?.HostnameOverride || '',
+      RigMonitorPort: endpoint.RigMonitor?.Port || 9990,
+      RigMonitorUseSsl: endpoint.RigMonitor?.UseSsl === true,
+      RigMonitorTimeoutMs: endpoint.RigMonitor?.TimeoutMs || 5000,
+      RigMonitorCollectDuringHealthCheck: endpoint.RigMonitor?.CollectDuringHealthCheck !== false,
+      RigMonitorRequireReadyz: endpoint.RigMonitor?.RequireReadyz !== false,
+      RigMonitorHealthAffectedByRigMonitor: endpoint.RigMonitor?.HealthAffectedByRigMonitor === true,
+      RigMonitorMaxTelemetryAgeMs: endpoint.RigMonitor?.MaxTelemetryAgeMs || 30000,
+      RigMonitorCapabilitiesRefreshIntervalMs: endpoint.RigMonitor?.CapabilitiesRefreshIntervalMs || 60000,
+      RigMonitorTelemetryProfile: endpoint.RigMonitor?.TelemetryProfile || 'Basic',
+      RigMonitorTelemetrySelectors: (endpoint.RigMonitor?.TelemetrySelectors || []).join(', ')
     });
     setShowForm(true);
   };
@@ -378,6 +461,7 @@ function ModelRunnerEndpoints() {
     try {
       let labels = [];
       let tags = {};
+      const telemetrySelectors = parseTelemetrySelectors(formData.RigMonitorTelemetrySelectors);
 
       try {
         labels = JSON.parse(formData.LabelsJson || '[]');
@@ -414,7 +498,21 @@ function ModelRunnerEndpoints() {
         HealthyThreshold: parseInt(formData.HealthyThreshold),
         HealthCheckUseAuth: formData.HealthCheckUseAuth,
         MaxParallelRequests: parseInt(formData.MaxParallelRequests),
-        Weight: parseInt(formData.Weight)
+        Weight: parseInt(formData.Weight),
+        RigMonitor: {
+          Enabled: formData.RigMonitorEnabled,
+          HostnameOverride: formData.RigMonitorHostnameOverride || null,
+          Port: parseInt(formData.RigMonitorPort, 10),
+          UseSsl: formData.RigMonitorUseSsl,
+          TimeoutMs: parseInt(formData.RigMonitorTimeoutMs, 10),
+          CollectDuringHealthCheck: formData.RigMonitorCollectDuringHealthCheck,
+          RequireReadyz: formData.RigMonitorRequireReadyz,
+          HealthAffectedByRigMonitor: formData.RigMonitorHealthAffectedByRigMonitor,
+          MaxTelemetryAgeMs: parseInt(formData.RigMonitorMaxTelemetryAgeMs, 10),
+          CapabilitiesRefreshIntervalMs: parseInt(formData.RigMonitorCapabilitiesRefreshIntervalMs, 10),
+          TelemetryProfile: formData.RigMonitorTelemetryProfile,
+          TelemetrySelectors: telemetrySelectors
+        }
       };
 
       if (editMode) {
@@ -460,6 +558,25 @@ function ModelRunnerEndpoints() {
       label: 'API Type',
       tooltip: 'API format used by this endpoint (Ollama, OpenAI, vLLM, or Gemini)',
       width: '100px'
+    },
+    {
+      key: 'RigMonitor',
+      label: 'RigMonitor',
+      tooltip: 'Whether this endpoint is configured to collect RigMonitor telemetry during health checks',
+      width: '120px',
+      render: (item) => {
+        const rig = healthData[item.Id]?.RigMonitor;
+        if (item.RigMonitor?.Enabled !== true) {
+          return <span style={{ color: 'var(--text-secondary)' }}>Off</span>;
+        }
+
+        return (
+          <span className={`status-badge ${rig?.Ready === false ? 'unhealthy' : 'healthy'}`}>
+            {rig?.Ready === false ? 'Issue' : 'Enabled'}
+          </span>
+        );
+      },
+      filterValue: (item) => item.RigMonitor?.Enabled === true ? 'enabled' : 'disabled'
     },
     {
       key: 'Active',
@@ -693,6 +810,163 @@ function ModelRunnerEndpoints() {
             />
           </div>
 
+          <h3 style={{ marginTop: '24px', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>RigMonitor</h3>
+
+          <div className="form-group checkbox-group">
+            <label title="Enable cached RigMonitor host telemetry collection for this endpoint during the health-check loop">
+              <input
+                type="checkbox"
+                checked={formData.RigMonitorEnabled}
+                onChange={(e) => setFormData({ ...formData, RigMonitorEnabled: e.target.checked })}
+              />
+              Enable RigMonitor
+            </label>
+          </div>
+
+          {formData.RigMonitorEnabled && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="rigMonitorHostnameOverride" title="Optional RigMonitor hostname override. Leave blank to reuse the endpoint hostname.">RigMonitor Hostname Override</label>
+                  <input
+                    type="text"
+                    id="rigMonitorHostnameOverride"
+                    value={formData.RigMonitorHostnameOverride}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorHostnameOverride: e.target.value })}
+                    placeholder="Leave blank to reuse endpoint hostname"
+                  />
+                </div>
+                <div className="form-group" style={{ maxWidth: '120px' }}>
+                  <label htmlFor="rigMonitorPort" title="RigMonitor REST API port">RigMonitor Port</label>
+                  <input
+                    type="number"
+                    id="rigMonitorPort"
+                    value={formData.RigMonitorPort}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorPort: e.target.value })}
+                    min="1"
+                    max="65535"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="rigMonitorTimeoutMs" title="HTTP timeout for RigMonitor REST calls">RigMonitor Timeout (ms)</label>
+                  <input
+                    type="number"
+                    id="rigMonitorTimeoutMs"
+                    value={formData.RigMonitorTimeoutMs}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorTimeoutMs: e.target.value })}
+                    min="1000"
+                    step="1000"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="rigMonitorTelemetryProfile" title="Predefined selector profile used when fetching RigMonitor telemetry">Telemetry Profile</label>
+                  <select
+                    id="rigMonitorTelemetryProfile"
+                    value={formData.RigMonitorTelemetryProfile}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorTelemetryProfile: e.target.value })}
+                  >
+                    <option value="Basic">Basic</option>
+                    <option value="GpuPlacement">GPU Placement</option>
+                    <option value="OllamaPlacement">Ollama Placement</option>
+                    <option value="Full">Full</option>
+                    <option value="Custom">Custom</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="rigMonitorMaxTelemetryAgeMs" title="Telemetry older than this is treated as stale for policy evaluation">Max Telemetry Age (ms)</label>
+                  <input
+                    type="number"
+                    id="rigMonitorMaxTelemetryAgeMs"
+                    value={formData.RigMonitorMaxTelemetryAgeMs}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorMaxTelemetryAgeMs: e.target.value })}
+                    min="1000"
+                    step="1000"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="rigMonitorCapabilitiesRefreshIntervalMs" title="How often Conductor refreshes RigMonitor capabilities">Capabilities Refresh (ms)</label>
+                  <input
+                    type="number"
+                    id="rigMonitorCapabilitiesRefreshIntervalMs"
+                    value={formData.RigMonitorCapabilitiesRefreshIntervalMs}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorCapabilitiesRefreshIntervalMs: e.target.value })}
+                    min="1000"
+                    step="1000"
+                  />
+                </div>
+              </div>
+
+              {formData.RigMonitorTelemetryProfile === 'Custom' && (
+                <div className="form-group">
+                  <label htmlFor="rigMonitorTelemetrySelectors" title="Comma or newline separated RigMonitor selectors such as cpu, memory, gpu, and ollama">Telemetry Selectors</label>
+                  <textarea
+                    id="rigMonitorTelemetrySelectors"
+                    value={formData.RigMonitorTelemetrySelectors}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorTelemetrySelectors: e.target.value })}
+                    rows={3}
+                    className="code-input"
+                    placeholder="cpu, memory, gpu"
+                  />
+                </div>
+              )}
+
+              <div className="form-group checkbox-group">
+                <label title="Use HTTPS for RigMonitor instead of HTTP">
+                  <input
+                    type="checkbox"
+                    checked={formData.RigMonitorUseSsl}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorUseSsl: e.target.checked })}
+                  />
+                  Use SSL for RigMonitor
+                </label>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <label title="Collect RigMonitor telemetry during the normal health-check loop">
+                  <input
+                    type="checkbox"
+                    checked={formData.RigMonitorCollectDuringHealthCheck}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorCollectDuringHealthCheck: e.target.checked })}
+                  />
+                  Collect Telemetry During Health Checks
+                </label>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <label title="Require RigMonitor /readyz to report ready before telemetry is considered current">
+                  <input
+                    type="checkbox"
+                    checked={formData.RigMonitorRequireReadyz}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorRequireReadyz: e.target.checked })}
+                  />
+                  Require /readyz
+                </label>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <label title="Allow RigMonitor readiness or telemetry failures to affect endpoint health">
+                  <input
+                    type="checkbox"
+                    checked={formData.RigMonitorHealthAffectedByRigMonitor}
+                    onChange={(e) => setFormData({ ...formData, RigMonitorHealthAffectedByRigMonitor: e.target.checked })}
+                  />
+                  RigMonitor Affects Endpoint Health
+                </label>
+              </div>
+
+              {editMode && selectedEndpoint && (
+                <div className="form-actions" style={{ justifyContent: 'flex-start', marginTop: '8px' }}>
+                  <button type="button" className="btn-secondary" onClick={() => handleViewHealth(selectedEndpoint)}>
+                    Test RigMonitor
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
           <h3 style={{ marginTop: '24px', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>Health Check Configuration</h3>
 
           <div className="form-row">
@@ -904,6 +1178,14 @@ function ModelRunnerEndpoints() {
             ? new Date() - new Date([...history].sort((a, b) => new Date(a.TimestampUtc) - new Date(b.TimestampUtc))[0].TimestampUtc)
             : 0;
           const historySpanStr = historySpanMs > 0 ? formatDuration(historySpanMs) : 'No data';
+          const rigMonitorStatusMessage = h?.RigMonitor?.LastError || h?.RigMonitor?.ReadyMessage || '';
+          const rigMonitorStatusTone = h?.RigMonitor?.LastError
+            ? 'error'
+            : (h?.RigMonitor?.Ready === true
+              ? 'success'
+              : (h?.RigMonitor?.Ready === false ? 'warning' : 'neutral'));
+          const loadedOllamaModels = h?.RigMonitor?.Telemetry?.Ollama?.LoadedModels || [];
+          const showLoadedOllamaModels = loadedOllamaModels.length > 1;
 
           return (
             <div className="health-modal">
@@ -982,6 +1264,141 @@ function ModelRunnerEndpoints() {
                       <span className="health-timestamp-value">{h.LastUnhealthyUtc ? new Date(h.LastUnhealthyUtc).toLocaleString() : 'N/A'}</span>
                     </div>
                   </div>
+
+                  {h.RigMonitor?.Enabled && (
+                    <>
+                      <div className="health-section-label" style={{ marginTop: '20px' }}>RigMonitor</div>
+                      <div className="health-stats-row">
+                        <div className="health-stat-card" title="Cached RigMonitor readiness">
+                          <div className="health-stat-label">Ready</div>
+                          <div className="health-stat-value">
+                            <span className={`status-badge ${h.RigMonitor.Ready === false ? 'unhealthy' : 'healthy'}`}>
+                              {h.RigMonitor.Ready === false ? 'Not Ready' : (h.RigMonitor.Ready === true ? 'Ready' : 'Unknown')}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="health-stat-card" title="RigMonitor base URL Conductor is polling">
+                          <div className="health-stat-label">Base URL</div>
+                          <div className="health-stat-value" style={{ fontSize: '13px' }}>{h.RigMonitor.BaseUrl || 'N/A'}</div>
+                        </div>
+                        <div className="health-stat-card" title="Age of the latest cached telemetry snapshot">
+                          <div className="health-stat-label">Telemetry Age</div>
+                          <div className="health-stat-value">{formatTelemetryAge(h.RigMonitor.LastTelemetryUtc)}</div>
+                        </div>
+                        <div className="health-stat-card" title="Most recent telemetry collection time">
+                          <div className="health-stat-label">Last Telemetry</div>
+                          <div className="health-stat-value">{h.RigMonitor.LastTelemetryUtc ? new Date(h.RigMonitor.LastTelemetryUtc).toLocaleString() : 'N/A'}</div>
+                        </div>
+                      </div>
+
+                      {rigMonitorStatusMessage && (
+                        <div className={`health-status-box ${rigMonitorStatusTone}`} title="Latest cached RigMonitor status message or error">
+                          <div className="health-status-label">RigMonitor Status</div>
+                          <div className="health-status-message">{rigMonitorStatusMessage}</div>
+                        </div>
+                      )}
+
+                      <div className="health-timestamps">
+                        <div className="health-timestamp-item" title="The last time RigMonitor /readyz was checked">
+                          <span className="health-timestamp-label">Last /readyz</span>
+                          <span className="health-timestamp-value">{h.RigMonitor.LastReadyzUtc ? new Date(h.RigMonitor.LastReadyzUtc).toLocaleString() : 'N/A'}</span>
+                        </div>
+                        <div className="health-timestamp-item" title="The last time RigMonitor capabilities were refreshed">
+                          <span className="health-timestamp-label">Last capabilities</span>
+                          <span className="health-timestamp-value">{h.RigMonitor.LastCapabilitiesUtc ? new Date(h.RigMonitor.LastCapabilitiesUtc).toLocaleString() : 'N/A'}</span>
+                        </div>
+                        <div className="health-timestamp-item" title="Whether RigMonitor reports warmed telemetry">
+                          <span className="health-timestamp-label">Telemetry warm</span>
+                          <span className="health-timestamp-value">{h.RigMonitor.Capabilities?.TelemetryWarm === true ? 'Yes' : 'No'}</span>
+                        </div>
+                        <div className="health-timestamp-item" title="Whether RigMonitor reports Nvidia GPU availability">
+                          <span className="health-timestamp-label">GPU available</span>
+                          <span className="health-timestamp-value">{h.RigMonitor.Capabilities?.NvidiaAvailable === true ? 'Yes' : 'No'}</span>
+                        </div>
+                      </div>
+
+                      {h.RigMonitor.Telemetry && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginTop: '16px' }}>
+                          <div className="health-stat-card" title="Cached CPU utilization from RigMonitor">
+                            <div className="health-stat-label">CPU Utilization</div>
+                            <div className="health-stat-value">
+                              {h.RigMonitor.Telemetry.Cpu?.UtilizationPercent !== null && h.RigMonitor.Telemetry.Cpu?.UtilizationPercent !== undefined
+                                ? `${h.RigMonitor.Telemetry.Cpu.UtilizationPercent.toFixed(1)}%`
+                                : '-'}
+                            </div>
+                          </div>
+                          <div className="health-stat-card" title="Cached available memory from RigMonitor">
+                            <div className="health-stat-label">Memory Free</div>
+                            <div className="health-stat-value">{formatBytes(h.RigMonitor.Telemetry.Memory?.AvailableBytes)}</div>
+                          </div>
+                          <div className="health-stat-card" title="Cached aggregate network receive throughput">
+                            <div className="health-stat-label">Network RX/s</div>
+                            <div className="health-stat-value">{formatBytes(h.RigMonitor.Telemetry.Network?.TotalReceiveBytesPerSecond)}</div>
+                          </div>
+                          <div className="health-stat-card" title="Maximum disk utilization across cached volume telemetry">
+                            <div className="health-stat-label">Disk Utilization</div>
+                            <div className="health-stat-value">
+                              {h.RigMonitor.Telemetry.Disk?.Volumes?.length
+                                ? `${Math.max(...h.RigMonitor.Telemetry.Disk.Volumes.map((volume) => volume.UtilizationPercent || 0)).toFixed(1)}%`
+                                : '-'}
+                            </div>
+                          </div>
+                          <div className="health-stat-card" title="Average cached GPU utilization across devices">
+                            <div className="health-stat-label">GPU Utilization</div>
+                            <div className="health-stat-value">
+                              {h.RigMonitor.Telemetry.Gpu?.Devices?.length
+                                ? `${(h.RigMonitor.Telemetry.Gpu.Devices
+                                    .map((device) => device.Metrics?.GpuUtilizationPercent || 0)
+                                    .reduce((sum, value) => sum + value, 0) / h.RigMonitor.Telemetry.Gpu.Devices.length).toFixed(1)}%`
+                                : '-'}
+                            </div>
+                          </div>
+                          <div className="health-stat-card" title="Cached Ollama loaded model count, if available">
+                            <div className="health-stat-label">Loaded Models</div>
+                            <div className="health-stat-value">{h.RigMonitor.Telemetry.Ollama?.LoadedModelCount ?? '-'}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {showLoadedOllamaModels && (
+                        <div className="health-table-section">
+                          <div className="health-section-label">Loaded Ollama Models</div>
+                          <div className="health-table-container">
+                            <table className="health-table">
+                              <thead>
+                                <tr>
+                                  <th title="Model name or tag currently loaded in Ollama">Model</th>
+                                  <th title="Model family reported by Ollama telemetry">Family</th>
+                                  <th title="Parameter size reported by Ollama telemetry">Parameters</th>
+                                  <th title="Model format reported by Ollama telemetry">Format</th>
+                                  <th title="Quantization level reported by Ollama telemetry">Quantization</th>
+                                  <th title="Resident model size in bytes">Size</th>
+                                  <th title="VRAM footprint reported by Ollama telemetry">VRAM</th>
+                                  <th title="When Ollama plans to evict the model from memory">Expires</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {loadedOllamaModels.map((model, index) => (
+                                  <tr key={`${model.Name || model.Model || 'model'}-${index}`}>
+                                    <td title={model.Model || model.Name || ''}>
+                                      {model.Name || model.Model || '-'}
+                                    </td>
+                                    <td>{model.Family || '-'}</td>
+                                    <td>{model.ParameterSize || '-'}</td>
+                                    <td>{model.Format || '-'}</td>
+                                    <td>{model.QuantizationLevel || '-'}</td>
+                                    <td>{formatBytes(model.SizeBytes)}</td>
+                                    <td>{formatBytes(model.SizeVramBytes)}</td>
+                                    <td>{formatDateTime(model.ExpiresAtUtc)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </>
               ) : null}
             </div>

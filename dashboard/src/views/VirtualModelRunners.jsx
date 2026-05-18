@@ -44,6 +44,7 @@ function VirtualModelRunners() {
   const [endpoints, setEndpoints] = useState([]);
   const [configurations, setConfigurations] = useState([]);
   const [definitions, setDefinitions] = useState([]);
+  const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -61,6 +62,7 @@ function VirtualModelRunners() {
     BasePath: '',
     ApiType: 'OpenAI',
     LoadBalancingMode: 'RoundRobin',
+    LoadBalancingPolicyId: '',
     ModelRunnerEndpointIds: [],
     ModelConfigurationIds: [],
     ModelDefinitionIds: [],
@@ -83,18 +85,20 @@ function VirtualModelRunners() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [vmrResult, tenantsResult, endpointsResult, configurationsResult, definitionsResult] = await Promise.all([
+      const [vmrResult, tenantsResult, endpointsResult, configurationsResult, definitionsResult, policiesResult] = await Promise.all([
         api.listVirtualModelRunners({ maxResults: 1000 }),
         api.listTenants({ maxResults: 1000 }),
         api.listModelRunnerEndpoints({ maxResults: 1000 }),
         api.listModelConfigurations({ maxResults: 1000 }),
-        api.listModelDefinitions({ maxResults: 1000 })
+        api.listModelDefinitions({ maxResults: 1000 }),
+        api.listLoadBalancingPolicies({ maxResults: 1000 })
       ]);
       setVmrs(vmrResult.Data || []);
       setTenants(tenantsResult.Data || []);
       setEndpoints(endpointsResult.Data || []);
       setConfigurations(configurationsResult.Data || []);
       setDefinitions(definitionsResult.Data || []);
+      setPolicies(policiesResult.Data || []);
     } catch (err) {
       setError('Failed to fetch data: ' + err.message);
     } finally {
@@ -122,6 +126,7 @@ function VirtualModelRunners() {
       BasePath: '',
       ApiType: 'OpenAI',
       LoadBalancingMode: 'RoundRobin',
+      LoadBalancingPolicyId: '',
       ModelRunnerEndpointIds: [],
       ModelConfigurationIds: [],
       ModelDefinitionIds: [],
@@ -153,6 +158,7 @@ function VirtualModelRunners() {
       BasePath: vmr.BasePath || '',
       ApiType: vmr.ApiType || 'OpenAI',
       LoadBalancingMode: vmr.LoadBalancingMode || 'RoundRobin',
+      LoadBalancingPolicyId: vmr.LoadBalancingPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
       ModelConfigurationIds: vmr.ModelConfigurationIds || [],
       ModelDefinitionIds: vmr.ModelDefinitionIds || [],
@@ -281,6 +287,7 @@ function VirtualModelRunners() {
         BasePath: normalizedBasePath,
         ApiType: formData.ApiType,
         LoadBalancingMode: formData.LoadBalancingMode,
+        LoadBalancingPolicyId: formData.LoadBalancingPolicyId || null,
         ModelRunnerEndpointIds: formData.ModelRunnerEndpointIds,
         ModelConfigurationIds: formData.ModelConfigurationIds,
         ModelDefinitionIds: formData.ModelDefinitionIds,
@@ -405,10 +412,15 @@ function VirtualModelRunners() {
       key: 'LoadBalancingMode',
       label: 'Load Balancing',
       tooltip: 'How requests are distributed across endpoints. Session affinity, if enabled, pins clients to specific endpoints.',
-      width: '140px',
+      width: '220px',
       render: (item) => (
         <span>
-          {item.LoadBalancingMode}
+          {item.LoadBalancingPolicyId
+            ? (policies.find((policy) => policy.Id === item.LoadBalancingPolicyId)?.Name || item.LoadBalancingPolicyId)
+            : item.LoadBalancingMode}
+          {item.LoadBalancingPolicyId && (
+            <small style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>(Policy)</small>
+          )}
           {item.SessionAffinityMode && item.SessionAffinityMode !== 'None' && (
             <small style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>(Pinned)</small>
           )}
@@ -487,6 +499,7 @@ function VirtualModelRunners() {
               onChange={(e) => setFormData({
                 ...formData,
                 TenantId: e.target.value,
+                LoadBalancingPolicyId: '',
                 ModelRunnerEndpointIds: [],
                 ModelConfigurationIds: [],
                 ModelDefinitionIds: []
@@ -556,7 +569,24 @@ function VirtualModelRunners() {
               </select>
             </div>
             <div className="form-group">
-              <label htmlFor="loadBalancingMode" title="How requests are distributed across endpoints">Load Balancing Mode</label>
+              <label htmlFor="loadBalancingPolicyId" title="Attach a reusable load-balancing policy that can use cached health and RigMonitor telemetry">Load Balancing Policy</label>
+              <select
+                id="loadBalancingPolicyId"
+                value={formData.LoadBalancingPolicyId}
+                onChange={(e) => setFormData({ ...formData, LoadBalancingPolicyId: e.target.value })}
+              >
+                <option value="">-- None (legacy mode only) --</option>
+                {policies
+                  .filter((policy) => !formData.TenantId || policy.TenantId === formData.TenantId)
+                  .map((policy) => (
+                    <option key={policy.Id} value={policy.Id}>
+                      {policy.Name} ({policy.Id})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="loadBalancingMode" title="Legacy selection mode, and fallback behavior when an attached policy is configured to fall back">Legacy Load Balancing Mode</label>
               <select
                 id="loadBalancingMode"
                 value={formData.LoadBalancingMode}
@@ -579,6 +609,12 @@ function VirtualModelRunners() {
               />
             </div>
           </div>
+
+          {formData.LoadBalancingPolicyId && (
+            <p className="form-help" style={{ marginTop: '-8px', marginBottom: '16px' }}>
+              The attached policy drives endpoint eligibility and ranking. The legacy load balancing mode remains available as the fallback path if the policy is configured to use it.
+            </p>
+          )}
 
           <div className="form-row">
             <div className="form-group">

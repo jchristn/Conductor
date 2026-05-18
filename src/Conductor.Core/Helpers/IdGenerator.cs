@@ -44,6 +44,11 @@ namespace Conductor.Core.Helpers
         public const string VirtualModelRunnerPrefix = "vmr_";
 
         /// <summary>
+        /// Load-balancing policy ID prefix.
+        /// </summary>
+        public const string LoadBalancingPolicyPrefix = "lbp_";
+
+        /// <summary>
         /// Administrator ID prefix.
         /// </summary>
         public const string AdministratorPrefix = "admin_";
@@ -121,6 +126,15 @@ namespace Conductor.Core.Helpers
         public static string NewVirtualModelRunnerId()
         {
             return _Generator.GenerateKSortable(VirtualModelRunnerPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new load-balancing policy ID.
+        /// </summary>
+        /// <returns>K-sortable load-balancing policy ID.</returns>
+        public static string NewLoadBalancingPolicyId()
+        {
+            return _Generator.GenerateKSortable(LoadBalancingPolicyPrefix, DefaultIdLength);
         }
 
         /// <summary>

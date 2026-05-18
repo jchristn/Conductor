@@ -190,6 +190,7 @@ namespace Conductor.Server
                 openApi.Tags.Add(new OpenApiTag { Name = "Model Runner Endpoints", Description = "Model runner endpoint management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Model Definitions", Description = "Model definition management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Model Configurations", Description = "Model configuration management" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Load Balancing Policies", Description = "Load-balancing policy management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Virtual Model Runners", Description = "Virtual model runner management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Administrators", Description = "Administrator management endpoints" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Backup", Description = "Backup and restore endpoints" });
@@ -358,6 +359,7 @@ namespace Conductor.Server
             Controllers.ModelRunnerEndpointController mreController = new Controllers.ModelRunnerEndpointController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService);
             Controllers.ModelDefinitionController mdController = new Controllers.ModelDefinitionController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.ModelConfigurationController mcController = new Controllers.ModelConfigurationController(_Database, _AuthService, _Serializer, _Logging);
+            Controllers.LoadBalancingPolicyController lbpController = new Controllers.LoadBalancingPolicyController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.VirtualModelRunnerController vmrController = new Controllers.VirtualModelRunnerController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService);
             Controllers.AuthController authController = new Controllers.AuthController(_Database, _AuthService, _Serializer, _Logging, _Settings.AdminApiKeys);
             Controllers.AdministratorController adminController = new Controllers.AdministratorController(_Database, _AuthService, _Serializer, _Logging);
@@ -713,6 +715,22 @@ namespace Conductor.Server
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);
 
+            _App.Get("/v1.0/modelrunnerendpoints/{id}/rigmonitor", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.GetRigMonitor(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Get cached RigMonitor status for an endpoint")
+                .WithDescription("Returns the cached RigMonitor readiness, capabilities, telemetry, and last error information for a specific model runner endpoint")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithResponse(200, Api.JsonResponse<RigMonitorEndpointStatus>("Cached RigMonitor status"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
             _App.Get("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
@@ -892,6 +910,122 @@ namespace Conductor.Server
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
                 .WithResponse(200, Api.JsonResponse<object>("List of model definitions with pagination info"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
+            #endregion
+
+            #region Load-Balancing-Policy-Routes
+
+            _App.Get("/v1.0/loadbalancingpolicies/metrics", async (req) =>
+            {
+                return lbpController.GetMetricsCatalog();
+            },
+            api => api
+                .WithTag("Load Balancing Policies")
+                .WithSummary("List supported load-balancing metrics")
+                .WithDescription("Returns the Conductor-owned metric catalog that can be used in load-balancing policy filters and ranking rules")
+                .WithSecurity("Bearer")
+                .WithResponse(200, Api.JsonResponse<LoadBalancingMetricsCatalog>("Supported load-balancing policy metrics"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
+            _App.Post<LoadBalancingPolicy>("/v1.0/loadbalancingpolicies", async (req) =>
+            {
+                LoadBalancingPolicy policy = req.Data as LoadBalancingPolicy;
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                req.Http.Response.StatusCode = 201;
+                return await lbpController.Create(tenantId, policy);
+            },
+            api => api
+                .WithTag("Load Balancing Policies")
+                .WithSummary("Create load-balancing policy")
+                .WithDescription("Create a new tenant-scoped load-balancing policy that can be attached to virtual model runners by ID")
+                .WithSecurity("Bearer")
+                .WithRequestBody(Api.JsonRequestBody<LoadBalancingPolicy>("Load-balancing policy to create", true))
+                .WithResponse(201, Api.JsonResponse<LoadBalancingPolicy>("Created load-balancing policy"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
+            _App.Get("/v1.0/loadbalancingpolicies/{id}", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await lbpController.Read(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Load Balancing Policies")
+                .WithSummary("Get load-balancing policy by ID")
+                .WithDescription("Retrieve a specific load-balancing policy by its unique identifier")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The load-balancing policy ID"))
+                .WithResponse(200, Api.JsonResponse<LoadBalancingPolicy>("Load-balancing policy details"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Put<LoadBalancingPolicy>("/v1.0/loadbalancingpolicies/{id}", async (req) =>
+            {
+                LoadBalancingPolicy policy = req.Data as LoadBalancingPolicy;
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                return await lbpController.Update(tenantId, req.Parameters["id"], policy);
+            },
+            api => api
+                .WithTag("Load Balancing Policies")
+                .WithSummary("Update load-balancing policy")
+                .WithDescription("Update an existing tenant-scoped load-balancing policy")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The load-balancing policy ID"))
+                .WithRequestBody(Api.JsonRequestBody<LoadBalancingPolicy>("Updated load-balancing policy data", true))
+                .WithResponse(200, Api.JsonResponse<LoadBalancingPolicy>("Updated load-balancing policy"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Delete("/v1.0/loadbalancingpolicies/{id}", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                req.Http.Response.StatusCode = 204;
+                await lbpController.Delete(tenantId, req.Parameters["id"]);
+                return null;
+            },
+            api => api
+                .WithTag("Load Balancing Policies")
+                .WithSummary("Delete load-balancing policy")
+                .WithDescription("Delete a load-balancing policy and detach it from any referencing virtual model runners")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The load-balancing policy ID"))
+                .WithResponse(204, OpenApiResponseMetadata.NoContent())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Get("/v1.0/loadbalancingpolicies", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                int? maxResults = null;
+                string maxResultsStr = req.Http.Request.Query.Elements.Get("maxResults");
+                if (!String.IsNullOrEmpty(maxResultsStr) && Int32.TryParse(maxResultsStr, out int max))
+                    maxResults = max;
+                bool? activeFilter = null;
+                string activeFilterStr = req.Http.Request.Query.Elements.Get("activeFilter");
+                if (!String.IsNullOrEmpty(activeFilterStr) && Boolean.TryParse(activeFilterStr, out bool active))
+                    activeFilter = active;
+                return await lbpController.Enumerate(tenantId, maxResults,
+                    req.Http.Request.Query.Elements.Get("continuationToken"),
+                    req.Http.Request.Query.Elements.Get("nameFilter"), activeFilter);
+            },
+            api => api
+                .WithTag("Load Balancing Policies")
+                .WithSummary("List load-balancing policies")
+                .WithDescription("Enumerate tenant-scoped load-balancing policies with optional filtering and pagination")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Query("maxResults", "Maximum number of results to return", false, OpenApiSchemaMetadata.Integer()))
+                .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
+                .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter by name", false))
+                .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
+                .WithResponse(200, Api.JsonResponse<object>("List of load-balancing policies with pagination info"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 

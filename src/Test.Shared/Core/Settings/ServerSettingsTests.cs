@@ -38,6 +38,11 @@ namespace Test.Shared.Core.Settings
             ServerSettings settings = new ServerSettings();
             settings.Webserver.Should().NotBeNull();
         }
+        public void Webserver_DefaultPort_Is9000()
+        {
+            ServerSettings settings = new ServerSettings();
+            settings.Webserver.Port.Should().Be(9000);
+        }
         public void Database_HasDefaultValue()
         {
             ServerSettings settings = new ServerSettings();
@@ -92,6 +97,14 @@ namespace Test.Shared.Core.Settings
             settings.Webserver = webserver;
             settings.Webserver.Hostname.Should().Be("0.0.0.0");
             settings.Webserver.Port.Should().Be(8080);
+        }
+        public void InvalidWebserverPort_RevertsToDefault()
+        {
+            WebserverSettings webserver = new WebserverSettings
+            {
+                Port = 0
+            };
+            webserver.Port.Should().Be(9000);
         }
         public void CanAssignDatabaseSettings()
         {

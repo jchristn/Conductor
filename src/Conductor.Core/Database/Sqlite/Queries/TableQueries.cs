@@ -103,6 +103,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 healthcheckuseauth INTEGER NOT NULL DEFAULT 0,
                 maxparallelrequests INTEGER NOT NULL DEFAULT 4,
                 weight INTEGER NOT NULL DEFAULT 1,
+                rigmonitor TEXT,
                 createdutc TEXT NOT NULL,
                 lastupdateutc TEXT NOT NULL,
                 labels TEXT,
@@ -176,6 +177,33 @@ namespace Conductor.Core.Database.Sqlite.Queries
         ";
 
         /// <summary>
+        /// Create load-balancing policies table.
+        /// </summary>
+        public static readonly string CreateLoadBalancingPoliciesTable = @"
+            CREATE TABLE IF NOT EXISTS loadbalancingpolicies (
+                id TEXT PRIMARY KEY,
+                tenantid TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                maxtelemetryagems INTEGER NOT NULL DEFAULT 30000,
+                filters TEXT,
+                ranking TEXT,
+                fallbackmode INTEGER NOT NULL DEFAULT 0,
+                tiebreaker INTEGER NOT NULL DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1,
+                createdutc TEXT NOT NULL,
+                lastupdateutc TEXT NOT NULL,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_lbp_tenantid ON loadbalancingpolicies(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_lbp_active ON loadbalancingpolicies(active);
+            CREATE INDEX IF NOT EXISTS idx_lbp_name ON loadbalancingpolicies(name);
+        ";
+
+        /// <summary>
         /// Create virtual model runners table.
         /// </summary>
         public static readonly string CreateVirtualModelRunnersTable = @"
@@ -201,6 +229,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
                 sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
                 requesthistoryenabled INTEGER NOT NULL DEFAULT 0,
+                loadbalancingpolicyid TEXT,
                 active INTEGER NOT NULL DEFAULT 1,
                 createdutc TEXT NOT NULL,
                 lastupdateutc TEXT NOT NULL,
@@ -296,6 +325,20 @@ namespace Conductor.Core.Database.Sqlite.Queries
         /// </summary>
         public static readonly string AddFirstTokenTimeMsColumn = @"
             ALTER TABLE requesthistory ADD COLUMN firsttokentimems INTEGER;
+        ";
+
+        /// <summary>
+        /// Add rigmonitor column to modelrunnerendpoints table (migration).
+        /// </summary>
+        public static readonly string AddRigMonitorColumn = @"
+            ALTER TABLE modelrunnerendpoints ADD COLUMN rigmonitor TEXT;
+        ";
+
+        /// <summary>
+        /// Add loadbalancingpolicyid column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddLoadBalancingPolicyIdColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN loadbalancingpolicyid TEXT;
         ";
     }
 }

@@ -87,6 +87,11 @@ namespace Conductor.Core.Models
         public string LastError { get; set; }
 
         /// <summary>
+        /// Cached RigMonitor state for this endpoint.
+        /// </summary>
+        public RigMonitorEndpointStatus RigMonitor { get; set; } = null;
+
+        /// <summary>
         /// History of recent health check results.
         /// Thread-safe access requires holding the Lock.
         /// </summary>
@@ -128,7 +133,8 @@ namespace Conductor.Core.Models
                 ConsecutiveFailures = this.ConsecutiveFailures,
                 InFlightRequests = this.InFlightRequests,
                 LastError = this.LastError,
-                CheckHistory = this.CheckHistory.ToList()
+                CheckHistory = this.CheckHistory.ToList(),
+                RigMonitor = this.RigMonitor?.DeepCopy()
             };
         }
     }

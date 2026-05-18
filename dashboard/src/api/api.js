@@ -1,8 +1,10 @@
-const DEFAULT_API_URL = window.CONDUCTOR_SERVER_URL || 'http://localhost:9000';
+import { DEFAULT_SERVER_URL, persistServerUrl, resolveInitialServerUrl } from '../config/serverUrl';
+
+const DEFAULT_API_URL = DEFAULT_SERVER_URL;
 
 class ConductorApi {
   constructor() {
-    this.baseUrl = localStorage.getItem('conductor_server_url') || DEFAULT_API_URL;
+    this.baseUrl = resolveInitialServerUrl() || DEFAULT_API_URL;
     this.pendingRequests = new Map();
 
     // Check if logged in as admin
@@ -28,9 +30,9 @@ class ConductorApi {
     }
   }
 
-  setBaseUrl(url) {
+  setBaseUrl(url, source = 'user') {
     this.baseUrl = url;
-    localStorage.setItem('conductor_server_url', url);
+    persistServerUrl(url, source);
   }
 
   setBearerToken(token) {
@@ -280,8 +282,9 @@ class ConductorApi {
     return this.dedupedRequest(`listModelRunnerEndpoints:${query}`, 'GET', `/v1.0/modelrunnerendpoints${query}`);
   }
 
-  async getModelRunnerEndpoint(id) {
-    return this.request('GET', `/v1.0/modelrunnerendpoints/${id}`);
+  async getModelRunnerEndpoint(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/modelrunnerendpoints/${id}${query}`);
   }
 
   async createModelRunnerEndpoint(endpoint) {
@@ -301,8 +304,14 @@ class ConductorApi {
     return this.request('GET', '/v1.0/modelrunnerendpoints/health');
   }
 
-  async getModelRunnerEndpointHealth(id) {
-    return this.request('GET', `/v1.0/modelrunnerendpoints/${id}/health`);
+  async getModelRunnerEndpointHealth(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/modelrunnerendpoints/${id}/health${query}`);
+  }
+
+  async getModelRunnerEndpointRigMonitor(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/modelrunnerendpoints/${id}/rigmonitor${query}`);
   }
 
   // Model Definition APIs
@@ -351,14 +360,43 @@ class ConductorApi {
     return this.request('DELETE', `/v1.0/modelconfigurations/${id}${query}`);
   }
 
+  // Load Balancing Policy APIs
+  async listLoadBalancingPolicies(params = {}) {
+    const query = this.buildQueryString(params);
+    return this.dedupedRequest(`listLoadBalancingPolicies:${query}`, 'GET', `/v1.0/loadbalancingpolicies${query}`);
+  }
+
+  async getLoadBalancingPolicy(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/loadbalancingpolicies/${id}${query}`);
+  }
+
+  async createLoadBalancingPolicy(policy) {
+    return this.request('POST', '/v1.0/loadbalancingpolicies', policy);
+  }
+
+  async updateLoadBalancingPolicy(id, policy) {
+    return this.request('PUT', `/v1.0/loadbalancingpolicies/${id}`, policy);
+  }
+
+  async deleteLoadBalancingPolicy(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('DELETE', `/v1.0/loadbalancingpolicies/${id}${query}`);
+  }
+
+  async getLoadBalancingPolicyMetrics() {
+    return this.request('GET', '/v1.0/loadbalancingpolicies/metrics');
+  }
+
   // Virtual Model Runner APIs
   async listVirtualModelRunners(params = {}) {
     const query = this.buildQueryString(params);
     return this.dedupedRequest(`listVirtualModelRunners:${query}`, 'GET', `/v1.0/virtualmodelrunners${query}`);
   }
 
-  async getVirtualModelRunner(id) {
-    return this.request('GET', `/v1.0/virtualmodelrunners/${id}`);
+  async getVirtualModelRunner(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/virtualmodelrunners/${id}${query}`);
   }
 
   async createVirtualModelRunner(vmr) {

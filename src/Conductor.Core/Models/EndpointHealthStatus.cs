@@ -107,6 +107,11 @@ namespace Conductor.Core.Models
         public List<HealthCheckRecord> History { get; set; } = new List<HealthCheckRecord>();
 
         /// <summary>
+        /// Cached RigMonitor status.
+        /// </summary>
+        public RigMonitorEndpointStatus RigMonitor { get; set; } = null;
+
+        /// <summary>
         /// Create an EndpointHealthStatus from an EndpointHealthState.
         /// </summary>
         public static EndpointHealthStatus FromState(EndpointHealthState state, ModelRunnerEndpoint endpoint)
@@ -129,7 +134,8 @@ namespace Conductor.Core.Models
                 Weight = endpoint?.Weight ?? 1,
                 LastError = state.LastError,
                 LastStateChangeUtc = state.LastStateChangeUtc,
-                History = state.CheckHistory ?? new List<HealthCheckRecord>()
+                History = state.CheckHistory ?? new List<HealthCheckRecord>(),
+                RigMonitor = state.RigMonitor?.DeepCopy()
             };
         }
     }

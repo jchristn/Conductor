@@ -118,6 +118,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 healthcheckuseauth BIT NOT NULL DEFAULT 0,
                 maxparallelrequests INT NOT NULL DEFAULT 4,
                 weight INT NOT NULL DEFAULT 1,
+                rigmonitor NVARCHAR(MAX),
                 createdutc DATETIME2 NOT NULL,
                 lastupdateutc DATETIME2 NOT NULL,
                 labels NVARCHAR(MAX),
@@ -204,6 +205,37 @@ namespace Conductor.Core.Database.SqlServer.Queries
         ";
 
         /// <summary>
+        /// Create load-balancing policies table.
+        /// </summary>
+        public static readonly string CreateLoadBalancingPoliciesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='loadbalancingpolicies' AND xtype='U')
+            CREATE TABLE loadbalancingpolicies (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                maxtelemetryagems INT NOT NULL DEFAULT 30000,
+                filters NVARCHAR(MAX),
+                ranking NVARCHAR(MAX),
+                fallbackmode INT NOT NULL DEFAULT 0,
+                tiebreaker INT NOT NULL DEFAULT 0,
+                active BIT NOT NULL DEFAULT 1,
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL,
+                labels NVARCHAR(MAX),
+                tags NVARCHAR(MAX),
+                metadata NVARCHAR(MAX),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lbp_tenantid')
+            CREATE INDEX idx_lbp_tenantid ON loadbalancingpolicies(tenantid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lbp_active')
+            CREATE INDEX idx_lbp_active ON loadbalancingpolicies(active);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_lbp_name')
+            CREATE INDEX idx_lbp_name ON loadbalancingpolicies(name);
+        ";
+
+        /// <summary>
         /// Create virtual model runners table.
         /// </summary>
         public static readonly string CreateVirtualModelRunnersTable = @"
@@ -230,6 +262,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 sessiontimeoutms INT NOT NULL DEFAULT 600000,
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
                 requesthistoryenabled BIT NOT NULL DEFAULT 0,
+                loadbalancingpolicyid NVARCHAR(48),
                 active BIT NOT NULL DEFAULT 1,
                 createdutc DATETIME2 NOT NULL,
                 lastupdateutc DATETIME2 NOT NULL,
@@ -337,6 +370,20 @@ namespace Conductor.Core.Database.SqlServer.Queries
         /// </summary>
         public static readonly string AddFirstTokenTimeMsColumn = @"
             ALTER TABLE requesthistory ADD firsttokentimems INT;
+        ";
+
+        /// <summary>
+        /// Add rigmonitor column to modelrunnerendpoints table (migration).
+        /// </summary>
+        public static readonly string AddRigMonitorColumn = @"
+            ALTER TABLE modelrunnerendpoints ADD rigmonitor NVARCHAR(MAX);
+        ";
+
+        /// <summary>
+        /// Add loadbalancingpolicyid column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddLoadBalancingPolicyIdColumn = @"
+            ALTER TABLE virtualmodelrunners ADD loadbalancingpolicyid NVARCHAR(48);
         ";
     }
 }

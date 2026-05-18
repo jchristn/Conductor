@@ -14,6 +14,7 @@ import Credentials from './views/Credentials';
 import ModelRunnerEndpoints from './views/ModelRunnerEndpoints';
 import ModelDefinitions from './views/ModelDefinitions';
 import ModelConfigurations from './views/ModelConfigurations';
+import LoadBalancingPolicies from './views/LoadBalancingPolicies';
 import VirtualModelRunners from './views/VirtualModelRunners';
 import RequestHistory from './views/RequestHistory';
 import ApiExplorer from './views/ApiExplorer';
@@ -46,6 +47,7 @@ function App() {
             <Route path="/endpoints" element={<ModelRunnerEndpoints />} />
             <Route path="/definitions" element={<ModelDefinitions />} />
             <Route path="/configurations" element={<ModelConfigurations />} />
+            <Route path="/policies" element={<LoadBalancingPolicies />} />
             <Route path="/vmr" element={<VirtualModelRunners />} />
             <Route path="/request-history" element={<RequestHistory />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />

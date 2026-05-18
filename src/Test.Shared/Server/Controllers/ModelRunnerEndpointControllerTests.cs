@@ -180,6 +180,46 @@ namespace Test.Shared.Server.Controllers
             result.Id.Should().NotBe("existing_id");
             result.Id.Should().StartWith("mre_");
         }
+        public async Task Create_WithRigMonitorConfiguration_PersistsSettings()
+        {
+            ModelRunnerEndpoint result = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "RigMonitor Endpoint",
+                Hostname = "localhost",
+                RigMonitor = new RigMonitorConfiguration
+                {
+                    Enabled = true,
+                    Port = 9100,
+                    TelemetryProfile = RigMonitorTelemetryProfileEnum.GpuPlacement,
+                    TelemetrySelectors = new List<string> { "cpu", "gpu" }
+                }
+            }).ConfigureAwait(false);
+
+            result.RigMonitor.Enabled.Should().BeTrue();
+            result.RigMonitor.Port.Should().Be(9100);
+            result.RigMonitor.TelemetryProfile.Should().Be(RigMonitorTelemetryProfileEnum.GpuPlacement);
+            result.RigMonitor.TelemetrySelectors.Should().Contain(new[] { "cpu", "gpu" });
+        }
+        public async Task Read_WithRigMonitorConfiguration_ReturnsSettings()
+        {
+            ModelRunnerEndpoint created = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "RigMonitor Endpoint",
+                Hostname = "localhost",
+                RigMonitor = new RigMonitorConfiguration
+                {
+                    Enabled = true,
+                    Port = 9200,
+                    UseSsl = true
+                }
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint reloaded = await _Controller.Read(TestTenantId, created.Id).ConfigureAwait(false);
+
+            reloaded.RigMonitor.Enabled.Should().BeTrue();
+            reloaded.RigMonitor.Port.Should().Be(9200);
+            reloaded.RigMonitor.UseSsl.Should().BeTrue();
+        }
 
         #endregion
 
@@ -556,6 +596,42 @@ namespace Test.Shared.Server.Controllers
             Func<Task> act = async () => await _Controller.GetHealth(TestTenantId, endpoint.Id);
 
             await act.Should().ThrowAsync<Exception>();
+        }
+        public async Task GetRigMonitor_WithEnabledConfiguration_ReturnsBaseUrlAndEnabledState()
+        {
+            ModelRunnerEndpoint endpoint = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "RigMonitor Endpoint",
+                Hostname = "rig.local",
+                RigMonitor = new RigMonitorConfiguration
+                {
+                    Enabled = true,
+                    Port = 9000,
+                    UseSsl = true
+                }
+            }).ConfigureAwait(false);
+
+            RigMonitorEndpointStatus result = await _Controller.GetRigMonitor(TestTenantId, endpoint.Id).ConfigureAwait(false);
+
+            result.Enabled.Should().BeTrue();
+            result.BaseUrl.Should().Be("https://rig.local:9000");
+        }
+        public async Task GetRigMonitor_WithDisabledConfiguration_ReturnsDisabledStatus()
+        {
+            ModelRunnerEndpoint endpoint = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "Standard Endpoint",
+                Hostname = "localhost",
+                RigMonitor = new RigMonitorConfiguration
+                {
+                    Enabled = false
+                }
+            }).ConfigureAwait(false);
+
+            RigMonitorEndpointStatus result = await _Controller.GetRigMonitor(TestTenantId, endpoint.Id).ConfigureAwait(false);
+
+            result.Enabled.Should().BeFalse();
+            result.BaseUrl.Should().BeNull();
         }
 
         #endregion

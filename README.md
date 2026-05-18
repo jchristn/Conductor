@@ -15,6 +15,8 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Session Affinity**: Pin clients to specific backend endpoints based on IP address, API key, or custom headers to minimize context drops and model swapping
 - **Load Balancing**: Round-robin, random, or first-available endpoint selection with weighted distribution and optional session affinity
 - **Health Checking**: Automatic background health monitoring of endpoints with configurable thresholds
+- **RigMonitor Telemetry**: Optionally enrich endpoint health with cached host CPU, memory, disk, network, GPU, and Ollama telemetry from RigMonitor sidecars
+- **Policy-Based Routing**: Create first-class load-balancing policies that filter or rank endpoints using health, capacity, and RigMonitor metrics
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
 - **Request History**: Optional per-VMR request/response capture for debugging and auditing with configurable retention
 - **React Dashboard**: Full-featured UI for managing all entities including real-time health status
@@ -55,7 +57,7 @@ npm run dev
 
 ## Testing
 
-Conductor’s automated tests use **Touchstone** so the same shared test cases can run through multiple hosts.
+Conductor's automated tests use **Touchstone** so the same shared test cases can run through multiple hosts.
 
 - `src/Test.Shared/` contains the authoritative test definitions.
 - `src/Test.Xunit/` exposes the shared suite through xUnit.
@@ -119,9 +121,92 @@ Users have three permission levels:
 | Model Runner Endpoint | `mre_` | `/v1.0/modelrunnerendpoints` |
 | Model Definition | `md_` | `/v1.0/modeldefinitions` |
 | Model Configuration | `mc_` | `/v1.0/modelconfigurations` |
+| Load Balancing Policy | `lbp_` | `/v1.0/loadbalancingpolicies` |
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
 | Request History | `req_` | `/v1.0/requesthistory` |
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
+
+## RigMonitor And Policy Routing
+
+Model runner endpoints can optionally declare a `RigMonitor` sidecar configuration. Conductor collects that data during the normal endpoint health-check loop, caches it in memory, and exposes it through endpoint health and telemetry routes. The proxy path never performs live RigMonitor calls while handling client traffic.
+
+### Endpoint RigMonitor Configuration
+
+Each `ModelRunnerEndpoint` can include a `RigMonitor` object with fields such as:
+
+- `Enabled`
+- `HostnameOverride`
+- `Port`
+- `UseSsl`
+- `TimeoutMs`
+- `CollectDuringHealthCheck`
+- `RequireReadyz`
+- `HealthAffectedByRigMonitor`
+- `MaxTelemetryAgeMs`
+- `CapabilitiesRefreshIntervalMs`
+- `TelemetryProfile`
+- `TelemetrySelectors`
+
+Useful routes:
+
+- `GET /v1.0/modelrunnerendpoints/health`
+- `GET /v1.0/modelrunnerendpoints/{id}/health`
+- `GET /v1.0/modelrunnerendpoints/{id}/rigmonitor`
+
+### First-Class Load Balancing Policies
+
+Load-balancing policies are tenant-scoped resources attached to a VMR by `LoadBalancingPolicyId`.
+
+- Policy CRUD: `/v1.0/loadbalancingpolicies`
+- Metrics catalog: `GET /v1.0/loadbalancingpolicies/metrics`
+- VMR attachment: set `LoadBalancingPolicyId` on `/v1.0/virtualmodelrunners`
+
+Policies combine:
+
+- `Filters`: hard eligibility checks such as `health.isHealthy == true` or `rig.gpu.available == true`
+- `Ranking`: weighted numeric comparisons such as lowest CPU, lowest GPU utilization, or fewest in-flight requests
+- `FallbackMode`: use the VMR's legacy load-balancing mode or fail closed
+- `TieBreaker`: round-robin, random, or first available when scores are equal
+
+Example policy payload:
+
+```json
+{
+  "Name": "Lowest GPU Utilization",
+  "MaxTelemetryAgeMs": 30000,
+  "Filters": [
+    { "Metric": "health.isHealthy", "Operator": "Equal", "ValueType": "Boolean", "Value": "true" },
+    { "Metric": "health.hasCapacity", "Operator": "Equal", "ValueType": "Boolean", "Value": "true" },
+    { "Metric": "rig.gpu.available", "Operator": "Equal", "ValueType": "Boolean", "Value": "true" }
+  ],
+  "Ranking": [
+    { "Metric": "rig.gpu.avgUtilizationPercent", "Direction": "Ascending", "Weight": 1.0 }
+  ],
+  "FallbackMode": "UseLegacyLoadBalancingMode",
+  "TieBreaker": "RoundRobin",
+  "Active": true
+}
+```
+
+Example VMR attachment:
+
+```json
+{
+  "Name": "GPU Chat VMR",
+  "BasePath": "/v1.0/api/gpu-chat/",
+  "LoadBalancingMode": "RoundRobin",
+  "LoadBalancingPolicyId": "lbp_example",
+  "ModelRunnerEndpointIds": ["mre_a", "mre_b"],
+  "Active": true
+}
+```
+
+### Operator Notes
+
+- Keep unauthenticated RigMonitor sidecars on trusted networks only.
+- Start with `TelemetryProfile = Basic` unless a policy requires GPU or Ollama-aware placement.
+- Prefer `FallbackMode = UseLegacyLoadBalancingMode` first, then move selected VMRs to `FailClosed` once telemetry freshness and sidecar reliability are proven.
+- Stale or missing telemetry can make a telemetry-dependent endpoint ineligible for policy evaluation.
 
 ### Virtual Model Runner Proxy
 
@@ -143,10 +228,10 @@ Virtual model runners expose an API at their configured base path. For example, 
     "Port": 9000,
     "Ssl": false,
     "Cors": {
-      "Enabled": false,
-      "AllowedOrigins": [],
+      "Enabled": true,
+      "AllowedOrigins": ["http://localhost:9100"],
       "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      "AllowedHeaders": ["Content-Type", "Authorization"],
+      "AllowedHeaders": ["Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password", "x-admin-apikey", "x-admin-email", "x-admin-password"],
       "ExposedHeaders": [],
       "AllowCredentials": false,
       "MaxAgeSeconds": 86400

@@ -171,6 +171,21 @@ namespace Conductor.Core.Enums
         /// </summary>
         ListModelRunnerEndpoints,
 
+        /// <summary>
+        /// List model runner endpoint health records.
+        /// </summary>
+        ListModelRunnerEndpointHealth,
+
+        /// <summary>
+        /// Read model runner endpoint health record.
+        /// </summary>
+        ReadModelRunnerEndpointHealth,
+
+        /// <summary>
+        /// Read RigMonitor data for a model runner endpoint.
+        /// </summary>
+        ReadModelRunnerEndpointRigMonitor,
+
         // ==================== Model Definition Operations ====================
 
         /// <summary>
@@ -251,6 +266,43 @@ namespace Conductor.Core.Enums
         /// List virtual model runners.
         /// </summary>
         ListVirtualModelRunners,
+
+        /// <summary>
+        /// Read virtual model runner health.
+        /// </summary>
+        ReadVirtualModelRunnerHealth,
+
+        // ==================== Load-Balancing Policy Operations ====================
+
+        /// <summary>
+        /// Create load-balancing policy.
+        /// </summary>
+        CreateLoadBalancingPolicy,
+
+        /// <summary>
+        /// Read load-balancing policy.
+        /// </summary>
+        ReadLoadBalancingPolicy,
+
+        /// <summary>
+        /// Update load-balancing policy.
+        /// </summary>
+        UpdateLoadBalancingPolicy,
+
+        /// <summary>
+        /// Delete load-balancing policy.
+        /// </summary>
+        DeleteLoadBalancingPolicy,
+
+        /// <summary>
+        /// List load-balancing policies.
+        /// </summary>
+        ListLoadBalancingPolicies,
+
+        /// <summary>
+        /// List load-balancing policy metrics.
+        /// </summary>
+        ListLoadBalancingPolicyMetrics,
 
         // ==================== Proxied API Operations (OpenAI) ====================
 

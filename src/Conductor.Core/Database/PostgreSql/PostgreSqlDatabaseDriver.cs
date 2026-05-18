@@ -36,6 +36,7 @@ namespace Conductor.Core.Database.PostgreSql
             ModelDefinition = new ModelDefinitionMethods(this);
             ModelConfiguration = new ModelConfigurationMethods(this);
             VirtualModelRunner = new VirtualModelRunnerMethods(this);
+            LoadBalancingPolicy = new LoadBalancingPolicyMethods(this);
             Administrator = new AdministratorMethods(this);
             RequestHistory = new RequestHistoryMethods(this);
         }
@@ -55,6 +56,7 @@ namespace Conductor.Core.Database.PostgreSql
                 TableQueries.CreateModelRunnerEndpointsTable,
                 TableQueries.CreateModelDefinitionsTable,
                 TableQueries.CreateModelConfigurationsTable,
+                TableQueries.CreateLoadBalancingPoliciesTable,
                 TableQueries.CreateVirtualModelRunnersTable,
                 TableQueries.CreateAdministratorsTable,
                 TableQueries.CreateRequestHistoryTable
@@ -258,6 +260,30 @@ namespace Conductor.Core.Database.PostgreSql
                 catch
                 {
                     // Column may already exist in some edge cases, ignore the error
+                }
+            }
+
+            bool rigMonitorExists = await ColumnExistsAsync("modelrunnerendpoints", "rigmonitor", token).ConfigureAwait(false);
+            if (!rigMonitorExists)
+            {
+                try
+                {
+                    await ExecuteQueryAsync(TableQueries.AddRigMonitorColumn, false, token).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+            }
+
+            bool policyIdExists = await ColumnExistsAsync("virtualmodelrunners", "loadbalancingpolicyid", token).ConfigureAwait(false);
+            if (!policyIdExists)
+            {
+                try
+                {
+                    await ExecuteQueryAsync(TableQueries.AddLoadBalancingPolicyIdColumn, false, token).ConfigureAwait(false);
+                }
+                catch
+                {
                 }
             }
         }
