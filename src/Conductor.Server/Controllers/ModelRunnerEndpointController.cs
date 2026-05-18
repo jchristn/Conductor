@@ -114,7 +114,9 @@ namespace Conductor.Server.Controllers
             {
                 if (vmr.ModelRunnerEndpointIds != null && vmr.ModelRunnerEndpointIds.Contains(id))
                 {
-                    vmr.ModelRunnerEndpointIds.Remove(id);
+                    vmr.ModelRunnerEndpointIds = vmr.ModelRunnerEndpointIds
+                        .Where(endpointId => !String.Equals(endpointId, id, StringComparison.Ordinal))
+                        .ToList();
                     await Database.VirtualModelRunner.UpdateAsync(vmr);
                 }
             }

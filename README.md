@@ -53,6 +53,27 @@ npm install
 npm run dev
 ```
 
+## Testing
+
+Conductor’s automated tests use **Touchstone** so the same shared test cases can run through multiple hosts.
+
+- `src/Test.Shared/` contains the authoritative test definitions.
+- `src/Test.Xunit/` exposes the shared suite through xUnit.
+- `src/Test.Nunit/` exposes the same suite through NUnit.
+- `src/Test.Automated/` runs the suite through the Touchstone console runner.
+
+Common commands:
+
+```bash
+# Run framework-hosted tests
+dotnet test src/Conductor.sln
+
+# Run the console host
+dotnet run --project src/Test.Automated/Test.Automated.csproj
+```
+
+See [TESTING.md](./TESTING.md) for the full testing guide.
+
 ## API Overview
 
 ### Supported Provider Types

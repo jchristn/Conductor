@@ -1,494 +1,117 @@
 # Conductor Testing Guide
 
-This document describes how to run, understand, and extend the automated test suite for Conductor.
+Conductor’s automated test suite now uses **Touchstone** so the same shared test cases can run through multiple hosts without duplicating test logic.
+
+## Projects
+
+| Project | Location | Purpose |
+|---|---|---|
+| `Test.Shared` | `src/Test.Shared/` | Authoritative source for all test cases and Touchstone descriptors |
+| `Test.Automated` | `src/Test.Automated/` | Console runner built on `Touchstone.Cli` |
+| `Test.Xunit` | `src/Test.Xunit/` | xUnit host built on `Touchstone.XunitAdapter` |
+| `Test.Nunit` | `src/Test.Nunit/` | NUnit host built on `Touchstone.NunitAdapter` |
+
+`Test.Shared` contains the real tests. `Test.Xunit` and `Test.Nunit` each expose the same descriptors through their own framework adapters, so `dotnet test src/Conductor.sln` runs the shared suite twice on purpose.
 
 ## Quick Start
 
-### Running All Tests
+Run the framework hosts through the solution:
 
 ```bash
-# From the repository root
 dotnet test src/Conductor.sln
 ```
 
-### Running Tests with Verbose Output
+Run only the xUnit host:
 
 ```bash
-dotnet test src/Conductor.sln --verbosity normal
+dotnet test src/Test.Xunit/Test.Xunit.csproj
 ```
 
-### Running Tests with Code Coverage
+Run only the NUnit host:
 
 ```bash
-dotnet test src/Conductor.sln --collect:"XPlat Code Coverage" --results-directory ./TestResults
+dotnet test src/Test.Nunit/Test.Nunit.csproj
 ```
 
-Coverage reports are generated in Cobertura XML format in the `TestResults` directory.
-
----
-
-## Test Projects
-
-The solution contains two test projects:
-
-| Project | Location | Tests | Description |
-|---------|----------|-------|-------------|
-| `Conductor.Core.Tests` | `src/Conductor.Core.Tests/` | 534 | Unit tests for the Core library |
-| `Conductor.Server.Tests` | `src/Conductor.Server.Tests/` | 246 | Unit tests for Server components |
-| **Total** | | **780** | |
-
-### Running Individual Test Projects
+Run the console host:
 
 ```bash
-# Core tests only
-dotnet test src/Conductor.Core.Tests/Conductor.Core.Tests.csproj
-
-# Server tests only
-dotnet test src/Conductor.Server.Tests/Conductor.Server.Tests.csproj
+dotnet run --project src/Test.Automated/Test.Automated.csproj
 ```
 
----
+Write console results to JSON:
 
-## Test Framework and Dependencies
-
-Both test projects use the following packages:
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `xunit` | 2.9.0 | Test framework |
-| `xunit.runner.visualstudio` | 3.0.0 | Visual Studio test adapter |
-| `FluentAssertions` | 7.0.0 | Fluent assertion syntax |
-| `Moq` | 4.20.72 | Mocking framework |
-| `Microsoft.NET.Test.Sdk` | 17.12.0 | .NET test SDK |
-| `coverlet.collector` | 6.0.2 | Code coverage collection |
-
----
-
-## Test Organization
-
-### Conductor.Core.Tests Structure
-
-```
-src/Conductor.Core.Tests/
-├── Models/
-│   ├── VirtualModelRunnerTests.cs      # VMR validation, defaults, serialization, session affinity defaults and clamping
-│   ├── ModelRunnerEndpointTests.cs     # Endpoint validation, URL construction
-│   ├── ModelConfigurationTests.cs      # Config pinning, case-insensitivity
-│   ├── ModelDefinitionTests.cs         # Definition validation, defaults
-│   ├── CredentialTests.cs              # Token generation, validation
-│   ├── AdministratorTests.cs           # Password hashing, email normalization
-│   ├── UserMasterTests.cs              # User validation, redaction
-│   ├── TenantMetadataTests.cs          # Tenant validation, JSON serialization
-│   ├── UrlContextTests.cs              # URL parsing, request type detection
-│   ├── EndpointHealthStateTests.cs     # Health state, copy semantics
-│   ├── EndpointHealthStatusTests.cs    # Health status, uptime calculation
-│   ├── VirtualModelRunnerHealthStatusTests.cs  # VMR health aggregation
-│   ├── EndpointAvailabilityTests.cs    # Availability state
-│   ├── EnumerationRequestTests.cs      # Pagination, filtering
-│   ├── EnumerationResultTests.cs       # Result handling
-│   └── ApiErrorResponseTests.cs        # Error response factory methods
-├── Helpers/
-│   ├── IdGeneratorTests.cs             # K-sortable ID generation
-│   └── DataTableHelperTests.cs         # DataRow/DataTable parsing
-├── Settings/
-│   ├── CorsSettingsTests.cs            # CORS configuration
-│   └── ServerSettingsTests.cs          # Server configuration
-└── Enums/
-    └── EnumTests.cs                    # Enum value verification, SessionAffinityModeEnum values
+```bash
+dotnet run --project src/Test.Automated/Test.Automated.csproj -- --results TestResults/touchstone-results.json
 ```
 
-### Conductor.Server.Tests Structure
+Collect coverage from a framework host:
 
-```
-src/Conductor.Server.Tests/
-├── Services/
-│   ├── AuthenticationServiceTests.cs   # Auth result classes
-│   ├── HealthCheckServiceTests.cs      # Health state management
-│   └── SessionAffinityServiceTests.cs  # Session pin lifecycle, TTL, eviction, thread safety
-├── Controllers/
-│   ├── ControllerTestBase.cs           # Shared test infrastructure with SQLite
-│   ├── VirtualModelRunnerControllerTests.cs  # CRUD, enumeration, health, session affinity
-│   ├── ModelRunnerEndpointControllerTests.cs # Endpoint CRUD, port validation
-│   └── CredentialControllerTests.cs    # Credential CRUD, token management
-└── Integration/
-    └── DatabaseIntegrationTests.cs     # Database round-trip tests for all entities
+```bash
+dotnet test src/Test.Xunit/Test.Xunit.csproj --collect:"XPlat Code Coverage" --results-directory ./TestResults
 ```
 
----
+## How It Works
 
-## Test Categories
+`Test.Shared` uses a reflection-based Touchstone registry:
 
-### Model Validation Tests
+- Any non-abstract public class in `src/Test.Shared/` whose name ends with `Tests` becomes a Touchstone suite.
+- Any public parameterless `void`, `Task`, or `ValueTask` method on that class becomes a Touchstone test case.
+- `Initialize`, `InitializeAsync`, `Dispose`, and `DisposeAsync` are treated as per-test lifecycle hooks and are not exposed as test cases.
+- Descriptor display names are emitted as `ClassName.MethodName`.
 
-Tests that verify model property validation, default values, and null handling:
+This preserves the original xUnit-style “new class instance per test” behavior while making the test definitions runner-agnostic.
+
+## Writing Tests
+
+Add new tests under `src/Test.Shared/` and keep the existing structure by domain:
+
+- `Core/Enums`
+- `Core/Helpers`
+- `Core/Models`
+- `Core/Settings`
+- `Server/Controllers`
+- `Server/Integration`
+- `Server/Services`
+
+Guidelines:
+
+- Name files `*Tests.cs`.
+- Add tests as public parameterless methods returning `void`, `Task`, or `ValueTask`.
+- Use optional `InitializeAsync`/`Dispose` hooks when a test class needs setup or cleanup.
+- Keep using `FluentAssertions`.
+- Prefer explicit positive and negative coverage for any behavior you touch.
+
+Example:
 
 ```csharp
-[Fact]
-public void TenantId_WhenNull_ThrowsArgumentNullException()
+public class MyComponentTests
 {
-    VirtualModelRunner vmr = new VirtualModelRunner();
-    Action act = () => vmr.TenantId = null;
-    act.Should().Throw<ArgumentNullException>().WithParameterName("TenantId");
-}
-```
-
-### Clamping and Range Tests
-
-Tests that verify values are clamped to valid ranges:
-
-```csharp
-[Fact]
-public void Port_WhenNegative_DefaultsTo11434()
-{
-    ModelRunnerEndpoint endpoint = new ModelRunnerEndpoint();
-    endpoint.Port = -1;
-    endpoint.Port.Should().Be(11434);
-}
-
-[Fact]
-public void MaxAgeSeconds_WhenOverMax_ClampsTo86400()
-{
-    CorsSettings cors = new CorsSettings();
-    cors.MaxAgeSeconds = 100000;
-    cors.MaxAgeSeconds.Should().Be(86400);
-}
-```
-
-### Serialization Tests
-
-Tests that verify JSON round-trip serialization:
-
-```csharp
-[Fact]
-public void ModelRunnerEndpointIds_SerializesAndDeserializesCorrectly()
-{
-    VirtualModelRunner vmr = new VirtualModelRunner();
-    vmr.ModelRunnerEndpointIds = new List<string> { "mre_1", "mre_2" };
-
-    string json = vmr.ModelRunnerEndpointIdsJson;
-    vmr.ModelRunnerEndpointIdsJson = json;
-
-    vmr.ModelRunnerEndpointIds.Should().Contain("mre_1");
-}
-```
-
-### Factory Method Tests
-
-Tests for `FromDataRow` and `FromDataTable` methods:
-
-```csharp
-[Fact]
-public void FromDataRow_WithNullRow_ReturnsNull()
-{
-    TenantMetadata result = TenantMetadata.FromDataRow(null);
-    result.Should().BeNull();
-}
-```
-
-### ID Generation Tests
-
-Tests for K-sortable ID generation:
-
-```csharp
-[Fact]
-public void GeneratedIds_AreKSortable()
-{
-    List<string> ids = new List<string>();
-    for (int i = 0; i < 100; i++)
+    public void Value_DefaultsCorrectly()
     {
-        ids.Add(IdGenerator.NewVirtualModelRunnerId());
-        Thread.Sleep(1);
+        MyComponent component = new MyComponent();
+        component.Value.Should().Be(42);
     }
 
-    List<string> sorted = ids.OrderBy(x => x).ToList();
-    ids.Should().Equal(sorted);
-}
-```
-
----
-
-## Running Specific Tests
-
-### By Test Name Pattern
-
-```bash
-# Run tests matching a pattern
-dotnet test src/Conductor.sln --filter "FullyQualifiedName~VirtualModelRunner"
-
-# Run a specific test
-dotnet test src/Conductor.sln --filter "FullyQualifiedName=Conductor.Core.Tests.Models.VirtualModelRunnerTests.TenantId_WhenNull_ThrowsArgumentNullException"
-```
-
-### By Test Class
-
-```bash
-dotnet test src/Conductor.sln --filter "ClassName=VirtualModelRunnerTests"
-```
-
-### By Namespace
-
-```bash
-dotnet test src/Conductor.sln --filter "Namespace~Conductor.Core.Tests.Models"
-```
-
----
-
-## Writing New Tests
-
-### Test File Naming Convention
-
-- Test files should be named `{ClassName}Tests.cs`
-- Place in the appropriate subdirectory matching the source structure
-
-### Test Method Naming Convention
-
-Use the pattern: `{Method/Property}_{Scenario}_{ExpectedResult}`
-
-Examples:
-- `TenantId_WhenNull_ThrowsArgumentNullException`
-- `Port_WhenNegative_DefaultsTo11434`
-- `FromDataRow_WithValidData_CreatesInstance`
-
-### Test Structure
-
-Follow the Arrange-Act-Assert pattern:
-
-```csharp
-[Fact]
-public void PropertyName_Scenario_ExpectedResult()
-{
-    // Arrange
-    MyClass instance = new MyClass();
-
-    // Act
-    instance.Property = someValue;
-
-    // Assert
-    instance.Property.Should().Be(expectedValue);
-}
-```
-
-### Using FluentAssertions
-
-```csharp
-// Basic assertions
-result.Should().Be(expected);
-result.Should().NotBeNull();
-result.Should().BeTrue();
-
-// Collection assertions
-list.Should().HaveCount(3);
-list.Should().Contain("item");
-list.Should().BeEmpty();
-
-// Exception assertions
-Action act = () => obj.Method();
-act.Should().Throw<ArgumentNullException>()
-   .WithParameterName("paramName");
-
-// DateTime assertions
-timestamp.Should().BeOnOrAfter(before);
-timestamp.Should().BeOnOrBefore(after);
-```
-
-### Using Regions
-
-Organize tests using regions for readability:
-
-```csharp
-public class MyClassTests
-{
-    #region Default-Value-Tests
-
-    [Fact]
-    public void Property_DefaultsToExpectedValue() { }
-
-    #endregion
-
-    #region Validation-Tests
-
-    [Fact]
-    public void Property_WhenInvalid_ThrowsException() { }
-
-    #endregion
-}
-```
-
----
-
-## Known Limitations
-
-### DatabaseDriverBase Mocking
-
-The `DatabaseDriverBase` class has non-virtual properties (`Credential`, `User`, `Tenant`, `Administrator`, `ModelRunnerEndpoint`) that cannot be mocked with Moq. This limits unit testing of services that depend on the database.
-
-**Affected Components:**
-- `AuthenticationService` - Cannot mock database lookups
-- `HealthCheckService` - Cannot mock endpoint enumeration
-
-**Workaround:** Tests for these services focus on:
-1. Constructor validation
-2. Result class behavior (e.g., `AuthenticationResult`, `AdminAuthenticationResult`)
-3. Pure functions that don't require database access
-
-**Future Improvement:** Consider making `DatabaseDriverBase` properties virtual or introducing interfaces to enable full unit testing.
-
-### WatsonWebserver/SwiftStack Types
-
-The `HttpContextBase` and related types from WatsonWebserver (via SwiftStack) are difficult to mock. Full authentication flow testing requires integration tests with actual HTTP requests.
-
----
-
-## Integration Testing
-
-Integration tests are not yet implemented but would cover:
-
-1. **Database Integration** - CRUD operations against SQLite, PostgreSQL, SQL Server, MySQL
-2. **API Integration** - Full HTTP request/response cycles
-3. **Authentication Flows** - Bearer token and header-based authentication
-4. **Proxy Functionality** - Request routing through virtual model runners
-
-### Setting Up Integration Tests
-
-For future integration tests, consider:
-
-```csharp
-public class DatabaseIntegrationTests : IDisposable
-{
-    private readonly DatabaseDriverBase _Database;
-
-    public DatabaseIntegrationTests()
+    public async Task Create_WithInvalidInput_Throws()
     {
-        // Create in-memory SQLite database
-        _Database = new SqliteDatabaseDriver(":memory:");
-    }
-
-    public void Dispose()
-    {
-        _Database?.Dispose();
-    }
-
-    [Fact]
-    public async Task CreateAndRead_Tenant_RoundTrips()
-    {
-        // Test implementation
+        Func<Task> act = async () => await _Controller.Create(null);
+        await act.Should().ThrowAsync<Exception>();
     }
 }
 ```
 
----
+## Packages
 
-## Continuous Integration
+| Project | Key Packages |
+|---|---|
+| `Test.Shared` | `Touchstone.Core`, `FluentAssertions` |
+| `Test.Automated` | `Touchstone.Cli` |
+| `Test.Xunit` | `Touchstone.XunitAdapter`, `xunit`, `Microsoft.NET.Test.Sdk`, `coverlet.collector` |
+| `Test.Nunit` | `Touchstone.NunitAdapter`, `NUnit`, `NUnit3TestAdapter`, `Microsoft.NET.Test.Sdk`, `coverlet.collector` |
 
-### GitHub Actions Example
+## Notes
 
-```yaml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
-
-    - name: Restore dependencies
-      run: dotnet restore src/Conductor.sln
-
-    - name: Build
-      run: dotnet build src/Conductor.sln --no-restore
-
-    - name: Test
-      run: dotnet test src/Conductor.sln --no-build --verbosity normal
-
-    - name: Test with Coverage
-      run: dotnet test src/Conductor.sln --no-build --collect:"XPlat Code Coverage"
-```
-
----
-
-## Test Results Summary
-
-As of the last test run:
-
-```
-Test Run Successful.
-Total tests: 780
-     Passed: 780
-     Failed: 0
-     Skipped: 0
-Duration: ~35 seconds
-```
-
-### Test Distribution
-
-| Category | Count |
-|----------|-------|
-| Model Tests | ~370 |
-| Helper Tests | ~50 |
-| Settings Tests | ~30 |
-| Enum Tests | ~31 |
-| URL Parsing Tests | ~35 |
-| Service Result Tests | ~98 |
-| Session Affinity Tests | ~33 |
-| Controller Tests | ~75 |
-| Integration Tests | ~58 |
-
----
-
-## Troubleshooting
-
-### Tests Not Discovered
-
-Ensure the test project references are correct:
-
-```xml
-<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-<PackageReference Include="xunit.runner.visualstudio" Version="3.0.0" />
-```
-
-### Build Errors in Tests
-
-Run a clean build:
-
-```bash
-dotnet clean src/Conductor.sln
-dotnet build src/Conductor.sln
-dotnet test src/Conductor.sln
-```
-
-### Coverage Not Generated
-
-Ensure coverlet.collector is referenced:
-
-```xml
-<PackageReference Include="coverlet.collector" Version="6.0.2" />
-```
-
----
-
-## Contributing
-
-When adding new tests:
-
-1. Follow existing naming conventions
-2. Use FluentAssertions for all assertions
-3. Organize tests using regions
-4. Include both positive and negative test cases
-5. Test edge cases (null, empty, boundary values)
-6. Run all tests before submitting a PR
-
-```bash
-# Verify all tests pass
-dotnet test src/Conductor.sln
-
-# Check for warnings
-dotnet build src/Conductor.sln --warnaserror
-```
+- The console runner is the fastest way to inspect raw descriptor output locally.
+- The xUnit and NUnit hosts should remain thin; do not move real test logic out of `Test.Shared`.
+- If a shared test starts failing in one framework host and not the other, treat that as a runner integration issue first, not as a reason to fork the test logic.
