@@ -205,7 +205,7 @@ function buildPolicyDiagnostics(policy, metricsById, vmrs, endpoints, endpointHe
   }
 
   if (policy.FallbackMode === 'FailClosed') {
-    notes.push('Fail-closed is enabled. If no endpoint satisfies this policy, the request path will return an error instead of using legacy load balancing.');
+    notes.push('Fail-closed is enabled. If no endpoint satisfies this policy, the request path will return an error instead of falling back to the VMR load balancing mode.');
   }
 
   if (policy.TieBreaker === 'FirstAvailable' && (policy.Ranking || []).length > 1) {
@@ -613,24 +613,8 @@ function LoadBalancingPolicies() {
 
       <div
         className="health-summary-banner"
-        style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', alignItems: 'start' }}
+        style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}
       >
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: '6px' }}>Metrics Catalog</div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '10px' }}>
-            Policies reference stable Conductor metric IDs instead of raw RigMonitor JSON paths.
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {metrics.slice(0, 12).map((metric) => (
-              <span key={metric.Id} className="health-badge" title={metric.Description || metric.Id}>
-                {metric.Id}
-              </span>
-            ))}
-            {metrics.length > 12 && (
-              <span className="health-badge">{metrics.length - 12} more</span>
-            )}
-          </div>
-        </div>
         <div>
           <div style={{ fontWeight: 600, marginBottom: '6px' }}>Quick Start Templates</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
@@ -727,7 +711,7 @@ function LoadBalancingPolicies() {
                 value={formData.FallbackMode}
                 onChange={(e) => setFormData({ ...formData, FallbackMode: e.target.value })}
               >
-                <option value="UseLegacyLoadBalancingMode">Use Legacy Load Balancing Mode</option>
+                <option value="UseLegacyLoadBalancingMode">Use VMR Load Balancing Mode</option>
                 <option value="FailClosed">Fail Closed</option>
               </select>
             </div>

@@ -569,35 +569,6 @@ function VirtualModelRunners() {
               </select>
             </div>
             <div className="form-group">
-              <label htmlFor="loadBalancingPolicyId" title="Attach a reusable load-balancing policy that can use cached health and RigMonitor telemetry">Load Balancing Policy</label>
-              <select
-                id="loadBalancingPolicyId"
-                value={formData.LoadBalancingPolicyId}
-                onChange={(e) => setFormData({ ...formData, LoadBalancingPolicyId: e.target.value })}
-              >
-                <option value="">-- None (legacy mode only) --</option>
-                {policies
-                  .filter((policy) => !formData.TenantId || policy.TenantId === formData.TenantId)
-                  .map((policy) => (
-                    <option key={policy.Id} value={policy.Id}>
-                      {policy.Name} ({policy.Id})
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="form-group">
-              <label htmlFor="loadBalancingMode" title="Legacy selection mode, and fallback behavior when an attached policy is configured to fall back">Legacy Load Balancing Mode</label>
-              <select
-                id="loadBalancingMode"
-                value={formData.LoadBalancingMode}
-                onChange={(e) => setFormData({ ...formData, LoadBalancingMode: e.target.value })}
-              >
-                <option value="RoundRobin">Round Robin</option>
-                <option value="Random">Random</option>
-                <option value="FirstAvailable">First Available</option>
-              </select>
-            </div>
-            <div className="form-group">
               <label htmlFor="timeoutMs" title="Maximum time in milliseconds to wait for endpoint response">Timeout (ms)</label>
               <input
                 type="number"
@@ -610,9 +581,41 @@ function VirtualModelRunners() {
             </div>
           </div>
 
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="loadBalancingPolicyId" title="Attach a reusable load-balancing policy that can use cached health and RigMonitor telemetry">Load Balancing Policy</label>
+              <select
+                id="loadBalancingPolicyId"
+                value={formData.LoadBalancingPolicyId}
+                onChange={(e) => setFormData({ ...formData, LoadBalancingPolicyId: e.target.value })}
+              >
+                <option value="">None</option>
+                {policies
+                  .filter((policy) => !formData.TenantId || policy.TenantId === formData.TenantId)
+                  .map((policy) => (
+                    <option key={policy.Id} value={policy.Id}>
+                      {policy.Name} ({policy.Id})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="loadBalancingMode" title="Selection mode used when no policy is attached and when an attached policy is configured to fall back">Load Balancing Mode</label>
+              <select
+                id="loadBalancingMode"
+                value={formData.LoadBalancingMode}
+                onChange={(e) => setFormData({ ...formData, LoadBalancingMode: e.target.value })}
+              >
+                <option value="RoundRobin">Round Robin</option>
+                <option value="Random">Random</option>
+                <option value="FirstAvailable">First Available</option>
+              </select>
+            </div>
+          </div>
+
           {formData.LoadBalancingPolicyId && (
             <p className="form-help" style={{ marginTop: '-8px', marginBottom: '16px' }}>
-              The attached policy drives endpoint eligibility and ranking. The legacy load balancing mode remains available as the fallback path if the policy is configured to use it.
+              The attached policy drives endpoint eligibility and ranking. The VMR load balancing mode remains available as the fallback path when the policy is configured to use it.
             </p>
           )}
 
