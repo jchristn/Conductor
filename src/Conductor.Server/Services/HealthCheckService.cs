@@ -3,6 +3,7 @@ namespace Conductor.Server.Services
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Net.Http;
     using System.Threading;
@@ -351,8 +352,18 @@ namespace Conductor.Server.Services
 
                     try
                     {
+                        Stopwatch stopwatch = Stopwatch.StartNew();
                         success = await PerformHealthCheck(endpoint, token).ConfigureAwait(false);
-                        _Logging.Debug(_Header + "health check " + (success ? "succeeded" : "failed") + " for endpoint " + endpoint.Id + " (" + endpoint.Name + ")");
+                        stopwatch.Stop();
+
+                        if (success)
+                        {
+                            _Logging.Debug(_Header + "health check succeeded for endpoint " + endpoint.Id + " (" + endpoint.Name + ") (" + stopwatch.Elapsed.TotalMilliseconds.ToString("F2") + "ms)");
+                        }
+                        else
+                        {
+                            _Logging.Debug(_Header + "health check failed for endpoint " + endpoint.Id + " (" + endpoint.Name + ")");
+                        }
                     }
                     catch (Exception ex)
                     {

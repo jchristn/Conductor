@@ -204,7 +204,7 @@ Example VMR attachment:
 ### Operator Notes
 
 - Keep unauthenticated RigMonitor sidecars on trusted networks only.
-- Start with `TelemetryProfile = Basic` unless a policy requires GPU or Ollama-aware placement.
+- `TelemetryProfile` now defaults to `Full`; narrow it only if you need to reduce health-check telemetry cost.
 - Prefer `FallbackMode = UseLegacyLoadBalancingMode` first, then move selected VMRs to `FailClosed` once telemetry freshness and sidecar reliability are proven.
 - Stale or missing telemetry can make a telemetry-dependent endpoint ineligible for policy evaluation.
 

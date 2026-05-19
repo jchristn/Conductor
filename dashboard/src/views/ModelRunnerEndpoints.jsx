@@ -88,7 +88,7 @@ function ModelRunnerEndpoints() {
     RigMonitorHealthAffectedByRigMonitor: false,
     RigMonitorMaxTelemetryAgeMs: 30000,
     RigMonitorCapabilitiesRefreshIntervalMs: 60000,
-    RigMonitorTelemetryProfile: 'Basic',
+    RigMonitorTelemetryProfile: 'Full',
     RigMonitorTelemetrySelectors: ''
   });
 
@@ -380,7 +380,7 @@ function ModelRunnerEndpoints() {
       RigMonitorHealthAffectedByRigMonitor: false,
       RigMonitorMaxTelemetryAgeMs: 30000,
       RigMonitorCapabilitiesRefreshIntervalMs: 60000,
-      RigMonitorTelemetryProfile: 'Basic',
+      RigMonitorTelemetryProfile: 'Full',
       RigMonitorTelemetrySelectors: ''
     });
     setShowForm(true);
@@ -426,7 +426,7 @@ function ModelRunnerEndpoints() {
       RigMonitorHealthAffectedByRigMonitor: endpoint.RigMonitor?.HealthAffectedByRigMonitor === true,
       RigMonitorMaxTelemetryAgeMs: endpoint.RigMonitor?.MaxTelemetryAgeMs || 30000,
       RigMonitorCapabilitiesRefreshIntervalMs: endpoint.RigMonitor?.CapabilitiesRefreshIntervalMs || 60000,
-      RigMonitorTelemetryProfile: endpoint.RigMonitor?.TelemetryProfile || 'Basic',
+      RigMonitorTelemetryProfile: endpoint.RigMonitor?.TelemetryProfile || 'Full',
       RigMonitorTelemetrySelectors: (endpoint.RigMonitor?.TelemetrySelectors || []).join(', ')
     });
     setShowForm(true);
@@ -1185,7 +1185,7 @@ function ModelRunnerEndpoints() {
               ? 'success'
               : (h?.RigMonitor?.Ready === false ? 'warning' : 'neutral'));
           const loadedOllamaModels = h?.RigMonitor?.Telemetry?.Ollama?.LoadedModels || [];
-          const showLoadedOllamaModels = loadedOllamaModels.length > 1;
+          const showLoadedOllamaModels = loadedOllamaModels.length > 0;
 
           return (
             <div className="health-modal">
@@ -1362,16 +1362,13 @@ function ModelRunnerEndpoints() {
 
                       {showLoadedOllamaModels && (
                         <div className="health-table-section">
-                          <div className="health-section-label">Loaded Ollama Models</div>
+                          <div className="health-section-label">Running Ollama Models</div>
                           <div className="health-table-container">
                             <table className="health-table">
                               <thead>
                                 <tr>
                                   <th title="Model name or tag currently loaded in Ollama">Model</th>
-                                  <th title="Model family reported by Ollama telemetry">Family</th>
                                   <th title="Parameter size reported by Ollama telemetry">Parameters</th>
-                                  <th title="Model format reported by Ollama telemetry">Format</th>
-                                  <th title="Quantization level reported by Ollama telemetry">Quantization</th>
                                   <th title="Resident model size in bytes">Size</th>
                                   <th title="VRAM footprint reported by Ollama telemetry">VRAM</th>
                                   <th title="When Ollama plans to evict the model from memory">Expires</th>
@@ -1383,10 +1380,7 @@ function ModelRunnerEndpoints() {
                                     <td title={model.Model || model.Name || ''}>
                                       {model.Name || model.Model || '-'}
                                     </td>
-                                    <td>{model.Family || '-'}</td>
                                     <td>{model.ParameterSize || '-'}</td>
-                                    <td>{model.Format || '-'}</td>
-                                    <td>{model.QuantizationLevel || '-'}</td>
                                     <td>{formatBytes(model.SizeBytes)}</td>
                                     <td>{formatBytes(model.SizeVramBytes)}</td>
                                     <td>{formatDateTime(model.ExpiresAtUtc)}</td>

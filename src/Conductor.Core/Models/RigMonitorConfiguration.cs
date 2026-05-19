@@ -61,7 +61,7 @@ namespace Conductor.Core.Models
         /// <summary>
         /// Named selector profile.
         /// </summary>
-        public RigMonitorTelemetryProfileEnum TelemetryProfile { get; set; } = RigMonitorTelemetryProfileEnum.Basic;
+        public RigMonitorTelemetryProfileEnum TelemetryProfile { get; set; } = RigMonitorTelemetryProfileEnum.Full;
 
         /// <summary>
         /// Explicit selector overrides used when <see cref="TelemetryProfile"/> is <see cref="RigMonitorTelemetryProfileEnum.Custom"/>.

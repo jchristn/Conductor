@@ -176,7 +176,7 @@ This plan is grounded in:
 - [x] Phase 8 - Define telemetry collection profiles
   - Avoid full telemetry collection for every endpoint by default.
   - Offer predefined profiles:
-    - `Basic`: `cpu`, `memory`
+    - `Full`: default profile for maximum telemetry coverage unless an endpoint needs a narrower selector set
     - `GpuPlacement`: `cpu`, `memory`, `gpu`
     - `OllamaPlacement`: `cpu`, `memory`, `ollama`
     - `Full`
