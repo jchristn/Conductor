@@ -118,6 +118,9 @@ namespace Conductor.Core.Models
         /// </summary>
         public object Metadata { get; set; } = null;
 
+        /// <summary>
+        /// JSON-serialized filters used for persistence.
+        /// </summary>
         [JsonIgnore]
         public string FiltersJson
         {
@@ -125,6 +128,9 @@ namespace Conductor.Core.Models
             set => _Filters = (String.IsNullOrEmpty(value) ? new List<LoadBalancingPolicyFilter>() : _Serializer.DeserializeJson<List<LoadBalancingPolicyFilter>>(value));
         }
 
+        /// <summary>
+        /// JSON-serialized ranking rules used for persistence.
+        /// </summary>
         [JsonIgnore]
         public string RankingJson
         {
@@ -132,6 +138,9 @@ namespace Conductor.Core.Models
             set => _Ranking = (String.IsNullOrEmpty(value) ? new List<LoadBalancingPolicyRankingRule>() : _Serializer.DeserializeJson<List<LoadBalancingPolicyRankingRule>>(value));
         }
 
+        /// <summary>
+        /// JSON-serialized labels used for persistence.
+        /// </summary>
         [JsonIgnore]
         public string LabelsJson
         {
@@ -139,6 +148,9 @@ namespace Conductor.Core.Models
             set => _Labels = (String.IsNullOrEmpty(value) ? new List<string>() : _Serializer.DeserializeJson<List<string>>(value));
         }
 
+        /// <summary>
+        /// JSON-serialized tags used for persistence.
+        /// </summary>
         [JsonIgnore]
         public string TagsJson
         {
@@ -146,6 +158,9 @@ namespace Conductor.Core.Models
             set => _Tags = (String.IsNullOrEmpty(value) ? new Dictionary<string, string>() : _Serializer.DeserializeJson<Dictionary<string, string>>(value));
         }
 
+        /// <summary>
+        /// JSON-serialized metadata used for persistence.
+        /// </summary>
         [JsonIgnore]
         public string MetadataJson
         {

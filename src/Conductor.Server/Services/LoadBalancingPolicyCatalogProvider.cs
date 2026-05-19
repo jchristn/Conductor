@@ -53,6 +53,10 @@ namespace Conductor.Server.Services
                 LoadBalancingPolicyOperatorEnum.Equal, LoadBalancingPolicyOperatorEnum.NotEqual, LoadBalancingPolicyOperatorEnum.LessThan, LoadBalancingPolicyOperatorEnum.LessThanOrEqual, LoadBalancingPolicyOperatorEnum.GreaterThan, LoadBalancingPolicyOperatorEnum.GreaterThanOrEqual)
         };
 
+        /// <summary>
+        /// Get the public catalog of supported load-balancing metrics.
+        /// </summary>
+        /// <returns>Metric catalog.</returns>
         public static LoadBalancingMetricsCatalog GetCatalog()
         {
             return new LoadBalancingMetricsCatalog
@@ -72,6 +76,12 @@ namespace Conductor.Server.Services
             };
         }
 
+        /// <summary>
+        /// Attempt to resolve a supported metric definition by ID.
+        /// </summary>
+        /// <param name="metricId">Metric identifier.</param>
+        /// <param name="metric">Resolved metric definition when found.</param>
+        /// <returns>True if the metric exists.</returns>
         public static bool TryGetMetric(string metricId, out LoadBalancingMetricDefinition metric)
         {
             metric = _Metrics.FirstOrDefault(m => String.Equals(m.Id, metricId, StringComparison.OrdinalIgnoreCase));

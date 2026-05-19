@@ -18,11 +18,24 @@ namespace Conductor.Server.Controllers
     {
         private readonly LoadBalancingPolicyEvaluator _Evaluator = new LoadBalancingPolicyEvaluator();
 
+        /// <summary>
+        /// Instantiate the load-balancing policy controller.
+        /// </summary>
+        /// <param name="database">Database driver.</param>
+        /// <param name="authService">Authentication service.</param>
+        /// <param name="serializer">Serializer.</param>
+        /// <param name="logging">Logging module.</param>
         public LoadBalancingPolicyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging)
             : base(database, authService, serializer, logging)
         {
         }
 
+        /// <summary>
+        /// Create a load-balancing policy.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID.</param>
+        /// <param name="policy">Policy to create.</param>
+        /// <returns>Created policy.</returns>
         public async Task<LoadBalancingPolicy> Create(string tenantId, LoadBalancingPolicy policy)
         {
             if (policy == null)
@@ -37,6 +50,12 @@ namespace Conductor.Server.Controllers
             return await Database.LoadBalancingPolicy.CreateAsync(policy).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Read a load-balancing policy by ID.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID.</param>
+        /// <param name="id">Policy ID.</param>
+        /// <returns>Policy.</returns>
         public async Task<LoadBalancingPolicy> Read(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
@@ -52,6 +71,13 @@ namespace Conductor.Server.Controllers
             return policy;
         }
 
+        /// <summary>
+        /// Update a load-balancing policy.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID.</param>
+        /// <param name="id">Policy ID.</param>
+        /// <param name="policy">Updated policy data.</param>
+        /// <returns>Updated policy.</returns>
         public async Task<LoadBalancingPolicy> Update(string tenantId, string id, LoadBalancingPolicy policy)
         {
             if (String.IsNullOrEmpty(id))
@@ -74,6 +100,12 @@ namespace Conductor.Server.Controllers
             return await Database.LoadBalancingPolicy.UpdateAsync(policy).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Delete a load-balancing policy.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID.</param>
+        /// <param name="id">Policy ID.</param>
+        /// <returns>Task.</returns>
         public async Task Delete(string tenantId, string id)
         {
             if (String.IsNullOrEmpty(id))
@@ -93,6 +125,15 @@ namespace Conductor.Server.Controllers
             await Database.LoadBalancingPolicy.DeleteAsync(tenantId, id).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Enumerate load-balancing policies.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID.</param>
+        /// <param name="maxResults">Maximum number of results to return.</param>
+        /// <param name="continuationToken">Pagination token.</param>
+        /// <param name="nameFilter">Optional name filter.</param>
+        /// <param name="activeFilter">Optional active-state filter.</param>
+        /// <returns>Enumeration result.</returns>
         public async Task<EnumerationResult<LoadBalancingPolicy>> Enumerate(string tenantId, int? maxResults = null, string continuationToken = null, string nameFilter = null, bool? activeFilter = null)
         {
             EnumerationRequest request = new EnumerationRequest();
@@ -104,6 +145,10 @@ namespace Conductor.Server.Controllers
             return await Database.LoadBalancingPolicy.EnumerateAsync(tenantId, request).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Get the public catalog of supported load-balancing metrics.
+        /// </summary>
+        /// <returns>Metric catalog.</returns>
         public LoadBalancingMetricsCatalog GetMetricsCatalog()
         {
             return LoadBalancingPolicyCatalogProvider.GetCatalog();

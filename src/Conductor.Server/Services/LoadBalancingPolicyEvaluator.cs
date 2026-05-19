@@ -17,8 +17,19 @@ namespace Conductor.Server.Services
         /// </summary>
         public class EvaluationResult
         {
+            /// <summary>
+            /// Whether evaluation produced a usable candidate list.
+            /// </summary>
             public bool Success { get; set; } = false;
+
+            /// <summary>
+            /// Failure reason when evaluation does not succeed.
+            /// </summary>
             public string FailureReason { get; set; } = null;
+
+            /// <summary>
+            /// Ranked endpoint candidates returned by evaluation.
+            /// </summary>
             public List<EndpointCandidate> Candidates { get; set; } = new List<EndpointCandidate>();
         }
 
@@ -27,7 +38,14 @@ namespace Conductor.Server.Services
         /// </summary>
         public class EndpointCandidate
         {
+            /// <summary>
+            /// Endpoint availability record for the candidate.
+            /// </summary>
             public EndpointAvailability Availability { get; set; } = null;
+
+            /// <summary>
+            /// Aggregate score assigned to the candidate.
+            /// </summary>
             public double Score { get; set; } = 0;
         }
 
@@ -39,6 +57,12 @@ namespace Conductor.Server.Services
             public string String { get; set; }
         }
 
+        /// <summary>
+        /// Validate a load-balancing policy definition.
+        /// </summary>
+        /// <param name="policy">Policy to validate.</param>
+        /// <param name="error">Validation error when invalid.</param>
+        /// <returns>True if the policy is valid.</returns>
         public bool ValidatePolicy(LoadBalancingPolicy policy, out string error)
         {
             error = null;
@@ -135,6 +159,13 @@ namespace Conductor.Server.Services
             return true;
         }
 
+        /// <summary>
+        /// Determine whether an endpoint satisfies a policy's filtering and metric requirements.
+        /// </summary>
+        /// <param name="policy">Policy to evaluate.</param>
+        /// <param name="availability">Endpoint availability state.</param>
+        /// <param name="state">Cached endpoint health state.</param>
+        /// <returns>True if the endpoint is eligible.</returns>
         public bool IsEndpointEligible(LoadBalancingPolicy policy, EndpointAvailability availability, EndpointHealthState state)
         {
             if (policy == null || availability == null) return false;
@@ -171,6 +202,13 @@ namespace Conductor.Server.Services
             return true;
         }
 
+        /// <summary>
+        /// Evaluate a policy against available endpoints and return ranked candidates.
+        /// </summary>
+        /// <param name="policy">Policy to evaluate.</param>
+        /// <param name="availableEndpoints">Endpoints already deemed available for routing.</param>
+        /// <param name="stateAccessor">Function used to resolve cached health state by endpoint ID.</param>
+        /// <returns>Evaluation result.</returns>
         public EvaluationResult Evaluate(LoadBalancingPolicy policy, List<EndpointAvailability> availableEndpoints, Func<string, EndpointHealthState> stateAccessor)
         {
             if (policy == null) return new EvaluationResult { FailureReason = "Policy is required." };

@@ -15,11 +15,16 @@ namespace Conductor.Core.Database.MySql.Implementations
     {
         private readonly MySqlDatabaseDriver _Driver;
 
+        /// <summary>
+        /// Instantiate the MySQL load-balancing policy methods implementation.
+        /// </summary>
+        /// <param name="driver">Database driver.</param>
         public LoadBalancingPolicyMethods(MySqlDatabaseDriver driver)
         {
             _Driver = driver ?? throw new ArgumentNullException(nameof(driver));
         }
 
+        /// <inheritdoc />
         public async Task<LoadBalancingPolicy> CreateAsync(LoadBalancingPolicy policy, CancellationToken token = default)
         {
             if (policy == null) throw new ArgumentNullException(nameof(policy));
@@ -48,6 +53,7 @@ namespace Conductor.Core.Database.MySql.Implementations
             return policy;
         }
 
+        /// <inheritdoc />
         public async Task<LoadBalancingPolicy> ReadAsync(string tenantId, string id, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(tenantId)) throw new ArgumentNullException(nameof(tenantId));
@@ -59,6 +65,7 @@ namespace Conductor.Core.Database.MySql.Implementations
             return LoadBalancingPolicy.FromDataRow(result.Rows[0]);
         }
 
+        /// <inheritdoc />
         public async Task<LoadBalancingPolicy> ReadByIdAsync(string id, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
@@ -69,6 +76,7 @@ namespace Conductor.Core.Database.MySql.Implementations
             return LoadBalancingPolicy.FromDataRow(result.Rows[0]);
         }
 
+        /// <inheritdoc />
         public async Task<LoadBalancingPolicy> UpdateAsync(LoadBalancingPolicy policy, CancellationToken token = default)
         {
             if (policy == null) throw new ArgumentNullException(nameof(policy));
@@ -94,6 +102,7 @@ namespace Conductor.Core.Database.MySql.Implementations
             return policy;
         }
 
+        /// <inheritdoc />
         public async Task DeleteAsync(string tenantId, string id, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(tenantId)) throw new ArgumentNullException(nameof(tenantId));
@@ -103,6 +112,7 @@ namespace Conductor.Core.Database.MySql.Implementations
             await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
         }
 
+        /// <inheritdoc />
         public async Task<bool> ExistsAsync(string tenantId, string id, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(tenantId)) throw new ArgumentNullException(nameof(tenantId));
@@ -114,6 +124,7 @@ namespace Conductor.Core.Database.MySql.Implementations
             return Convert.ToInt32(result.Rows[0]["cnt"]) > 0;
         }
 
+        /// <inheritdoc />
         public async Task<EnumerationResult<LoadBalancingPolicy>> EnumerateAsync(string tenantId, EnumerationRequest request, CancellationToken token = default)
         {
             if (request == null) request = new EnumerationRequest();

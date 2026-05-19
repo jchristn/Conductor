@@ -26,6 +26,10 @@ namespace Conductor.Server.Services
         private readonly HttpClient _HttpClient = new HttpClient();
         private readonly LoggingModule _Logging;
 
+        /// <summary>
+        /// Instantiate the RigMonitor client.
+        /// </summary>
+        /// <param name="logging">Logging module.</param>
         public RigMonitorClient(LoggingModule logging)
         {
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
@@ -76,6 +80,12 @@ namespace Conductor.Server.Services
             return selectors;
         }
 
+        /// <summary>
+        /// Retrieve RigMonitor readiness status for an endpoint.
+        /// </summary>
+        /// <param name="endpoint">Model runner endpoint.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Ready status payload.</returns>
         public async Task<RigMonitorReadyStatus> GetReadyStatusAsync(ModelRunnerEndpoint endpoint, CancellationToken token = default)
         {
             string baseUrl = GetBaseUrl(endpoint) ?? throw new InvalidOperationException("RigMonitor is not enabled for the endpoint.");
@@ -103,12 +113,24 @@ namespace Conductor.Server.Services
             }
         }
 
+        /// <summary>
+        /// Retrieve RigMonitor capabilities for an endpoint.
+        /// </summary>
+        /// <param name="endpoint">Model runner endpoint.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Capabilities payload.</returns>
         public async Task<RigMonitorCapabilities> GetCapabilitiesAsync(ModelRunnerEndpoint endpoint, CancellationToken token = default)
         {
             string baseUrl = GetBaseUrl(endpoint) ?? throw new InvalidOperationException("RigMonitor is not enabled for the endpoint.");
             return await GetJsonAsync<RigMonitorCapabilities>(baseUrl + "/v1/capabilities", endpoint.RigMonitor.TimeoutMs, token).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Retrieve RigMonitor telemetry for an endpoint.
+        /// </summary>
+        /// <param name="endpoint">Model runner endpoint.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Telemetry snapshot.</returns>
         public async Task<RigMonitorTelemetrySnapshot> GetTelemetryAsync(ModelRunnerEndpoint endpoint, CancellationToken token = default)
         {
             string baseUrl = GetBaseUrl(endpoint) ?? throw new InvalidOperationException("RigMonitor is not enabled for the endpoint.");
@@ -123,6 +145,12 @@ namespace Conductor.Server.Services
             return await GetJsonAsync<RigMonitorTelemetrySnapshot>(url, endpoint.RigMonitor.TimeoutMs, token).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Probe RigMonitor readiness, capabilities, and telemetry for an endpoint.
+        /// </summary>
+        /// <param name="endpoint">Model runner endpoint.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Aggregated endpoint status.</returns>
         public async Task<RigMonitorEndpointStatus> ProbeAsync(ModelRunnerEndpoint endpoint, CancellationToken token = default)
         {
             if (endpoint == null) throw new ArgumentNullException(nameof(endpoint));
@@ -174,6 +202,7 @@ namespace Conductor.Server.Services
             return status;
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             _HttpClient.Dispose();
