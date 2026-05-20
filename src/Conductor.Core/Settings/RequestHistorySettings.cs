@@ -9,7 +9,7 @@ namespace Conductor.Core.Settings
     {
         /// <summary>
         /// Enable or disable request history globally.
-        /// Default is false.
+        /// Default is true.
         /// </summary>
         public bool Enabled
         {
@@ -67,7 +67,7 @@ namespace Conductor.Core.Settings
             set => _MaxResponseBodyBytes = (value < 1024 ? 65536 : (value > 1048576 ? 1048576 : value));
         }
 
-        private bool _Enabled = false;
+        private bool _Enabled = true;
         private int _RetentionDays = 30;
         private string _Directory = "./request-history";
         private int _CleanupIntervalMinutes = 5;

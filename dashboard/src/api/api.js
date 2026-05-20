@@ -2,6 +2,22 @@ import { DEFAULT_SERVER_URL, persistServerUrl, resolveInitialServerUrl } from '.
 
 const DEFAULT_API_URL = DEFAULT_SERVER_URL;
 
+function createApiError(response, errorData, endpoint, method) {
+  const error = new Error(
+    errorData?.error ||
+    errorData?.Message ||
+    errorData?.message ||
+    `HTTP ${response.status}`
+  );
+
+  error.status = response.status;
+  error.endpoint = endpoint;
+  error.method = method;
+  error.response = errorData || {};
+
+  return error;
+}
+
 class ConductorApi {
   constructor() {
     this.baseUrl = resolveInitialServerUrl() || DEFAULT_API_URL;
@@ -102,7 +118,7 @@ class ConductorApi {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.Message || errorData.message || `HTTP ${response.status}`);
+      throw createApiError(response, errorData, endpoint, method);
     }
 
     if (response.status === 204) {
@@ -127,7 +143,7 @@ class ConductorApi {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.Message || errorData.message || `HTTP ${response.status}`);
+      throw createApiError(response, errorData, endpoint, method);
     }
 
     if (response.status === 204) {

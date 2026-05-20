@@ -122,6 +122,7 @@ function RequestHistory() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [jsonModalData, setJsonModalData] = useState(null);
+  const [requestHistoryIssue, setRequestHistoryIssue] = useState(null);
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -130,6 +131,15 @@ function RequestHistory() {
     sourceIp: '',
     httpStatus: ''
   });
+
+  const showRequestHistoryUnavailableModal = useCallback((err) => {
+    setError(null);
+    setRequestHistoryIssue({
+      endpoint: err?.endpoint || '/v1.0/requesthistory',
+      status: err?.status || 404,
+      message: err?.message || 'HTTP 404'
+    });
+  }, [setError]);
 
   const fetchEntries = useCallback(async () => {
     try {
@@ -142,15 +152,23 @@ function RequestHistory() {
         )
       };
       const result = await api.searchRequestHistory(params);
+      setRequestHistoryIssue(null);
       setEntries(result.Data || []);
       setTotalPages(result.TotalPages || 1);
       setTotalCount(result.TotalCount || 0);
     } catch (err) {
-      setError('Failed to fetch request history: ' + err.message);
+      if (err?.status === 404) {
+        setEntries([]);
+        setTotalPages(1);
+        setTotalCount(0);
+        showRequestHistoryUnavailableModal(err);
+      } else {
+        setError('Failed to fetch request history: ' + err.message);
+      }
     } finally {
       setLoading(false);
     }
-  }, [api, setError, page, pageSize, filters]);
+  }, [api, setError, page, pageSize, filters, showRequestHistoryUnavailableModal]);
 
   const fetchVMRs = useCallback(async () => {
     try {
@@ -529,6 +547,46 @@ function RequestHistory() {
       </div>
 
       <DataTable data={entries} columns={columns} loading={loading} hidePagination={true} onRowClick={handleViewDetail} />
+
+      <Modal
+        isOpen={Boolean(requestHistoryIssue)}
+        onClose={() => setRequestHistoryIssue(null)}
+        title="Request History Unavailable"
+      >
+        <div className="request-history-issue-modal">
+          <p>
+            Conductor could not load request history because the server returned
+            {' '}<strong>HTTP {requestHistoryIssue?.status || 404}</strong>{' '}
+            for <code>{requestHistoryIssue?.endpoint || '/v1.0/requesthistory'}</code>.
+          </p>
+          <p>
+            This usually means request history is disabled globally in the server settings,
+            even if the Virtual Model Runner has request history enabled.
+          </p>
+          <div className="request-history-issue-callout">
+            <code>"RequestHistory": &#123; "Enabled": true &#125;</code>
+          </div>
+          <p>
+            Check <code>conductor.json</code>, enable <code>RequestHistory.Enabled</code>,
+            restart the server, and retry this page. The per-VMR
+            {' '}<code>RequestHistoryEnabled</code>{' '}setting must also remain enabled.
+          </p>
+          <div className="request-history-issue-actions">
+            <button className="btn-secondary" onClick={() => setRequestHistoryIssue(null)}>
+              Close
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setRequestHistoryIssue(null);
+                fetchEntries();
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={showDetail}

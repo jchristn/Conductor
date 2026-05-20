@@ -53,6 +53,12 @@ namespace Test.Shared.Core.Settings
             ServerSettings settings = new ServerSettings();
             settings.Logging.Should().NotBeNull();
         }
+        public void RequestHistory_HasDefaultValue()
+        {
+            ServerSettings settings = new ServerSettings();
+            settings.RequestHistory.Should().NotBeNull();
+            settings.RequestHistory.Enabled.Should().BeTrue();
+        }
         public void AdminApiKeys_HasDefaultValue()
         {
             ServerSettings settings = new ServerSettings();

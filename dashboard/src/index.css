@@ -2851,6 +2851,32 @@ body {
   color: var(--danger-color);
 }
 
+.request-history-issue-modal p {
+  margin-bottom: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.request-history-issue-callout {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.request-history-issue-callout code {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+}
+
+.request-history-issue-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
 /* Detail Modal */
 .detail-content {
   padding: 0;
