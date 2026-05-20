@@ -51,9 +51,6 @@ function Login() {
               placeholder={DEFAULT_SERVER_URL}
               required
             />
-            <p className="form-help">
-              Conductor defaults to <code>9000</code>. RigMonitor commonly uses port <code>9990</code> so both services can run on the same machine.
-            </p>
           </div>
 
           <div className="form-group">
