@@ -243,6 +243,7 @@ These are the primary JSON resources used across the API.
   "HealthCheckUseAuth": false,
   "MaxParallelRequests": 4,
   "Weight": 1,
+  "ServiceState": "Normal",             // Normal, Draining, Quarantined
   "RigMonitor": {
     "Enabled": true,
     "HostnameOverride": null,
@@ -361,6 +362,9 @@ Minimal example:
   "LoadBalancingPolicyId": "lbp_xxx",
   "ModelRunnerEndpointIds": ["mre_a", "mre_b"],
   "ModelConfigurationIds": ["mc_default"],
+  "ModelConfigurationMappings": {
+    "llama3.2:latest": "mc_default"
+  },
   "ModelDefinitionIds": ["md_llama"],
   "TimeoutMs": 300000,
   "AllowEmbeddings": true,
@@ -547,9 +551,13 @@ Auth level: `Authenticated`
 | --- | --- | --- |
 | `GET` | `/v1.0/modelrunnerendpoints` | List endpoints. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
 | `POST` | `/v1.0/modelrunnerendpoints` | Create endpoint. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/modelrunnerendpoints/validate` | Validate an endpoint draft without saving it. Optional query: `tenantId`, `existingId`. |
 | `GET` | `/v1.0/modelrunnerendpoints/{id}` | Read endpoint. Optional `tenantId` query. |
 | `PUT` | `/v1.0/modelrunnerendpoints/{id}` | Update endpoint. Cross-tenant callers supply `TenantId` in the body. |
 | `DELETE` | `/v1.0/modelrunnerendpoints/{id}` | Delete endpoint. Optional `tenantId` query. Also removes the endpoint from referenced VMRs. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/drain` | Move the endpoint to `Draining` service state. Optional `tenantId` query. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/resume` | Move the endpoint back to `Normal` service state. Optional `tenantId` query. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/quarantine` | Move the endpoint to `Quarantined` service state. Optional `tenantId` query. |
 | `GET` | `/v1.0/modelrunnerendpoints/health` | List cached health state for all endpoints in scope. Optional `tenantId` query. |
 | `GET` | `/v1.0/modelrunnerendpoints/{id}/health` | Get cached health state for one endpoint. Optional `tenantId` query. |
 | `GET` | `/v1.0/modelrunnerendpoints/{id}/rigmonitor` | Get cached RigMonitor status for one endpoint. Optional `tenantId` query. |
@@ -571,6 +579,7 @@ Endpoint health response fields include:
 - `InFlightRequests`
 - `MaxParallelRequests`
 - `Weight`
+- `ServiceState`
 - `LastError`
 - `LastStateChangeUtc`
 - `History`
@@ -600,6 +609,7 @@ Auth level: `Authenticated`
 | --- | --- | --- |
 | `GET` | `/v1.0/modeldefinitions` | List definitions. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
 | `POST` | `/v1.0/modeldefinitions` | Create definition. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/modeldefinitions/validate` | Validate a model-definition draft without saving it. Optional query: `tenantId`, `existingId`. |
 | `GET` | `/v1.0/modeldefinitions/{id}` | Read definition. Optional `tenantId` query. |
 | `PUT` | `/v1.0/modeldefinitions/{id}` | Update definition. Cross-tenant callers supply `TenantId` in the body. |
 | `DELETE` | `/v1.0/modeldefinitions/{id}` | Delete definition. Optional `tenantId` query. Also removes it from referenced VMRs. |
@@ -612,6 +622,7 @@ Auth level: `Authenticated`
 | --- | --- | --- |
 | `GET` | `/v1.0/modelconfigurations` | List configurations. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
 | `POST` | `/v1.0/modelconfigurations` | Create configuration. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/modelconfigurations/validate` | Validate a model-configuration draft without saving it. Optional query: `tenantId`, `existingId`. |
 | `GET` | `/v1.0/modelconfigurations/{id}` | Read configuration. Optional `tenantId` query. |
 | `PUT` | `/v1.0/modelconfigurations/{id}` | Update configuration. Cross-tenant callers supply `TenantId` in the body. |
 | `DELETE` | `/v1.0/modelconfigurations/{id}` | Delete configuration. Optional `tenantId` query. Also removes it from referenced VMRs. |
@@ -624,6 +635,7 @@ Auth level: `Authenticated`
 | --- | --- | --- |
 | `GET` | `/v1.0/loadbalancingpolicies` | List policies. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
 | `POST` | `/v1.0/loadbalancingpolicies` | Create policy. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/loadbalancingpolicies/validate` | Validate a load-balancing policy draft without saving it. Optional query: `tenantId`, `existingId`. |
 | `GET` | `/v1.0/loadbalancingpolicies/{id}` | Read policy. Optional `tenantId` query. |
 | `PUT` | `/v1.0/loadbalancingpolicies/{id}` | Update policy. Cross-tenant callers supply `TenantId` in the body. |
 | `DELETE` | `/v1.0/loadbalancingpolicies/{id}` | Delete policy. Optional `tenantId` query. Also detaches it from any VMRs that reference it. |
@@ -664,10 +676,13 @@ Auth level: `Authenticated`
 | --- | --- | --- |
 | `GET` | `/v1.0/virtualmodelrunners` | List VMRs. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
 | `POST` | `/v1.0/virtualmodelrunners` | Create VMR. Cross-tenant callers supply `TenantId` in the body. `BasePath` must be `/v1.0/api/{name}/`. |
+| `POST` | `/v1.0/virtualmodelrunners/validate` | Validate a VMR draft without saving it. Optional query: `tenantId`, `existingId`. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}` | Read VMR. Optional `tenantId` query. |
 | `PUT` | `/v1.0/virtualmodelrunners/{id}` | Update VMR. Cross-tenant callers supply `TenantId` in the body. `BasePath` must stay `/v1.0/api/{name}/`. |
 | `DELETE` | `/v1.0/virtualmodelrunners/{id}` | Delete VMR. Optional `tenantId` query. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}/health` | Get aggregated health for the VMR and its endpoints. Optional `tenantId` query. |
+| `GET` | `/v1.0/virtualmodelrunners/{id}/effective` | Return the resolved read-only effective configuration for the VMR. Optional `tenantId` query. |
+| `POST` | `/v1.0/virtualmodelrunners/{id}/explain-routing` | Simulate routing for a representative request. Optional `tenantId` query. |
 
 VMR health response fields include:
 
@@ -676,9 +691,13 @@ VMR health response fields include:
 - `CheckedUtc`
 - `OverallHealthy`
 - `HealthyEndpointCount`
+- `DrainingEndpointCount`
+- `QuarantinedEndpointCount`
 - `TotalEndpointCount`
 - `ActiveSessionCount`
 - `Endpoints`
+
+Validation routes return a `ResourceValidationResult` with `Errors` and `Warnings`. The VMR `effective` response resolves the endpoint inventory, request permissions, session-affinity settings, attached policy metadata, model definitions, model configurations, and `ModelConfigurationMappings` that the proxy path will use. The VMR `explain-routing` response returns a `RoutingDecision` containing a timeline, selected endpoint, session-affinity outcome, policy metadata, mutation summary, and per-candidate evidence.
 
 ### Backup and restore
 
@@ -689,7 +708,7 @@ Both global admin users and system administrators can use these routes.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/v1.0/backup` | Export all configuration data into a `BackupPackage`. |
-| `POST` | `/v1.0/backup/validate` | Validate a backup package without applying it. Request body is a `BackupPackage`. |
+| `POST` | `/v1.0/backup/validate` | Validate a backup package without applying it. Request body is a `BackupPackage`. Uses the same shared validators as create, update, and restore flows. |
 | `POST` | `/v1.0/backup/restore` | Restore from a package. Request body is a `RestoreRequest`. |
 
 Backup package shape:
@@ -776,12 +795,12 @@ Request history routes are registered only when request history is enabled in se
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/v1.0/requesthistory/summary` | Aggregated time buckets. Query: `tenantId`, `vmrGuid`, `startUtc`, `endUtc`, `interval`. |
-| `GET` | `/v1.0/requesthistory` | Search entries. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `sourceIp`, `httpStatus`, `page`, `pageSize`. |
+| `GET` | `/v1.0/requesthistory/summary` | Aggregated time buckets. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `startUtc`, `endUtc`, `interval`. |
+| `GET` | `/v1.0/requesthistory` | Search entries. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`, `page`, `pageSize`. |
 | `GET` | `/v1.0/requesthistory/{id}` | Read entry metadata. Query: optional `tenantId` for cross-tenant callers. |
 | `GET` | `/v1.0/requesthistory/{id}/detail` | Read full request/response detail. Query: optional `tenantId`. |
 | `DELETE` | `/v1.0/requesthistory/{id}` | Delete one entry. Query: optional `tenantId`. |
-| `DELETE` | `/v1.0/requesthistory/bulk` | Bulk delete by filter. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `sourceIp`, `httpStatus`. |
+| `DELETE` | `/v1.0/requesthistory/bulk` | Bulk delete by filter. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`. |
 
 Summary interval values:
 
@@ -820,6 +839,18 @@ Summary response shape:
   "Interval": "hour",
   "TotalSuccess": 120,
   "TotalFailure": 3,
+  "StatusClassCounts": {
+    "2xx": 120,
+    "5xx": 3
+  },
+  "DenialReasonCounts": {
+    "AllEndpointsAtCapacity": 2,
+    "PolicyRejected": 1
+  },
+  "SessionAffinityOutcomeCounts": {
+    "Hit": 40,
+    "Miss": 83
+  },
   "TotalRequests": 123
 }
 ```
@@ -830,12 +861,33 @@ Request history entry fields include:
 - `TenantGuid`
 - `VirtualModelRunnerGuid`
 - `VirtualModelRunnerName`
+- `RequestorUserGuid`
+- `RequestorUserEmail`
+- `CredentialGuid`
+- `CredentialName`
+- `LoadBalancingPolicyGuid`
+- `LoadBalancingPolicyName`
 - `ModelEndpointGuid`
 - `ModelEndpointName`
 - `ModelEndpointUrl`
 - `ModelDefinitionGuid`
 - `ModelDefinitionName`
 - `ModelConfigurationGuid`
+- `RequestedModel`
+- `EffectiveModel`
+- `RequestType`
+- `RoutingOutcomeCode`
+- `DenialReasonCode`
+- `DenialReason`
+- `SessionAffinityOutcome`
+- `MutationSummary`
+- `ExplanationSummary`
+- `RequestBodyRetained`
+- `RequestBodyRedacted`
+- `RequestHeadersRedacted`
+- `ResponseBodyRetained`
+- `ResponseBodyRedacted`
+- `ResponseHeadersRedacted`
 - `RequestorSourceIp`
 - `HttpMethod`
 - `HttpUrl`
@@ -858,6 +910,20 @@ Detail responses extend the entry with:
 - `ResponseHeaders`
 - `ResponseBody`
 - `ResponseBodyTruncated`
+- `RoutingDecision`
+
+If request or response bodies have aged past `BodyRetentionDays`, detail records remain readable but the body content is scrubbed while the searchable routing and latency metadata stays available until `MetadataRetentionDays` expires.
+
+### Observability
+
+Auth level: `Authenticated`
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/observability/metrics` | Prometheus text exposition for low-cardinality operational metrics. |
+| `GET` | `/v1.0/observability/metrics/summary` | JSON snapshot of counters and latency summaries grouped overall and by VMR. |
+
+The export includes counters and histograms such as `conductor_requests_total`, `conductor_denials_total`, `conductor_policy_fallbacks_total`, `conductor_session_affinity_total`, `conductor_saturation_denials_total`, `conductor_telemetry_freshness_failures_total`, `conductor_route_decision_duration_ms`, `conductor_total_duration_ms`, and `conductor_first_token_time_ms`.
 
 ## Proxied Virtual Model Runner APIs
 

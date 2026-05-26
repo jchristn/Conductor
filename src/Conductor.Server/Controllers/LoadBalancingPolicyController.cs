@@ -17,6 +17,7 @@ namespace Conductor.Server.Controllers
     public class LoadBalancingPolicyController : BaseController
     {
         private readonly LoadBalancingPolicyEvaluator _Evaluator = new LoadBalancingPolicyEvaluator();
+        private readonly ConfigurationValidationService _ValidationService;
 
         /// <summary>
         /// Instantiate the load-balancing policy controller.
@@ -25,9 +26,11 @@ namespace Conductor.Server.Controllers
         /// <param name="authService">Authentication service.</param>
         /// <param name="serializer">Serializer.</param>
         /// <param name="logging">Logging module.</param>
-        public LoadBalancingPolicyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging)
+        /// <param name="validationService">Shared configuration validation service.</param>
+        public LoadBalancingPolicyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, ConfigurationValidationService validationService = null)
             : base(database, authService, serializer, logging)
         {
+            _ValidationService = validationService;
         }
 
         /// <summary>
@@ -46,6 +49,8 @@ namespace Conductor.Server.Controllers
 
             if (!_Evaluator.ValidatePolicy(policy, out string error))
                 throw new WebserverException(ApiResultEnum.BadRequest, error);
+
+            await ValidateAsync(tenantId, policy, null).ConfigureAwait(false);
 
             return await Database.LoadBalancingPolicy.CreateAsync(policy).ConfigureAwait(false);
         }
@@ -97,7 +102,26 @@ namespace Conductor.Server.Controllers
             if (!_Evaluator.ValidatePolicy(policy, out string error))
                 throw new WebserverException(ApiResultEnum.BadRequest, error);
 
+            await ValidateAsync(tenantId, policy, id).ConfigureAwait(false);
+
             return await Database.LoadBalancingPolicy.UpdateAsync(policy).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Validate a load-balancing policy draft.
+        /// </summary>
+        public async Task<ResourceValidationResult> Validate(string tenantId, LoadBalancingPolicy policy, string existingId = null)
+        {
+            if (_ValidationService == null)
+            {
+                return new ResourceValidationResult
+                {
+                    ResourceType = "LoadBalancingPolicy",
+                    IsValid = true
+                };
+            }
+
+            return await _ValidationService.ValidateLoadBalancingPolicyAsync(tenantId, policy, existingId).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -152,6 +176,15 @@ namespace Conductor.Server.Controllers
         public LoadBalancingMetricsCatalog GetMetricsCatalog()
         {
             return LoadBalancingPolicyCatalogProvider.GetCatalog();
+        }
+
+        private async Task ValidateAsync(string tenantId, LoadBalancingPolicy policy, string existingId)
+        {
+            ResourceValidationResult validation = await Validate(tenantId, policy, existingId).ConfigureAwait(false);
+            if (!validation.IsValid)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, String.Join(" ", validation.Errors.ConvertAll(item => item.Message)));
+            }
         }
     }
 }

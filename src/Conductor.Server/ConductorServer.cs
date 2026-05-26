@@ -36,6 +36,9 @@ namespace Conductor.Server
         private static AuthenticationService _AuthService;
         private static HealthCheckService _HealthCheckService;
         private static SessionAffinityService _SessionAffinityService;
+        private static OperationalMetricsService _OperationalMetricsService;
+        private static RoutingDecisionService _RoutingDecisionService;
+        private static ConfigurationValidationService _ConfigurationValidationService;
         private static RequestHistoryService _RequestHistoryService;
         private static RequestHistoryCleanupService _RequestHistoryCleanupService;
         private static Serializer _Serializer;
@@ -136,6 +139,17 @@ namespace Conductor.Server
             _SessionAffinityService = new SessionAffinityService(_Logging);
             _Logging.Info(_Header + "session affinity service initialized");
 
+            // Initialize shared routing, validation, and observability services
+            _OperationalMetricsService = new OperationalMetricsService();
+            _RoutingDecisionService = new RoutingDecisionService(
+                _Database,
+                _Logging,
+                _HealthCheckService,
+                _SessionAffinityService,
+                _OperationalMetricsService);
+            _ConfigurationValidationService = new ConfigurationValidationService(_Database, _Logging, _RoutingDecisionService);
+            _Logging.Info(_Header + "routing, validation, and observability services initialized");
+
             // Initialize request history service
             if (_Settings.RequestHistory.Enabled)
             {
@@ -156,7 +170,7 @@ namespace Conductor.Server
             // a default route at construction time; the default route is the proxy handler.
             _ProxyController = new Controllers.ProxyController(
                 _Database, _AuthService, _Serializer, _Logging,
-                _HealthCheckService, _SessionAffinityService, _RequestHistoryService);
+                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService);
 
             WatsonWebserver.Core.WebserverSettings webSettings = new WatsonWebserver.Core.WebserverSettings(
                 _Settings.Webserver.Hostname,
@@ -195,6 +209,7 @@ namespace Conductor.Server
                 openApi.Tags.Add(new OpenApiTag { Name = "Administrators", Description = "Administrator management endpoints" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Backup", Description = "Backup and restore endpoints" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Request History", Description = "Request history endpoints" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Observability", Description = "Operational metrics and observability endpoints" });
 
                 // Define security scheme for bearer token authentication
                 openApi.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
@@ -356,14 +371,14 @@ namespace Conductor.Server
             Controllers.TenantController tenantController = new Controllers.TenantController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.UserController userController = new Controllers.UserController(_Database, _AuthService, _Serializer, _Logging);
             Controllers.CredentialController credentialController = new Controllers.CredentialController(_Database, _AuthService, _Serializer, _Logging);
-            Controllers.ModelRunnerEndpointController mreController = new Controllers.ModelRunnerEndpointController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService);
-            Controllers.ModelDefinitionController mdController = new Controllers.ModelDefinitionController(_Database, _AuthService, _Serializer, _Logging);
-            Controllers.ModelConfigurationController mcController = new Controllers.ModelConfigurationController(_Database, _AuthService, _Serializer, _Logging);
-            Controllers.LoadBalancingPolicyController lbpController = new Controllers.LoadBalancingPolicyController(_Database, _AuthService, _Serializer, _Logging);
-            Controllers.VirtualModelRunnerController vmrController = new Controllers.VirtualModelRunnerController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService);
+            Controllers.ModelRunnerEndpointController mreController = new Controllers.ModelRunnerEndpointController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _ConfigurationValidationService);
+            Controllers.ModelDefinitionController mdController = new Controllers.ModelDefinitionController(_Database, _AuthService, _Serializer, _Logging, _ConfigurationValidationService);
+            Controllers.ModelConfigurationController mcController = new Controllers.ModelConfigurationController(_Database, _AuthService, _Serializer, _Logging, _ConfigurationValidationService);
+            Controllers.LoadBalancingPolicyController lbpController = new Controllers.LoadBalancingPolicyController(_Database, _AuthService, _Serializer, _Logging, _ConfigurationValidationService);
+            Controllers.VirtualModelRunnerController vmrController = new Controllers.VirtualModelRunnerController(_Database, _AuthService, _Serializer, _Logging, _HealthCheckService, _SessionAffinityService, _ConfigurationValidationService, _RoutingDecisionService);
             Controllers.AuthController authController = new Controllers.AuthController(_Database, _AuthService, _Serializer, _Logging, _Settings.AdminApiKeys);
             Controllers.AdministratorController adminController = new Controllers.AdministratorController(_Database, _AuthService, _Serializer, _Logging);
-            Controllers.BackupController backupController = new Controllers.BackupController(_Database, _AuthService, _Serializer, _Logging);
+            Controllers.BackupController backupController = new Controllers.BackupController(_Database, _AuthService, _Serializer, _Logging, _ConfigurationValidationService);
             Controllers.RequestHistoryController requestHistoryController = _RequestHistoryService != null
                 ? new Controllers.RequestHistoryController(_Database, _AuthService, _Serializer, _Logging, _RequestHistoryService)
                 : null;
@@ -685,6 +700,22 @@ namespace Conductor.Server
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 
+            _App.Post<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints/validate", async (req) =>
+            {
+                ModelRunnerEndpoint mre = req.Data as ModelRunnerEndpoint;
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
+                return await mreController.Validate(tenantId, mre, mre?.Id);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Validate model runner endpoint")
+                .WithDescription("Validate a model runner endpoint draft without persisting it")
+                .WithSecurity("Bearer")
+                .WithRequestBody(Api.JsonRequestBody<ModelRunnerEndpoint>("Model runner endpoint draft", true))
+                .WithResponse(200, Api.JsonResponse<ResourceValidationResult>("Validation result"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
             _App.Get("/v1.0/modelrunnerendpoints/health", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
@@ -727,6 +758,54 @@ namespace Conductor.Server
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
                 .WithResponse(200, Api.JsonResponse<RigMonitorEndpointStatus>("Cached RigMonitor status"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post("/v1.0/modelrunnerendpoints/{id}/drain", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.Drain(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Drain model runner endpoint")
+                .WithDescription("Stops new selections for the endpoint while keeping health probes active and allowing already-admitted traffic to finish")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithResponse(200, Api.JsonResponse<ModelRunnerEndpoint>("Updated model runner endpoint"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post("/v1.0/modelrunnerendpoints/{id}/resume", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.Resume(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Resume model runner endpoint")
+                .WithDescription("Returns a drained or quarantined endpoint to normal routing service")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithResponse(200, Api.JsonResponse<ModelRunnerEndpoint>("Updated model runner endpoint"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post("/v1.0/modelrunnerendpoints/{id}/quarantine", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.Quarantine(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Quarantine model runner endpoint")
+                .WithDescription("Keeps the endpoint visible for health diagnostics while excluding it from all routing decisions")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithResponse(200, Api.JsonResponse<ModelRunnerEndpoint>("Updated model runner endpoint"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);
@@ -830,6 +909,22 @@ namespace Conductor.Server
                 .WithRequestBody(Api.JsonRequestBody<ModelDefinition>("Model definition to create", true))
                 .WithResponse(201, Api.JsonResponse<ModelDefinition>("Created model definition"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
+            _App.Post<ModelDefinition>("/v1.0/modeldefinitions/validate", async (req) =>
+            {
+                ModelDefinition md = req.Data as ModelDefinition;
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
+                return await mdController.Validate(tenantId, md, md?.Id);
+            },
+            api => api
+                .WithTag("Model Definitions")
+                .WithSummary("Validate model definition")
+                .WithDescription("Validate a model definition draft without persisting it")
+                .WithSecurity("Bearer")
+                .WithRequestBody(Api.JsonRequestBody<ModelDefinition>("Model definition draft", true))
+                .WithResponse(200, Api.JsonResponse<ResourceValidationResult>("Validation result"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 
@@ -948,6 +1043,22 @@ namespace Conductor.Server
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 
+            _App.Post<LoadBalancingPolicy>("/v1.0/loadbalancingpolicies/validate", async (req) =>
+            {
+                LoadBalancingPolicy policy = req.Data as LoadBalancingPolicy;
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                return await lbpController.Validate(tenantId, policy, policy?.Id);
+            },
+            api => api
+                .WithTag("Load Balancing Policies")
+                .WithSummary("Validate load-balancing policy")
+                .WithDescription("Validate a load-balancing policy draft without persisting it")
+                .WithSecurity("Bearer")
+                .WithRequestBody(Api.JsonRequestBody<LoadBalancingPolicy>("Load-balancing policy draft", true))
+                .WithResponse(200, Api.JsonResponse<ResourceValidationResult>("Validation result"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
             _App.Get("/v1.0/loadbalancingpolicies/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
@@ -1048,6 +1159,22 @@ namespace Conductor.Server
                 .WithRequestBody(Api.JsonRequestBody<ModelConfiguration>("Model configuration to create", true))
                 .WithResponse(201, Api.JsonResponse<ModelConfiguration>("Created model configuration"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
+            _App.Post<ModelConfiguration>("/v1.0/modelconfigurations/validate", async (req) =>
+            {
+                ModelConfiguration mc = req.Data as ModelConfiguration;
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
+                return await mcController.Validate(tenantId, mc, mc?.Id);
+            },
+            api => api
+                .WithTag("Model Configurations")
+                .WithSummary("Validate model configuration")
+                .WithDescription("Validate a model configuration draft without persisting it")
+                .WithSecurity("Bearer")
+                .WithRequestBody(Api.JsonRequestBody<ModelConfiguration>("Model configuration draft", true))
+                .WithResponse(200, Api.JsonResponse<ResourceValidationResult>("Validation result"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 
@@ -1153,6 +1280,22 @@ namespace Conductor.Server
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 
+            _App.Post<VirtualModelRunner>("/v1.0/virtualmodelrunners/validate", async (req) =>
+            {
+                VirtualModelRunner vmr = req.Data as VirtualModelRunner;
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
+                return await vmrController.Validate(tenantId, vmr, vmr?.Id);
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Validate virtual model runner")
+                .WithDescription("Validate a virtual model runner draft without persisting it")
+                .WithSecurity("Bearer")
+                .WithRequestBody(Api.JsonRequestBody<VirtualModelRunner>("Virtual model runner draft", true))
+                .WithResponse(200, Api.JsonResponse<ResourceValidationResult>("Validation result"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
             _App.Get("/v1.0/virtualmodelrunners/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
@@ -1245,6 +1388,39 @@ namespace Conductor.Server
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
                 .WithResponse(200, Api.JsonResponse<VirtualModelRunnerHealthStatus>("Virtual model runner health status"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Get("/v1.0/virtualmodelrunners/{id}/effective", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.GetEffectiveConfiguration(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Get effective virtual model runner configuration")
+                .WithDescription("Resolve the effective endpoint, model, session-affinity, and policy configuration for a virtual model runner")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithResponse(200, Api.JsonResponse<EffectiveVirtualModelRunnerConfiguration>("Effective configuration"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post<RoutingSimulationRequest>("/v1.0/virtualmodelrunners/{id}/explain-routing", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.ExplainRouting(tenantId, req.Parameters["id"], req.Data as RoutingSimulationRequest);
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Explain routing for a virtual model runner")
+                .WithDescription("Simulate a representative request and return the routing timeline, candidate evidence, policy diagnostics, and mutation summary")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithRequestBody(Api.JsonRequestBody<RoutingSimulationRequest>("Representative request shape", true))
+                .WithResponse(200, Api.JsonResponse<RoutingDecision>("Routing decision explanation"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);
@@ -1402,23 +1578,28 @@ namespace Conductor.Server
                 _App.Get("/v1.0/requesthistory/summary", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
-
-                    return await requestHistoryController.Summary(
-                        tenantId,
-                        req.Http.Request.Query.Elements.Get("vmrGuid"),
-                        req.Http.Request.Query.Elements.Get("startUtc"),
-                        req.Http.Request.Query.Elements.Get("endUtc"),
-                        req.Http.Request.Query.Elements.Get("interval"));
+                    return await requestHistoryController.Summary(tenantId, BuildRequestHistorySummaryFilter(req.Http.Request, tenantId));
                 },
                 api => api
                     .WithTag("Request History")
                     .WithSummary("Get request history summary")
-                    .WithDescription("Get aggregated request counts grouped by time buckets with success/failure breakdown")
+                    .WithDescription("Get aggregated request counts grouped by time buckets with success, failure, status-class, denial-reason, and session-affinity breakdowns")
                     .WithSecurity("Bearer")
-                    .WithParameter(OpenApiParameterMetadata.Query("vmrGuid", "Filter by virtual model runner GUID", false))
-                    .WithParameter(OpenApiParameterMetadata.Query("startUtc", "Start of time range (UTC, ISO 8601)", false))
-                    .WithParameter(OpenApiParameterMetadata.Query("endUtc", "End of time range (UTC, ISO 8601)", false))
-                    .WithParameter(OpenApiParameterMetadata.Query("interval", "Bucket interval: 'hour' or 'day' (default: 'hour')", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("vmrGuid", "Filter by virtual model runner GUID", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("endpointGuid", "Filter by model endpoint GUID", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("requestorUserGuid", "Filter by requestor user GUID", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("credentialGuid", "Filter by credential GUID", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("loadBalancingPolicyGuid", "Filter by load-balancing policy GUID", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("modelName", "Filter by requested or effective model name", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("mutationSummary", "Filter by mutation summary text", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("denialReasonCode", "Filter by routing denial reason code", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("sessionAffinityOutcome", "Filter by session-affinity outcome", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("statusClass", "Filter by HTTP status class such as 2xx, 4xx, or 5xx", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("sourceIp", "Filter by source IP", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("httpStatus", "Filter by HTTP status code", false, OpenApiSchemaMetadata.Integer()))
+                  .WithParameter(OpenApiParameterMetadata.Query("startUtc", "Start of time range (UTC, ISO 8601)", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("endUtc", "End of time range (UTC, ISO 8601)", false))
+                  .WithParameter(OpenApiParameterMetadata.Query("interval", "Bucket interval: 'minute', '15minute', 'hour', '6hour', or 'day' (default: 'hour')", false))
                     .WithResponse(200, Api.JsonResponse<RequestHistorySummaryResult>("Summary with time-bucketed counts"))
                     .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
                 auth: true);
@@ -1426,30 +1607,7 @@ namespace Conductor.Server
                 _App.Get("/v1.0/requesthistory", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
-
-                    int page = 1;
-                    string pageStr = req.Http.Request.Query.Elements.Get("page");
-                    if (!String.IsNullOrEmpty(pageStr) && Int32.TryParse(pageStr, out int p))
-                        page = p;
-
-                    int pageSize = 10;
-                    string pageSizeStr = req.Http.Request.Query.Elements.Get("pageSize");
-                    if (!String.IsNullOrEmpty(pageSizeStr) && Int32.TryParse(pageSizeStr, out int ps))
-                        pageSize = ps;
-
-                    int? httpStatus = null;
-                    string httpStatusStr = req.Http.Request.Query.Elements.Get("httpStatus");
-                    if (!String.IsNullOrEmpty(httpStatusStr) && Int32.TryParse(httpStatusStr, out int status))
-                        httpStatus = status;
-
-                    return await requestHistoryController.Search(
-                        tenantId,
-                        req.Http.Request.Query.Elements.Get("vmrGuid"),
-                        req.Http.Request.Query.Elements.Get("endpointGuid"),
-                        req.Http.Request.Query.Elements.Get("sourceIp"),
-                        httpStatus,
-                        page,
-                        pageSize);
+                    return await requestHistoryController.Search(tenantId, BuildRequestHistorySearchFilter(req.Http.Request, tenantId));
                 },
                 api => api
                     .WithTag("Request History")
@@ -1458,6 +1616,16 @@ namespace Conductor.Server
                     .WithSecurity("Bearer")
                     .WithParameter(OpenApiParameterMetadata.Query("vmrGuid", "Filter by virtual model runner GUID", false))
                     .WithParameter(OpenApiParameterMetadata.Query("endpointGuid", "Filter by model endpoint GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("requestorUserGuid", "Filter by requestor user GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("credentialGuid", "Filter by credential GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("loadBalancingPolicyGuid", "Filter by load-balancing policy GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("modelName", "Filter by requested or effective model name", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("mutationSummary", "Filter by mutation summary text", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("denialReasonCode", "Filter by routing denial reason code", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("sessionAffinityOutcome", "Filter by session-affinity outcome", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("statusClass", "Filter by HTTP status class such as 2xx, 4xx, or 5xx", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("createdAfterUtc", "Filter to entries created at or after this UTC timestamp", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("createdBeforeUtc", "Filter to entries created before this UTC timestamp", false))
                     .WithParameter(OpenApiParameterMetadata.Query("sourceIp", "Filter by source IP", false))
                     .WithParameter(OpenApiParameterMetadata.Query("httpStatus", "Filter by HTTP status code", false, OpenApiSchemaMetadata.Integer()))
                     .WithParameter(OpenApiParameterMetadata.Query("page", "Page number (1-based)", false, OpenApiSchemaMetadata.Integer()))
@@ -1469,18 +1637,7 @@ namespace Conductor.Server
                 _App.Delete("/v1.0/requesthistory/bulk", async (req) =>
                 {
                     string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
-
-                    int? httpStatus = null;
-                    string httpStatusStr = req.Http.Request.Query.Elements.Get("httpStatus");
-                    if (!String.IsNullOrEmpty(httpStatusStr) && Int32.TryParse(httpStatusStr, out int status))
-                        httpStatus = status;
-
-                    return await requestHistoryController.DeleteBulk(
-                        tenantId,
-                        req.Http.Request.Query.Elements.Get("vmrGuid"),
-                        req.Http.Request.Query.Elements.Get("endpointGuid"),
-                        req.Http.Request.Query.Elements.Get("sourceIp"),
-                        httpStatus);
+                    return await requestHistoryController.DeleteBulk(tenantId, BuildRequestHistorySearchFilter(req.Http.Request, tenantId));
                 },
                 api => api
                     .WithTag("Request History")
@@ -1489,6 +1646,16 @@ namespace Conductor.Server
                     .WithSecurity("Bearer")
                     .WithParameter(OpenApiParameterMetadata.Query("vmrGuid", "Filter by virtual model runner GUID", false))
                     .WithParameter(OpenApiParameterMetadata.Query("endpointGuid", "Filter by model endpoint GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("requestorUserGuid", "Filter by requestor user GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("credentialGuid", "Filter by credential GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("loadBalancingPolicyGuid", "Filter by load-balancing policy GUID", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("modelName", "Filter by requested or effective model name", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("mutationSummary", "Filter by mutation summary text", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("denialReasonCode", "Filter by routing denial reason code", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("sessionAffinityOutcome", "Filter by session-affinity outcome", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("statusClass", "Filter by HTTP status class such as 2xx, 4xx, or 5xx", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("createdAfterUtc", "Filter to entries created at or after this UTC timestamp", false))
+                    .WithParameter(OpenApiParameterMetadata.Query("createdBeforeUtc", "Filter to entries created before this UTC timestamp", false))
                     .WithParameter(OpenApiParameterMetadata.Query("sourceIp", "Filter by source IP", false))
                     .WithParameter(OpenApiParameterMetadata.Query("httpStatus", "Filter by HTTP status code", false, OpenApiSchemaMetadata.Integer()))
                     .WithResponse(200, Api.JsonResponse<Controllers.BulkDeleteResult>("Number of deleted entries"))
@@ -1565,6 +1732,39 @@ namespace Conductor.Server
                     .WithResponse(200, Api.JsonResponse<RequestHistorySummaryResult>("Empty summary result")),
                 auth: true);
             }
+
+            #endregion
+
+            #region Observability-Routes
+
+            _App.Get("/v1.0/observability/metrics", async (req) =>
+            {
+                req.Http.Response.ContentType = "text/plain; version=0.0.4";
+                await Task.CompletedTask.ConfigureAwait(false);
+                return _OperationalMetricsService != null ? _OperationalMetricsService.RenderPrometheus() : String.Empty;
+            },
+            api => api
+                .WithTag("Observability")
+                .WithSummary("Get Prometheus metrics")
+                .WithDescription("Returns the current low-cardinality operational metric set in Prometheus text exposition format")
+                .WithSecurity("Bearer")
+                .WithResponse(200, Api.JsonResponse<string>("Prometheus metrics exposition"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
+            _App.Get("/v1.0/observability/metrics/summary", async (req) =>
+            {
+                await Task.CompletedTask.ConfigureAwait(false);
+                return _OperationalMetricsService != null ? _OperationalMetricsService.GetSnapshot() : new ObservabilityMetricsSnapshot();
+            },
+            api => api
+                .WithTag("Observability")
+                .WithSummary("Get observability metrics summary")
+                .WithDescription("Returns a JSON snapshot of request, denial, session-affinity, saturation, telemetry-freshness, and latency percentile metrics")
+                .WithSecurity("Bearer")
+                .WithResponse(200, Api.JsonResponse<ObservabilityMetricsSnapshot>("Operational metrics snapshot"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
 
             #endregion
 
@@ -1686,6 +1886,100 @@ namespace Conductor.Server
                 // Admin auth - use user ID from request body
                 return requestBodyUserId;
             }
+            return null;
+        }
+
+        private static RequestHistorySearchFilter BuildRequestHistorySearchFilter(HttpRequestBase request, string tenantId)
+        {
+            RequestHistorySearchFilter filter = new RequestHistorySearchFilter
+            {
+                TenantGuid = tenantId,
+                VirtualModelRunnerGuid = request.Query.Elements.Get("vmrGuid"),
+                ModelEndpointGuid = request.Query.Elements.Get("endpointGuid"),
+                RequestorUserGuid = request.Query.Elements.Get("requestorUserGuid"),
+                CredentialGuid = request.Query.Elements.Get("credentialGuid"),
+                LoadBalancingPolicyGuid = request.Query.Elements.Get("loadBalancingPolicyGuid"),
+                ModelName = request.Query.Elements.Get("modelName"),
+                MutationSummary = request.Query.Elements.Get("mutationSummary"),
+                DenialReasonCode = request.Query.Elements.Get("denialReasonCode"),
+                SessionAffinityOutcome = request.Query.Elements.Get("sessionAffinityOutcome"),
+                StatusClass = request.Query.Elements.Get("statusClass"),
+                CreatedAfterUtc = ParseUtcQueryValue(request.Query.Elements.Get("createdAfterUtc")),
+                CreatedBeforeUtc = ParseUtcQueryValue(request.Query.Elements.Get("createdBeforeUtc")),
+                RequestorSourceIp = request.Query.Elements.Get("sourceIp"),
+                HttpStatus = ParseNullableInt(request.Query.Elements.Get("httpStatus")),
+                Page = ParsePositiveInt(request.Query.Elements.Get("page"), 1),
+                PageSize = ParsePositiveInt(request.Query.Elements.Get("pageSize"), 10)
+            };
+
+            return filter;
+        }
+
+        private static RequestHistorySummaryFilter BuildRequestHistorySummaryFilter(HttpRequestBase request, string tenantId)
+        {
+            DateTime? startUtc = ParseUtcQueryValue(request.Query.Elements.Get("startUtc"));
+            DateTime? endUtc = ParseUtcQueryValue(request.Query.Elements.Get("endUtc"));
+
+            RequestHistorySummaryFilter filter = new RequestHistorySummaryFilter
+            {
+                TenantGuid = tenantId,
+                VirtualModelRunnerGuid = request.Query.Elements.Get("vmrGuid"),
+                ModelEndpointGuid = request.Query.Elements.Get("endpointGuid"),
+                RequestorUserGuid = request.Query.Elements.Get("requestorUserGuid"),
+                CredentialGuid = request.Query.Elements.Get("credentialGuid"),
+                LoadBalancingPolicyGuid = request.Query.Elements.Get("loadBalancingPolicyGuid"),
+                ModelName = request.Query.Elements.Get("modelName"),
+                MutationSummary = request.Query.Elements.Get("mutationSummary"),
+                DenialReasonCode = request.Query.Elements.Get("denialReasonCode"),
+                SessionAffinityOutcome = request.Query.Elements.Get("sessionAffinityOutcome"),
+                StatusClass = request.Query.Elements.Get("statusClass"),
+                RequestorSourceIp = request.Query.Elements.Get("sourceIp"),
+                HttpStatus = ParseNullableInt(request.Query.Elements.Get("httpStatus")),
+                StartUtc = startUtc ?? DateTime.UtcNow.AddHours(-1),
+                EndUtc = endUtc ?? DateTime.UtcNow,
+                Interval = request.Query.Elements.Get("interval") ?? "hour"
+            };
+
+            return filter;
+        }
+
+        private static int? ParseNullableInt(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            if (Int32.TryParse(value, out int parsed))
+            {
+                return parsed;
+            }
+
+            return null;
+        }
+
+        private static int ParsePositiveInt(string value, int defaultValue)
+        {
+            if (Int32.TryParse(value, out int parsed) && parsed > 0)
+            {
+                return parsed;
+            }
+
+            return defaultValue;
+        }
+
+        private static DateTime? ParseUtcQueryValue(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            if (DateTime.TryParse(value, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsed))
+            {
+                return parsed.ToUniversalTime();
+            }
+
             return null;
         }
 

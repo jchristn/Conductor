@@ -16,12 +16,15 @@ namespace Conductor.Server.Controllers
     /// </summary>
     public class ModelDefinitionController : BaseController
     {
+        private readonly ConfigurationValidationService _ValidationService;
+
         /// <summary>
         /// Instantiate the model definition controller.
         /// </summary>
-        public ModelDefinitionController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging)
+        public ModelDefinitionController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, ConfigurationValidationService validationService = null)
             : base(database, authService, serializer, logging)
         {
+            _ValidationService = validationService;
         }
 
         /// <summary>
@@ -37,6 +40,7 @@ namespace Conductor.Server.Controllers
 
             definition.Id = IdGenerator.NewModelDefinitionId();
             definition.TenantId = tenantId;
+            await ValidateAsync(tenantId, definition, null).ConfigureAwait(false);
             definition = await Database.ModelDefinition.CreateAsync(definition);
 
             return definition;
@@ -80,9 +84,27 @@ namespace Conductor.Server.Controllers
             definition.Id = id;
             definition.TenantId = tenantId;
             definition.CreatedUtc = existing.CreatedUtc;
+            await ValidateAsync(tenantId, definition, id).ConfigureAwait(false);
             definition = await Database.ModelDefinition.UpdateAsync(definition);
 
             return definition;
+        }
+
+        /// <summary>
+        /// Validate a model definition draft.
+        /// </summary>
+        public async Task<ResourceValidationResult> Validate(string tenantId, ModelDefinition definition, string existingId = null)
+        {
+            if (_ValidationService == null)
+            {
+                return new ResourceValidationResult
+                {
+                    ResourceType = "ModelDefinition",
+                    IsValid = true
+                };
+            }
+
+            return await _ValidationService.ValidateModelDefinitionAsync(tenantId, definition, existingId).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -133,6 +155,15 @@ namespace Conductor.Server.Controllers
                 request.ActiveFilter = activeFilter.Value;
 
             return await Database.ModelDefinition.EnumerateAsync(tenantId, request);
+        }
+
+        private async Task ValidateAsync(string tenantId, ModelDefinition definition, string existingId)
+        {
+            ResourceValidationResult validation = await Validate(tenantId, definition, existingId).ConfigureAwait(false);
+            if (!validation.IsValid)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, String.Join(" ", validation.Errors.ConvertAll(item => item.Message)));
+            }
         }
     }
 }

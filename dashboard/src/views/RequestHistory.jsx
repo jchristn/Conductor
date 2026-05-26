@@ -101,6 +101,46 @@ function CollapsibleSection({ title, meta, content, defaultExpanded = false, sho
   );
 }
 
+function formatFacetEntries(facets) {
+  return Object.entries(facets || {})
+    .sort((left, right) => right[1] - left[1]);
+}
+
+function getRetentionLabel(retained, redacted, truncated) {
+  if (!retained) return { label: 'Metadata Only', tone: 'neutral' };
+  if (redacted && truncated) return { label: 'Redacted + Truncated', tone: 'warning' };
+  if (redacted) return { label: 'Redacted', tone: 'warning' };
+  if (truncated) return { label: 'Truncated', tone: 'warning' };
+  return { label: 'Retained', tone: 'success' };
+}
+
+function getStageOutcomeTone(outcome) {
+  switch (outcome) {
+    case 'Passed':
+      return 'success';
+    case 'Denied':
+      return 'danger';
+    case 'Fallback':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
+}
+
+function toLocalDateTimeValue(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const pad = (part) => String(part).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function RequestHistory() {
   const { api, setError } = useApp();
   const [entries, setEntries] = useState([]);
@@ -123,11 +163,23 @@ function RequestHistory() {
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [jsonModalData, setJsonModalData] = useState(null);
   const [requestHistoryIssue, setRequestHistoryIssue] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Filter state
   const [filters, setFilters] = useState({
     vmrGuid: '',
     endpointGuid: '',
+    requestorUserGuid: '',
+    credentialGuid: '',
+    loadBalancingPolicyGuid: '',
+    modelName: '',
+    mutationSummary: '',
+    denialReasonCode: '',
+    sessionAffinityOutcome: '',
+    statusClass: '',
+    createdAfterUtc: '',
+    createdBeforeUtc: '',
     sourceIp: '',
     httpStatus: ''
   });
@@ -170,6 +222,25 @@ function RequestHistory() {
     }
   }, [api, setError, page, pageSize, filters, showRequestHistoryUnavailableModal]);
 
+  const fetchSummary = useCallback(async () => {
+    try {
+      setSummaryLoading(true);
+      const endUtc = new Date().toISOString();
+      const startUtc = filters.createdAfterUtc || new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString();
+      const result = await api.getRequestHistorySummary({
+        ...Object.fromEntries(Object.entries(filters).filter(([_, value]) => value !== '')),
+        startUtc,
+        endUtc: filters.createdBeforeUtc || endUtc,
+        interval: 'hour'
+      });
+      setSummary(result);
+    } catch {
+      setSummary(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [api, filters]);
+
   const fetchVMRs = useCallback(async () => {
     try {
       const result = await api.listVirtualModelRunners({ maxResults: 1000 });
@@ -196,6 +267,10 @@ function RequestHistory() {
     fetchVMRs();
     fetchEndpoints();
   }, [fetchVMRs, fetchEndpoints]);
+
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
   const handleViewDetail = async (entry) => {
     setSelectedEntry(entry);
@@ -269,6 +344,16 @@ function RequestHistory() {
     setFilters({
       vmrGuid: '',
       endpointGuid: '',
+      requestorUserGuid: '',
+      credentialGuid: '',
+      loadBalancingPolicyGuid: '',
+      modelName: '',
+      mutationSummary: '',
+      denialReasonCode: '',
+      sessionAffinityOutcome: '',
+      statusClass: '',
+      createdAfterUtc: '',
+      createdBeforeUtc: '',
       sourceIp: '',
       httpStatus: ''
     });
@@ -345,13 +430,13 @@ function RequestHistory() {
         </span>
       )
     },
-    {
-      key: 'ResponseTransferType',
-      label: 'Type',
-      tooltip: 'Response transfer type (Normal, Chunked, or SSE)',
-      width: '80px',
-      render: (item) => getTransferTypeBadge(item.ResponseTransferType) || <span className="text-muted">Normal</span>
-    },
+      {
+        key: 'ResponseTransferType',
+        label: 'Transfer',
+        tooltip: 'Response transfer type (Normal, Chunked, or SSE)',
+        width: '90px',
+        render: (item) => getTransferTypeBadge(item.ResponseTransferType) || <span className="text-muted">Normal</span>
+      },
     {
       key: 'ResponseTimeMs',
       label: 'Time (ms)',
@@ -414,7 +499,7 @@ function RequestHistory() {
           <p className="view-subtitle">View and filter recent API requests including routing decisions, response details, and token usage.</p>
         </div>
         <div className="view-actions">
-          <button className="btn-icon" onClick={fetchEntries} title="Refresh">
+            <button className="btn-icon" onClick={fetchEntries} title="Refresh">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
             </svg>
@@ -429,9 +514,42 @@ function RequestHistory() {
             </button>
           )}
         </div>
-      </div>
+        </div>
 
-      <div className="filter-bar">
+        <div className="dashboard-section compact">
+          <div className="request-history-chart-header">
+            <h2>Ledger Summary</h2>
+            <button className="btn-icon" onClick={fetchSummary} title="Refresh summary" disabled={summaryLoading}>
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+          {summary && (
+            <div className="facet-grid">
+              <div className="facet-card">
+                <strong>Status Classes</strong>
+                {formatFacetEntries(summary.StatusClassCounts).map(([key, value]) => (
+                  <div className="facet-row" key={`status-class-${key}`}><span>{key}</span><span>{value}</span></div>
+                ))}
+              </div>
+              <div className="facet-card">
+                <strong>Denial Reasons</strong>
+                {formatFacetEntries(summary.DenialReasonCounts).slice(0, 6).map(([key, value]) => (
+                  <div className="facet-row" key={`denial-${key}`}><span>{key}</span><span>{value}</span></div>
+                ))}
+              </div>
+              <div className="facet-card">
+                <strong>Session Affinity</strong>
+                {formatFacetEntries(summary.SessionAffinityOutcomeCounts).map(([key, value]) => (
+                  <div className="facet-row" key={`session-${key}`}><span>{key}</span><span>{value}</span></div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="filter-bar">
         <div className="filter-group">
           <label>VMR:</label>
           <select
@@ -456,34 +574,117 @@ function RequestHistory() {
             ))}
           </select>
         </div>
-        <div className="filter-group">
-          <label>Source IP:</label>
-          <input
+          <div className="filter-group">
+            <label>Source IP:</label>
+            <input
             type="text"
             value={filters.sourceIp}
             onChange={(e) => handleFilterChange('sourceIp', e.target.value)}
             placeholder="Filter by IP"
           />
         </div>
-        <div className="filter-group">
-          <label>Status:</label>
-          <select
-            value={filters.httpStatus}
+          <div className="filter-group">
+            <label>User:</label>
+            <input
+              type="text"
+              value={filters.requestorUserGuid}
+              onChange={(e) => handleFilterChange('requestorUserGuid', e.target.value)}
+              placeholder="User GUID"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Credential:</label>
+            <input
+              type="text"
+              value={filters.credentialGuid}
+              onChange={(e) => handleFilterChange('credentialGuid', e.target.value)}
+              placeholder="Credential GUID"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Model:</label>
+            <input
+              type="text"
+              value={filters.modelName}
+              onChange={(e) => handleFilterChange('modelName', e.target.value)}
+              placeholder="Requested/effective model"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Mutation:</label>
+            <input
+              type="text"
+              value={filters.mutationSummary}
+              onChange={(e) => handleFilterChange('mutationSummary', e.target.value)}
+              placeholder="temperature, max_tokens..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>Status:</label>
+            <select
+              value={filters.httpStatus}
             onChange={(e) => handleFilterChange('httpStatus', e.target.value)}
-          >
-            <option value="">All</option>
-            <option value="200">200</option>
+            >
+              <option value="">All</option>
+              <option value="200">200</option>
             <option value="400">400</option>
             <option value="401">401</option>
             <option value="403">403</option>
             <option value="404">404</option>
             <option value="500">500</option>
-            <option value="502">502</option>
-          </select>
-        </div>
-        {hasFilters && (
-          <button className="btn-link" onClick={handleClearFilters}>
-            Clear Filters
+              <option value="502">502</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Class:</label>
+            <select
+              value={filters.statusClass}
+              onChange={(e) => handleFilterChange('statusClass', e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="2xx">2xx</option>
+              <option value="4xx">4xx</option>
+              <option value="5xx">5xx</option>
+              <option value="NoStatus">No Status</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Denied:</label>
+            <input
+              type="text"
+              value={filters.denialReasonCode}
+              onChange={(e) => handleFilterChange('denialReasonCode', e.target.value)}
+              placeholder="AllEndpointsAtCapacity"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Affinity:</label>
+            <input
+              type="text"
+              value={filters.sessionAffinityOutcome}
+              onChange={(e) => handleFilterChange('sessionAffinityOutcome', e.target.value)}
+              placeholder="Hit, Miss, Created..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>Created After:</label>
+            <input
+              type="datetime-local"
+              value={toLocalDateTimeValue(filters.createdAfterUtc)}
+              onChange={(e) => handleFilterChange('createdAfterUtc', e.target.value ? new Date(e.target.value).toISOString() : '')}
+            />
+          </div>
+          <div className="filter-group">
+            <label>Created Before:</label>
+            <input
+              type="datetime-local"
+              value={toLocalDateTimeValue(filters.createdBeforeUtc)}
+              onChange={(e) => handleFilterChange('createdBeforeUtc', e.target.value ? new Date(e.target.value).toISOString() : '')}
+            />
+          </div>
+          {hasFilters && (
+            <button className="btn-link" onClick={handleClearFilters}>
+              Clear Filters
           </button>
         )}
       </div>
@@ -653,11 +854,11 @@ function RequestHistory() {
               </div>
             </div>
 
-            <div className="detail-section">
-              <h3>Routing</h3>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <label>VMR:</label>
+              <div className="detail-section">
+                <h3>Routing</h3>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <label>VMR:</label>
                   <span>{detailData.VirtualModelRunnerName || detailData.VirtualModelRunnerGuid || '-'}</span>
                 </div>
                 <div className="detail-item">
@@ -668,42 +869,123 @@ function RequestHistory() {
                   <label>Model Definition:</label>
                   <span>{detailData.ModelDefinitionName || detailData.ModelDefinitionGuid || '-'}</span>
                 </div>
-                <div className="detail-item">
-                  <label>Endpoint URL:</label>
-                  <span>{detailData.ModelEndpointUrl || '-'}</span>
+                  <div className="detail-item">
+                    <label>Endpoint URL:</label>
+                    <span>{detailData.ModelEndpointUrl || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Requested Model:</label>
+                    <span>{detailData.RequestedModel || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Effective Model:</label>
+                    <span>{detailData.EffectiveModel || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Policy:</label>
+                    <span>{detailData.LoadBalancingPolicyName || detailData.LoadBalancingPolicyGuid || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Request Type:</label>
+                    <span>{detailData.RequestType || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Outcome:</label>
+                    <span>{detailData.RoutingOutcomeCode || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Denied Because:</label>
+                    <span>{detailData.DenialReasonCode || detailData.DenialReason || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Session Affinity:</label>
+                    <span>{detailData.SessionAffinityOutcome || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Mutation Summary:</label>
+                    <span>{detailData.MutationSummary || '-'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Explanation:</label>
+                    <span>{detailData.ExplanationSummary || '-'}</span>
+                  </div>
                 </div>
+
+                {detailData.RoutingDecision && (
+                  <div className="explain-detail-panel">
+                    <div className="summary-badge-row compact">
+                      <span className={`service-state-badge ${detailData.RoutingDecision.Success ? 'success' : 'danger'}`}>
+                        {detailData.RoutingDecision.Success ? 'Routed' : 'Denied'}
+                      </span>
+                      <span className="service-state-badge neutral">HTTP {detailData.RoutingDecision.HttpStatusCode}</span>
+                      {detailData.RoutingDecision.PolicyFallbackUsed && <span className="service-state-badge warning">Policy Fallback</span>}
+                    </div>
+
+                    <div className="detail-table-container">
+                      <table className="detail-table explanation-table">
+                        <thead>
+                          <tr>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(detailData.RoutingDecision.Timeline || []).length > 0 ? (
+                            (detailData.RoutingDecision.Timeline || []).map((stage, index) => (
+                              <tr key={`detail-stage-${index}`}>
+                                <td className="detail-table-title-cell">{stage.Title || '-'}</td>
+                                <td>{stage.Message || '-'}</td>
+                                <td className="detail-table-status-cell">
+                                  <span className={`service-state-badge ${getStageOutcomeTone(stage.Outcome)}`}>
+                                    {stage.Outcome || 'Unknown'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="3" className="detail-table-empty-cell">No routing explanation steps recorded.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              <div className="detail-section">
+                <h3>Request</h3>
+                <CollapsibleSection
+                  title="Headers"
+                  meta={detailData.RequestHeadersRedacted ? 'Redacted' : null}
+                  content={detailData.RequestHeaders || {}}
+                  defaultExpanded={false}
+                />
+                <CollapsibleSection
+                  title="Body"
+                  meta={`${detailData.RequestBodyLength || 0} bytes · ${getRetentionLabel(detailData.RequestBodyRetained, detailData.RequestBodyRedacted, detailData.RequestBodyTruncated).label}`}
+                  content={detailData.RequestBody}
+                  defaultExpanded={false}
+                  showFormatJson={true}
+              />
             </div>
 
-            <div className="detail-section">
-              <h3>Request</h3>
-              <CollapsibleSection
-                title="Headers"
-                content={detailData.RequestHeaders || {}}
-                defaultExpanded={false}
-              />
-              <CollapsibleSection
-                title="Body"
-                meta={`${detailData.RequestBodyLength || 0} bytes${detailData.RequestBodyTruncated ? ' [TRUNCATED]' : ''}`}
-                content={detailData.RequestBody}
-                defaultExpanded={false}
-                showFormatJson={true}
-              />
-            </div>
-
-            <div className="detail-section">
-              <h3>Response</h3>
-              <CollapsibleSection
-                title="Headers"
-                content={detailData.ResponseHeaders || {}}
-                defaultExpanded={false}
-              />
-              <CollapsibleSection
-                title="Body"
-                meta={`${detailData.ResponseBodyLength || 0} bytes${detailData.ResponseBodyTruncated ? ' [TRUNCATED]' : ''}`}
-                content={detailData.ResponseBody}
-                defaultExpanded={false}
-                showFormatJson={true}
+              <div className="detail-section">
+                <h3>Response</h3>
+                <CollapsibleSection
+                  title="Headers"
+                  meta={detailData.ResponseHeadersRedacted ? 'Redacted' : null}
+                  content={detailData.ResponseHeaders || {}}
+                  defaultExpanded={false}
+                />
+                <CollapsibleSection
+                  title="Body"
+                  meta={`${detailData.ResponseBodyLength || 0} bytes · ${getRetentionLabel(detailData.ResponseBodyRetained, detailData.ResponseBodyRedacted, detailData.ResponseBodyTruncated).label}`}
+                  content={detailData.ResponseBody}
+                  defaultExpanded={false}
+                  showFormatJson={true}
               />
             </div>
           </div>

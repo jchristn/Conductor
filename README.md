@@ -17,8 +17,13 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Health Checking**: Automatic background health monitoring of endpoints with configurable thresholds
 - **RigMonitor Telemetry**: Optionally enrich endpoint health with cached host CPU, memory, disk, network, GPU, and Ollama telemetry from RigMonitor sidecars
 - **Policy-Based Routing**: Create first-class load-balancing policies that filter or rank endpoints using health, capacity, and RigMonitor metrics
+- **Explainable Routing**: Simulate representative requests, inspect candidate elimination, review policy evidence, and persist routing explanations into request history
+- **Preflight Validation**: Validate endpoints, model definitions, model configurations, load-balancing policies, and VMRs before saving them
+- **Effective Configuration Preview**: Resolve the endpoint set, request permissions, policy attachment, model pinning, and session-affinity settings that a VMR will actually use
+- **Operational Metrics**: Export Prometheus-friendly latency, denial, fallback, session-affinity, saturation, and telemetry-freshness signals
+- **Drain And Quarantine Controls**: Keep endpoints visible for health diagnostics while intentionally excluding them from new routing
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
-- **Request History**: Optional per-VMR request/response capture for debugging and auditing with configurable retention
+- **Request History**: Optional per-VMR request/response capture for debugging and auditing with configurable retention, redaction, and metadata-only retention modes
 - **React Dashboard**: Full-featured UI for managing all entities including real-time health status
 
 ## Quick Start
@@ -76,6 +81,22 @@ dotnet run --project src/Test.Automated/Test.Automated.csproj
 
 See [TESTING.md](./TESTING.md) for the full testing guide.
 
+## SDKs
+
+Conductor ships lightweight SDKs for common management-plane workflows:
+
+- `sdk/javascript/` for Node.js and browser-adjacent tooling
+- `sdk/python/` for Python automation and ops scripts
+
+Both SDKs include helpers for:
+
+- validation routes
+- VMR effective configuration preview
+- explain-routing simulations
+- endpoint drain, resume, and quarantine actions
+- request-history search, summary, detail, and bulk deletion
+- observability metrics summary and text export
+
 ## API Overview
 
 ### Supported Provider Types
@@ -125,6 +146,7 @@ Users have three permission levels:
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
 | Request History | `req_` | `/v1.0/requesthistory` |
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
+| Observability Metrics | - | `/v1.0/observability/metrics` |
 
 ## RigMonitor And Policy Routing
 
@@ -201,6 +223,26 @@ Example VMR attachment:
 }
 ```
 
+### Explain, Validate, And Preview
+
+The management plane now exposes first-class safety and explainability routes:
+
+- `POST /v1.0/modelrunnerendpoints/validate`
+- `POST /v1.0/modeldefinitions/validate`
+- `POST /v1.0/modelconfigurations/validate`
+- `POST /v1.0/loadbalancingpolicies/validate`
+- `POST /v1.0/virtualmodelrunners/validate`
+- `GET /v1.0/virtualmodelrunners/{id}/effective`
+- `POST /v1.0/virtualmodelrunners/{id}/explain-routing`
+
+Recommended operator flow:
+
+1. Validate drafts before saving.
+2. Inspect the effective VMR preview to confirm endpoint coverage, request permissions, policy attachment, and model pinning.
+3. Use explain-routing with a representative request body when you need to understand why a request would route, mutate, reuse a session pin, or be denied.
+
+Request-history detail responses also expose the structured routing decision when history is enabled for the VMR.
+
 ### Operator Notes
 
 - Keep unauthenticated RigMonitor sidecars on trusted networks only.
@@ -252,7 +294,13 @@ Virtual model runners expose an API at their configured base path. For example, 
     "Enabled": true,
     "Directory": "./request-history/",
     "RetentionDays": 7,
+    "MetadataRetentionDays": 30,
+    "BodyRetentionDays": 7,
     "CleanupIntervalMinutes": 60,
+    "CaptureRequestBody": true,
+    "CaptureResponseBody": true,
+    "RedactedHeaders": ["authorization", "x-password", "x-admin-password", "x-goog-api-key"],
+    "RedactedJsonFields": ["authorization", "api_key", "apikey", "password", "token", "bearertoken"],
     "MaxRequestBodyBytes": 65536,
     "MaxResponseBodyBytes": 65536
   }
@@ -313,14 +361,22 @@ Request history captures request/response data for Virtual Model Runners with `R
 |----------|------|---------|-------------|
 | `Enabled` | bool | `true` | Enable or disable request history globally |
 | `Directory` | string | `"./request-history/"` | Directory for storing request detail JSON files |
-| `RetentionDays` | int | `30` | Number of days to retain entries before cleanup (1-365) |
+| `RetentionDays` | int | `30` | Legacy retention knob used as a fallback when the newer retention settings are omitted |
+| `MetadataRetentionDays` | int | `30` | Number of days to retain searchable ledger metadata before cleanup (1-365) |
+| `BodyRetentionDays` | int | `30` | Number of days to retain request and response bodies inside detail files before they are scrubbed (1-365) |
 | `CleanupIntervalMinutes` | int | `60` | Interval between cleanup runs in minutes (1-1440) |
+| `CaptureRequestBody` | bool | `true` | Persist request bodies when request history is enabled for the VMR |
+| `CaptureResponseBody` | bool | `true` | Persist response bodies when request history is enabled for the VMR |
+| `RedactedHeaders` | string[] | built-in sensitive headers | Header names redacted before persistence |
+| `RedactedJsonFields` | string[] | built-in sensitive JSON fields | JSON field names redacted recursively before persistence |
 | `MaxRequestBodyBytes` | int | `65536` | Maximum request body bytes to capture (1-10485760) |
 | `MaxResponseBodyBytes` | int | `65536` | Maximum response body bytes to capture (1-10485760) |
 
 **Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property).
 
-Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), and time to first token/byte (`FirstTokenTimeMs`).
+Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, policy attachment, requested/effective model names, routing outcome, denial reason, mutation summary, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), and time to first token/byte (`FirstTokenTimeMs`).
+
+When `BodyRetentionDays` is shorter than `MetadataRetentionDays`, Conductor scrubs request and response bodies from detail files while preserving the searchable routing and latency ledger.
 
 ### Request History Summary API
 
@@ -336,6 +392,17 @@ GET /v1.0/requesthistory/summary?startUtc={ISO8601}&endUtc={ISO8601}&interval={h
 | `endUtc` | string | No | End of time range (UTC, ISO 8601). Default: now |
 | `interval` | string | No | Bucket interval: `minute`, `15minute`, `hour`, `6hour`, or `day`. Default: `hour` |
 | `vmrGuid` | string | No | Filter by Virtual Model Runner GUID |
+| `endpointGuid` | string | No | Filter by routed model runner endpoint GUID |
+| `requestorUserGuid` | string | No | Filter by authenticated user GUID |
+| `credentialGuid` | string | No | Filter by credential GUID |
+| `loadBalancingPolicyGuid` | string | No | Filter by attached load-balancing policy GUID |
+| `modelName` | string | No | Filter by requested or effective model |
+| `mutationSummary` | string | No | Filter by mutation-summary substring |
+| `denialReasonCode` | string | No | Filter by denial reason |
+| `sessionAffinityOutcome` | string | No | Filter by session-affinity outcome |
+| `statusClass` | string | No | Filter by status class such as `2xx`, `4xx`, or `5xx` |
+| `sourceIp` | string | No | Filter by requestor source IP |
+| `httpStatus` | integer | No | Filter by exact HTTP status code |
 
 **Response:**
 ```json
@@ -353,6 +420,18 @@ GET /v1.0/requesthistory/summary?startUtc={ISO8601}&endUtc={ISO8601}&interval={h
   "Interval": "hour",
   "TotalSuccess": 42,
   "TotalFailure": 3,
+  "StatusClassCounts": {
+    "2xx": 42,
+    "5xx": 3
+  },
+  "DenialReasonCounts": {
+    "AllEndpointsAtCapacity": 2,
+    "PolicyRejected": 1
+  },
+  "SessionAffinityOutcomeCounts": {
+    "Hit": 20,
+    "Miss": 25
+  },
   "TotalRequests": 45
 }
 ```
@@ -397,6 +476,7 @@ Model Runner Endpoints support comprehensive health checking with the following 
 | `HealthCheckUseAuth` | bool | `false` | Include API key (Bearer token) in health check requests |
 | `MaxParallelRequests` | int | `4` | Maximum concurrent requests (0 = unlimited) |
 | `Weight` | int | `1` | Relative weight for load balancing (1-1000) |
+| `ServiceState` | enum | `Normal` | Operator-controlled traffic state: `Normal`, `Draining`, or `Quarantined` |
 
 **Note for OpenAI and vLLM APIs**: When using `api.openai.com` or another OpenAI-compatible backend that requires authentication for model listing, set `HealthCheckUseAuth` to `true` and `HealthCheckUrl` to `/v1/models`.
 
@@ -407,8 +487,11 @@ Model Runner Endpoints support comprehensive health checking with the following 
 - Endpoints start in an **unhealthy** state and transition to healthy after meeting the `HealthyThreshold`
 - Background tasks continuously monitor each active endpoint at the configured interval
 - The proxy automatically excludes unhealthy endpoints from request routing
+- Draining endpoints continue to be probed and remain available for already-pinned session-affinity traffic, but they do not receive new assignments
+- Quarantined endpoints continue to be probed for diagnostics, but they are excluded from all routing, including pinned-session reuse
 - When all endpoints are unhealthy, requests return `502 Bad Gateway`
 - When all endpoints are at capacity, requests return `429 Too Many Requests`
+- When all configured endpoints are quarantined or draining, requests are denied with an explicit service-state-specific error
 
 ### Rate Limiting
 
@@ -431,12 +514,22 @@ Monitor endpoint health via the REST API:
 # Health of all endpoints in tenant
 GET /v1.0/modelrunnerendpoints/health
 
+# Put an endpoint into maintenance drain mode
+POST /v1.0/modelrunnerendpoints/{id}/drain
+
+# Resume normal traffic
+POST /v1.0/modelrunnerendpoints/{id}/resume
+
+# Exclude an endpoint from all routing while keeping health visibility
+POST /v1.0/modelrunnerendpoints/{id}/quarantine
+
 # Health of endpoints for a specific VMR
 GET /v1.0/virtualmodelrunners/{id}/health
 ```
 
 Response includes:
 - Current health state (healthy/unhealthy)
+- Operator-managed service state (`Normal`, `Draining`, `Quarantined`)
 - In-flight request count
 - Total uptime/downtime
 - Uptime percentage

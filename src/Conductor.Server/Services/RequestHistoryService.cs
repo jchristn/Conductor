@@ -4,10 +4,13 @@ namespace Conductor.Server.Services
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
+    using System.Linq;
     using System.Text;
+    using System.Text.Json.Nodes;
     using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
+    using Conductor.Core.Enums;
     using Conductor.Core.Helpers;
     using Conductor.Core.Models;
     using Conductor.Core.Serialization;
@@ -69,8 +72,7 @@ namespace Conductor.Server.Services
         /// Create a new request history entry at the start of a request.
         /// </summary>
         /// <param name="vmr">Virtual model runner handling the request.</param>
-        /// <param name="sourceIp">Source IP address of the requestor.</param>
-        /// <param name="httpMethod">HTTP method.</param>
+        /// <param name="requestContext">Request context with authenticated caller information.</param>
         /// <param name="httpUrl">HTTP URL.</param>
         /// <param name="requestHeaders">Request headers.</param>
         /// <param name="requestBody">Request body (will be truncated if too large).</param>
@@ -78,16 +80,14 @@ namespace Conductor.Server.Services
         /// <returns>RequestHistoryDetail with the entry data, or null if creation fails.</returns>
         public async Task<RequestHistoryDetail> CreateEntryAsync(
             VirtualModelRunner vmr,
-            string sourceIp,
-            string httpMethod,
+            RequestContext requestContext,
             string httpUrl,
             Dictionary<string, string> requestHeaders,
             string requestBody,
             CancellationToken token = default)
         {
             if (vmr == null) throw new ArgumentNullException(nameof(vmr));
-            if (String.IsNullOrEmpty(sourceIp)) throw new ArgumentNullException(nameof(sourceIp));
-            if (String.IsNullOrEmpty(httpMethod)) throw new ArgumentNullException(nameof(httpMethod));
+            if (requestContext == null) throw new ArgumentNullException(nameof(requestContext));
             if (String.IsNullOrEmpty(httpUrl)) throw new ArgumentNullException(nameof(httpUrl));
 
             try
@@ -95,14 +95,14 @@ namespace Conductor.Server.Services
                 string id = IdGenerator.NewRequestHistoryId();
                 string objectKey = GenerateObjectKey(id);
 
-                // Truncate request body if needed
-                bool requestBodyTruncated = false;
-                string truncatedRequestBody = requestBody;
-                if (!String.IsNullOrEmpty(requestBody) && requestBody.Length > _Settings.MaxRequestBodyBytes)
-                {
-                    truncatedRequestBody = requestBody.Substring(0, _Settings.MaxRequestBodyBytes);
-                    requestBodyTruncated = true;
-                }
+                Dictionary<string, string> persistedRequestHeaders = RedactHeaders(requestHeaders, out bool requestHeadersRedacted);
+                string persistedRequestBody = PrepareBodyForPersistence(
+                    requestBody,
+                    _Settings.CaptureRequestBody,
+                    _Settings.MaxRequestBodyBytes,
+                    out bool requestBodyRetained,
+                    out bool requestBodyRedacted,
+                    out bool requestBodyTruncated);
 
                 RequestHistoryDetail detail = new RequestHistoryDetail
                 {
@@ -110,19 +110,27 @@ namespace Conductor.Server.Services
                     TenantGuid = vmr.TenantId,
                     VirtualModelRunnerGuid = vmr.Id,
                     VirtualModelRunnerName = vmr.Name,
-                    RequestorSourceIp = sourceIp,
-                    HttpMethod = httpMethod,
+                    RequestorUserGuid = requestContext.UserId,
+                    RequestorUserEmail = requestContext.UserEmail,
+                    CredentialGuid = requestContext.CredentialId,
+                    CredentialName = requestContext.CredentialName,
+                    RequestorSourceIp = requestContext.ClientIpAddress ?? "unknown",
+                    HttpMethod = requestContext.HttpMethod ?? "GET",
                     HttpUrl = httpUrl,
                     RequestBodyLength = requestBody?.Length ?? 0,
                     ObjectKey = objectKey,
                     CreatedUtc = DateTime.UtcNow,
-                    RequestHeaders = requestHeaders ?? new Dictionary<string, string>(),
-                    RequestBody = truncatedRequestBody,
-                    RequestBodyTruncated = requestBodyTruncated
+                    RequestHeaders = persistedRequestHeaders,
+                    RequestHeadersRedacted = requestHeadersRedacted,
+                    RequestBody = persistedRequestBody,
+                    RequestBodyRetained = requestBodyRetained,
+                    RequestBodyRedacted = requestBodyRedacted,
+                    RequestBodyTruncated = requestBodyTruncated,
+                    RequestTransferType = requestContext.IsChunkedRequest ? TransferTypeEnum.Chunked : TransferTypeEnum.Normal
                 };
 
                 // Create database entry
-                RequestHistoryEntry entry = await _Database.RequestHistory.CreateAsync(detail, token).ConfigureAwait(false);
+                await _Database.RequestHistory.CreateAsync(detail, token).ConfigureAwait(false);
 
                 _Logging.Debug(_Header + "created request history entry " + id + " for VMR " + vmr.Name);
 
@@ -139,6 +147,7 @@ namespace Conductor.Server.Services
         /// Update a request history entry with response data.
         /// </summary>
         /// <param name="detail">Request history detail to update.</param>
+        /// <param name="routingDecision">Structured routing decision captured during request processing.</param>
         /// <param name="endpoint">Model endpoint that handled the request (may be null).</param>
         /// <param name="modelDefinition">Model definition used (may be null).</param>
         /// <param name="modelConfiguration">Model configuration used (may be null).</param>
@@ -151,6 +160,7 @@ namespace Conductor.Server.Services
         /// <returns>Task.</returns>
         public async Task UpdateWithResponseAsync(
             RequestHistoryDetail detail,
+            RoutingDecision routingDecision,
             ModelRunnerEndpoint endpoint,
             ModelDefinition modelDefinition,
             ModelConfiguration modelConfiguration,
@@ -166,6 +176,8 @@ namespace Conductor.Server.Services
             try
             {
                 // Update with endpoint/model info
+                ApplyRoutingDecision(detail, routingDecision);
+
                 if (endpoint != null)
                 {
                     detail.ModelEndpointGuid = endpoint.Id;
@@ -190,17 +202,18 @@ namespace Conductor.Server.Services
                 detail.ResponseTimeMs = (int)stopwatch.ElapsedMilliseconds;
                 detail.FirstTokenTimeMs = firstTokenTimeMs ?? detail.ResponseTimeMs;
                 detail.CompletedUtc = DateTime.UtcNow;
-                detail.ResponseHeaders = responseHeaders ?? new Dictionary<string, string>();
+                detail.ResponseHeaders = RedactHeaders(responseHeaders, out bool responseHeadersRedacted);
+                detail.ResponseHeadersRedacted = responseHeadersRedacted;
 
-                // Truncate response body if needed
-                bool responseBodyTruncated = false;
-                string truncatedResponseBody = responseBody;
-                if (!String.IsNullOrEmpty(responseBody) && responseBody.Length > _Settings.MaxResponseBodyBytes)
-                {
-                    truncatedResponseBody = responseBody.Substring(0, _Settings.MaxResponseBodyBytes);
-                    responseBodyTruncated = true;
-                }
-                detail.ResponseBody = truncatedResponseBody;
+                detail.ResponseBody = PrepareBodyForPersistence(
+                    responseBody,
+                    _Settings.CaptureResponseBody,
+                    _Settings.MaxResponseBodyBytes,
+                    out bool responseBodyRetained,
+                    out bool responseBodyRedacted,
+                    out bool responseBodyTruncated);
+                detail.ResponseBodyRetained = responseBodyRetained;
+                detail.ResponseBodyRedacted = responseBodyRedacted;
                 detail.ResponseBodyTruncated = responseBodyTruncated;
 
                 // Update database entry
@@ -297,21 +310,12 @@ namespace Conductor.Server.Services
         /// <returns>Number of deleted entries.</returns>
         public async Task<long> DeleteBulkAsync(RequestHistorySearchFilter filter, CancellationToken token = default)
         {
-            // Get all entries matching filter to delete their files
-            RequestHistorySearchResult result = await _Database.RequestHistory.SearchAsync(
-                new RequestHistorySearchFilter
-                {
-                    TenantGuid = filter.TenantGuid,
-                    VirtualModelRunnerGuid = filter.VirtualModelRunnerGuid,
-                    ModelEndpointGuid = filter.ModelEndpointGuid,
-                    RequestorSourceIp = filter.RequestorSourceIp,
-                    HttpStatus = filter.HttpStatus,
-                    Page = 1,
-                    PageSize = 100
-                }, token).ConfigureAwait(false);
+            RequestHistorySearchFilter workingFilter = filter ?? new RequestHistorySearchFilter();
+            workingFilter.Page = 1;
+            workingFilter.PageSize = 100;
 
-            // Delete files for all matching entries
             long totalDeleted = 0;
+            RequestHistorySearchResult result = await _Database.RequestHistory.SearchAsync(workingFilter, token).ConfigureAwait(false);
             while (result.Data.Count > 0)
             {
                 foreach (RequestHistoryEntry entry in result.Data)
@@ -322,17 +326,7 @@ namespace Conductor.Server.Services
 
                 if (result.Data.Count < 100) break;
 
-                result = await _Database.RequestHistory.SearchAsync(
-                    new RequestHistorySearchFilter
-                    {
-                        TenantGuid = filter.TenantGuid,
-                        VirtualModelRunnerGuid = filter.VirtualModelRunnerGuid,
-                        ModelEndpointGuid = filter.ModelEndpointGuid,
-                        RequestorSourceIp = filter.RequestorSourceIp,
-                        HttpStatus = filter.HttpStatus,
-                        Page = 1,
-                        PageSize = 100
-                    }, token).ConfigureAwait(false);
+                result = await _Database.RequestHistory.SearchAsync(workingFilter, token).ConfigureAwait(false);
             }
 
             // Delete database entries
@@ -375,16 +369,16 @@ namespace Conductor.Server.Services
                 if (!File.Exists(filePath))
                 {
                     // Return basic detail from entry if file doesn't exist
-                    return RequestHistoryDetail.FromEntry(entry);
+                    return ApplyBodyRetention(RequestHistoryDetail.FromEntry(entry));
                 }
 
                 string json = await File.ReadAllTextAsync(filePath, Encoding.UTF8, token).ConfigureAwait(false);
-                return _Serializer.DeserializeJson<RequestHistoryDetail>(json);
+                return ApplyBodyRetention(_Serializer.DeserializeJson<RequestHistoryDetail>(json) ?? RequestHistoryDetail.FromEntry(entry));
             }
             catch (Exception ex)
             {
                 _Logging.Warn(_Header + "failed to load detail file for " + entry.Id + ": " + ex.Message);
-                return RequestHistoryDetail.FromEntry(entry);
+                return ApplyBodyRetention(RequestHistoryDetail.FromEntry(entry));
             }
         }
 
@@ -402,6 +396,172 @@ namespace Conductor.Server.Services
             {
                 _Logging.Warn(_Header + "failed to delete file " + objectKey + ": " + ex.Message);
             }
+        }
+
+        private void ApplyRoutingDecision(RequestHistoryDetail detail, RoutingDecision routingDecision)
+        {
+            if (detail == null || routingDecision == null) return;
+
+            detail.RoutingDecision = routingDecision;
+            detail.LoadBalancingPolicyGuid = routingDecision.LoadBalancingPolicyId;
+            detail.LoadBalancingPolicyName = routingDecision.LoadBalancingPolicyName;
+            detail.RequestedModel = routingDecision.RequestedModel;
+            detail.EffectiveModel = routingDecision.EffectiveModel;
+            detail.RequestType = routingDecision.RequestType.ToString();
+            detail.RoutingOutcomeCode = routingDecision.OutcomeCode;
+            detail.DenialReasonCode = routingDecision.DenialReasonCode;
+            detail.DenialReason = routingDecision.DenialReason;
+            detail.SessionAffinityOutcome = routingDecision.SessionAffinityOutcome;
+            detail.ExplanationSummary = routingDecision.Message;
+            detail.MutationSummary = BuildMutationSummary(routingDecision.MutationSummary);
+        }
+
+        private string BuildMutationSummary(RequestMutationSummary mutationSummary)
+        {
+            if (mutationSummary == null || mutationSummary.Changes.Count < 1)
+            {
+                return null;
+            }
+
+            List<string> changes = new List<string>();
+            foreach (RequestMutationDetail change in mutationSummary.Changes)
+            {
+                changes.Add(change.PropertyName + ": " + (change.RequestedValue ?? "(unset)") + " -> " + (change.EffectiveValue ?? "(unset)"));
+            }
+
+            return String.Join("; ", changes);
+        }
+
+        private Dictionary<string, string> RedactHeaders(Dictionary<string, string> headers, out bool redacted)
+        {
+            redacted = false;
+            Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+            if (headers == null) return result;
+
+            HashSet<string> redactedHeaders = new HashSet<string>(_Settings.RedactedHeaders ?? new List<string>(), StringComparer.InvariantCultureIgnoreCase);
+            foreach (KeyValuePair<string, string> header in headers)
+            {
+                if (String.IsNullOrWhiteSpace(header.Key)) continue;
+
+                if (redactedHeaders.Contains(header.Key))
+                {
+                    result[header.Key] = "[REDACTED]";
+                    redacted = true;
+                }
+                else
+                {
+                    result[header.Key] = header.Value;
+                }
+            }
+
+            return result;
+        }
+
+        private string PrepareBodyForPersistence(
+            string body,
+            bool captureEnabled,
+            int maxLength,
+            out bool retained,
+            out bool redacted,
+            out bool truncated)
+        {
+            retained = false;
+            redacted = false;
+            truncated = false;
+
+            if (!captureEnabled || String.IsNullOrEmpty(body))
+            {
+                return null;
+            }
+
+            retained = true;
+            string persisted = RedactBody(body, out redacted);
+            if (!String.IsNullOrEmpty(persisted) && persisted.Length > maxLength)
+            {
+                persisted = persisted.Substring(0, maxLength);
+                truncated = true;
+            }
+
+            return persisted;
+        }
+
+        private string RedactBody(string body, out bool redacted)
+        {
+            redacted = false;
+            if (String.IsNullOrWhiteSpace(body))
+            {
+                return body;
+            }
+
+            if (_Settings.RedactedJsonFields == null || _Settings.RedactedJsonFields.Count < 1)
+            {
+                return body;
+            }
+
+            try
+            {
+                JsonNode node = JsonNode.Parse(body);
+                if (node == null)
+                {
+                    return body;
+                }
+
+                HashSet<string> redactedFields = new HashSet<string>(_Settings.RedactedJsonFields, StringComparer.InvariantCultureIgnoreCase);
+                RedactNode(node, redactedFields, ref redacted);
+                return node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+            }
+            catch
+            {
+                return body;
+            }
+        }
+
+        private void RedactNode(JsonNode node, HashSet<string> fields, ref bool redacted)
+        {
+            if (node is JsonObject obj)
+            {
+                foreach (KeyValuePair<string, JsonNode> child in obj.ToList())
+                {
+                    if (fields.Contains(child.Key))
+                    {
+                        obj[child.Key] = "[REDACTED]";
+                        redacted = true;
+                    }
+                    else if (child.Value != null)
+                    {
+                        RedactNode(child.Value, fields, ref redacted);
+                    }
+                }
+            }
+            else if (node is JsonArray array)
+            {
+                foreach (JsonNode child in array)
+                {
+                    if (child != null)
+                    {
+                        RedactNode(child, fields, ref redacted);
+                    }
+                }
+            }
+        }
+
+        private RequestHistoryDetail ApplyBodyRetention(RequestHistoryDetail detail)
+        {
+            if (detail == null)
+            {
+                return null;
+            }
+
+            int bodyRetentionDays = _Settings.BodyRetentionDays > 0 ? _Settings.BodyRetentionDays : _Settings.RetentionDays;
+            if (detail.CreatedUtc < DateTime.UtcNow.AddDays(-bodyRetentionDays))
+            {
+                detail.RequestBody = null;
+                detail.ResponseBody = null;
+                detail.RequestBodyRetained = false;
+                detail.ResponseBodyRetained = false;
+            }
+
+            return detail;
         }
     }
 }

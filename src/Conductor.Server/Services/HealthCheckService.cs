@@ -209,7 +209,7 @@ namespace Conductor.Server.Services
         public void OnEndpointCreated(ModelRunnerEndpoint endpoint)
         {
             if (endpoint == null || !endpoint.Active) return;
-            _Logging.Debug(_Header + "endpoint created: {endpoint.Id}");
+            _Logging.Debug(_Header + "endpoint created: " + endpoint.Id);
             StartHealthCheckTask(endpoint);
         }
 
@@ -286,24 +286,50 @@ namespace Conductor.Server.Services
 
         private void StartHealthCheckTask(ModelRunnerEndpoint endpoint)
         {
-            // Create health state entry
-            EndpointHealthState state = new EndpointHealthState
+            EndpointHealthState state = null;
+            if (_HealthStates.TryGetValue(endpoint.Id, out EndpointHealthState existingState))
             {
-                EndpointId = endpoint.Id,
-                EndpointName = endpoint.Name,
-                TenantId = endpoint.TenantId,
-                IsHealthy = false, // Start unhealthy until proven healthy
-                FirstCheckUtc = DateTime.UtcNow,
-                LastStateChangeUtc = DateTime.UtcNow,
-                RigMonitor = endpoint.RigMonitor?.Enabled == true
-                    ? new RigMonitorEndpointStatus
+                lock (existingState.Lock)
+                {
+                    existingState.EndpointName = endpoint.Name;
+                    existingState.TenantId = endpoint.TenantId;
+                    existingState.ServiceState = endpoint.ServiceState;
+
+                    if (endpoint.RigMonitor?.Enabled == true)
                     {
-                        Enabled = true,
-                        BaseUrl = RigMonitorClient.GetBaseUrl(endpoint)
+                        existingState.RigMonitor ??= new RigMonitorEndpointStatus();
+                        existingState.RigMonitor.Enabled = true;
+                        existingState.RigMonitor.BaseUrl = RigMonitorClient.GetBaseUrl(endpoint);
                     }
-                    : null
-            };
-            _HealthStates.AddOrUpdate(endpoint.Id, state, (k, v) => state);
+                    else
+                    {
+                        existingState.RigMonitor = null;
+                    }
+
+                    state = existingState;
+                }
+            }
+            else
+            {
+                state = new EndpointHealthState
+                {
+                    EndpointId = endpoint.Id,
+                    EndpointName = endpoint.Name,
+                    TenantId = endpoint.TenantId,
+                    IsHealthy = false,
+                    FirstCheckUtc = DateTime.UtcNow,
+                    LastStateChangeUtc = DateTime.UtcNow,
+                    ServiceState = endpoint.ServiceState,
+                    RigMonitor = endpoint.RigMonitor?.Enabled == true
+                        ? new RigMonitorEndpointStatus
+                        {
+                            Enabled = true,
+                            BaseUrl = RigMonitorClient.GetBaseUrl(endpoint)
+                        }
+                        : null
+                };
+                _HealthStates.AddOrUpdate(endpoint.Id, state, (k, v) => state);
+            }
 
             // Create cancellation token for this endpoint
             CancellationTokenSource cts = new CancellationTokenSource();
@@ -566,6 +592,7 @@ namespace Conductor.Server.Services
             lock (state.Lock)
             {
                 DateTime now = DateTime.UtcNow;
+                state.ServiceState = endpoint.ServiceState;
                 state.LastCheckUtc = now;
                 state.LastError = success ? null : error;
 

@@ -41,6 +41,40 @@ function parseTelemetrySelectors(value) {
     .filter(Boolean);
 }
 
+function normalizeServiceState(value) {
+  if (value === 1 || value === 'Draining') return 'Draining';
+  if (value === 2 || value === 'Quarantined') return 'Quarantined';
+  return 'Normal';
+}
+
+function getServiceStatePresentation(value) {
+  const serviceState = normalizeServiceState(value);
+
+  switch (serviceState) {
+    case 'Draining':
+      return {
+        serviceState,
+        tone: 'warning',
+        label: 'Draining',
+        description: 'Stops new routing while preserving in-flight or pinned work.'
+      };
+    case 'Quarantined':
+      return {
+        serviceState,
+        tone: 'danger',
+        label: 'Quarantined',
+        description: 'Excluded from all routing but still health-checked for diagnostics.'
+      };
+    default:
+      return {
+        serviceState: 'Normal',
+        tone: 'success',
+        label: 'Normal',
+        description: 'Eligible for new routing when active and healthy.'
+      };
+  }
+}
+
 function ModelRunnerEndpoints() {
   const { api, setError } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
@@ -56,6 +90,9 @@ function ModelRunnerEndpoints() {
   const [healthData, setHealthData] = useState({});
   const [showHealthDetail, setShowHealthDetail] = useState(false);
   const [healthDetailEndpoint, setHealthDetailEndpoint] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [serviceStateActionLoading, setServiceStateActionLoading] = useState('');
   const [formData, setFormData] = useState({
     TenantId: '',
     Name: '',
@@ -348,6 +385,7 @@ function ModelRunnerEndpoints() {
 
   const handleCreate = () => {
     setEditMode(false);
+    setValidationResult(null);
     setFormData({
       TenantId: '',
       Name: '',
@@ -394,6 +432,7 @@ function ModelRunnerEndpoints() {
   const handleEdit = (endpoint) => {
     setEditMode(true);
     setSelectedEndpoint(endpoint);
+    setValidationResult(null);
     setFormData({
       TenantId: endpoint.TenantId || '',
       Name: endpoint.Name || '',
@@ -456,75 +495,134 @@ function ModelRunnerEndpoints() {
     }
   };
 
+  const getEffectiveServiceState = (endpoint) => {
+    return normalizeServiceState(healthData[endpoint?.Id]?.ServiceState ?? endpoint?.ServiceState);
+  };
+
+  const buildEndpointPayload = () => {
+    let labels = [];
+    let tags = {};
+    const telemetrySelectors = parseTelemetrySelectors(formData.RigMonitorTelemetrySelectors);
+
+    try {
+      labels = JSON.parse(formData.LabelsJson || '[]');
+    } catch (err) {
+      throw new Error('Invalid JSON in Labels');
+    }
+
+    try {
+      tags = JSON.parse(formData.TagsJson || '{}');
+    } catch (err) {
+      throw new Error('Invalid JSON in Tags');
+    }
+
+    return {
+      TenantId: formData.TenantId || null,
+      Name: formData.Name,
+      Hostname: formData.Hostname,
+      Port: parseInt(formData.Port),
+      ApiKey: formData.ApiKey,
+      ApiType: formData.ApiType,
+      UseSsl: formData.UseSsl,
+      TimeoutMs: parseInt(formData.TimeoutMs),
+      Active: formData.Active,
+      Labels: labels,
+      Tags: tags,
+      HealthCheckUrl: formData.HealthCheckUrl,
+      HealthCheckMethod: formData.HealthCheckMethod,
+      HealthCheckIntervalMs: parseInt(formData.HealthCheckIntervalMs),
+      HealthCheckTimeoutMs: parseInt(formData.HealthCheckTimeoutMs),
+      HealthCheckExpectedStatusCode: parseInt(formData.HealthCheckExpectedStatusCode),
+      UnhealthyThreshold: parseInt(formData.UnhealthyThreshold),
+      HealthyThreshold: parseInt(formData.HealthyThreshold),
+      HealthCheckUseAuth: formData.HealthCheckUseAuth,
+      MaxParallelRequests: parseInt(formData.MaxParallelRequests),
+      Weight: parseInt(formData.Weight),
+      RigMonitor: {
+        Enabled: formData.RigMonitorEnabled,
+        HostnameOverride: formData.RigMonitorHostnameOverride || null,
+        Port: parseInt(formData.RigMonitorPort, 10),
+        UseSsl: formData.RigMonitorUseSsl,
+        TimeoutMs: parseInt(formData.RigMonitorTimeoutMs, 10),
+        CollectDuringHealthCheck: formData.RigMonitorCollectDuringHealthCheck,
+        RequireReadyz: formData.RigMonitorRequireReadyz,
+        HealthAffectedByRigMonitor: formData.RigMonitorHealthAffectedByRigMonitor,
+        MaxTelemetryAgeMs: parseInt(formData.RigMonitorMaxTelemetryAgeMs, 10),
+        CapabilitiesRefreshIntervalMs: parseInt(formData.RigMonitorCapabilitiesRefreshIntervalMs, 10),
+        TelemetryProfile: formData.RigMonitorTelemetryProfile,
+        TelemetrySelectors: telemetrySelectors
+      }
+    };
+  };
+
+  const validateDraft = async () => {
+    setValidationLoading(true);
+    try {
+      const payload = buildEndpointPayload();
+      const result = await api.validateModelRunnerEndpoint(payload, editMode ? selectedEndpoint?.Id : null);
+      setValidationResult(result);
+      return { payload, result };
+    } catch (err) {
+      if (err.message?.startsWith('Invalid JSON')) {
+        setError(err.message);
+      } else {
+        setError('Failed to validate endpoint: ' + err.message);
+      }
+      throw err;
+    } finally {
+      setValidationLoading(false);
+    }
+  };
+
+  const handleServiceStateAction = async (endpoint, action) => {
+    if (!endpoint?.Id) {
+      return;
+    }
+
+    setServiceStateActionLoading(`${action}:${endpoint.Id}`);
+    try {
+      if (action === 'drain') {
+        await api.drainModelRunnerEndpoint(endpoint.Id, endpoint.TenantId);
+      } else if (action === 'resume') {
+        await api.resumeModelRunnerEndpoint(endpoint.Id, endpoint.TenantId);
+      } else if (action === 'quarantine') {
+        await api.quarantineModelRunnerEndpoint(endpoint.Id, endpoint.TenantId);
+      }
+
+      await fetchEndpoints();
+      await fetchHealth();
+      if (healthDetailEndpoint?.Id === endpoint.Id) {
+        await handleViewHealth(endpoint);
+      }
+    } catch (err) {
+      setError('Failed to update endpoint service state: ' + err.message);
+    } finally {
+      setServiceStateActionLoading('');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      let labels = [];
-      let tags = {};
-      const telemetrySelectors = parseTelemetrySelectors(formData.RigMonitorTelemetrySelectors);
-
-      try {
-        labels = JSON.parse(formData.LabelsJson || '[]');
-      } catch (err) {
-        setError('Invalid JSON in Labels');
+      const { payload, result } = await validateDraft();
+      if (!result?.IsValid) {
+        setError('Resolve the blocking validation issues before saving this endpoint.');
         return;
       }
-
-      try {
-        tags = JSON.parse(formData.TagsJson || '{}');
-      } catch (err) {
-        setError('Invalid JSON in Tags');
-        return;
-      }
-
-      const data = {
-        TenantId: formData.TenantId || null,
-        Name: formData.Name,
-        Hostname: formData.Hostname,
-        Port: parseInt(formData.Port),
-        ApiKey: formData.ApiKey,
-        ApiType: formData.ApiType,
-        UseSsl: formData.UseSsl,
-        TimeoutMs: parseInt(formData.TimeoutMs),
-        Active: formData.Active,
-        Labels: labels,
-        Tags: tags,
-        HealthCheckUrl: formData.HealthCheckUrl,
-        HealthCheckMethod: formData.HealthCheckMethod,
-        HealthCheckIntervalMs: parseInt(formData.HealthCheckIntervalMs),
-        HealthCheckTimeoutMs: parseInt(formData.HealthCheckTimeoutMs),
-        HealthCheckExpectedStatusCode: parseInt(formData.HealthCheckExpectedStatusCode),
-        UnhealthyThreshold: parseInt(formData.UnhealthyThreshold),
-        HealthyThreshold: parseInt(formData.HealthyThreshold),
-        HealthCheckUseAuth: formData.HealthCheckUseAuth,
-        MaxParallelRequests: parseInt(formData.MaxParallelRequests),
-        Weight: parseInt(formData.Weight),
-        RigMonitor: {
-          Enabled: formData.RigMonitorEnabled,
-          HostnameOverride: formData.RigMonitorHostnameOverride || null,
-          Port: parseInt(formData.RigMonitorPort, 10),
-          UseSsl: formData.RigMonitorUseSsl,
-          TimeoutMs: parseInt(formData.RigMonitorTimeoutMs, 10),
-          CollectDuringHealthCheck: formData.RigMonitorCollectDuringHealthCheck,
-          RequireReadyz: formData.RigMonitorRequireReadyz,
-          HealthAffectedByRigMonitor: formData.RigMonitorHealthAffectedByRigMonitor,
-          MaxTelemetryAgeMs: parseInt(formData.RigMonitorMaxTelemetryAgeMs, 10),
-          CapabilitiesRefreshIntervalMs: parseInt(formData.RigMonitorCapabilitiesRefreshIntervalMs, 10),
-          TelemetryProfile: formData.RigMonitorTelemetryProfile,
-          TelemetrySelectors: telemetrySelectors
-        }
-      };
 
       if (editMode) {
-        await api.updateModelRunnerEndpoint(selectedEndpoint.Id, data);
+        await api.updateModelRunnerEndpoint(selectedEndpoint.Id, payload);
       } else {
-        await api.createModelRunnerEndpoint(data);
+        await api.createModelRunnerEndpoint(payload);
         onEntityCreated('endpoint');
       }
       setShowForm(false);
+      setValidationResult(null);
       fetchEndpoints();
     } catch (err) {
-      setError('Failed to save endpoint: ' + err.message);
+      if (!err.message?.startsWith('Invalid JSON')) {
+        setError('Failed to save endpoint: ' + err.message);
+      }
     }
   };
 
@@ -578,10 +676,25 @@ function ModelRunnerEndpoints() {
       },
       filterValue: (item) => item.RigMonitor?.Enabled === true ? 'enabled' : 'disabled'
     },
-    {
-      key: 'Active',
-      label: 'Status',
-      tooltip: 'Whether this endpoint is enabled for use in load balancing',
+      {
+        key: 'ServiceState',
+        label: 'Service State',
+        tooltip: 'Operator-managed routing state for this endpoint: normal, draining, or quarantined',
+        width: '130px',
+        render: (item) => {
+          const presentation = getServiceStatePresentation(getEffectiveServiceState(item));
+          return (
+            <span className={`service-state-badge ${presentation.tone}`} title={presentation.description}>
+              {presentation.label}
+            </span>
+          );
+        },
+        filterValue: (item) => normalizeServiceState(getEffectiveServiceState(item)).toLowerCase()
+      },
+      {
+        key: 'Active',
+        label: 'Status',
+        tooltip: 'Whether this endpoint is enabled for use in load balancing',
       width: '100px',
       render: (item) => (
         <span title={item.Active ? 'Endpoint is enabled and available for routing' : 'Endpoint is disabled and excluded from routing'}>
@@ -662,15 +775,31 @@ function ModelRunnerEndpoints() {
       sortable: false,
       filterable: false,
       isAction: true,
-      render: (item) => (
-        <ActionMenu
-          actions={[
-            { label: 'View Details', onClick: () => handleViewMetadata(item) },
-            { label: 'Health Data', onClick: () => handleViewHealth(item) },
-            { label: 'Edit', onClick: () => handleEdit(item) },
-            { divider: true },
-            { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
-          ]}
+        render: (item) => (
+          <ActionMenu
+            actions={[
+              { label: 'View Details', onClick: () => handleViewMetadata(item) },
+              { label: 'Health Data', onClick: () => handleViewHealth(item) },
+              { label: 'Edit', onClick: () => handleEdit(item) },
+              { divider: true },
+              {
+                label: serviceStateActionLoading === `drain:${item.Id}` ? 'Draining...' : 'Drain',
+                disabled: normalizeServiceState(getEffectiveServiceState(item)) === 'Draining' || serviceStateActionLoading.length > 0,
+                onClick: () => handleServiceStateAction(item, 'drain')
+              },
+              {
+                label: serviceStateActionLoading === `resume:${item.Id}` ? 'Resuming...' : 'Resume',
+                disabled: normalizeServiceState(getEffectiveServiceState(item)) === 'Normal' || serviceStateActionLoading.length > 0,
+                onClick: () => handleServiceStateAction(item, 'resume')
+              },
+              {
+                label: serviceStateActionLoading === `quarantine:${item.Id}` ? 'Quarantining...' : 'Quarantine',
+                disabled: normalizeServiceState(getEffectiveServiceState(item)) === 'Quarantined' || serviceStateActionLoading.length > 0,
+                onClick: () => handleServiceStateAction(item, 'quarantine')
+              },
+              { divider: true },
+              { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
+            ]}
         />
       )
     }
@@ -723,6 +852,26 @@ function ModelRunnerEndpoints() {
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Endpoint' : 'Create Endpoint'} wide>
         <form onSubmit={handleSubmit}>
+          {validationResult && (
+            <div className={`validation-panel ${validationResult.IsValid ? 'success' : 'error'}`}>
+              <strong>{validationResult.IsValid ? 'Draft looks routable.' : 'Resolve the blocking issues before saving.'}</strong>
+              {validationResult.Errors?.length > 0 && (
+                <ul className="validation-list">
+                  {validationResult.Errors.map((issue, index) => (
+                    <li key={`endpoint-error-${index}`}>{issue.Message}</li>
+                  ))}
+                </ul>
+              )}
+              {validationResult.Warnings?.length > 0 && (
+                <ul className="validation-list warning">
+                  {validationResult.Warnings.map((issue, index) => (
+                    <li key={`endpoint-warning-${index}`}>{issue.Message}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <div className="form-group">
             <label htmlFor="tenantId" title="Organizational unit that owns this endpoint">Tenant</label>
             <select
@@ -1138,6 +1287,9 @@ function ModelRunnerEndpoints() {
             <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
               Cancel
             </button>
+            <button type="button" className="btn-secondary" onClick={() => validateDraft().catch(() => {})} disabled={validationLoading}>
+              {validationLoading ? 'Validating...' : 'Validate'}
+            </button>
             <button type="submit" className="btn-primary">
               {editMode ? 'Update' : 'Create'}
             </button>
@@ -1207,6 +1359,14 @@ function ModelRunnerEndpoints() {
                       <div className="health-stat-value">
                         <span className={`status-badge ${h.IsHealthy ? 'healthy' : 'unhealthy'}`}>
                           {h.IsHealthy ? 'Healthy' : 'Unhealthy'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="health-stat-card" title="Operator-managed routing state for this endpoint">
+                      <div className="health-stat-label">Service State</div>
+                      <div className="health-stat-value">
+                        <span className={`service-state-badge ${getServiceStatePresentation(h.ServiceState ?? healthDetailEndpoint.ServiceState).tone}`}>
+                          {getServiceStatePresentation(h.ServiceState ?? healthDetailEndpoint.ServiceState).label}
                         </span>
                       </div>
                     </div>

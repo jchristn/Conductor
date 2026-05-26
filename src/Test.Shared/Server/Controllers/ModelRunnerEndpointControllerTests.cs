@@ -6,6 +6,7 @@ namespace Test.Shared.Server.Controllers
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
     using Conductor.Server.Controllers;
+    using Conductor.Server.Services;
     using FluentAssertions;
     
     /// <summary>
@@ -394,6 +395,24 @@ namespace Test.Shared.Server.Controllers
 
             result.TenantId.Should().Be(TestTenantId);
         }
+        public async Task Update_PreservesExistingServiceState_WhenLegacyPayloadOmitsField()
+        {
+            ModelRunnerEndpoint created = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "Compat Endpoint",
+                Hostname = "compat.local"
+            }).ConfigureAwait(false);
+
+            await _Controller.Drain(TestTenantId, created.Id).ConfigureAwait(false);
+
+            ModelRunnerEndpoint updated = await _Controller.Update(TestTenantId, created.Id, new ModelRunnerEndpoint
+            {
+                Name = "Compat Endpoint Updated",
+                Hostname = "compat-updated.local"
+            }).ConfigureAwait(false);
+
+            updated.ServiceState.Should().Be(EndpointServiceStateEnum.Draining);
+        }
 
         #endregion
 
@@ -632,6 +651,59 @@ namespace Test.Shared.Server.Controllers
 
             result.Enabled.Should().BeFalse();
             result.BaseUrl.Should().BeNull();
+        }
+        public async Task Validate_WithMissingApiKeyForAuthenticatedHealthCheck_ReturnsError()
+        {
+            RoutingDecisionService routingDecisionService = new RoutingDecisionService(Database, Logging);
+            ConfigurationValidationService validationService = new ConfigurationValidationService(Database, Logging, routingDecisionService);
+            ModelRunnerEndpointController controller = new ModelRunnerEndpointController(Database, AuthService, Serializer, Logging, null, validationService);
+
+            ResourceValidationResult result = await controller.Validate(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "Validation Endpoint",
+                Hostname = "validation.local",
+                HealthCheckUseAuth = true
+            }).ConfigureAwait(false);
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().ContainSingle(item => item.Code == "HealthCheckAuthRequiresApiKey");
+        }
+        public async Task Drain_UpdatesServiceState()
+        {
+            ModelRunnerEndpoint endpoint = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "Drain Endpoint",
+                Hostname = "drain.local"
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint updated = await _Controller.Drain(TestTenantId, endpoint.Id).ConfigureAwait(false);
+
+            updated.ServiceState.Should().Be(EndpointServiceStateEnum.Draining);
+        }
+        public async Task Resume_UpdatesServiceState()
+        {
+            ModelRunnerEndpoint endpoint = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "Resume Endpoint",
+                Hostname = "resume.local",
+                ServiceState = EndpointServiceStateEnum.Draining
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint updated = await _Controller.Resume(TestTenantId, endpoint.Id).ConfigureAwait(false);
+
+            updated.ServiceState.Should().Be(EndpointServiceStateEnum.Normal);
+        }
+        public async Task Quarantine_UpdatesServiceState()
+        {
+            ModelRunnerEndpoint endpoint = await _Controller.Create(TestTenantId, new ModelRunnerEndpoint
+            {
+                Name = "Quarantine Endpoint",
+                Hostname = "quarantine.local"
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint updated = await _Controller.Quarantine(TestTenantId, endpoint.Id).ConfigureAwait(false);
+
+            updated.ServiceState.Should().Be(EndpointServiceStateEnum.Quarantined);
         }
 
         #endregion

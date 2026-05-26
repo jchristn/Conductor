@@ -50,6 +50,10 @@ yarn-debug.log*
 yarn-error.log*
 .npm
 
+# Python
+__pycache__/
+*.pyc
+
 # Dashboard build
 dashboard/dist/
 
@@ -71,3 +75,6 @@ logs/
 # Conductor specific
 conductor.db
 conductor.log
+docker/data/request-history/*
+!docker/data/request-history/.gitkeep
+docker/logs/*.log*

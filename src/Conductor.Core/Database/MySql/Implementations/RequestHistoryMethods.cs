@@ -33,19 +33,43 @@ namespace Conductor.Core.Database.MySql.Implementations
             if (entry == null) throw new ArgumentNullException(nameof(entry));
 
             string query = "INSERT INTO requesthistory (id, tenantguid, virtualmodelrunnerguid, virtualmodelrunnername, " +
+                           "requestoruserguid, requestoruseremail, credentialguid, credentialname, loadbalancingpolicyguid, loadbalancingpolicyname, " +
                            "modelendpointguid, modelendpointname, modelendpointurl, modeldefinitionguid, modeldefinitionname, " +
-                           "modelconfigurationguid, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
+                           "modelconfigurationguid, requestedmodel, effectivemodel, requesttype, routingoutcomecode, denialreasoncode, denialreason, " +
+                           "sessionaffinityoutcome, mutationsummary, explanationsummary, requestbodyretained, requestbodyredacted, requestheadersredacted, " +
+                           "responsebodyretained, responsebodyredacted, responseheadersredacted, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
                            "httpstatus, firsttokentimems, responsetimems, objectkey, requesttransfertype, responsetransfertype, createdutc, completedutc) " +
                            "VALUES ('" + _Driver.Sanitize(entry.Id) + "', " +
                            "'" + _Driver.Sanitize(entry.TenantGuid) + "', " +
                            "'" + _Driver.Sanitize(entry.VirtualModelRunnerGuid) + "', " +
                            "'" + _Driver.Sanitize(entry.VirtualModelRunnerName) + "', " +
+                           _Driver.FormatNullableString(entry.RequestorUserGuid) + ", " +
+                           _Driver.FormatNullableString(entry.RequestorUserEmail) + ", " +
+                           _Driver.FormatNullableString(entry.CredentialGuid) + ", " +
+                           _Driver.FormatNullableString(entry.CredentialName) + ", " +
+                           _Driver.FormatNullableString(entry.LoadBalancingPolicyGuid) + ", " +
+                           _Driver.FormatNullableString(entry.LoadBalancingPolicyName) + ", " +
                            _Driver.FormatNullableString(entry.ModelEndpointGuid) + ", " +
                            _Driver.FormatNullableString(entry.ModelEndpointName) + ", " +
                            _Driver.FormatNullableString(entry.ModelEndpointUrl) + ", " +
                            _Driver.FormatNullableString(entry.ModelDefinitionGuid) + ", " +
                            _Driver.FormatNullableString(entry.ModelDefinitionName) + ", " +
                            _Driver.FormatNullableString(entry.ModelConfigurationGuid) + ", " +
+                           _Driver.FormatNullableString(entry.RequestedModel) + ", " +
+                           _Driver.FormatNullableString(entry.EffectiveModel) + ", " +
+                           _Driver.FormatNullableString(entry.RequestType) + ", " +
+                           _Driver.FormatNullableString(entry.RoutingOutcomeCode) + ", " +
+                           _Driver.FormatNullableString(entry.DenialReasonCode) + ", " +
+                           _Driver.FormatNullableString(entry.DenialReason) + ", " +
+                           _Driver.FormatNullableString(entry.SessionAffinityOutcome) + ", " +
+                           _Driver.FormatNullableString(entry.MutationSummary) + ", " +
+                           _Driver.FormatNullableString(entry.ExplanationSummary) + ", " +
+                           _Driver.FormatBoolean(entry.RequestBodyRetained) + ", " +
+                           _Driver.FormatBoolean(entry.RequestBodyRedacted) + ", " +
+                           _Driver.FormatBoolean(entry.RequestHeadersRedacted) + ", " +
+                           _Driver.FormatBoolean(entry.ResponseBodyRetained) + ", " +
+                           _Driver.FormatBoolean(entry.ResponseBodyRedacted) + ", " +
+                           _Driver.FormatBoolean(entry.ResponseHeadersRedacted) + ", " +
                            "'" + _Driver.Sanitize(entry.RequestorSourceIp) + "', " +
                            "'" + _Driver.Sanitize(entry.HttpMethod) + "', " +
                            "'" + _Driver.Sanitize(entry.HttpUrl) + "', " +
@@ -72,12 +96,33 @@ namespace Conductor.Core.Database.MySql.Implementations
             if (entry == null) throw new ArgumentNullException(nameof(entry));
 
             string query = "UPDATE requesthistory SET " +
+                           "requestoruserguid = " + _Driver.FormatNullableString(entry.RequestorUserGuid) + ", " +
+                           "requestoruseremail = " + _Driver.FormatNullableString(entry.RequestorUserEmail) + ", " +
+                           "credentialguid = " + _Driver.FormatNullableString(entry.CredentialGuid) + ", " +
+                           "credentialname = " + _Driver.FormatNullableString(entry.CredentialName) + ", " +
+                           "loadbalancingpolicyguid = " + _Driver.FormatNullableString(entry.LoadBalancingPolicyGuid) + ", " +
+                           "loadbalancingpolicyname = " + _Driver.FormatNullableString(entry.LoadBalancingPolicyName) + ", " +
                            "modelendpointguid = " + _Driver.FormatNullableString(entry.ModelEndpointGuid) + ", " +
                            "modelendpointname = " + _Driver.FormatNullableString(entry.ModelEndpointName) + ", " +
                            "modelendpointurl = " + _Driver.FormatNullableString(entry.ModelEndpointUrl) + ", " +
                            "modeldefinitionguid = " + _Driver.FormatNullableString(entry.ModelDefinitionGuid) + ", " +
                            "modeldefinitionname = " + _Driver.FormatNullableString(entry.ModelDefinitionName) + ", " +
                            "modelconfigurationguid = " + _Driver.FormatNullableString(entry.ModelConfigurationGuid) + ", " +
+                           "requestedmodel = " + _Driver.FormatNullableString(entry.RequestedModel) + ", " +
+                           "effectivemodel = " + _Driver.FormatNullableString(entry.EffectiveModel) + ", " +
+                           "requesttype = " + _Driver.FormatNullableString(entry.RequestType) + ", " +
+                           "routingoutcomecode = " + _Driver.FormatNullableString(entry.RoutingOutcomeCode) + ", " +
+                           "denialreasoncode = " + _Driver.FormatNullableString(entry.DenialReasonCode) + ", " +
+                           "denialreason = " + _Driver.FormatNullableString(entry.DenialReason) + ", " +
+                           "sessionaffinityoutcome = " + _Driver.FormatNullableString(entry.SessionAffinityOutcome) + ", " +
+                           "mutationsummary = " + _Driver.FormatNullableString(entry.MutationSummary) + ", " +
+                           "explanationsummary = " + _Driver.FormatNullableString(entry.ExplanationSummary) + ", " +
+                           "requestbodyretained = " + _Driver.FormatBoolean(entry.RequestBodyRetained) + ", " +
+                           "requestbodyredacted = " + _Driver.FormatBoolean(entry.RequestBodyRedacted) + ", " +
+                           "requestheadersredacted = " + _Driver.FormatBoolean(entry.RequestHeadersRedacted) + ", " +
+                           "responsebodyretained = " + _Driver.FormatBoolean(entry.ResponseBodyRetained) + ", " +
+                           "responsebodyredacted = " + _Driver.FormatBoolean(entry.ResponseBodyRedacted) + ", " +
+                           "responseheadersredacted = " + _Driver.FormatBoolean(entry.ResponseHeadersRedacted) + ", " +
                            "responsebodylength = " + _Driver.FormatNullable(entry.ResponseBodyLength) + ", " +
                            "httpstatus = " + _Driver.FormatNullable(entry.HttpStatus) + ", " +
                            "firsttokentimems = " + _Driver.FormatNullable(entry.FirstTokenTimeMs) + ", " +
@@ -267,20 +312,7 @@ namespace Conductor.Core.Database.MySql.Implementations
                     break;
             }
 
-            List<string> conditions = new List<string>();
-            conditions.Add("createdutc >= '" + startStr + "'");
-            conditions.Add("createdutc < '" + endStr + "'");
-
-            if (!String.IsNullOrEmpty(filter.TenantGuid))
-            {
-                conditions.Add("tenantguid = '" + _Driver.Sanitize(filter.TenantGuid) + "'");
-            }
-            if (!String.IsNullOrEmpty(filter.VirtualModelRunnerGuid))
-            {
-                conditions.Add("virtualmodelrunnerguid = '" + _Driver.Sanitize(filter.VirtualModelRunnerGuid) + "'");
-            }
-
-            string whereClause = "WHERE " + String.Join(" AND ", conditions);
+            string whereClause = BuildSummaryWhereClause(filter, startStr, endStr);
 
             string query = "SELECT " + dateTrunc + " AS bucket_time, " +
                            "SUM(CASE WHEN httpstatus IS NOT NULL AND httpstatus >= 100 AND httpstatus < 400 THEN 1 ELSE 0 END) AS success_count, " +
@@ -288,10 +320,22 @@ namespace Conductor.Core.Database.MySql.Implementations
                            "FROM requesthistory " + whereClause + " " +
                            "GROUP BY bucket_time " +
                            "ORDER BY bucket_time ASC;";
+            string statusClassExpression = BuildStatusClassExpression();
+            string statusClassQuery = "SELECT " + statusClassExpression + " AS bucket_key, COUNT(*) AS bucket_count " +
+                                      "FROM requesthistory " + whereClause + " GROUP BY " + statusClassExpression + ";";
+            string denialReasonQuery = "SELECT COALESCE(NULLIF(denialreasoncode, ''), 'None') AS bucket_key, COUNT(*) AS bucket_count " +
+                                       "FROM requesthistory " + whereClause + " GROUP BY COALESCE(NULLIF(denialreasoncode, ''), 'None');";
+            string sessionOutcomeQuery = "SELECT COALESCE(NULLIF(sessionaffinityoutcome, ''), 'None') AS bucket_key, COUNT(*) AS bucket_count " +
+                                         "FROM requesthistory " + whereClause + " GROUP BY COALESCE(NULLIF(sessionaffinityoutcome, ''), 'None');";
 
-            DataTable result = await _Driver.ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+            Task<DataTable> bucketTask = _Driver.ExecuteQueryAsync(query, false, token);
+            Task<DataTable> statusTask = _Driver.ExecuteQueryAsync(statusClassQuery, false, token);
+            Task<DataTable> denialTask = _Driver.ExecuteQueryAsync(denialReasonQuery, false, token);
+            Task<DataTable> sessionTask = _Driver.ExecuteQueryAsync(sessionOutcomeQuery, false, token);
 
-            List<RequestHistorySummaryBucket> buckets = RequestHistorySummaryBucket.FromDataTable(result) ?? new List<RequestHistorySummaryBucket>();
+            await Task.WhenAll(bucketTask, statusTask, denialTask, sessionTask).ConfigureAwait(false);
+
+            List<RequestHistorySummaryBucket> buckets = RequestHistorySummaryBucket.FromDataTable(bucketTask.Result) ?? new List<RequestHistorySummaryBucket>();
 
             long totalSuccess = 0;
             long totalFailure = 0;
@@ -308,7 +352,10 @@ namespace Conductor.Core.Database.MySql.Implementations
                 EndUtc = filter.EndUtc,
                 Interval = filter.Interval,
                 TotalSuccess = totalSuccess,
-                TotalFailure = totalFailure
+                TotalFailure = totalFailure,
+                StatusClassCounts = ReadBucketCounts(statusTask.Result),
+                DenialReasonCounts = ReadBucketCounts(denialTask.Result),
+                SessionAffinityOutcomeCounts = ReadBucketCounts(sessionTask.Result)
             };
         }
 
@@ -328,6 +375,52 @@ namespace Conductor.Core.Database.MySql.Implementations
             {
                 conditions.Add("modelendpointguid = '" + _Driver.Sanitize(filter.ModelEndpointGuid) + "'");
             }
+            if (!String.IsNullOrEmpty(filter.RequestorUserGuid))
+            {
+                conditions.Add("requestoruserguid = '" + _Driver.Sanitize(filter.RequestorUserGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.CredentialGuid))
+            {
+                conditions.Add("credentialguid = '" + _Driver.Sanitize(filter.CredentialGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.LoadBalancingPolicyGuid))
+            {
+                conditions.Add("loadbalancingpolicyguid = '" + _Driver.Sanitize(filter.LoadBalancingPolicyGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelName))
+            {
+                string modelName = _Driver.Sanitize(filter.ModelName).ToLowerInvariant();
+                conditions.Add("(LOWER(COALESCE(requestedmodel, '')) LIKE '%" + modelName + "%' OR LOWER(COALESCE(effectivemodel, '')) LIKE '%" + modelName + "%')");
+            }
+            if (!String.IsNullOrEmpty(filter.MutationSummary))
+            {
+                string mutationSummary = _Driver.Sanitize(filter.MutationSummary).ToLowerInvariant();
+                conditions.Add("LOWER(COALESCE(mutationsummary, '')) LIKE '%" + mutationSummary + "%'");
+            }
+            if (!String.IsNullOrEmpty(filter.DenialReasonCode))
+            {
+                conditions.Add("denialreasoncode = '" + _Driver.Sanitize(filter.DenialReasonCode) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.SessionAffinityOutcome))
+            {
+                conditions.Add("sessionaffinityoutcome = '" + _Driver.Sanitize(filter.SessionAffinityOutcome) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.StatusClass))
+            {
+                string statusClassCondition = BuildStatusClassCondition(filter.StatusClass);
+                if (!String.IsNullOrEmpty(statusClassCondition))
+                {
+                    conditions.Add(statusClassCondition);
+                }
+            }
+            if (filter.CreatedAfterUtc.HasValue)
+            {
+                conditions.Add("createdutc >= '" + _Driver.FormatDateTime(filter.CreatedAfterUtc.Value) + "'");
+            }
+            if (filter.CreatedBeforeUtc.HasValue)
+            {
+                conditions.Add("createdutc < '" + _Driver.FormatDateTime(filter.CreatedBeforeUtc.Value) + "'");
+            }
             if (!String.IsNullOrEmpty(filter.RequestorSourceIp))
             {
                 conditions.Add("requestorsourceip = '" + _Driver.Sanitize(filter.RequestorSourceIp) + "'");
@@ -338,6 +431,138 @@ namespace Conductor.Core.Database.MySql.Implementations
             }
 
             return conditions.Count > 0 ? "WHERE " + String.Join(" AND ", conditions) : "";
+        }
+
+        private string BuildSummaryWhereClause(RequestHistorySummaryFilter filter, string startStr, string endStr)
+        {
+            List<string> conditions = new List<string>();
+            conditions.Add("createdutc >= '" + startStr + "'");
+            conditions.Add("createdutc < '" + endStr + "'");
+
+            if (!String.IsNullOrEmpty(filter.TenantGuid))
+            {
+                conditions.Add("tenantguid = '" + _Driver.Sanitize(filter.TenantGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.VirtualModelRunnerGuid))
+            {
+                conditions.Add("virtualmodelrunnerguid = '" + _Driver.Sanitize(filter.VirtualModelRunnerGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelEndpointGuid))
+            {
+                conditions.Add("modelendpointguid = '" + _Driver.Sanitize(filter.ModelEndpointGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.RequestorUserGuid))
+            {
+                conditions.Add("requestoruserguid = '" + _Driver.Sanitize(filter.RequestorUserGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.CredentialGuid))
+            {
+                conditions.Add("credentialguid = '" + _Driver.Sanitize(filter.CredentialGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.LoadBalancingPolicyGuid))
+            {
+                conditions.Add("loadbalancingpolicyguid = '" + _Driver.Sanitize(filter.LoadBalancingPolicyGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelName))
+            {
+                string modelName = _Driver.Sanitize(filter.ModelName).ToLowerInvariant();
+                conditions.Add("(LOWER(COALESCE(requestedmodel, '')) LIKE '%" + modelName + "%' OR LOWER(COALESCE(effectivemodel, '')) LIKE '%" + modelName + "%')");
+            }
+            if (!String.IsNullOrEmpty(filter.MutationSummary))
+            {
+                string mutationSummary = _Driver.Sanitize(filter.MutationSummary).ToLowerInvariant();
+                conditions.Add("LOWER(COALESCE(mutationsummary, '')) LIKE '%" + mutationSummary + "%'");
+            }
+            if (!String.IsNullOrEmpty(filter.DenialReasonCode))
+            {
+                conditions.Add("denialreasoncode = '" + _Driver.Sanitize(filter.DenialReasonCode) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.SessionAffinityOutcome))
+            {
+                conditions.Add("sessionaffinityoutcome = '" + _Driver.Sanitize(filter.SessionAffinityOutcome) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.StatusClass))
+            {
+                string statusClassCondition = BuildStatusClassCondition(filter.StatusClass);
+                if (!String.IsNullOrEmpty(statusClassCondition))
+                {
+                    conditions.Add(statusClassCondition);
+                }
+            }
+            if (!String.IsNullOrEmpty(filter.RequestorSourceIp))
+            {
+                conditions.Add("requestorsourceip = '" + _Driver.Sanitize(filter.RequestorSourceIp) + "'");
+            }
+            if (filter.HttpStatus.HasValue)
+            {
+                conditions.Add("httpstatus = " + filter.HttpStatus.Value);
+            }
+
+            return "WHERE " + String.Join(" AND ", conditions);
+        }
+
+        private static string BuildStatusClassExpression()
+        {
+            return "CASE " +
+                   "WHEN httpstatus IS NULL THEN 'NoStatus' " +
+                   "WHEN httpstatus >= 100 AND httpstatus < 200 THEN '1xx' " +
+                   "WHEN httpstatus >= 200 AND httpstatus < 300 THEN '2xx' " +
+                   "WHEN httpstatus >= 300 AND httpstatus < 400 THEN '3xx' " +
+                   "WHEN httpstatus >= 400 AND httpstatus < 500 THEN '4xx' " +
+                   "ELSE '5xx' END";
+        }
+
+        private static string BuildStatusClassCondition(string statusClass)
+        {
+            if (String.IsNullOrWhiteSpace(statusClass))
+            {
+                return null;
+            }
+
+            switch (statusClass.Trim().ToLowerInvariant())
+            {
+                case "1xx":
+                case "1":
+                    return "httpstatus >= 100 AND httpstatus < 200";
+                case "2xx":
+                case "2":
+                    return "httpstatus >= 200 AND httpstatus < 300";
+                case "3xx":
+                case "3":
+                    return "httpstatus >= 300 AND httpstatus < 400";
+                case "4xx":
+                case "4":
+                    return "httpstatus >= 400 AND httpstatus < 500";
+                case "5xx":
+                case "5":
+                    return "httpstatus >= 500 AND httpstatus < 600";
+                case "nostatus":
+                    return "httpstatus IS NULL";
+                default:
+                    return null;
+            }
+        }
+
+        private static Dictionary<string, long> ReadBucketCounts(DataTable table)
+        {
+            Dictionary<string, long> counts = new Dictionary<string, long>(StringComparer.InvariantCultureIgnoreCase);
+            if (table == null)
+            {
+                return counts;
+            }
+
+            foreach (DataRow row in table.Rows)
+            {
+                string key = row["bucket_key"]?.ToString();
+                if (String.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                counts[key] = Convert.ToInt64(row["bucket_count"]);
+            }
+
+            return counts;
         }
     }
 }

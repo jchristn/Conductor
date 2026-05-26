@@ -31,6 +31,21 @@ namespace Conductor.Core.Models
         public string UserId { get; set; } = null;
 
         /// <summary>
+        /// User email from authentication.
+        /// </summary>
+        public string UserEmail { get; set; } = null;
+
+        /// <summary>
+        /// Credential identifier from authentication.
+        /// </summary>
+        public string CredentialId { get; set; } = null;
+
+        /// <summary>
+        /// Credential display name from authentication.
+        /// </summary>
+        public string CredentialName { get; set; } = null;
+
+        /// <summary>
         /// Virtual model runner handling this request.
         /// </summary>
         public string VirtualModelRunnerId { get; set; } = null;

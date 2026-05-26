@@ -739,6 +739,174 @@ namespace Test.Shared.Server.Controllers
             result.VirtualModelRunnerName.Should().Be("My Test VMR");
             result.CheckedUtc.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
         }
+        public async Task GetHealth_IncludesDrainingAndQuarantinedEndpointCounts()
+        {
+            HealthCheckService healthCheckService = new HealthCheckService(Database, Logging);
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(
+                Database,
+                AuthService,
+                Serializer,
+                Logging,
+                healthCheckService);
+
+            ModelRunnerEndpoint draining = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Draining Endpoint",
+                Hostname = "draining.local",
+                ServiceState = EndpointServiceStateEnum.Draining
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint quarantined = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Quarantined Endpoint",
+                Hostname = "quarantined.local",
+                ServiceState = EndpointServiceStateEnum.Quarantined
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Health Count VMR",
+                BasePath = "/v1.0/api/health-count/",
+                ModelRunnerEndpointIds = new List<string> { draining.Id, quarantined.Id }
+            }).ConfigureAwait(false);
+
+            VirtualModelRunnerHealthStatus result = await controller.GetHealth(TestTenantId, vmr.Id).ConfigureAwait(false);
+
+            result.DrainingEndpointCount.Should().Be(1);
+            result.QuarantinedEndpointCount.Should().Be(1);
+            result.Endpoints.Should().HaveCount(2);
+        }
+        public async Task Validate_WithStrictModeAndNoDefinitions_ReturnsError()
+        {
+            RoutingDecisionService routingDecisionService = new RoutingDecisionService(Database, Logging);
+            ConfigurationValidationService validationService = new ConfigurationValidationService(Database, Logging, routingDecisionService);
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, validationService, routingDecisionService);
+
+            ResourceValidationResult result = await controller.Validate(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Strict Validation VMR",
+                BasePath = "/v1.0/api/strict-validation/",
+                StrictMode = true
+            }).ConfigureAwait(false);
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().ContainSingle(item => item.Code == "StrictModeRequiresDefinitions");
+        }
+        public async Task GetEffectiveConfiguration_ReturnsResolvedResources()
+        {
+            RoutingDecisionService routingDecisionService = new RoutingDecisionService(Database, Logging);
+            ConfigurationValidationService validationService = new ConfigurationValidationService(Database, Logging, routingDecisionService);
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, validationService, routingDecisionService);
+
+            ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Effective Endpoint",
+                Hostname = "effective.local",
+                ServiceState = EndpointServiceStateEnum.Draining
+            }).ConfigureAwait(false);
+
+            ModelDefinition definition = await Database.ModelDefinition.CreateAsync(new ModelDefinition
+            {
+                TenantId = TestTenantId,
+                Name = "llama3.2:latest"
+            }).ConfigureAwait(false);
+
+            ModelConfiguration configuration = await Database.ModelConfiguration.CreateAsync(new ModelConfiguration
+            {
+                TenantId = TestTenantId,
+                Name = "Pinned Temperature",
+                Model = "llama3.2:latest",
+                Temperature = 0.2m
+            }).ConfigureAwait(false);
+
+            LoadBalancingPolicy policy = await Database.LoadBalancingPolicy.CreateAsync(new LoadBalancingPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Effective Policy"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Effective VMR",
+                BasePath = "/v1.0/api/effective/",
+                LoadBalancingPolicyId = policy.Id,
+                ModelRunnerEndpointIds = new List<string> { endpoint.Id },
+                ModelDefinitionIds = new List<string> { definition.Id },
+                ModelConfigurationIds = new List<string> { configuration.Id },
+                ModelConfigurationMappings = new Dictionary<string, string>
+                {
+                    { definition.Name, configuration.Id }
+                }
+            }).ConfigureAwait(false);
+
+            EffectiveVirtualModelRunnerConfiguration effective = await controller.GetEffectiveConfiguration(TestTenantId, vmr.Id).ConfigureAwait(false);
+
+            effective.Policy.Should().NotBeNull();
+            effective.Policy.Id.Should().Be(policy.Id);
+            effective.Endpoints.Should().ContainSingle(item => item.Id == endpoint.Id && item.ServiceState == EndpointServiceStateEnum.Draining);
+            effective.ModelDefinitions.Should().ContainSingle(item => item.Id == definition.Id);
+            effective.ModelConfigurations.Should().ContainSingle(item => item.Id == configuration.Id);
+            effective.ModelConfigurationMappings.Should().ContainKey(definition.Name);
+            effective.ModelConfigurationMappings[definition.Name].Should().Be(configuration.Id);
+        }
+        public async Task ExplainRouting_ReturnsTimelineCandidatesAndMutationSummary()
+        {
+            RoutingDecisionService routingDecisionService = new RoutingDecisionService(Database, Logging);
+            ConfigurationValidationService validationService = new ConfigurationValidationService(Database, Logging, routingDecisionService);
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, validationService, routingDecisionService);
+
+            ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Explain Endpoint",
+                Hostname = "explain.local"
+            }).ConfigureAwait(false);
+
+            ModelDefinition definition = await Database.ModelDefinition.CreateAsync(new ModelDefinition
+            {
+                TenantId = TestTenantId,
+                Name = "llama3.2:latest"
+            }).ConfigureAwait(false);
+
+            ModelConfiguration configuration = await Database.ModelConfiguration.CreateAsync(new ModelConfiguration
+            {
+                TenantId = TestTenantId,
+                Name = "Explain Config",
+                Model = "llama3.2:latest",
+                MaxTokens = 256
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Explain VMR",
+                BasePath = "/v1.0/api/explain/",
+                ModelRunnerEndpointIds = new List<string> { endpoint.Id },
+                ModelDefinitionIds = new List<string> { definition.Id },
+                ModelConfigurationIds = new List<string> { configuration.Id },
+                ModelConfigurationMappings = new Dictionary<string, string>
+                {
+                    { definition.Name, configuration.Id }
+                }
+            }).ConfigureAwait(false);
+
+            RoutingDecision decision = await controller.ExplainRouting(TestTenantId, vmr.Id, new RoutingSimulationRequest
+            {
+                Method = "POST",
+                RelativePath = "/api/chat",
+                Body = "{\"model\":\"llama3.2:latest\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}"
+            }).ConfigureAwait(false);
+
+            decision.Success.Should().BeTrue();
+            decision.SelectedEndpointId.Should().Be(endpoint.Id);
+            decision.RequestWasMutated.Should().BeTrue();
+            decision.MutationSummary.Should().NotBeNull();
+            decision.MutationSummary.Changes.Should().Contain(item => item.PropertyName == "max_tokens");
+            decision.Candidates.Should().ContainSingle(item => item.EndpointId == endpoint.Id && item.Included);
+            decision.Timeline.Should().NotBeEmpty();
+        }
 
         #endregion
     }

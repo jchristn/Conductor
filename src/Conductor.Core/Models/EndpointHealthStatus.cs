@@ -29,6 +29,11 @@ namespace Conductor.Core.Models
         public DateTime? LastCheckUtc { get; set; }
 
         /// <summary>
+        /// Operator-managed service state.
+        /// </summary>
+        public Enums.EndpointServiceStateEnum ServiceState { get; set; } = Enums.EndpointServiceStateEnum.Normal;
+
+        /// <summary>
         /// UTC timestamp when the endpoint last became healthy.
         /// </summary>
         public DateTime? LastHealthyUtc { get; set; }
@@ -121,6 +126,7 @@ namespace Conductor.Core.Models
                 EndpointId = state.EndpointId,
                 EndpointName = state.EndpointName ?? endpoint?.Name,
                 IsHealthy = state.IsHealthy,
+                ServiceState = endpoint?.ServiceState ?? state.ServiceState,
                 LastCheckUtc = state.LastCheckUtc,
                 LastHealthyUtc = state.LastHealthyUtc,
                 LastUnhealthyUtc = state.LastUnhealthyUtc,

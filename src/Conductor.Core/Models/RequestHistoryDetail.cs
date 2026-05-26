@@ -9,6 +9,11 @@ namespace Conductor.Core.Models
     public class RequestHistoryDetail : RequestHistoryEntry
     {
         /// <summary>
+        /// Full structured routing decision when available.
+        /// </summary>
+        public RoutingDecision RoutingDecision { get; set; } = null;
+
+        /// <summary>
         /// HTTP request headers.
         /// </summary>
         public Dictionary<string, string> RequestHeaders
@@ -73,12 +78,33 @@ namespace Conductor.Core.Models
                 TenantGuid = entry.TenantGuid,
                 VirtualModelRunnerGuid = entry.VirtualModelRunnerGuid,
                 VirtualModelRunnerName = entry.VirtualModelRunnerName,
+                RequestorUserGuid = entry.RequestorUserGuid,
+                RequestorUserEmail = entry.RequestorUserEmail,
+                CredentialGuid = entry.CredentialGuid,
+                CredentialName = entry.CredentialName,
+                LoadBalancingPolicyGuid = entry.LoadBalancingPolicyGuid,
+                LoadBalancingPolicyName = entry.LoadBalancingPolicyName,
                 ModelEndpointGuid = entry.ModelEndpointGuid,
                 ModelEndpointName = entry.ModelEndpointName,
                 ModelEndpointUrl = entry.ModelEndpointUrl,
                 ModelDefinitionGuid = entry.ModelDefinitionGuid,
                 ModelDefinitionName = entry.ModelDefinitionName,
                 ModelConfigurationGuid = entry.ModelConfigurationGuid,
+                RequestedModel = entry.RequestedModel,
+                EffectiveModel = entry.EffectiveModel,
+                RequestType = entry.RequestType,
+                RoutingOutcomeCode = entry.RoutingOutcomeCode,
+                DenialReasonCode = entry.DenialReasonCode,
+                DenialReason = entry.DenialReason,
+                SessionAffinityOutcome = entry.SessionAffinityOutcome,
+                MutationSummary = entry.MutationSummary,
+                ExplanationSummary = entry.ExplanationSummary,
+                RequestBodyRetained = entry.RequestBodyRetained,
+                RequestBodyRedacted = entry.RequestBodyRedacted,
+                RequestHeadersRedacted = entry.RequestHeadersRedacted,
+                ResponseBodyRetained = entry.ResponseBodyRetained,
+                ResponseBodyRedacted = entry.ResponseBodyRedacted,
+                ResponseHeadersRedacted = entry.ResponseHeadersRedacted,
                 RequestorSourceIp = entry.RequestorSourceIp,
                 HttpMethod = entry.HttpMethod,
                 HttpUrl = entry.HttpUrl,

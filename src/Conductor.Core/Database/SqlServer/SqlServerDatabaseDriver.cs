@@ -75,85 +75,45 @@ namespace Conductor.Core.Database.SqlServer
         /// <returns>Task.</returns>
         private async Task RunMigrationsAsync(CancellationToken token = default)
         {
-            // Check if requesthistoryenabled column exists in virtualmodelrunners
-            bool columnExists = await ColumnExistsAsync("virtualmodelrunners", "requesthistoryenabled", token).ConfigureAwait(false);
-            if (!columnExists)
-            {
-                try
-                {
-                    await ExecuteQueryAsync(TableQueries.AddRequestHistoryEnabledColumn, false, token).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Column may already exist in some edge cases, ignore the error
-                }
-            }
+            await EnsureColumnAsync("virtualmodelrunners", "requesthistoryenabled", TableQueries.AddRequestHistoryEnabledColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "loadbalancingpolicyid", TableQueries.AddLoadBalancingPolicyIdColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "modelconfigurationmappings", "ALTER TABLE virtualmodelrunners ADD modelconfigurationmappings NVARCHAR(MAX);", token).ConfigureAwait(false);
 
-            // Check if requesttransfertype column exists in requesthistory
-            bool requestTransferTypeExists = await ColumnExistsAsync("requesthistory", "requesttransfertype", token).ConfigureAwait(false);
-            if (!requestTransferTypeExists)
-            {
-                try
-                {
-                    await ExecuteQueryAsync(TableQueries.AddRequestTransferTypeColumn, false, token).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Column may already exist in some edge cases, ignore the error
-                }
-            }
+            await EnsureColumnAsync("modelrunnerendpoints", "rigmonitor", TableQueries.AddRigMonitorColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "servicestate", "ALTER TABLE modelrunnerendpoints ADD servicestate INT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
 
-            // Check if responsetransfertype column exists in requesthistory
-            bool responseTransferTypeExists = await ColumnExistsAsync("requesthistory", "responsetransfertype", token).ConfigureAwait(false);
-            if (!responseTransferTypeExists)
-            {
-                try
-                {
-                    await ExecuteQueryAsync(TableQueries.AddResponseTransferTypeColumn, false, token).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Column may already exist in some edge cases, ignore the error
-                }
-            }
+            await EnsureColumnAsync("requesthistory", "requesttransfertype", TableQueries.AddRequestTransferTypeColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "responsetransfertype", TableQueries.AddResponseTransferTypeColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "firsttokentimems", TableQueries.AddFirstTokenTimeMsColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "requestoruserguid", "ALTER TABLE requesthistory ADD requestoruserguid NVARCHAR(48);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "requestoruseremail", "ALTER TABLE requesthistory ADD requestoruseremail NVARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "credentialguid", "ALTER TABLE requesthistory ADD credentialguid NVARCHAR(48);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "credentialname", "ALTER TABLE requesthistory ADD credentialname NVARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "loadbalancingpolicyguid", "ALTER TABLE requesthistory ADD loadbalancingpolicyguid NVARCHAR(48);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "loadbalancingpolicyname", "ALTER TABLE requesthistory ADD loadbalancingpolicyname NVARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "requestedmodel", "ALTER TABLE requesthistory ADD requestedmodel NVARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "effectivemodel", "ALTER TABLE requesthistory ADD effectivemodel NVARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "requesttype", "ALTER TABLE requesthistory ADD requesttype NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "routingoutcomecode", "ALTER TABLE requesthistory ADD routingoutcomecode NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "denialreasoncode", "ALTER TABLE requesthistory ADD denialreasoncode NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "denialreason", "ALTER TABLE requesthistory ADD denialreason NVARCHAR(MAX);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "sessionaffinityoutcome", "ALTER TABLE requesthistory ADD sessionaffinityoutcome NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "mutationsummary", "ALTER TABLE requesthistory ADD mutationsummary NVARCHAR(MAX);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "explanationsummary", "ALTER TABLE requesthistory ADD explanationsummary NVARCHAR(MAX);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "requestbodyretained", "ALTER TABLE requesthistory ADD requestbodyretained BIT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "requestbodyredacted", "ALTER TABLE requesthistory ADD requestbodyredacted BIT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "requestheadersredacted", "ALTER TABLE requesthistory ADD requestheadersredacted BIT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "responsebodyretained", "ALTER TABLE requesthistory ADD responsebodyretained BIT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "responsebodyredacted", "ALTER TABLE requesthistory ADD responsebodyredacted BIT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "responseheadersredacted", "ALTER TABLE requesthistory ADD responseheadersredacted BIT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
 
-            // Check if firsttokentimems column exists in requesthistory
-            bool firstTokenTimeMsExists = await ColumnExistsAsync("requesthistory", "firsttokentimems", token).ConfigureAwait(false);
-            if (!firstTokenTimeMsExists)
-            {
-                try
-                {
-                    await ExecuteQueryAsync(TableQueries.AddFirstTokenTimeMsColumn, false, token).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Column may already exist in some edge cases, ignore the error
-                }
-            }
-
-            bool rigMonitorExists = await ColumnExistsAsync("modelrunnerendpoints", "rigmonitor", token).ConfigureAwait(false);
-            if (!rigMonitorExists)
-            {
-                try
-                {
-                    await ExecuteQueryAsync(TableQueries.AddRigMonitorColumn, false, token).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
-            }
-
-            bool policyIdExists = await ColumnExistsAsync("virtualmodelrunners", "loadbalancingpolicyid", token).ConfigureAwait(false);
-            if (!policyIdExists)
-            {
-                try
-                {
-                    await ExecuteQueryAsync(TableQueries.AddLoadBalancingPolicyIdColumn, false, token).ConfigureAwait(false);
-                }
-                catch
-                {
-                }
-            }
+            await EnsureIndexAsync("idx_requesthistory_requestoruserguid", "CREATE INDEX idx_requesthistory_requestoruserguid ON requesthistory(requestoruserguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_credentialguid", "CREATE INDEX idx_requesthistory_credentialguid ON requesthistory(credentialguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_loadbalancingpolicyguid", "CREATE INDEX idx_requesthistory_loadbalancingpolicyguid ON requesthistory(loadbalancingpolicyguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_requestedmodel", "CREATE INDEX idx_requesthistory_requestedmodel ON requesthistory(requestedmodel);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_effectivemodel", "CREATE INDEX idx_requesthistory_effectivemodel ON requesthistory(effectivemodel);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_denialreasoncode", "CREATE INDEX idx_requesthistory_denialreasoncode ON requesthistory(denialreasoncode);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_sessionaffinityoutcome", "CREATE INDEX idx_requesthistory_sessionaffinityoutcome ON requesthistory(sessionaffinityoutcome);", token).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -170,6 +130,49 @@ namespace Conductor.Core.Database.SqlServer
 
             if (result == null || result.Rows.Count < 1) return false;
             return Convert.ToInt32(result.Rows[0]["cnt"]) > 0;
+        }
+
+        private async Task<bool> IndexExistsAsync(string indexName, CancellationToken token = default)
+        {
+            string query = "SELECT COUNT(*) AS cnt FROM sys.indexes WHERE name = '" + Sanitize(indexName) + "';";
+            DataTable result = await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return false;
+            return Convert.ToInt32(result.Rows[0]["cnt"]) > 0;
+        }
+
+        private async Task EnsureColumnAsync(string tableName, string columnName, string query, CancellationToken token = default)
+        {
+            bool exists = await ColumnExistsAsync(tableName, columnName, token).ConfigureAwait(false);
+            if (exists)
+            {
+                return;
+            }
+
+            try
+            {
+                await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        private async Task EnsureIndexAsync(string indexName, string query, CancellationToken token = default)
+        {
+            bool exists = await IndexExistsAsync(indexName, token).ConfigureAwait(false);
+            if (exists)
+            {
+                return;
+            }
+
+            try
+            {
+                await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
         }
 
         /// <summary>

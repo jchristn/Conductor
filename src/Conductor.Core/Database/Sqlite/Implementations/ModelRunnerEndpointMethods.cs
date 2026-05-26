@@ -36,7 +36,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
 
             string query = "INSERT INTO modelrunnerendpoints (id, tenantid, name, hostname, port, apikey, apitype, usessl, timeoutms, active, " +
                            "healthcheckurl, healthcheckmethod, healthcheckintervalms, healthchecktimeoutms, healthcheckexpectedstatuscode, " +
-                           "unhealthythreshold, healthythreshold, healthcheckuseauth, maxparallelrequests, weight, rigmonitor, " +
+                           "unhealthythreshold, healthythreshold, healthcheckuseauth, maxparallelrequests, weight, servicestate, rigmonitor, " +
                            "createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(endpoint.Id) + "', " +
                            "'" + _Driver.Sanitize(endpoint.TenantId) + "', " +
@@ -58,6 +58,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
                            endpoint.MaxParallelRequests + ", " +
                            endpoint.Weight + ", " +
+                           (int)endpoint.ServiceState + ", " +
                            _Driver.FormatNullableString(endpoint.RigMonitorJson) + ", " +
                            "'" + _Driver.FormatDateTime(endpoint.CreatedUtc) + "', " +
                            "'" + _Driver.FormatDateTime(endpoint.LastUpdateUtc) + "', " +
@@ -126,6 +127,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "healthcheckuseauth = " + _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
                            "maxparallelrequests = " + endpoint.MaxParallelRequests + ", " +
                            "weight = " + endpoint.Weight + ", " +
+                           "servicestate = " + (int)endpoint.ServiceState + ", " +
                            "rigmonitor = " + _Driver.FormatNullableString(endpoint.RigMonitorJson) + ", " +
                            "lastupdateutc = '" + _Driver.FormatDateTime(endpoint.LastUpdateUtc) + "', " +
                            "labels = " + _Driver.FormatNullableString(endpoint.LabelsJson) + ", " +

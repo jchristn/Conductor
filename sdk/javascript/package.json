@@ -1,0 +1,10 @@
+{
+  "name": "@conductor/sdk-javascript",
+  "version": "0.1.0",
+  "description": "JavaScript client for Conductor management-plane features.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test"
+  }
+}

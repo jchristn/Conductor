@@ -19,6 +19,21 @@
       "key": "policyId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "vmrId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "endpointId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "historyEntryId",
+      "value": "",
+      "type": "string"
     }
   ],
   "auth": {
@@ -802,6 +817,161 @@
               ]
             },
             "description": "Delete all request history entries matching the filter criteria."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation & Preview",
+      "item": [
+        {
+          "name": "Validate Virtual Model Runner",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Preview Route\",\n  \"BasePath\": \"/v1.0/api/preview-route/\",\n  \"ApiType\": \"OpenAI\",\n  \"ModelRunnerEndpointIds\": [],\n  \"ModelConfigurationIds\": [],\n  \"ModelDefinitionIds\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners", "validate"]
+            }
+          }
+        },
+        {
+          "name": "Validate Model Runner Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Preview Endpoint\",\n  \"Hostname\": \"localhost\",\n  \"Port\": 11434,\n  \"ApiType\": \"Ollama\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "validate"]
+            }
+          }
+        },
+        {
+          "name": "Get Effective Virtual Model Runner Configuration",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/effective?tenantId={{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}", "effective"],
+              "query": [
+                { "key": "tenantId", "value": "{{tenantId}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Routing Explanation",
+      "item": [
+        {
+          "name": "Explain Routing (Success Candidate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Method\": \"POST\",\n  \"RelativePath\": \"/v1/chat/completions\",\n  \"SourceIp\": \"127.0.0.1\",\n  \"Headers\": {\n    \"x-session-id\": \"demo-session\"\n  },\n  \"Body\": \"{\\\"model\\\":\\\"gpt-4o-mini\\\",\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"hello\\\"}]}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/explain-routing?tenantId={{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}", "explain-routing"],
+              "query": [
+                { "key": "tenantId", "value": "{{tenantId}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Endpoint States",
+      "item": [
+        {
+          "name": "Drain Endpoint",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/drain?tenantId={{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "drain"],
+              "query": [
+                { "key": "tenantId", "value": "{{tenantId}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resume Endpoint",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/resume?tenantId={{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "resume"],
+              "query": [
+                { "key": "tenantId", "value": "{{tenantId}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Quarantine Endpoint",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/quarantine?tenantId={{tenantId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "quarantine"],
+              "query": [
+                { "key": "tenantId", "value": "{{tenantId}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Observability",
+      "item": [
+        {
+          "name": "Get Observability Metrics Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/observability/metrics/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "observability", "metrics", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Get Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/observability/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "observability", "metrics"]
+            }
           }
         }
       ]

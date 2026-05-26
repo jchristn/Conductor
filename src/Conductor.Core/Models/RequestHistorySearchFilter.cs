@@ -21,6 +21,56 @@ namespace Conductor.Core.Models
         public string ModelEndpointGuid { get; set; } = null;
 
         /// <summary>
+        /// Filter by requestor user GUID. May be null.
+        /// </summary>
+        public string RequestorUserGuid { get; set; } = null;
+
+        /// <summary>
+        /// Filter by credential GUID. May be null.
+        /// </summary>
+        public string CredentialGuid { get; set; } = null;
+
+        /// <summary>
+        /// Filter by load-balancing policy GUID. May be null.
+        /// </summary>
+        public string LoadBalancingPolicyGuid { get; set; } = null;
+
+        /// <summary>
+        /// Filter by requested or effective model name. May be null.
+        /// </summary>
+        public string ModelName { get; set; } = null;
+
+        /// <summary>
+        /// Filter by mutation summary substring. May be null.
+        /// </summary>
+        public string MutationSummary { get; set; } = null;
+
+        /// <summary>
+        /// Filter by denial reason code. May be null.
+        /// </summary>
+        public string DenialReasonCode { get; set; } = null;
+
+        /// <summary>
+        /// Filter by session-affinity outcome. May be null.
+        /// </summary>
+        public string SessionAffinityOutcome { get; set; } = null;
+
+        /// <summary>
+        /// Filter by HTTP status class (2xx, 4xx, 5xx). May be null.
+        /// </summary>
+        public string StatusClass { get; set; } = null;
+
+        /// <summary>
+        /// Filter to entries created at or after this UTC timestamp. May be null.
+        /// </summary>
+        public System.DateTime? CreatedAfterUtc { get; set; } = null;
+
+        /// <summary>
+        /// Filter to entries created before this UTC timestamp. May be null.
+        /// </summary>
+        public System.DateTime? CreatedBeforeUtc { get; set; } = null;
+
+        /// <summary>
         /// Filter by requestor source IP. May be null.
         /// </summary>
         public string RequestorSourceIp { get; set; } = null;

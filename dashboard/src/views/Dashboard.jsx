@@ -1,14 +1,35 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import RequestHistoryChart from '../components/RequestHistoryChart';
 
 function Dashboard() {
-  const { counts, fetchCounts } = useApp();
+  const { api, counts, fetchCounts } = useApp();
+  const [observability, setObservability] = useState(null);
 
   useEffect(() => {
     fetchCounts();
   }, [fetchCounts]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.getObservabilityMetricsSummary()
+      .then((result) => {
+        if (!cancelled) {
+          setObservability(result);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setObservability(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
 
   const cards = [
     { label: 'Tenants', count: counts.tenants, path: '/tenants', color: '#3b82f6', tooltip: 'Organizational units for grouping resources' },
@@ -30,6 +51,40 @@ function Dashboard() {
       </div>
 
       <RequestHistoryChart />
+
+      {observability?.Overall && (
+        <section className="dashboard-section">
+          <div className="request-history-chart-header">
+            <h2>Operational Signals</h2>
+          </div>
+          <div className="observability-grid">
+            <div className="metric">
+              <span className="metric-label">Total Requests</span>
+              <span className="metric-value">{observability.Overall.TotalRequests?.toLocaleString?.() || 0}</span>
+            </div>
+            <div className="metric">
+              <span className="metric-label">Denied Requests</span>
+              <span className="metric-value">{observability.Overall.DeniedRequests?.toLocaleString?.() || 0}</span>
+            </div>
+            <div className="metric">
+              <span className="metric-label">Session Hit Rate</span>
+              <span className="metric-value">{observability.Overall.SessionAffinityHitRate || 0}%</span>
+            </div>
+            <div className="metric">
+              <span className="metric-label">Route Decision P95</span>
+              <span className="metric-value">{observability.Overall.RouteDecisionDurationMs?.P95 || 0} ms</span>
+            </div>
+            <div className="metric">
+              <span className="metric-label">First Token P95</span>
+              <span className="metric-value">{observability.Overall.FirstTokenTimeMs?.P95 || 0} ms</span>
+            </div>
+            <div className="metric">
+              <span className="metric-label">Telemetry Freshness Failures</span>
+              <span className="metric-value">{observability.Overall.TelemetryFreshnessFailures?.toLocaleString?.() || 0}</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="dashboard-sections">
         <section className="dashboard-section">

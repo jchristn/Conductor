@@ -36,6 +36,54 @@ function normalizeVmrBasePath(basePath) {
   return `${VMR_BASE_PATH_PREFIX}${suffix}/`;
 }
 
+function normalizeServiceState(value) {
+  if (value === 1 || value === 'Draining') return 'Draining';
+  if (value === 2 || value === 'Quarantined') return 'Quarantined';
+  return 'Normal';
+}
+
+function getServiceStatePresentation(value) {
+  const serviceState = normalizeServiceState(value);
+
+  switch (serviceState) {
+    case 'Draining':
+      return { label: 'Draining', tone: 'warning' };
+    case 'Quarantined':
+      return { label: 'Quarantined', tone: 'danger' };
+    default:
+      return { label: 'Normal', tone: 'success' };
+  }
+}
+
+function getDefaultExplainRequest(apiType) {
+  switch (apiType) {
+    case 'Gemini':
+      return {
+        Method: 'POST',
+        RelativePath: '/v1beta/models/gemini-1.5-flash:generateContent',
+        SourceIp: '127.0.0.1',
+        HeadersJson: '{}',
+        Body: '{\n  "contents": [{ "parts": [{ "text": "hello" }] }]\n}'
+      };
+    case 'Ollama':
+      return {
+        Method: 'POST',
+        RelativePath: '/api/chat',
+        SourceIp: '127.0.0.1',
+        HeadersJson: '{}',
+        Body: '{\n  "model": "llama3.1",\n  "messages": [{ "role": "user", "content": "hello" }]\n}'
+      };
+    default:
+      return {
+        Method: 'POST',
+        RelativePath: '/v1/chat/completions',
+        SourceIp: '127.0.0.1',
+        HeadersJson: '{}',
+        Body: '{\n  "model": "gpt-4o-mini",\n  "messages": [{ "role": "user", "content": "hello" }]\n}'
+      };
+  }
+}
+
 function VirtualModelRunners() {
   const { api, setError, serverUrl } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
@@ -55,6 +103,15 @@ function VirtualModelRunners() {
   const [showHealth, setShowHealth] = useState(false);
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [showEffective, setShowEffective] = useState(false);
+  const [effectiveConfig, setEffectiveConfig] = useState(null);
+  const [effectiveLoading, setEffectiveLoading] = useState(false);
+  const [showExplain, setShowExplain] = useState(false);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [routingExplanation, setRoutingExplanation] = useState(null);
+  const [explainRequest, setExplainRequest] = useState(getDefaultExplainRequest('OpenAI'));
   const [formData, setFormData] = useState({
     TenantId: '',
     Name: '',
@@ -119,6 +176,7 @@ function VirtualModelRunners() {
 
   const handleCreate = () => {
     setEditMode(false);
+    setValidationResult(null);
     setFormData({
       TenantId: '',
       Name: '',
@@ -151,6 +209,7 @@ function VirtualModelRunners() {
   const handleEdit = (vmr) => {
     setEditMode(true);
     setSelectedVmr(vmr);
+    setValidationResult(null);
     setFormData({
       TenantId: vmr.TenantId || '',
       Name: vmr.Name || '',
@@ -204,6 +263,130 @@ function VirtualModelRunners() {
     }
   };
 
+  const buildVmrPayload = () => {
+    let labels = [];
+    let tags = {};
+    let modelConfigurationMappings = {};
+
+    try {
+      labels = JSON.parse(formData.LabelsJson || '[]');
+    } catch (err) {
+      throw new Error('Invalid JSON in Labels');
+    }
+
+    try {
+      tags = JSON.parse(formData.TagsJson || '{}');
+    } catch (err) {
+      throw new Error('Invalid JSON in Tags');
+    }
+
+    try {
+      modelConfigurationMappings = JSON.parse(formData.ModelConfigurationMappingsJson || '{}');
+    } catch (err) {
+      throw new Error('Invalid JSON in Model Configuration Mappings');
+    }
+
+    return {
+      TenantId: formData.TenantId || null,
+      Name: formData.Name,
+      Hostname: formData.Hostname || null,
+      BasePath: normalizeVmrBasePath(formData.BasePath),
+      ApiType: formData.ApiType,
+      LoadBalancingMode: formData.LoadBalancingMode,
+      LoadBalancingPolicyId: formData.LoadBalancingPolicyId || null,
+      ModelRunnerEndpointIds: formData.ModelRunnerEndpointIds,
+      ModelConfigurationIds: formData.ModelConfigurationIds,
+      ModelDefinitionIds: formData.ModelDefinitionIds,
+      ModelConfigurationMappings: modelConfigurationMappings,
+      TimeoutMs: parseInt(formData.TimeoutMs),
+      AllowEmbeddings: formData.AllowEmbeddings,
+      AllowCompletions: formData.AllowCompletions,
+      AllowModelManagement: formData.AllowModelManagement,
+      StrictMode: formData.StrictMode,
+      RequestHistoryEnabled: formData.RequestHistoryEnabled,
+      SessionAffinityMode: formData.SessionAffinityMode,
+      SessionAffinityHeader: formData.SessionAffinityHeader || null,
+      SessionTimeoutMs: parseInt(formData.SessionTimeoutMs),
+      SessionMaxEntries: parseInt(formData.SessionMaxEntries),
+      Active: formData.Active,
+      Labels: labels,
+      Tags: tags
+    };
+  };
+
+  const validateDraft = async () => {
+    setValidationLoading(true);
+    try {
+      const payload = buildVmrPayload();
+      const result = await api.validateVirtualModelRunner(payload, editMode ? selectedVmr?.Id : null);
+      setValidationResult(result);
+      return { payload, result };
+    } catch (err) {
+      if (err.message?.startsWith('Invalid JSON') || err.message?.startsWith('Base path')) {
+        setError(err.message);
+      } else {
+        setError('Failed to validate virtual model runner: ' + err.message);
+      }
+      throw err;
+    } finally {
+      setValidationLoading(false);
+    }
+  };
+
+  const handleViewEffectiveConfiguration = async (vmr) => {
+    setSelectedVmr(vmr);
+    setShowEffective(true);
+    setEffectiveLoading(true);
+    try {
+      const result = await api.getVirtualModelRunnerEffectiveConfiguration(vmr.Id, vmr.TenantId);
+      setEffectiveConfig(result);
+    } catch (err) {
+      setError('Failed to fetch effective configuration: ' + err.message);
+      setEffectiveConfig(null);
+    } finally {
+      setEffectiveLoading(false);
+    }
+  };
+
+  const handleOpenExplainRouting = (vmr) => {
+    setSelectedVmr(vmr);
+    setRoutingExplanation(null);
+    setExplainRequest(getDefaultExplainRequest(vmr?.ApiType || 'OpenAI'));
+    setShowExplain(true);
+  };
+
+  const handleExplainRouting = async (e) => {
+    e.preventDefault();
+    if (!selectedVmr) {
+      return;
+    }
+
+    setExplainLoading(true);
+    try {
+      let headers = {};
+      try {
+        headers = JSON.parse(explainRequest.HeadersJson || '{}');
+      } catch (err) {
+        setError('Invalid JSON in Explain Routing headers');
+        return;
+      }
+
+      const result = await api.explainVirtualModelRunnerRouting(selectedVmr.Id, {
+        Method: explainRequest.Method,
+        RelativePath: explainRequest.RelativePath,
+        SourceIp: explainRequest.SourceIp,
+        Headers: headers,
+        Body: explainRequest.Body
+      }, selectedVmr.TenantId);
+      setRoutingExplanation(result);
+    } catch (err) {
+      setError('Failed to explain routing: ' + err.message);
+      setRoutingExplanation(null);
+    } finally {
+      setExplainLoading(false);
+    }
+  };
+
   const handleViewHealth = async (vmr) => {
     setSelectedVmr(vmr);
     setShowHealth(true);
@@ -247,76 +430,25 @@ function VirtualModelRunners() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      let labels = [];
-      let tags = {};
-      let modelConfigurationMappings = {};
-
-      try {
-        labels = JSON.parse(formData.LabelsJson || '[]');
-      } catch (err) {
-        setError('Invalid JSON in Labels');
+      const { payload, result } = await validateDraft();
+      if (!result?.IsValid) {
+        setError('Resolve the blocking validation issues before saving this virtual model runner.');
         return;
       }
-
-      try {
-        tags = JSON.parse(formData.TagsJson || '{}');
-      } catch (err) {
-        setError('Invalid JSON in Tags');
-        return;
-      }
-
-      try {
-        modelConfigurationMappings = JSON.parse(formData.ModelConfigurationMappingsJson || '{}');
-      } catch (err) {
-        setError('Invalid JSON in Model Configuration Mappings');
-        return;
-      }
-
-      let normalizedBasePath = '';
-      try {
-        normalizedBasePath = normalizeVmrBasePath(formData.BasePath);
-      } catch (err) {
-        setError(err.message);
-        return;
-      }
-
-      const data = {
-        TenantId: formData.TenantId || null,
-        Name: formData.Name,
-        Hostname: formData.Hostname || null,
-        BasePath: normalizedBasePath,
-        ApiType: formData.ApiType,
-        LoadBalancingMode: formData.LoadBalancingMode,
-        LoadBalancingPolicyId: formData.LoadBalancingPolicyId || null,
-        ModelRunnerEndpointIds: formData.ModelRunnerEndpointIds,
-        ModelConfigurationIds: formData.ModelConfigurationIds,
-        ModelDefinitionIds: formData.ModelDefinitionIds,
-        ModelConfigurationMappings: modelConfigurationMappings,
-        TimeoutMs: parseInt(formData.TimeoutMs),
-        AllowEmbeddings: formData.AllowEmbeddings,
-        AllowCompletions: formData.AllowCompletions,
-        AllowModelManagement: formData.AllowModelManagement,
-        StrictMode: formData.StrictMode,
-        RequestHistoryEnabled: formData.RequestHistoryEnabled,
-        SessionAffinityMode: formData.SessionAffinityMode,
-        SessionAffinityHeader: formData.SessionAffinityHeader || null,
-        SessionTimeoutMs: parseInt(formData.SessionTimeoutMs),
-        SessionMaxEntries: parseInt(formData.SessionMaxEntries),
-        Active: formData.Active,
-        Labels: labels,
-        Tags: tags
-      };
 
       if (editMode) {
-        await api.updateVirtualModelRunner(selectedVmr.Id, data);
+        await api.updateVirtualModelRunner(selectedVmr.Id, payload);
       } else {
-        await api.createVirtualModelRunner(data);
+        await api.createVirtualModelRunner(payload);
         onEntityCreated('vmr');
       }
       setShowForm(false);
+      setValidationResult(null);
       fetchData();
     } catch (err) {
-      setError('Failed to save virtual model runner: ' + err.message);
+      if (!err.message?.startsWith('Invalid JSON') && !err.message?.startsWith('Base path')) {
+        setError('Failed to save virtual model runner: ' + err.message);
+      }
     }
   };
 
@@ -427,17 +559,29 @@ function VirtualModelRunners() {
         </span>
       )
     },
-    {
-      key: 'Endpoints',
-      label: 'Endpoints',
+      {
+        key: 'Endpoints',
+        label: 'Endpoints',
       tooltip: 'Number of backend model runner endpoints attached to this VMR',
       width: '80px',
       render: (item) => (item.ModelRunnerEndpointIds || []).length,
       sortValue: (item) => (item.ModelRunnerEndpointIds || []).length
     },
-    {
-      key: 'Active',
-      label: 'Status',
+      {
+        key: 'RequestHistoryEnabled',
+        label: 'History',
+        tooltip: 'Whether request history capture is enabled for this route',
+        width: '100px',
+        render: (item) => (
+          <span className={`service-state-badge ${item.RequestHistoryEnabled ? 'success' : 'neutral'}`}>
+            {item.RequestHistoryEnabled ? 'Enabled' : 'Off'}
+          </span>
+        ),
+        filterValue: (item) => item.RequestHistoryEnabled ? 'enabled' : 'disabled'
+      },
+      {
+        key: 'Active',
+        label: 'Status',
       tooltip: 'Whether this VMR is accepting requests',
       width: '120px',
       render: (item) => (
@@ -455,13 +599,15 @@ function VirtualModelRunners() {
       filterable: false,
       isAction: true,
       render: (item) => (
-        <ActionMenu
-          actions={[
-            { label: 'View Details', onClick: () => handleViewMetadata(item) },
-            { label: 'Health Data', onClick: () => handleViewHealth(item) },
-            { label: 'Edit', onClick: () => handleEdit(item) },
-            { divider: true },
-            { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
+          <ActionMenu
+            actions={[
+              { label: 'View Details', onClick: () => handleViewMetadata(item) },
+              { label: 'Health Data', onClick: () => handleViewHealth(item) },
+              { label: 'Effective Config', onClick: () => handleViewEffectiveConfiguration(item) },
+              { label: 'Explain Routing', onClick: () => handleOpenExplainRouting(item) },
+              { label: 'Edit', onClick: () => handleEdit(item) },
+              { divider: true },
+              { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
           ]}
         />
       )
@@ -491,6 +637,26 @@ function VirtualModelRunners() {
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Virtual Model Runner' : 'Create Virtual Model Runner'} wide>
         <form onSubmit={handleSubmit}>
+          {validationResult && (
+            <div className={`validation-panel ${validationResult.IsValid ? 'success' : 'error'}`}>
+              <strong>{validationResult.IsValid ? 'Draft looks internally consistent.' : 'Resolve the blocking validation issues before saving.'}</strong>
+              {validationResult.Errors?.length > 0 && (
+                <ul className="validation-list">
+                  {validationResult.Errors.map((issue, index) => (
+                    <li key={`vmr-error-${index}`}>{issue.Message}</li>
+                  ))}
+                </ul>
+              )}
+              {validationResult.Warnings?.length > 0 && (
+                <ul className="validation-list warning">
+                  {validationResult.Warnings.map((issue, index) => (
+                    <li key={`vmr-warning-${index}`}>{issue.Message}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <div className="form-group">
             <label htmlFor="tenantId" title="Organizational unit that owns this VMR and its associated resources">Tenant</label>
             <select
@@ -848,13 +1014,16 @@ function VirtualModelRunners() {
             </label>
           </div>
 
-          <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary">
-              {editMode ? 'Update' : 'Create'}
-            </button>
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn-secondary" onClick={() => validateDraft().catch(() => {})} disabled={validationLoading}>
+                {validationLoading ? 'Validating...' : 'Validate'}
+              </button>
+              <button type="submit" className="btn-primary">
+                {editMode ? 'Update' : 'Create'}
+              </button>
           </div>
         </form>
       </Modal>
@@ -886,19 +1055,31 @@ function VirtualModelRunners() {
         <div className="health-modal">
           {selectedVmr && (
             <div className="health-header">
-              <div className="health-summary">
-                <h3>{selectedVmr.Name}</h3>
-                {healthData && (
-                  <span
-                    className={`health-badge ${healthData.OverallHealthy ? 'healthy' : 'unhealthy'}`}
-                    title={healthData.OverallHealthy
-                      ? `All ${healthData.TotalEndpointCount} endpoint(s) are passing health checks`
-                      : `${healthData.TotalEndpointCount - healthData.HealthyEndpointCount} of ${healthData.TotalEndpointCount} endpoint(s) are failing health checks`}
-                  >
-                    {healthData.OverallHealthy ? 'All Healthy' : 'Issues Detected'}
-                  </span>
-                )}
-              </div>
+                <div className="health-summary">
+                  <h3>{selectedVmr.Name}</h3>
+                  {healthData && (
+                    <div className="summary-badge-row">
+                      <span
+                        className={`health-badge ${healthData.OverallHealthy ? 'healthy' : 'unhealthy'}`}
+                        title={healthData.OverallHealthy
+                          ? `All ${healthData.TotalEndpointCount} endpoint(s) are passing health checks`
+                          : `${healthData.TotalEndpointCount - healthData.HealthyEndpointCount} of ${healthData.TotalEndpointCount} endpoint(s) are failing health checks`}
+                      >
+                        {healthData.OverallHealthy ? 'All Healthy' : 'Issues Detected'}
+                      </span>
+                      {healthData.DrainingEndpointCount > 0 && (
+                        <span className="service-state-badge warning" title="Endpoints intentionally draining new work">
+                          {healthData.DrainingEndpointCount} Draining
+                        </span>
+                      )}
+                      {healthData.QuarantinedEndpointCount > 0 && (
+                        <span className="service-state-badge danger" title="Endpoints quarantined from routing">
+                          {healthData.QuarantinedEndpointCount} Quarantined
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               {healthData && selectedVmr.SessionAffinityMode && selectedVmr.SessionAffinityMode !== 'None' && (
                 <span className="health-badge" style={{ marginLeft: '8px', fontSize: '0.85em' }} title="Active session affinity pins for this VMR">
                   Sessions: {healthData.ActiveSessionCount ?? 0} / {selectedVmr.SessionMaxEntries}
@@ -922,8 +1103,9 @@ function VirtualModelRunners() {
                 <thead>
                   <tr>
                     <th title="Backend model runner endpoint name and any error details">Endpoint</th>
-                    <th title="Current health check status based on periodic monitoring">Status</th>
-                    <th title="Active requests being proxied vs. configured maximum (0 = unlimited)">In-Flight</th>
+                      <th title="Current health check status based on periodic monitoring">Status</th>
+                      <th title="Operator-managed routing state for this endpoint">Service State</th>
+                      <th title="Active requests being proxied vs. configured maximum (0 = unlimited)">In-Flight</th>
                     <th title="Relative load balancing weight - higher values receive more traffic">Weight</th>
                     <th title="Percentage of time this endpoint has been healthy since monitoring started">Uptime</th>
                     <th title="When the most recent health check was performed">Last Check</th>
@@ -938,19 +1120,24 @@ function VirtualModelRunners() {
                           {ep.LastError && <small className="error-text" title="Error from the most recent failed health check">{ep.LastError}</small>}
                         </div>
                       </td>
-                      <td>
-                        <span
-                          className={`status-badge ${ep.IsHealthy ? 'healthy' : 'unhealthy'}`}
+                        <td>
+                          <span
+                            className={`status-badge ${ep.IsHealthy ? 'healthy' : 'unhealthy'}`}
                           title={ep.IsHealthy
                             ? `Passing health checks since ${ep.LastHealthyUtc ? new Date(ep.LastHealthyUtc).toLocaleString() : 'unknown'}`
                             : `Failing health checks${ep.LastError ? ': ' + ep.LastError : ''}`}
                         >
                           {ep.IsHealthy ? 'Healthy' : 'Unhealthy'}
-                        </span>
-                      </td>
-                      <td title={`${ep.InFlightRequests} active request(s) of ${ep.MaxParallelRequests === 0 ? 'unlimited' : ep.MaxParallelRequests} maximum`}>
-                        {ep.InFlightRequests} / {ep.MaxParallelRequests === 0 ? '\u221E' : ep.MaxParallelRequests}
-                      </td>
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`service-state-badge ${getServiceStatePresentation(ep.ServiceState).tone}`}>
+                            {getServiceStatePresentation(ep.ServiceState).label}
+                          </span>
+                        </td>
+                        <td title={`${ep.InFlightRequests} active request(s) of ${ep.MaxParallelRequests === 0 ? 'unlimited' : ep.MaxParallelRequests} maximum`}>
+                          {ep.InFlightRequests} / {ep.MaxParallelRequests === 0 ? '\u221E' : ep.MaxParallelRequests}
+                        </td>
                       <td title="Relative weight for load balancing distribution">{ep.Weight}</td>
                       <td title={`${ep.UptimePercentage !== undefined ? ep.UptimePercentage.toFixed(2) : 0}% uptime - total healthy time: ${formatDuration(ep.TotalUptimeMs)}`}>
                         {ep.UptimePercentage !== undefined ? `${ep.UptimePercentage.toFixed(1)}%` : '-'}
@@ -973,9 +1160,182 @@ function VirtualModelRunners() {
             </div>
           ) : null}
         </div>
-      </Modal>
-    </div>
-  );
-}
+        </Modal>
+
+        <Modal
+          isOpen={showEffective}
+          onClose={() => { setShowEffective(false); setEffectiveConfig(null); }}
+          title={`Effective Configuration: ${selectedVmr?.Name || 'VMR'}`}
+          extraWide
+        >
+          {effectiveLoading ? (
+            <div className="loading-spinner">Loading effective configuration...</div>
+          ) : effectiveConfig ? (
+            <div className="detail-content">
+              <div className="detail-section">
+                <div className="detail-grid">
+                  <div className="detail-item"><label>Base Path</label><code>{effectiveConfig.BasePath}</code></div>
+                  <div className="detail-item"><label>API Type</label><span>{effectiveConfig.ApiType}</span></div>
+                  <div className="detail-item"><label>Load Balancing</label><span>{effectiveConfig.Policy?.Name || effectiveConfig.LoadBalancingMode}</span></div>
+                  <div className="detail-item"><label>Strict Mode</label><span>{effectiveConfig.StrictMode ? 'Enabled' : 'Disabled'}</span></div>
+                  <div className="detail-item"><label>Request History</label><span>{effectiveConfig.RequestHistoryEnabled ? 'Enabled' : 'Disabled'}</span></div>
+                  <div className="detail-item"><label>Session Affinity</label><span>{effectiveConfig.SessionAffinity?.Mode || 'None'}</span></div>
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Permissions</h3>
+                <div className="summary-badge-row">
+                  <span className={`service-state-badge ${effectiveConfig.Permissions?.AllowEmbeddings ? 'success' : 'neutral'}`}>Embeddings {effectiveConfig.Permissions?.AllowEmbeddings ? 'On' : 'Off'}</span>
+                  <span className={`service-state-badge ${effectiveConfig.Permissions?.AllowCompletions ? 'success' : 'neutral'}`}>Completions {effectiveConfig.Permissions?.AllowCompletions ? 'On' : 'Off'}</span>
+                  <span className={`service-state-badge ${effectiveConfig.Permissions?.AllowModelManagement ? 'success' : 'neutral'}`}>Model Mgmt {effectiveConfig.Permissions?.AllowModelManagement ? 'On' : 'Off'}</span>
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Resolved Endpoints</h3>
+                <div className="explain-candidate-list">
+                  {(effectiveConfig.Endpoints || []).map((endpoint) => (
+                    <div className="explain-candidate-card" key={endpoint.Id}>
+                      <div className="explain-candidate-header">
+                        <strong>{endpoint.Name}</strong>
+                        <span className={`service-state-badge ${getServiceStatePresentation(endpoint.ServiceState).tone}`}>{getServiceStatePresentation(endpoint.ServiceState).label}</span>
+                      </div>
+                      <div className="detail-grid">
+                        <div className="detail-item"><label>URL</label><code>{endpoint.Url}</code></div>
+                        <div className="detail-item"><label>Weight</label><span>{endpoint.Weight}</span></div>
+                        <div className="detail-item"><label>Max Parallel</label><span>{endpoint.MaxParallelRequests}</span></div>
+                        <div className="detail-item"><label>Active</label><span>{endpoint.Active ? 'Yes' : 'No'}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Model Resolution</h3>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <label>Definitions</label>
+                    <span>{(effectiveConfig.ModelDefinitions || []).map((item) => item.Name).join(', ') || 'None attached'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Configurations</label>
+                    <span>{(effectiveConfig.ModelConfigurations || []).map((item) => item.Name).join(', ') || 'None attached'}</span>
+                  </div>
+                </div>
+                <div className="detail-item" style={{ marginTop: '12px' }}>
+                  <label>Model Configuration Mappings</label>
+                  <div className="code-block">
+                    {JSON.stringify(effectiveConfig.ModelConfigurationMappings || {}, null, 2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="no-items">No effective configuration available.</p>
+          )}
+        </Modal>
+
+        <Modal
+          isOpen={showExplain}
+          onClose={() => { setShowExplain(false); setRoutingExplanation(null); }}
+          title={`Explain Routing: ${selectedVmr?.Name || 'VMR'}`}
+          extraWide
+        >
+          <form onSubmit={handleExplainRouting}>
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="explainMethod">Method</label>
+                <select id="explainMethod" value={explainRequest.Method} onChange={(e) => setExplainRequest({ ...explainRequest, Method: e.target.value })}>
+                  <option value="POST">POST</option>
+                  <option value="GET">GET</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="explainSourceIp">Source IP</label>
+                <input id="explainSourceIp" value={explainRequest.SourceIp} onChange={(e) => setExplainRequest({ ...explainRequest, SourceIp: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="explainRelativePath">Relative Path</label>
+              <input id="explainRelativePath" value={explainRequest.RelativePath} onChange={(e) => setExplainRequest({ ...explainRequest, RelativePath: e.target.value })} />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="explainHeaders">Headers JSON</label>
+              <textarea id="explainHeaders" rows="4" className="code-input" value={explainRequest.HeadersJson} onChange={(e) => setExplainRequest({ ...explainRequest, HeadersJson: e.target.value })} />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="explainBody">Body</label>
+              <textarea id="explainBody" rows="8" className="code-input" value={explainRequest.Body} onChange={(e) => setExplainRequest({ ...explainRequest, Body: e.target.value })} />
+            </div>
+
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowExplain(false)}>Close</button>
+              <button type="submit" className="btn-primary" disabled={explainLoading}>
+                {explainLoading ? 'Explaining...' : 'Run Explanation'}
+              </button>
+            </div>
+          </form>
+
+          {routingExplanation && (
+            <div className="detail-content">
+              <div className="detail-section">
+                <div className="summary-badge-row">
+                  <span className={`service-state-badge ${routingExplanation.Success ? 'success' : 'danger'}`}>{routingExplanation.Success ? 'Routed' : 'Denied'}</span>
+                  <span className="service-state-badge neutral">HTTP {routingExplanation.HttpStatusCode}</span>
+                  {routingExplanation.SessionAffinityOutcome && <span className="service-state-badge neutral">Session {routingExplanation.SessionAffinityOutcome}</span>}
+                  {routingExplanation.PolicyFallbackUsed && <span className="service-state-badge warning">Policy Fallback</span>}
+                </div>
+                <p className="section-description" style={{ marginTop: '12px', marginBottom: 0 }}>{routingExplanation.Message}</p>
+              </div>
+
+              <div className="detail-section">
+                <h3>Timeline</h3>
+                <div className="timeline-list">
+                  {(routingExplanation.Timeline || []).map((stage, index) => (
+                    <div className="timeline-item" key={`${stage.Code}-${index}`}>
+                      <div className="timeline-item-header">
+                        <strong>{stage.Title}</strong>
+                        <span className={`service-state-badge ${stage.Outcome === 'Passed' ? 'success' : stage.Outcome === 'Denied' ? 'danger' : stage.Outcome === 'Fallback' ? 'warning' : 'neutral'}`}>{stage.Outcome}</span>
+                      </div>
+                      <p>{stage.Message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Candidates</h3>
+                <div className="explain-candidate-list">
+                  {(routingExplanation.Candidates || []).map((candidate) => (
+                    <div className="explain-candidate-card" key={candidate.EndpointId}>
+                      <div className="explain-candidate-header">
+                        <strong>{candidate.EndpointName || candidate.EndpointId}</strong>
+                        <div className="summary-badge-row">
+                          <span className={`service-state-badge ${candidate.Selected ? 'success' : candidate.Included ? 'neutral' : 'danger'}`}>{candidate.Selected ? 'Selected' : candidate.Included ? 'Eligible' : 'Excluded'}</span>
+                          <span className={`service-state-badge ${getServiceStatePresentation(candidate.ServiceState).tone}`}>{getServiceStatePresentation(candidate.ServiceState).label}</span>
+                        </div>
+                      </div>
+                      <div className="detail-grid">
+                        <div className="detail-item"><label>URL</label><code>{candidate.EndpointUrl}</code></div>
+                        <div className="detail-item"><label>Healthy</label><span>{candidate.IsHealthy ? 'Yes' : 'No'}</span></div>
+                        <div className="detail-item"><label>Capacity</label><span>{candidate.HasCapacity ? 'Available' : 'Full'}</span></div>
+                        <div className="detail-item"><label>Policy Score</label><span>{candidate.PolicyScore ?? '-'}</span></div>
+                      </div>
+                      {candidate.ExclusionReason && <p className="form-help">{candidate.ExclusionReason}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal>
+      </div>
+    );
+  }
 
 export default VirtualModelRunners;

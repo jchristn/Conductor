@@ -64,9 +64,13 @@ namespace Conductor.Server.Services
             // Model Runner Endpoints
             { new RouteKey("POST", "/v1.0/modelrunnerendpoints"), RequestTypeEnum.CreateModelRunnerEndpoint },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/health"), RequestTypeEnum.ListModelRunnerEndpointHealth },
+            { new RouteKey("POST", "/v1.0/modelrunnerendpoints/validate"), RequestTypeEnum.ValidateModelRunnerEndpoint },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.ReadModelRunnerEndpoint },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}/health"), RequestTypeEnum.ReadModelRunnerEndpointHealth },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}/rigmonitor"), RequestTypeEnum.ReadModelRunnerEndpointRigMonitor },
+            { new RouteKey("POST", "/v1.0/modelrunnerendpoints/{id}/drain"), RequestTypeEnum.DrainModelRunnerEndpoint },
+            { new RouteKey("POST", "/v1.0/modelrunnerendpoints/{id}/resume"), RequestTypeEnum.ResumeModelRunnerEndpoint },
+            { new RouteKey("POST", "/v1.0/modelrunnerendpoints/{id}/quarantine"), RequestTypeEnum.QuarantineModelRunnerEndpoint },
             { new RouteKey("PUT", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.UpdateModelRunnerEndpoint },
             { new RouteKey("DELETE", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.DeleteModelRunnerEndpoint },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints"), RequestTypeEnum.ListModelRunnerEndpoints },
@@ -76,6 +80,7 @@ namespace Conductor.Server.Services
             { new RouteKey("GET", "/v1.0/modeldefinitions/{id}"), RequestTypeEnum.ReadModelDefinition },
             { new RouteKey("PUT", "/v1.0/modeldefinitions/{id}"), RequestTypeEnum.UpdateModelDefinition },
             { new RouteKey("DELETE", "/v1.0/modeldefinitions/{id}"), RequestTypeEnum.DeleteModelDefinition },
+            { new RouteKey("POST", "/v1.0/modeldefinitions/validate"), RequestTypeEnum.ValidateModelDefinition },
             { new RouteKey("GET", "/v1.0/modeldefinitions"), RequestTypeEnum.ListModelDefinitions },
 
             // Model Configurations
@@ -83,12 +88,16 @@ namespace Conductor.Server.Services
             { new RouteKey("GET", "/v1.0/modelconfigurations/{id}"), RequestTypeEnum.ReadModelConfiguration },
             { new RouteKey("PUT", "/v1.0/modelconfigurations/{id}"), RequestTypeEnum.UpdateModelConfiguration },
             { new RouteKey("DELETE", "/v1.0/modelconfigurations/{id}"), RequestTypeEnum.DeleteModelConfiguration },
+            { new RouteKey("POST", "/v1.0/modelconfigurations/validate"), RequestTypeEnum.ValidateModelConfiguration },
             { new RouteKey("GET", "/v1.0/modelconfigurations"), RequestTypeEnum.ListModelConfigurations },
 
             // Virtual Model Runners
             { new RouteKey("POST", "/v1.0/virtualmodelrunners"), RequestTypeEnum.CreateVirtualModelRunner },
+            { new RouteKey("POST", "/v1.0/virtualmodelrunners/validate"), RequestTypeEnum.ValidateVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.ReadVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/health"), RequestTypeEnum.ReadVirtualModelRunnerHealth },
+            { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/effective"), RequestTypeEnum.ReadVirtualModelRunnerEffective },
+            { new RouteKey("POST", "/v1.0/virtualmodelrunners/{id}/explain-routing"), RequestTypeEnum.ExplainVirtualModelRunnerRouting },
             { new RouteKey("PUT", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.UpdateVirtualModelRunner },
             { new RouteKey("DELETE", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.DeleteVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners"), RequestTypeEnum.ListVirtualModelRunners },
@@ -96,6 +105,7 @@ namespace Conductor.Server.Services
             // Load Balancing Policies
             { new RouteKey("POST", "/v1.0/loadbalancingpolicies"), RequestTypeEnum.CreateLoadBalancingPolicy },
             { new RouteKey("GET", "/v1.0/loadbalancingpolicies/metrics"), RequestTypeEnum.ListLoadBalancingPolicyMetrics },
+            { new RouteKey("POST", "/v1.0/loadbalancingpolicies/validate"), RequestTypeEnum.ValidateLoadBalancingPolicy },
             { new RouteKey("GET", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.ReadLoadBalancingPolicy },
             { new RouteKey("PUT", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.UpdateLoadBalancingPolicy },
             { new RouteKey("DELETE", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.DeleteLoadBalancingPolicy },
@@ -104,7 +114,19 @@ namespace Conductor.Server.Services
             // Backup and Restore
             { new RouteKey("GET", "/v1.0/backup"), RequestTypeEnum.CreateBackup },
             { new RouteKey("POST", "/v1.0/backup/restore"), RequestTypeEnum.RestoreBackup },
-            { new RouteKey("POST", "/v1.0/backup/validate"), RequestTypeEnum.ValidateBackup }
+            { new RouteKey("POST", "/v1.0/backup/validate"), RequestTypeEnum.ValidateBackup },
+
+            // Request history
+            { new RouteKey("GET", "/v1.0/requesthistory/summary"), RequestTypeEnum.ReadRequestHistorySummary },
+            { new RouteKey("GET", "/v1.0/requesthistory/{id}/detail"), RequestTypeEnum.ReadRequestHistoryDetail },
+            { new RouteKey("GET", "/v1.0/requesthistory/{id}"), RequestTypeEnum.ReadRequestHistory },
+            { new RouteKey("DELETE", "/v1.0/requesthistory/{id}"), RequestTypeEnum.DeleteRequestHistory },
+            { new RouteKey("DELETE", "/v1.0/requesthistory/bulk"), RequestTypeEnum.DeleteRequestHistoryBulk },
+            { new RouteKey("GET", "/v1.0/requesthistory"), RequestTypeEnum.ListRequestHistory },
+
+            // Observability
+            { new RouteKey("GET", "/v1.0/observability/metrics"), RequestTypeEnum.ReadObservabilityMetrics },
+            { new RouteKey("GET", "/v1.0/observability/metrics/summary"), RequestTypeEnum.ReadObservabilityMetricsSummary }
         };
 
         /// <summary>

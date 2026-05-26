@@ -355,6 +355,20 @@ namespace Test.Shared.Server.Integration
 
             result.Data.Should().OnlyContain(e => e.Active);
         }
+        public async Task ModelRunnerEndpoint_ServiceState_RoundTrip()
+        {
+            ModelRunnerEndpoint created = await _Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = _TestTenantId,
+                Name = "Draining Endpoint",
+                Hostname = "draining.local",
+                ServiceState = EndpointServiceStateEnum.Draining
+            });
+
+            ModelRunnerEndpoint read = await _Database.ModelRunnerEndpoint.ReadAsync(_TestTenantId, created.Id);
+
+            read.ServiceState.Should().Be(EndpointServiceStateEnum.Draining);
+        }
 
         #endregion
 
@@ -527,6 +541,83 @@ namespace Test.Shared.Server.Integration
             read.Tags["environment"].Should().Be("production");
             read.Tags.Should().ContainKey("team");
             read.Tags["team"].Should().Be("ml");
+        }
+        public async Task VirtualModelRunner_ModelConfigurationMappings_RoundTrip()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "VMR with Mappings",
+                BasePath = $"/vmr/{Guid.NewGuid():N}/",
+                ModelConfigurationMappings = new Dictionary<string, string>
+                {
+                    { "llama3.2:latest", "mc_llama" },
+                    { "nomic-embed-text", "mc_embed" }
+                }
+            };
+
+            VirtualModelRunner created = await _Database.VirtualModelRunner.CreateAsync(vmr);
+            VirtualModelRunner read = await _Database.VirtualModelRunner.ReadAsync(_TestTenantId, created.Id);
+
+            read.ModelConfigurationMappings.Should().ContainKey("llama3.2:latest");
+            read.ModelConfigurationMappings["llama3.2:latest"].Should().Be("mc_llama");
+            read.ModelConfigurationMappings.Should().ContainKey("nomic-embed-text");
+        }
+
+        #endregion
+
+        #region RequestHistory-Tests
+        public async Task RequestHistory_SummaryFilterByDenialReason_ReturnsExpectedCounts()
+        {
+            DateTime now = DateTime.UtcNow;
+            VirtualModelRunner vmr = await _Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "History VMR",
+                BasePath = $"/history/{Guid.NewGuid():N}/"
+            });
+
+            await _Database.RequestHistory.CreateAsync(new RequestHistoryDetail
+            {
+                TenantGuid = _TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "history-one.json",
+                CreatedUtc = now.AddMinutes(-10),
+                HttpStatus = 429,
+                RoutingOutcomeCode = "Denied",
+                DenialReasonCode = "AllEndpointsAtCapacity"
+            });
+
+            await _Database.RequestHistory.CreateAsync(new RequestHistoryDetail
+            {
+                TenantGuid = _TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "history-two.json",
+                CreatedUtc = now.AddMinutes(-5),
+                HttpStatus = 503,
+                RoutingOutcomeCode = "Denied",
+                DenialReasonCode = "AllEndpointsQuarantined"
+            });
+
+            RequestHistorySummaryResult result = await _Database.RequestHistory.GetSummaryAsync(new RequestHistorySummaryFilter
+            {
+                TenantGuid = _TestTenantId,
+                StartUtc = now.AddHours(-1),
+                EndUtc = now.AddHours(1),
+                DenialReasonCode = "AllEndpointsAtCapacity"
+            });
+
+            result.TotalFailure.Should().Be(1);
+            result.DenialReasonCounts.Should().ContainKey("AllEndpointsAtCapacity");
+            result.DenialReasonCounts["AllEndpointsAtCapacity"].Should().Be(1);
         }
 
         #endregion

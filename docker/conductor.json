@@ -36,7 +36,13 @@
     "Enabled": true,
     "Directory": "/app/data/request-history/",
     "RetentionDays": 7,
+    "MetadataRetentionDays": 7,
+    "BodyRetentionDays": 3,
     "CleanupIntervalMinutes": 60,
+    "CaptureRequestBody": true,
+    "CaptureResponseBody": true,
+    "RedactedHeaders": ["authorization", "x-password", "x-admin-password", "x-goog-api-key"],
+    "RedactedJsonFields": ["authorization", "api_key", "apikey", "password", "token", "bearertoken"],
     "MaxRequestBodyBytes": 65536,
     "MaxResponseBodyBytes": 65536
   },

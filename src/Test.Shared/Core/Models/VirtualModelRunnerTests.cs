@@ -149,6 +149,20 @@ namespace Test.Shared.Core.Models
             vmr.ModelRunnerEndpointIds.Should().Contain("mre_a");
             vmr.ModelRunnerEndpointIds.Should().Contain("mre_b");
         }
+        public void ModelConfigurationMappings_SerializesAndDeserializesCorrectly()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            Dictionary<string, string> mappings = new Dictionary<string, string>
+            {
+                { "llama3.2", "mc_llama" },
+                { "nomic-embed-text", "mc_embed" }
+            };
+
+            vmr.ModelConfigurationMappings = mappings;
+
+            vmr.ModelConfigurationMappings.Should().BeEquivalentTo(mappings);
+            vmr.ModelConfigurationMappingsJson.Should().Contain("mc_llama");
+        }
 
         #endregion
 
@@ -314,6 +328,13 @@ namespace Test.Shared.Core.Models
             vmr.ModelRunnerEndpointIds = null;
             vmr.ModelRunnerEndpointIds.Should().NotBeNull();
             vmr.ModelRunnerEndpointIds.Should().BeEmpty();
+        }
+        public void ModelConfigurationMappings_WhenSetToNull_BecomesEmptyDictionary()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.ModelConfigurationMappings = null;
+            vmr.ModelConfigurationMappings.Should().NotBeNull();
+            vmr.ModelConfigurationMappings.Should().BeEmpty();
         }
 
         #endregion

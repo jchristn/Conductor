@@ -35,6 +35,8 @@ namespace Conductor.Server.Controllers
         private readonly HealthCheckService _HealthCheckService;
         private readonly SessionAffinityService _SessionAffinityService;
         private readonly RequestHistoryService _RequestHistoryService;
+        private readonly RoutingDecisionService _RoutingDecisionService;
+        private readonly OperationalMetricsService _Metrics;
         private readonly LoadBalancingPolicyEvaluator _LoadBalancingPolicyEvaluator = new LoadBalancingPolicyEvaluator();
 
         /// <summary>
@@ -52,12 +54,25 @@ namespace Conductor.Server.Controllers
         /// <param name="healthCheckService">Health check service (optional).</param>
         /// <param name="sessionAffinityService">Session affinity service (optional).</param>
         /// <param name="requestHistoryService">Request history service (optional).</param>
-        public ProxyController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, SessionAffinityService sessionAffinityService = null, RequestHistoryService requestHistoryService = null)
+        /// <param name="routingDecisionService">Shared routing-decision service (optional).</param>
+        /// <param name="metrics">Operational metrics service (optional).</param>
+        public ProxyController(
+            DatabaseDriverBase database,
+            AuthenticationService authService,
+            Serializer serializer,
+            LoggingModule logging,
+            HealthCheckService healthCheckService = null,
+            SessionAffinityService sessionAffinityService = null,
+            RequestHistoryService requestHistoryService = null,
+            RoutingDecisionService routingDecisionService = null,
+            OperationalMetricsService metrics = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
             _SessionAffinityService = sessionAffinityService;
             _RequestHistoryService = requestHistoryService;
+            _RoutingDecisionService = routingDecisionService;
+            _Metrics = metrics;
         }
 
         /// <summary>
@@ -73,10 +88,13 @@ namespace Conductor.Server.Controllers
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
             RequestHistoryDetail historyDetail = null;
+            RoutingExecutionResult routingResult = null;
+            ModelRunnerEndpoint endpoint = null;
+            VirtualModelRunner vmr = null;
+            bool incrementedInFlight = false;
 
             try
             {
-                // Parse the URL to extract VMR base path
                 UrlContext urlContext = UrlContext.Parse(ctx.Request.Url.RawWithQuery, ctx.Request.Method.ToString());
                 if (urlContext == null || String.IsNullOrEmpty(urlContext.BasePath))
                 {
@@ -84,15 +102,15 @@ namespace Conductor.Server.Controllers
                     return;
                 }
 
-                // Find the VMR by base path
-                VirtualModelRunner vmr = await Database.VirtualModelRunner.ReadByBasePathAsync(urlContext.BasePath);
+                vmr = await Database.VirtualModelRunner.ReadByBasePathAsync(urlContext.BasePath);
                 if (vmr == null || !vmr.Active)
                 {
                     await SendNotFound(ctx);
                     return;
                 }
 
-                // Create request history entry if enabled
+                PopulateRequestContext(ctx, requestContext, urlContext, vmr);
+
                 if (_RequestHistoryService != null && _RequestHistoryService.IsEnabled && vmr.RequestHistoryEnabled)
                 {
                     Dictionary<string, string> requestHeaders = GetRequestHeaders(ctx);
@@ -100,328 +118,84 @@ namespace Conductor.Server.Controllers
 
                     historyDetail = await _RequestHistoryService.CreateEntryAsync(
                         vmr,
-                        ctx.Request.Source.IpAddress,
-                        ctx.Request.Method.ToString(),
+                        requestContext,
                         ctx.Request.Url.RawWithoutQuery,
                         requestHeaders,
                         requestBody,
                         cancellationToken).ConfigureAwait(false);
                 }
 
-                // Check if request type is allowed
-                if (urlContext.IsEmbeddingsRequest && !vmr.AllowEmbeddings)
+                routingResult = await _RoutingDecisionService.EvaluateAsync(vmr, urlContext, requestContext, true, cancellationToken).ConfigureAwait(false);
+                endpoint = routingResult.Endpoint;
+
+                if (routingResult.Decision == null || !routingResult.Decision.Success || endpoint == null)
                 {
-                    await SendForbidden(ctx, "Embeddings not allowed on this endpoint");
+                    await SendRoutingDecisionResponse(ctx, routingResult?.Decision).ConfigureAwait(false);
+                    if (historyDetail != null && _RequestHistoryService != null)
+                    {
+                        await _RequestHistoryService.UpdateWithResponseAsync(
+                            historyDetail,
+                            routingResult?.Decision,
+                            null,
+                            routingResult?.ModelDefinition,
+                            routingResult?.ModelConfiguration,
+                            routingResult?.Decision?.HttpStatusCode ?? 502,
+                            null,
+                            null,
+                            stopwatch,
+                            cancellationToken).ConfigureAwait(false);
+                    }
                     return;
                 }
 
-                if (urlContext.IsCompletionsRequest && !vmr.AllowCompletions)
-                {
-                    await SendForbidden(ctx, "Completions not allowed on this endpoint");
-                    return;
-                }
-
-                if (urlContext.IsModelManagementRequest && !vmr.AllowModelManagement)
-                {
-                    await SendForbidden(ctx, "Model management not allowed on this endpoint");
-                    return;
-                }
-
-                // Derive client key for session affinity
-                string clientKey = null;
-                bool sessionPinUsed = false;
-
-                if (vmr.SessionAffinityMode != Conductor.Core.Enums.SessionAffinityModeEnum.None)
-                {
-                    clientKey = DeriveClientKey(ctx, vmr.SessionAffinityMode, vmr.SessionAffinityHeader);
-                }
-
-                // Populate request context
-                requestContext.ClientIpAddress = ctx.Request.Source.IpAddress;
-                requestContext.ClientIdentifier = clientKey;
-
-                // Get all endpoint IDs
-                List<string> endpointIds = vmr.ModelRunnerEndpointIds;
-                if (endpointIds == null || endpointIds.Count == 0)
-                {
-                    await SendBadGateway(ctx, "No model runners configured");
-                    return;
-                }
-
-                LoadBalancingPolicy policy = null;
-                if (!String.IsNullOrWhiteSpace(vmr.LoadBalancingPolicyId))
-                {
-                    policy = await Database.LoadBalancingPolicy.ReadAsync(vmr.TenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
-                    if (policy != null && !policy.Active)
-                    {
-                        Logging.Debug(_Header + "load-balancing policy " + vmr.LoadBalancingPolicyId + " is inactive for VMR " + vmr.Id + ", using legacy mode");
-                        policy = null;
-                    }
-                    else if (policy == null)
-                    {
-                        Logging.Warn(_Header + "load-balancing policy " + vmr.LoadBalancingPolicyId + " was not found for VMR " + vmr.Id + ", using legacy mode");
-                    }
-                }
-
-                // Attempt session affinity lookup before filtering
-                ModelRunnerEndpoint endpoint = null;
-
-                if (!String.IsNullOrEmpty(clientKey) && _SessionAffinityService != null)
-                {
-                    if (_SessionAffinityService.TryGetPinnedEndpoint(vmr.Id, clientKey, out string pinnedEndpointId))
-                    {
-                        // Verify the pinned endpoint is still valid
-                        ModelRunnerEndpoint pinnedEp = await Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, pinnedEndpointId);
-                        if (pinnedEp != null && pinnedEp.Active && endpointIds.Contains(pinnedEndpointId))
-                        {
-                            bool pinnedHealthy = true;
-                            bool pinnedHasCapacity = true;
-                            EndpointHealthState pinnedState = null;
-
-                            if (_HealthCheckService != null)
-                            {
-                                pinnedState = _HealthCheckService.GetHealthState(pinnedEndpointId);
-                                if (pinnedState != null)
-                                {
-                                    pinnedHealthy = pinnedState.IsHealthy;
-                                    if (pinnedEp.MaxParallelRequests > 0 && pinnedState.InFlightRequests >= pinnedEp.MaxParallelRequests)
-                                    {
-                                        pinnedHasCapacity = false;
-                                    }
-                                }
-                            }
-
-                            if (policy != null)
-                            {
-                                EndpointAvailability pinnedAvailability = new EndpointAvailability(pinnedEp, pinnedHealthy, pinnedHasCapacity);
-                                if (!_LoadBalancingPolicyEvaluator.IsEndpointEligible(policy, pinnedAvailability, pinnedState))
-                                {
-                                    pinnedHealthy = false;
-                                }
-                            }
-
-                            if (pinnedHealthy && pinnedHasCapacity)
-                            {
-                                endpoint = pinnedEp;
-                                sessionPinUsed = true;
-                            }
-                            else
-                            {
-                                // Pinned endpoint failed checks, remove pin
-                                _SessionAffinityService.RemovePinnedEndpoint(vmr.Id, clientKey);
-                                Logging.Debug(_Header + "removed stale session pin for client " + clientKey + " to endpoint " + pinnedEndpointId);
-                            }
-                        }
-                        else
-                        {
-                            // Pinned endpoint no longer valid
-                            _SessionAffinityService.RemovePinnedEndpoint(vmr.Id, clientKey);
-                        }
-                    }
-                }
-
-                // If no pinned endpoint was used, proceed with normal load balancing
-                if (endpoint == null)
-                {
-                    // Filter endpoints by health and capacity
-                    List<EndpointAvailability> availableEndpoints = new List<EndpointAvailability>();
-                    bool anyUnhealthy = false;
-                    bool anyAtCapacity = false;
-
-                    foreach (string endpointId in endpointIds)
-                    {
-                        ModelRunnerEndpoint ep = await Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, endpointId);
-                        if (ep == null || !ep.Active) continue;
-
-                        bool isHealthy = true;
-                        bool hasCapacity = true;
-
-                        if (_HealthCheckService != null)
-                        {
-                            EndpointHealthState healthState = _HealthCheckService.GetHealthState(endpointId);
-                            if (healthState != null)
-                            {
-                                isHealthy = healthState.IsHealthy;
-                                // Check capacity (0 = unlimited)
-                                if (ep.MaxParallelRequests > 0 && healthState.InFlightRequests >= ep.MaxParallelRequests)
-                                {
-                                    hasCapacity = false;
-                                }
-                            }
-                        }
-
-                        if (!isHealthy) anyUnhealthy = true;
-                        if (!hasCapacity) anyAtCapacity = true;
-
-                        if (isHealthy && hasCapacity)
-                        {
-                            availableEndpoints.Add(new EndpointAvailability(ep, isHealthy, hasCapacity));
-                        }
-                    }
-
-                    // Check if we have any available endpoints
-                    if (availableEndpoints.Count == 0)
-                    {
-                        if (anyAtCapacity && !anyUnhealthy)
-                        {
-                            await SendTooManyRequests(ctx, "All endpoints at capacity");
-                        }
-                        else
-                        {
-                            await SendBadGateway(ctx, "No healthy endpoints available");
-                        }
-                        return;
-                    }
-
-                    if (policy != null)
-                    {
-                        LoadBalancingPolicyEvaluator.EvaluationResult evaluation = _LoadBalancingPolicyEvaluator.Evaluate(
-                            policy,
-                            availableEndpoints,
-                            endpointId => _HealthCheckService?.GetHealthState(endpointId));
-
-                        if (evaluation.Success && evaluation.Candidates.Count > 0)
-                        {
-                            double topScore = evaluation.Candidates[0].Score;
-                            List<EndpointAvailability> tiedCandidates = evaluation.Candidates
-                                .Where(candidate => Math.Abs(candidate.Score - topScore) < 0.000001)
-                                .Select(candidate => candidate.Availability)
-                                .ToList();
-                            endpoint = SelectEndpointWithWeight(tiedCandidates, MapTieBreaker(policy.TieBreaker));
-                        }
-                        else if (policy.FallbackMode == LoadBalancingPolicyFallbackModeEnum.FailClosed)
-                        {
-                            await SendBadGateway(ctx, evaluation.FailureReason ?? "No endpoints satisfied the attached load-balancing policy");
-                            return;
-                        }
-                        else
-                        {
-                            Logging.Debug(_Header + "policy " + policy.Id + " could not select an endpoint for VMR " + vmr.Id + ": " + (evaluation.FailureReason ?? "unknown failure") + ", using legacy mode");
-                        }
-                    }
-
-                    // Select endpoint using load balancing (with weights)
-                    endpoint ??= SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode);
-
-                    // Pin the selected endpoint for this client
-                    if (!String.IsNullOrEmpty(clientKey) && _SessionAffinityService != null)
-                    {
-                        _SessionAffinityService.SetPinnedEndpoint(vmr.Id, clientKey, endpoint.Id, vmr.SessionTimeoutMs, vmr.SessionMaxEntries);
-                    }
-                }
-
-                // Track in-flight request
-                bool incrementedInFlight = false;
                 if (_HealthCheckService != null)
                 {
                     incrementedInFlight = _HealthCheckService.TryIncrementInFlight(endpoint.Id, endpoint.MaxParallelRequests);
                     if (!incrementedInFlight)
                     {
-                        // Race condition - endpoint went to capacity between check and increment
-                        await SendTooManyRequests(ctx, "Endpoint at capacity");
+                        routingResult.Decision.Success = false;
+                        routingResult.Decision.OutcomeCode = "Denied";
+                        routingResult.Decision.HttpStatusCode = 429;
+                        routingResult.Decision.DenialReasonCode = "EndpointAtCapacity";
+                        routingResult.Decision.DenialReason = "The selected endpoint reached capacity before the request was admitted.";
+                        routingResult.Decision.Message = routingResult.Decision.DenialReason;
+                        await SendRoutingDecisionResponse(ctx, routingResult.Decision).ConfigureAwait(false);
+                        if (historyDetail != null && _RequestHistoryService != null)
+                        {
+                            await _RequestHistoryService.UpdateWithResponseAsync(
+                                historyDetail,
+                                routingResult.Decision,
+                                endpoint,
+                                routingResult.ModelDefinition,
+                                routingResult.ModelConfiguration,
+                                429,
+                                null,
+                                null,
+                                stopwatch,
+                                cancellationToken).ConfigureAwait(false);
+                        }
                         return;
                     }
                 }
 
-                try
+                string targetUrl = BuildTargetUrl(endpoint, routingResult.UrlContext);
+                using (HttpResponseMessage response = await ForwardRequestAsync(
+                    ctx,
+                    targetUrl,
+                    vmr,
+                    endpoint,
+                    routingResult.RequestBody,
+                    cancellationToken).ConfigureAwait(false))
                 {
-                    // Build the target URL
-                    string targetUrl = BuildTargetUrl(endpoint, urlContext);
-
-                    string effectiveModel = urlContext.ApiType == ApiTypeEnum.Gemini ? urlContext.RequestedModel : null;
-                    if (requestContext.Data != null && requestContext.Data.Length > 0)
-                    {
-                        // Apply model definition and configuration logic
-                        ModelResolutionResult resolution = await ApplyModelDefinitionAndConfigurationAsync(
-                            requestContext.Data, 
-                            vmr, 
-                            urlContext, ctx).ConfigureAwait(false);
-
-                        if (!resolution.Success)
-                        {
-                            // Error response already sent by the method
-                            return;
-                        }
-
-                        requestContext.Data = resolution.Body;
-                        effectiveModel = resolution.EffectiveModel;
-
-                        // Apply pinning if this is an embeddings or completions request
-                        if (requestContext.Data != null 
-                            && requestContext.Data.Length > 0 
-                            && vmr.ModelConfigurationIds != null 
-                            && vmr.ModelConfigurationIds.Count > 0)
-                        {
-                            requestContext.Data = await ApplyPinningAsync(
-                                requestContext.Data, 
-                                vmr, 
-                                urlContext).ConfigureAwait(false);
-                        }
-                    }
-
-                    // Resolve model definition and configuration for history tracking
-                    ModelDefinition modelDefinition = null;
-                    ModelConfiguration modelConfiguration = null;
-
-                    if (historyDetail != null && vmr.ModelDefinitionIds != null)
-                    {
-                        foreach (string defId in vmr.ModelDefinitionIds)
-                        {
-                            ModelDefinition def = await Database.ModelDefinition.ReadAsync(vmr.TenantId, defId).ConfigureAwait(false);
-                            if (def != null && (String.IsNullOrEmpty(effectiveModel) || String.Equals(def.Name, effectiveModel, StringComparison.OrdinalIgnoreCase)))
-                            {
-                                modelDefinition = def;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (historyDetail != null && vmr.ModelConfigurationIds != null)
-                    {
-                        foreach (string configId in vmr.ModelConfigurationIds)
-                        {
-                            ModelConfiguration config = await Database.ModelConfiguration.ReadAsync(vmr.TenantId, configId).ConfigureAwait(false);
-                            if (config != null && (String.IsNullOrEmpty(config.Model) || String.Equals(config.Model, effectiveModel, StringComparison.OrdinalIgnoreCase)))
-                            {
-                                modelConfiguration = config;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Forward the request and send response back
-                    // Use using to ensure HttpResponseMessage is disposed after streaming completes
-                    using (HttpResponseMessage response = await ForwardRequestAsync(
+                    await SendProxyResponse(
                         ctx,
-                        targetUrl,
+                        response,
                         vmr,
-                        endpoint,
-                        requestContext.Data,
-                        cancellationToken).ConfigureAwait(false))
-                    {
-                        await SendProxyResponse(
-                            ctx,
-                            response,
-                            vmr.Id,
-                            endpoint.Id,
-                            effectiveModel,
-                            sessionPinUsed,
-                            requestContext,
-                            historyDetail,
-                            endpoint,
-                            modelDefinition,
-                            modelConfiguration,
-                            stopwatch,
-                            cancellationToken).ConfigureAwait(false);
-                    }
-                }
-                finally
-                {
-                    // Decrement in-flight count when request completes
-                    if (incrementedInFlight && _HealthCheckService != null)
-                    {
-                        _HealthCheckService.DecrementInFlight(endpoint.Id);
-                    }
+                        routingResult,
+                        requestContext,
+                        historyDetail,
+                        stopwatch,
+                        cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -429,19 +203,26 @@ namespace Conductor.Server.Controllers
                 Logging.Warn(_Header + "proxy exception:" + Environment.NewLine + ex.ToString());
                 await SendBadGateway(ctx, "Proxy error: " + ex.Message);
 
-                // Update request history with error
                 if (historyDetail != null && _RequestHistoryService != null)
                 {
                     await _RequestHistoryService.UpdateWithResponseAsync(
                         historyDetail,
-                        null,
-                        null,
-                        null,
+                        routingResult?.Decision,
+                        endpoint,
+                        routingResult?.ModelDefinition,
+                        routingResult?.ModelConfiguration,
                         502,
                         null,
                         "Proxy error: " + ex.Message,
                         stopwatch,
                         cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                if (incrementedInFlight && _HealthCheckService != null && endpoint != null)
+                {
+                    _HealthCheckService.DecrementInFlight(endpoint.Id);
                 }
             }
         }
@@ -1098,38 +879,38 @@ namespace Conductor.Server.Controllers
         private async Task SendProxyResponse(
             HttpContextBase ctx,
             HttpResponseMessage response,
-            string vmrId,
-            string endpointId,
-            string modelName,
-            bool sessionPinUsed,
+            VirtualModelRunner vmr,
+            RoutingExecutionResult routingResult,
             RequestContext requestContext,
             RequestHistoryDetail historyDetail,
-            ModelRunnerEndpoint endpoint,
-            ModelDefinition modelDefinition,
-            ModelConfiguration modelConfiguration,
             Stopwatch stopwatch,
             CancellationToken cancellationToken)
         {
+            RoutingDecision decision = routingResult?.Decision ?? new RoutingDecision();
+            ModelRunnerEndpoint endpoint = routingResult?.Endpoint;
+            ModelDefinition modelDefinition = routingResult?.ModelDefinition;
+            ModelConfiguration modelConfiguration = routingResult?.ModelConfiguration;
+
             ctx.Response.StatusCode = (int)response.StatusCode;
 
             // Add Conductor identification headers
-            if (!String.IsNullOrEmpty(vmrId))
+            if (!String.IsNullOrEmpty(vmr?.Id))
             {
-                ctx.Response.Headers.Add(ConductorConstants.HeaderVmrId, vmrId);
+                ctx.Response.Headers.Add(ConductorConstants.HeaderVmrId, vmr.Id);
             }
 
-            if (!String.IsNullOrEmpty(endpointId))
+            if (!String.IsNullOrEmpty(endpoint?.Id))
             {
-                ctx.Response.Headers.Add(ConductorConstants.HeaderEndpointId, endpointId);
+                ctx.Response.Headers.Add(ConductorConstants.HeaderEndpointId, endpoint.Id);
             }
 
-            if (!String.IsNullOrEmpty(modelName))
+            if (!String.IsNullOrEmpty(routingResult?.EffectiveModel))
             {
-                ctx.Response.Headers.Add(ConductorConstants.HeaderModelName, modelName);
+                ctx.Response.Headers.Add(ConductorConstants.HeaderModelName, routingResult.EffectiveModel);
             }
 
             // Add session affinity header
-            ctx.Response.Headers.Add(ConductorConstants.HeaderSessionPinned, sessionPinUsed ? "true" : "false");
+            ctx.Response.Headers.Add(ConductorConstants.HeaderSessionPinned, decision.SessionPinUsed ? "true" : "false");
 
             // Copy content type
             if (response.Content?.Headers?.ContentType != null)
@@ -1196,6 +977,7 @@ namespace Conductor.Server.Controllers
 
                 await _RequestHistoryService.UpdateWithResponseAsync(
                     historyDetail,
+                    decision,
                     endpoint,
                     modelDefinition,
                     modelConfiguration,
@@ -1205,6 +987,17 @@ namespace Conductor.Server.Controllers
                     stopwatch,
                     cancellationToken,
                     firstTokenTimeMs).ConfigureAwait(false);
+            }
+
+            if (_Metrics != null && vmr != null)
+            {
+                _Metrics.RecordRequestCompletion(
+                    vmr.TenantId,
+                    vmr.Id,
+                    vmr.Name,
+                    GetApiFamily(requestContext.RequestType),
+                    stopwatch.Elapsed.TotalMilliseconds,
+                    firstTokenTimeMs);
             }
         }
 
@@ -1400,15 +1193,7 @@ namespace Conductor.Server.Controllers
                     {
                         if (!String.IsNullOrEmpty(key))
                         {
-                            // Skip Authorization header for security
-                            if (String.Equals(key, "Authorization", StringComparison.OrdinalIgnoreCase))
-                            {
-                                headers[key] = "[REDACTED]";
-                            }
-                            else
-                            {
-                                headers[key] = ctx.Request.Headers.Get(key);
-                            }
+                            headers[key] = ctx.Request.Headers.Get(key);
                         }
                     }
                 }
@@ -1418,6 +1203,94 @@ namespace Conductor.Server.Controllers
                 Logging.Warn(_Header + "failed to extract request headers: " + ex.Message);
             }
             return headers;
+        }
+
+        private void PopulateRequestContext(HttpContextBase ctx, RequestContext requestContext, UrlContext urlContext, VirtualModelRunner vmr)
+        {
+            string rawUrl = ctx.Request.Url.RawWithQuery;
+            int queryStart = String.IsNullOrEmpty(rawUrl) ? -1 : rawUrl.IndexOf('?');
+
+            requestContext.HttpMethod = ctx.Request.Method.ToString();
+            requestContext.OriginalUrl = rawUrl;
+            requestContext.Path = ctx.Request.Url.RawWithoutQuery;
+            requestContext.QueryString = queryStart >= 0 ? rawUrl.Substring(queryStart) : null;
+            requestContext.ClientIpAddress = ctx.Request.Source.IpAddress;
+            requestContext.Headers = GetRequestHeaders(ctx);
+            requestContext.ContentType = ctx.Request.ContentType;
+            requestContext.ContentLength = requestContext.Data?.LongLength ?? 0;
+            requestContext.ModelName = urlContext.RequestedModel;
+            requestContext.RequestType = urlContext.RequestType;
+            requestContext.ApiType = urlContext.ApiType;
+            requestContext.TenantId = vmr?.TenantId;
+            requestContext.VirtualModelRunnerId = vmr?.Id;
+
+            if (ctx.Metadata is AuthenticationResult authResult)
+            {
+                requestContext.UserId = authResult.User?.Id;
+                requestContext.UserEmail = authResult.User?.Email;
+                requestContext.CredentialId = authResult.Credential?.Id;
+                requestContext.CredentialName = authResult.Credential?.Name;
+                requestContext.TenantId = authResult.Tenant?.Id ?? requestContext.TenantId;
+            }
+        }
+
+        private async Task SendRoutingDecisionResponse(HttpContextBase ctx, RoutingDecision decision)
+        {
+            if (decision == null)
+            {
+                await SendBadGateway(ctx, "Conductor could not evaluate the request.");
+                return;
+            }
+
+            switch (decision.HttpStatusCode)
+            {
+                case 401:
+                    await SendUnauthorized(ctx, decision.Message ?? decision.DenialReason ?? "Unauthorized");
+                    break;
+                case 403:
+                    await SendForbidden(ctx, decision.Message ?? decision.DenialReason ?? "Forbidden");
+                    break;
+                case 404:
+                    await SendNotFound(ctx);
+                    break;
+                case 429:
+                    await SendTooManyRequests(ctx, decision.Message ?? decision.DenialReason ?? "All endpoints at capacity");
+                    break;
+                case 503:
+                    await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.ServiceUnavailable(decision.Message ?? decision.DenialReason ?? "Service unavailable"));
+                    break;
+                default:
+                    await SendBadGateway(ctx, decision.Message ?? decision.DenialReason ?? "Routing denied.");
+                    break;
+            }
+        }
+
+        private static string GetApiFamily(RequestTypeEnum requestType)
+        {
+            switch (requestType)
+            {
+                case RequestTypeEnum.OpenAIChatCompletions:
+                case RequestTypeEnum.OpenAICompletions:
+                case RequestTypeEnum.OpenAIEmbeddings:
+                case RequestTypeEnum.OpenAIListModels:
+                    return "OpenAI";
+                case RequestTypeEnum.GeminiGenerateContent:
+                case RequestTypeEnum.GeminiStreamGenerateContent:
+                case RequestTypeEnum.GeminiEmbedContent:
+                case RequestTypeEnum.GeminiListModels:
+                    return "Gemini";
+                case RequestTypeEnum.OllamaGenerate:
+                case RequestTypeEnum.OllamaChat:
+                case RequestTypeEnum.OllamaEmbeddings:
+                case RequestTypeEnum.OllamaListTags:
+                case RequestTypeEnum.OllamaListRunningModels:
+                case RequestTypeEnum.OllamaPullModel:
+                case RequestTypeEnum.OllamaDeleteModel:
+                case RequestTypeEnum.OllamaShowModelInfo:
+                    return "Ollama";
+                default:
+                    return "Management";
+            }
         }
 
         private Dictionary<string, string> GetResponseHeaders(HttpResponseMessage response)

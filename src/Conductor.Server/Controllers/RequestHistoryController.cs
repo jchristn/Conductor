@@ -1,7 +1,6 @@
 namespace Conductor.Server.Controllers
 {
     using System;
-    using System.Globalization;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Models;
@@ -16,7 +15,6 @@ namespace Conductor.Server.Controllers
     /// </summary>
     public class RequestHistoryController : BaseController
     {
-        private static readonly string _Header = "[RequestHistoryController] ";
         private readonly RequestHistoryService _RequestHistoryService;
 
         /// <summary>
@@ -43,33 +41,12 @@ namespace Conductor.Server.Controllers
         /// Search request history entries.
         /// </summary>
         /// <param name="tenantId">Tenant ID (from auth).</param>
-        /// <param name="vmrGuid">Filter by virtual model runner GUID.</param>
-        /// <param name="endpointGuid">Filter by model endpoint GUID.</param>
-        /// <param name="sourceIp">Filter by source IP.</param>
-        /// <param name="httpStatus">Filter by HTTP status.</param>
-        /// <param name="page">Page number (1-based).</param>
-        /// <param name="pageSize">Page size.</param>
+        /// <param name="filter">Filter to apply.</param>
         /// <returns>Search result with pagination.</returns>
-        public async Task<RequestHistorySearchResult> Search(
-            string tenantId,
-            string vmrGuid,
-            string endpointGuid,
-            string sourceIp,
-            int? httpStatus,
-            int page,
-            int pageSize)
+        public async Task<RequestHistorySearchResult> Search(string tenantId, RequestHistorySearchFilter filter)
         {
-            RequestHistorySearchFilter filter = new RequestHistorySearchFilter
-            {
-                TenantGuid = tenantId,
-                VirtualModelRunnerGuid = vmrGuid,
-                ModelEndpointGuid = endpointGuid,
-                RequestorSourceIp = sourceIp,
-                HttpStatus = httpStatus,
-                Page = page,
-                PageSize = pageSize
-            };
-
+            filter ??= new RequestHistorySearchFilter();
+            filter.TenantGuid = tenantId;
             return await _RequestHistoryService.SearchAsync(filter).ConfigureAwait(false);
         }
 
@@ -164,39 +141,12 @@ namespace Conductor.Server.Controllers
         /// Get aggregated request history summary with time-bucketed success/failure counts.
         /// </summary>
         /// <param name="tenantId">Tenant ID (from auth).</param>
-        /// <param name="vmrGuid">Filter by virtual model runner GUID.</param>
-        /// <param name="startUtc">Start of time range (UTC, ISO 8601).</param>
-        /// <param name="endUtc">End of time range (UTC, ISO 8601).</param>
-        /// <param name="interval">Bucket interval: "hour" or "day".</param>
+        /// <param name="filter">Summary filter.</param>
         /// <returns>Summary result with time-bucketed counts.</returns>
-        public async Task<RequestHistorySummaryResult> Summary(
-            string tenantId,
-            string vmrGuid,
-            string startUtc,
-            string endUtc,
-            string interval)
+        public async Task<RequestHistorySummaryResult> Summary(string tenantId, RequestHistorySummaryFilter filter)
         {
-            DateTime start = DateTime.UtcNow.AddHours(-1);
-            if (!String.IsNullOrEmpty(startUtc) && DateTime.TryParse(startUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsedStart))
-            {
-                start = parsedStart.ToUniversalTime();
-            }
-
-            DateTime end = DateTime.UtcNow;
-            if (!String.IsNullOrEmpty(endUtc) && DateTime.TryParse(endUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsedEnd))
-            {
-                end = parsedEnd.ToUniversalTime();
-            }
-
-            RequestHistorySummaryFilter filter = new RequestHistorySummaryFilter
-            {
-                TenantGuid = tenantId,
-                VirtualModelRunnerGuid = vmrGuid,
-                StartUtc = start,
-                EndUtc = end,
-                Interval = interval ?? "hour"
-            };
-
+            filter ??= new RequestHistorySummaryFilter();
+            filter.TenantGuid = tenantId;
             return await _RequestHistoryService.GetSummaryAsync(filter).ConfigureAwait(false);
         }
 
@@ -204,27 +154,12 @@ namespace Conductor.Server.Controllers
         /// Delete request history entries matching filter.
         /// </summary>
         /// <param name="tenantId">Tenant ID (from auth).</param>
-        /// <param name="vmrGuid">Filter by virtual model runner GUID.</param>
-        /// <param name="endpointGuid">Filter by model endpoint GUID.</param>
-        /// <param name="sourceIp">Filter by source IP.</param>
-        /// <param name="httpStatus">Filter by HTTP status.</param>
+        /// <param name="filter">Filter to apply.</param>
         /// <returns>Number of deleted entries.</returns>
-        public async Task<BulkDeleteResult> DeleteBulk(
-            string tenantId,
-            string vmrGuid,
-            string endpointGuid,
-            string sourceIp,
-            int? httpStatus)
+        public async Task<BulkDeleteResult> DeleteBulk(string tenantId, RequestHistorySearchFilter filter)
         {
-            RequestHistorySearchFilter filter = new RequestHistorySearchFilter
-            {
-                TenantGuid = tenantId,
-                VirtualModelRunnerGuid = vmrGuid,
-                ModelEndpointGuid = endpointGuid,
-                RequestorSourceIp = sourceIp,
-                HttpStatus = httpStatus
-            };
-
+            filter ??= new RequestHistorySearchFilter();
+            filter.TenantGuid = tenantId;
             long deletedCount = await _RequestHistoryService.DeleteBulkAsync(filter).ConfigureAwait(false);
             return new BulkDeleteResult { DeletedCount = deletedCount };
         }

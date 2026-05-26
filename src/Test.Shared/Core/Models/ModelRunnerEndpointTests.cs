@@ -340,6 +340,17 @@ namespace Test.Shared.Core.Models
             ModelRunnerEndpoint endpoint = new ModelRunnerEndpoint();
             endpoint.UseSsl.Should().BeFalse();
         }
+        public void ServiceState_DefaultsToNormal()
+        {
+            ModelRunnerEndpoint endpoint = new ModelRunnerEndpoint();
+            endpoint.ServiceState.Should().Be(EndpointServiceStateEnum.Normal);
+        }
+        public void RigMonitor_WhenSetToNull_BecomesDefaultInstance()
+        {
+            ModelRunnerEndpoint endpoint = new ModelRunnerEndpoint();
+            endpoint.RigMonitor = null;
+            endpoint.RigMonitor.Should().NotBeNull();
+        }
 
         #endregion
 

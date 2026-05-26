@@ -39,6 +39,8 @@ Run the console host:
 dotnet run --project src/Test.Automated/Test.Automated.csproj
 ```
 
+`Test.Shared` is not a standalone test host. Running `dotnet test src/Test.Shared/Test.Shared.csproj` only compiles the shared descriptors; it does not execute them. Use `Test.Automated`, `Test.Xunit`, or `Test.Nunit` when you need real execution.
+
 Write console results to JSON:
 
 ```bash
@@ -81,6 +83,27 @@ Guidelines:
 - Use optional `InitializeAsync`/`Dispose` hooks when a test class needs setup or cleanup.
 - Keep using `FluentAssertions`.
 - Prefer explicit positive and negative coverage for any behavior you touch.
+
+## Feature Expectations
+
+Changes in the following areas should ship with targeted shared-suite coverage:
+
+- routing explanation, session affinity, and policy evidence
+- validation routes and effective-configuration preview
+- request-history search, summary, redaction, and retention behavior
+- observability metrics aggregation and export
+- endpoint drain, resume, quarantine, and health-payload visibility
+- compatibility behavior where new fields must default cleanly when older payloads omit them
+
+When a feature spans the dashboard or SDKs, verify those surfaces too:
+
+```bash
+dotnet run --project src/Test.Automated/Test.Automated.csproj
+dotnet build src/Conductor.sln
+cd dashboard && npm run build
+cd sdk/javascript && npm test
+cd sdk/python && set PYTHONPATH=src && python -m unittest discover -s tests
+```
 
 Example:
 

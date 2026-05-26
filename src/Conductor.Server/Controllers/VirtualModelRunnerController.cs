@@ -21,15 +21,27 @@ namespace Conductor.Server.Controllers
         private const string VmrBasePathPrefix = "/v1.0/api/";
         private readonly HealthCheckService _HealthCheckService;
         private readonly SessionAffinityService _SessionAffinityService;
+        private readonly ConfigurationValidationService _ValidationService;
+        private readonly RoutingDecisionService _RoutingDecisionService;
 
         /// <summary>
         /// Instantiate the virtual model runner controller.
         /// </summary>
-        public VirtualModelRunnerController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, SessionAffinityService sessionAffinityService = null)
+        public VirtualModelRunnerController(
+            DatabaseDriverBase database,
+            AuthenticationService authService,
+            Serializer serializer,
+            LoggingModule logging,
+            HealthCheckService healthCheckService = null,
+            SessionAffinityService sessionAffinityService = null,
+            ConfigurationValidationService validationService = null,
+            RoutingDecisionService routingDecisionService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
             _SessionAffinityService = sessionAffinityService;
+            _ValidationService = validationService;
+            _RoutingDecisionService = routingDecisionService;
         }
 
         /// <summary>
@@ -40,16 +52,17 @@ namespace Conductor.Server.Controllers
             if (vmr == null)
                 throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
-            if (String.IsNullOrEmpty(vmr.Name) || String.IsNullOrEmpty(vmr.BasePath))
-                throw new WebserverException(ApiResultEnum.BadRequest, "Name and BasePath are required");
+            if (String.IsNullOrEmpty(vmr.Name))
+                throw new WebserverException(ApiResultEnum.BadRequest, "Name is required");
 
-            bool useGeneratedBasePath = UsesGeneratedBasePath(vmr);
+            bool useGeneratedBasePath = IsImplicitGeneratedBasePath(vmr, null);
             vmr.Id = IdGenerator.NewVirtualModelRunnerId();
             vmr.BasePath = useGeneratedBasePath
                 ? VmrBasePathPrefix + vmr.Id + "/"
                 : NormalizeBasePath(vmr.BasePath);
             vmr.TenantId = tenantId;
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
+            await ValidateAsync(tenantId, vmr, null).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.CreateAsync(vmr);
 
             return vmr;
@@ -90,7 +103,7 @@ namespace Conductor.Server.Controllers
             if (vmr == null)
                 throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
 
-            if (UsesGeneratedBasePath(vmr))
+            if (IsImplicitGeneratedBasePath(vmr, id))
             {
                 throw new WebserverException(
                     ApiResultEnum.BadRequest,
@@ -102,6 +115,7 @@ namespace Conductor.Server.Controllers
             vmr.CreatedUtc = existing.CreatedUtc;
             vmr.BasePath = NormalizeBasePath(vmr.BasePath);
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
+            await ValidateAsync(tenantId, vmr, id).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.UpdateAsync(vmr);
 
             return vmr;
@@ -172,6 +186,8 @@ namespace Conductor.Server.Controllers
             };
 
             int healthyCount = 0;
+            int drainingCount = 0;
+            int quarantinedCount = 0;
             int totalCount = vmr.ModelRunnerEndpointIds?.Count ?? 0;
 
             if (vmr.ModelRunnerEndpointIds != null && _HealthCheckService != null)
@@ -190,6 +206,8 @@ namespace Conductor.Server.Controllers
                     {
                         status.Endpoints.Add(EndpointHealthStatus.FromState(state, endpoint));
                         if (state.IsHealthy) healthyCount++;
+                        if (state.ServiceState == Core.Enums.EndpointServiceStateEnum.Draining) drainingCount++;
+                        if (state.ServiceState == Core.Enums.EndpointServiceStateEnum.Quarantined) quarantinedCount++;
                     }
                     else if (endpoint != null)
                     {
@@ -199,15 +217,20 @@ namespace Conductor.Server.Controllers
                             EndpointId = endpointId,
                             EndpointName = endpoint.Name,
                             IsHealthy = false,
+                            ServiceState = endpoint.ServiceState,
                             MaxParallelRequests = endpoint.MaxParallelRequests,
                             Weight = endpoint.Weight,
                             LastError = "Not being monitored"
                         });
+                        if (endpoint.ServiceState == Core.Enums.EndpointServiceStateEnum.Draining) drainingCount++;
+                        if (endpoint.ServiceState == Core.Enums.EndpointServiceStateEnum.Quarantined) quarantinedCount++;
                     }
                 }
             }
 
             status.HealthyEndpointCount = healthyCount;
+            status.DrainingEndpointCount = drainingCount;
+            status.QuarantinedEndpointCount = quarantinedCount;
             status.TotalEndpointCount = totalCount;
             status.OverallHealthy = healthyCount == totalCount && totalCount > 0;
 
@@ -220,16 +243,49 @@ namespace Conductor.Server.Controllers
             return status;
         }
 
-        private static bool UsesGeneratedBasePath(VirtualModelRunner vmr)
+        /// <summary>
+        /// Validate a virtual model runner draft.
+        /// </summary>
+        public async Task<ResourceValidationResult> Validate(string tenantId, VirtualModelRunner vmr, string existingId = null)
         {
-            if (vmr == null || String.IsNullOrWhiteSpace(vmr.BasePath) || String.IsNullOrWhiteSpace(vmr.Id))
-                return true;
+            if (_ValidationService == null)
+            {
+                return new ResourceValidationResult
+                {
+                    ResourceType = "VirtualModelRunner",
+                    IsValid = true
+                };
+            }
 
-            string generatedWithSlash = VmrBasePathPrefix + vmr.Id + "/";
-            string generatedWithoutSlash = VmrBasePathPrefix + vmr.Id;
+            return await _ValidationService.ValidateVirtualModelRunnerAsync(tenantId, vmr, existingId).ConfigureAwait(false);
+        }
 
-            return String.Equals(vmr.BasePath, generatedWithSlash, StringComparison.OrdinalIgnoreCase)
-                || String.Equals(vmr.BasePath, generatedWithoutSlash, StringComparison.OrdinalIgnoreCase);
+        /// <summary>
+        /// Explain how a representative request would route through this VMR.
+        /// </summary>
+        public async Task<RoutingDecision> ExplainRouting(string tenantId, string id, RoutingSimulationRequest request)
+        {
+            VirtualModelRunner vmr = await Read(tenantId, id).ConfigureAwait(false);
+            if (_RoutingDecisionService == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "Routing explanation is not available.");
+            }
+
+            return await _RoutingDecisionService.ExplainAsync(vmr, request ?? new RoutingSimulationRequest()).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Read the effective configuration for a VMR.
+        /// </summary>
+        public async Task<EffectiveVirtualModelRunnerConfiguration> GetEffectiveConfiguration(string tenantId, string id)
+        {
+            VirtualModelRunner vmr = await Read(tenantId, id).ConfigureAwait(false);
+            if (_ValidationService == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "Effective configuration preview is not available.");
+            }
+
+            return await _ValidationService.BuildEffectiveVirtualModelRunnerConfigurationAsync(vmr).ConfigureAwait(false);
         }
 
         private async Task ValidateLoadBalancingPolicyAsync(string tenantId, string policyId)
@@ -268,6 +324,31 @@ namespace Conductor.Server.Controllers
             }
 
             return VmrBasePathPrefix + suffix + "/";
+        }
+
+        private static bool IsImplicitGeneratedBasePath(VirtualModelRunner vmr, string existingId)
+        {
+            if (vmr == null || String.IsNullOrWhiteSpace(vmr.BasePath))
+            {
+                return true;
+            }
+
+            string generatedFromPayloadId = VmrBasePathPrefix + vmr.Id + "/";
+            if (!String.Equals(vmr.BasePath, generatedFromPayloadId, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return String.IsNullOrWhiteSpace(existingId) || !String.Equals(vmr.Id, existingId, StringComparison.Ordinal);
+        }
+
+        private async Task ValidateAsync(string tenantId, VirtualModelRunner vmr, string existingId)
+        {
+            ResourceValidationResult validation = await Validate(tenantId, vmr, existingId).ConfigureAwait(false);
+            if (!validation.IsValid)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, String.Join(" ", validation.Errors.ConvertAll(item => item.Message)));
+            }
         }
     }
 }

@@ -19,14 +19,16 @@ namespace Conductor.Server.Controllers
     public class ModelRunnerEndpointController : BaseController
     {
         private readonly HealthCheckService _HealthCheckService;
+        private readonly ConfigurationValidationService _ValidationService;
 
         /// <summary>
         /// Instantiate the model runner endpoint controller.
         /// </summary>
-        public ModelRunnerEndpointController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null)
+        public ModelRunnerEndpointController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, ConfigurationValidationService validationService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
+            _ValidationService = validationService;
         }
 
         /// <summary>
@@ -42,6 +44,7 @@ namespace Conductor.Server.Controllers
 
             endpoint.Id = IdGenerator.NewModelRunnerEndpointId();
             endpoint.TenantId = tenantId;
+            await ValidateAsync(tenantId, endpoint, null).ConfigureAwait(false);
             endpoint = await Database.ModelRunnerEndpoint.CreateAsync(endpoint);
 
             // Notify health check service
@@ -88,6 +91,11 @@ namespace Conductor.Server.Controllers
             endpoint.Id = id;
             endpoint.TenantId = tenantId;
             endpoint.CreatedUtc = existing.CreatedUtc;
+            if (endpoint.ServiceState == 0 && existing.ServiceState != 0 && endpoint.ServiceState != existing.ServiceState)
+            {
+                endpoint.ServiceState = existing.ServiceState;
+            }
+            await ValidateAsync(tenantId, endpoint, id).ConfigureAwait(false);
             endpoint = await Database.ModelRunnerEndpoint.UpdateAsync(endpoint);
 
             // Notify health check service
@@ -219,6 +227,72 @@ namespace Conductor.Server.Controllers
                 request.ActiveFilter = activeFilter.Value;
 
             return await Database.ModelRunnerEndpoint.EnumerateAsync(tenantId, request);
+        }
+
+        /// <summary>
+        /// Validate a model runner endpoint draft.
+        /// </summary>
+        public async Task<ResourceValidationResult> Validate(string tenantId, ModelRunnerEndpoint endpoint, string existingId = null)
+        {
+            if (_ValidationService == null)
+            {
+                return new ResourceValidationResult
+                {
+                    ResourceType = "ModelRunnerEndpoint",
+                    IsValid = true
+                };
+            }
+
+            return await _ValidationService.ValidateModelRunnerEndpointAsync(tenantId, endpoint, existingId).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Put an endpoint into draining state.
+        /// </summary>
+        public async Task<ModelRunnerEndpoint> Drain(string tenantId, string id)
+        {
+            return await SetServiceState(tenantId, id, Core.Enums.EndpointServiceStateEnum.Draining).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Resume an endpoint to normal service state.
+        /// </summary>
+        public async Task<ModelRunnerEndpoint> Resume(string tenantId, string id)
+        {
+            return await SetServiceState(tenantId, id, Core.Enums.EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Put an endpoint into quarantined state.
+        /// </summary>
+        public async Task<ModelRunnerEndpoint> Quarantine(string tenantId, string id)
+        {
+            return await SetServiceState(tenantId, id, Core.Enums.EndpointServiceStateEnum.Quarantined).ConfigureAwait(false);
+        }
+
+        private async Task ValidateAsync(string tenantId, ModelRunnerEndpoint endpoint, string existingId)
+        {
+            ResourceValidationResult validation = await Validate(tenantId, endpoint, existingId).ConfigureAwait(false);
+            if (!validation.IsValid)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, String.Join(" ", validation.Errors.ConvertAll(item => item.Message)));
+            }
+        }
+
+        private async Task<ModelRunnerEndpoint> SetServiceState(string tenantId, string id, Core.Enums.EndpointServiceStateEnum serviceState)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id).ConfigureAwait(false);
+            if (endpoint == null)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            endpoint.ServiceState = serviceState;
+            await ValidateAsync(tenantId, endpoint, id).ConfigureAwait(false);
+            endpoint = await Database.ModelRunnerEndpoint.UpdateAsync(endpoint).ConfigureAwait(false);
+            _HealthCheckService?.OnEndpointUpdated(endpoint);
+            return endpoint;
         }
     }
 }

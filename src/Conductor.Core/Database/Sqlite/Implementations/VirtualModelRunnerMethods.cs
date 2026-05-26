@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
             vmr.CreatedUtc = DateTime.UtcNow;
             vmr.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(vmr.Id) + "', " +
                            "'" + _Driver.Sanitize(vmr.TenantId) + "', " +
                            "'" + _Driver.Sanitize(vmr.Name) + "', " +
@@ -47,6 +47,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.ModelConfigurationIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.ModelDefinitionIdsJson) + ", " +
+                           _Driver.FormatNullableString(vmr.ModelConfigurationMappingsJson) + ", " +
                            vmr.TimeoutMs + ", " +
                            _Driver.FormatBoolean(vmr.AllowEmbeddings) + ", " +
                            _Driver.FormatBoolean(vmr.AllowCompletions) + ", " +
@@ -134,6 +135,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "modelrunnerendpointids = " + _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            "modelconfigurationids = " + _Driver.FormatNullableString(vmr.ModelConfigurationIdsJson) + ", " +
                            "modeldefinitionids = " + _Driver.FormatNullableString(vmr.ModelDefinitionIdsJson) + ", " +
+                           "modelconfigurationmappings = " + _Driver.FormatNullableString(vmr.ModelConfigurationMappingsJson) + ", " +
                            "timeoutms = " + vmr.TimeoutMs + ", " +
                            "allowembeddings = " + _Driver.FormatBoolean(vmr.AllowEmbeddings) + ", " +
                            "allowcompletions = " + _Driver.FormatBoolean(vmr.AllowCompletions) + ", " +

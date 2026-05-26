@@ -44,6 +44,36 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Requestor user GUID, if authenticated. May be null.
+        /// </summary>
+        public string RequestorUserGuid { get; set; } = null;
+
+        /// <summary>
+        /// Requestor user email, if authenticated. May be null.
+        /// </summary>
+        public string RequestorUserEmail { get; set; } = null;
+
+        /// <summary>
+        /// Credential GUID used to authenticate the request, if available. May be null.
+        /// </summary>
+        public string CredentialGuid { get; set; } = null;
+
+        /// <summary>
+        /// Credential name used to authenticate the request, if available. May be null.
+        /// </summary>
+        public string CredentialName { get; set; } = null;
+
+        /// <summary>
+        /// Attached load-balancing policy GUID, if any. May be null.
+        /// </summary>
+        public string LoadBalancingPolicyGuid { get; set; } = null;
+
+        /// <summary>
+        /// Attached load-balancing policy name, if any. May be null.
+        /// </summary>
+        public string LoadBalancingPolicyName { get; set; } = null;
+
+        /// <summary>
         /// Model Endpoint GUID, if routed. May be null.
         /// </summary>
         public string ModelEndpointGuid { get; set; } = null;
@@ -72,6 +102,81 @@ namespace Conductor.Core.Models
         /// Model Configuration GUID. May be null.
         /// </summary>
         public string ModelConfigurationGuid { get; set; } = null;
+
+        /// <summary>
+        /// Requested model name before mutation. May be null.
+        /// </summary>
+        public string RequestedModel { get; set; } = null;
+
+        /// <summary>
+        /// Effective model name after mutation. May be null.
+        /// </summary>
+        public string EffectiveModel { get; set; } = null;
+
+        /// <summary>
+        /// Request type at the time of capture. May be null.
+        /// </summary>
+        public string RequestType { get; set; } = null;
+
+        /// <summary>
+        /// High-level routing outcome code. May be null.
+        /// </summary>
+        public string RoutingOutcomeCode { get; set; } = null;
+
+        /// <summary>
+        /// Denial reason code for non-routed requests. May be null.
+        /// </summary>
+        public string DenialReasonCode { get; set; } = null;
+
+        /// <summary>
+        /// Denial reason detail for non-routed requests. May be null.
+        /// </summary>
+        public string DenialReason { get; set; } = null;
+
+        /// <summary>
+        /// Session-affinity outcome for this request. May be null.
+        /// </summary>
+        public string SessionAffinityOutcome { get; set; } = null;
+
+        /// <summary>
+        /// Compact mutation summary for search and ledger views. May be null.
+        /// </summary>
+        public string MutationSummary { get; set; } = null;
+
+        /// <summary>
+        /// Compact routing explanation summary for search and ledger views. May be null.
+        /// </summary>
+        public string ExplanationSummary { get; set; } = null;
+
+        /// <summary>
+        /// Whether the request body was retained in detail storage.
+        /// </summary>
+        public bool RequestBodyRetained { get; set; } = false;
+
+        /// <summary>
+        /// Whether the request body was redacted before persistence.
+        /// </summary>
+        public bool RequestBodyRedacted { get; set; } = false;
+
+        /// <summary>
+        /// Whether request headers were redacted before persistence.
+        /// </summary>
+        public bool RequestHeadersRedacted { get; set; } = false;
+
+        /// <summary>
+        /// Whether the response body was retained in detail storage.
+        /// </summary>
+        public bool ResponseBodyRetained { get; set; } = false;
+
+        /// <summary>
+        /// Whether the response body was redacted before persistence.
+        /// </summary>
+        public bool ResponseBodyRedacted { get; set; } = false;
+
+        /// <summary>
+        /// Whether response headers were redacted before persistence.
+        /// </summary>
+        public bool ResponseHeadersRedacted { get; set; } = false;
 
         /// <summary>
         /// Requestor's source IP address.
@@ -187,12 +292,33 @@ namespace Conductor.Core.Models
                 TenantGuid = DataTableHelper.GetStringValue(row, "tenantguid"),
                 VirtualModelRunnerGuid = DataTableHelper.GetStringValue(row, "virtualmodelrunnerguid"),
                 VirtualModelRunnerName = DataTableHelper.GetStringValue(row, "virtualmodelrunnername"),
+                RequestorUserGuid = DataTableHelper.GetStringValue(row, "requestoruserguid"),
+                RequestorUserEmail = DataTableHelper.GetStringValue(row, "requestoruseremail"),
+                CredentialGuid = DataTableHelper.GetStringValue(row, "credentialguid"),
+                CredentialName = DataTableHelper.GetStringValue(row, "credentialname"),
+                LoadBalancingPolicyGuid = DataTableHelper.GetStringValue(row, "loadbalancingpolicyguid"),
+                LoadBalancingPolicyName = DataTableHelper.GetStringValue(row, "loadbalancingpolicyname"),
                 ModelEndpointGuid = DataTableHelper.GetStringValue(row, "modelendpointguid"),
                 ModelEndpointName = DataTableHelper.GetStringValue(row, "modelendpointname"),
                 ModelEndpointUrl = DataTableHelper.GetStringValue(row, "modelendpointurl"),
                 ModelDefinitionGuid = DataTableHelper.GetStringValue(row, "modeldefinitionguid"),
                 ModelDefinitionName = DataTableHelper.GetStringValue(row, "modeldefinitionname"),
                 ModelConfigurationGuid = DataTableHelper.GetStringValue(row, "modelconfigurationguid"),
+                RequestedModel = DataTableHelper.GetStringValue(row, "requestedmodel"),
+                EffectiveModel = DataTableHelper.GetStringValue(row, "effectivemodel"),
+                RequestType = DataTableHelper.GetStringValue(row, "requesttype"),
+                RoutingOutcomeCode = DataTableHelper.GetStringValue(row, "routingoutcomecode"),
+                DenialReasonCode = DataTableHelper.GetStringValue(row, "denialreasoncode"),
+                DenialReason = DataTableHelper.GetStringValue(row, "denialreason"),
+                SessionAffinityOutcome = DataTableHelper.GetStringValue(row, "sessionaffinityoutcome"),
+                MutationSummary = DataTableHelper.GetStringValue(row, "mutationsummary"),
+                ExplanationSummary = DataTableHelper.GetStringValue(row, "explanationsummary"),
+                RequestBodyRetained = DataTableHelper.GetBooleanValue(row, "requestbodyretained"),
+                RequestBodyRedacted = DataTableHelper.GetBooleanValue(row, "requestbodyredacted"),
+                RequestHeadersRedacted = DataTableHelper.GetBooleanValue(row, "requestheadersredacted"),
+                ResponseBodyRetained = DataTableHelper.GetBooleanValue(row, "responsebodyretained"),
+                ResponseBodyRedacted = DataTableHelper.GetBooleanValue(row, "responsebodyredacted"),
+                ResponseHeadersRedacted = DataTableHelper.GetBooleanValue(row, "responseheadersredacted"),
                 RequestorSourceIp = DataTableHelper.GetStringValue(row, "requestorsourceip"),
                 HttpMethod = DataTableHelper.GetStringValue(row, "httpmethod"),
                 HttpUrl = DataTableHelper.GetStringValue(row, "httpurl"),

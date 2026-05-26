@@ -205,6 +205,11 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Operator-managed service state.
+        /// </summary>
+        public EndpointServiceStateEnum ServiceState { get; set; } = EndpointServiceStateEnum.Normal;
+
+        /// <summary>
         /// RigMonitor integration settings for this endpoint.
         /// </summary>
         public RigMonitorConfiguration RigMonitor
@@ -320,7 +325,8 @@ namespace Conductor.Core.Models
                 HealthyThreshold = DataTableHelper.GetIntValue(row, "healthythreshold"),
                 HealthCheckUseAuth = DataTableHelper.GetBooleanValue(row, "healthcheckuseauth"),
                 MaxParallelRequests = DataTableHelper.GetIntValue(row, "maxparallelrequests"),
-                Weight = DataTableHelper.GetIntValue(row, "weight")
+                Weight = DataTableHelper.GetIntValue(row, "weight"),
+                ServiceState = DataTableHelper.GetEnumValue<EndpointServiceStateEnum>(row, "servicestate", EndpointServiceStateEnum.Normal)
             };
 
             if (obj.Port == 0) obj.Port = 11434;

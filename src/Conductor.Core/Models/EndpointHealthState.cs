@@ -92,6 +92,11 @@ namespace Conductor.Core.Models
         public RigMonitorEndpointStatus RigMonitor { get; set; } = null;
 
         /// <summary>
+        /// Operator-managed service state.
+        /// </summary>
+        public Enums.EndpointServiceStateEnum ServiceState { get; set; } = Enums.EndpointServiceStateEnum.Normal;
+
+        /// <summary>
         /// History of recent health check results.
         /// Thread-safe access requires holding the Lock.
         /// </summary>
@@ -122,6 +127,7 @@ namespace Conductor.Core.Models
                 EndpointName = this.EndpointName,
                 TenantId = this.TenantId,
                 IsHealthy = this.IsHealthy,
+                ServiceState = this.ServiceState,
                 LastCheckUtc = this.LastCheckUtc,
                 LastHealthyUtc = this.LastHealthyUtc,
                 LastUnhealthyUtc = this.LastUnhealthyUtc,

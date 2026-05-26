@@ -2833,6 +2833,76 @@ body {
   text-decoration: underline;
 }
 
+.validation-panel {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-color);
+}
+
+.validation-panel.success {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.validation-panel.error {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.validation-list {
+  margin: 10px 0 0 18px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.validation-list.warning {
+  color: var(--text-secondary);
+}
+
+.service-state-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.service-state-badge.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-color);
+}
+
+.service-state-badge.warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning-color);
+}
+
+.service-state-badge.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger-color);
+}
+
+.service-state-badge.neutral {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--text-secondary);
+}
+
+.summary-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.summary-badge-row.compact {
+  gap: 6px;
+}
+
 .http-status {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
@@ -3035,6 +3105,144 @@ body {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.timeline-item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.timeline-item p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.detail-table-container {
+  margin-top: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--card-bg);
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.detail-table th,
+.detail-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
+  font-size: 13px;
+}
+
+.detail-table th {
+  background: var(--bg-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.detail-table tbody tr:hover {
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.detail-table-title-cell {
+  min-width: 180px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.detail-table-status-cell {
+  width: 140px;
+  white-space: nowrap;
+}
+
+.detail-table-empty-cell {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.explain-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.explain-candidate-card,
+.explain-detail-panel,
+.facet-card {
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.explain-candidate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.facet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.facet-card strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.facet-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.facet-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.observability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
 }
 
 /* ===== Tour & Onboarding ===== */

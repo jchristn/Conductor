@@ -16,12 +16,15 @@ namespace Conductor.Server.Controllers
     /// </summary>
     public class ModelConfigurationController : BaseController
     {
+        private readonly ConfigurationValidationService _ValidationService;
+
         /// <summary>
         /// Instantiate the model configuration controller.
         /// </summary>
-        public ModelConfigurationController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging)
+        public ModelConfigurationController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, ConfigurationValidationService validationService = null)
             : base(database, authService, serializer, logging)
         {
+            _ValidationService = validationService;
         }
 
         /// <summary>
@@ -37,6 +40,7 @@ namespace Conductor.Server.Controllers
 
             configuration.Id = IdGenerator.NewModelConfigurationId();
             configuration.TenantId = tenantId;
+            await ValidateAsync(tenantId, configuration, null).ConfigureAwait(false);
             configuration = await Database.ModelConfiguration.CreateAsync(configuration);
 
             return configuration;
@@ -80,9 +84,27 @@ namespace Conductor.Server.Controllers
             configuration.Id = id;
             configuration.TenantId = tenantId;
             configuration.CreatedUtc = existing.CreatedUtc;
+            await ValidateAsync(tenantId, configuration, id).ConfigureAwait(false);
             configuration = await Database.ModelConfiguration.UpdateAsync(configuration);
 
             return configuration;
+        }
+
+        /// <summary>
+        /// Validate a model configuration draft.
+        /// </summary>
+        public async Task<ResourceValidationResult> Validate(string tenantId, ModelConfiguration configuration, string existingId = null)
+        {
+            if (_ValidationService == null)
+            {
+                return new ResourceValidationResult
+                {
+                    ResourceType = "ModelConfiguration",
+                    IsValid = true
+                };
+            }
+
+            return await _ValidationService.ValidateModelConfigurationAsync(tenantId, configuration, existingId).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -133,6 +155,15 @@ namespace Conductor.Server.Controllers
                 request.ActiveFilter = activeFilter.Value;
 
             return await Database.ModelConfiguration.EnumerateAsync(tenantId, request);
+        }
+
+        private async Task ValidateAsync(string tenantId, ModelConfiguration configuration, string existingId)
+        {
+            ResourceValidationResult validation = await Validate(tenantId, configuration, existingId).ConfigureAwait(false);
+            if (!validation.IsValid)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, String.Join(" ", validation.Errors.ConvertAll(item => item.Message)));
+            }
         }
     }
 }

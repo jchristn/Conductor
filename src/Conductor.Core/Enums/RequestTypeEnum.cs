@@ -186,6 +186,26 @@ namespace Conductor.Core.Enums
         /// </summary>
         ReadModelRunnerEndpointRigMonitor,
 
+        /// <summary>
+        /// Validate a model runner endpoint draft.
+        /// </summary>
+        ValidateModelRunnerEndpoint,
+
+        /// <summary>
+        /// Place a model runner endpoint into draining state.
+        /// </summary>
+        DrainModelRunnerEndpoint,
+
+        /// <summary>
+        /// Resume a model runner endpoint to normal service state.
+        /// </summary>
+        ResumeModelRunnerEndpoint,
+
+        /// <summary>
+        /// Place a model runner endpoint into quarantined state.
+        /// </summary>
+        QuarantineModelRunnerEndpoint,
+
         // ==================== Model Definition Operations ====================
 
         /// <summary>
@@ -213,6 +233,11 @@ namespace Conductor.Core.Enums
         /// </summary>
         ListModelDefinitions,
 
+        /// <summary>
+        /// Validate a model definition draft.
+        /// </summary>
+        ValidateModelDefinition,
+
         // ==================== Model Configuration Operations ====================
 
         /// <summary>
@@ -239,6 +264,11 @@ namespace Conductor.Core.Enums
         /// List model configurations.
         /// </summary>
         ListModelConfigurations,
+
+        /// <summary>
+        /// Validate a model configuration draft.
+        /// </summary>
+        ValidateModelConfiguration,
 
         // ==================== Virtual Model Runner Operations ====================
 
@@ -272,6 +302,21 @@ namespace Conductor.Core.Enums
         /// </summary>
         ReadVirtualModelRunnerHealth,
 
+        /// <summary>
+        /// Validate a virtual model runner draft.
+        /// </summary>
+        ValidateVirtualModelRunner,
+
+        /// <summary>
+        /// Explain routing for a virtual model runner.
+        /// </summary>
+        ExplainVirtualModelRunnerRouting,
+
+        /// <summary>
+        /// Read the effective configuration for a virtual model runner.
+        /// </summary>
+        ReadVirtualModelRunnerEffective,
+
         // ==================== Load-Balancing Policy Operations ====================
 
         /// <summary>
@@ -303,6 +348,11 @@ namespace Conductor.Core.Enums
         /// List load-balancing policy metrics.
         /// </summary>
         ListLoadBalancingPolicyMetrics,
+
+        /// <summary>
+        /// Validate a load-balancing policy draft.
+        /// </summary>
+        ValidateLoadBalancingPolicy,
 
         // ==================== Proxied API Operations (OpenAI) ====================
 
@@ -405,6 +455,50 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// Validate backup.
         /// </summary>
-        ValidateBackup
+        ValidateBackup,
+
+        // ==================== Request History Operations ====================
+
+        /// <summary>
+        /// Search request history entries.
+        /// </summary>
+        ListRequestHistory,
+
+        /// <summary>
+        /// Read request history detail.
+        /// </summary>
+        ReadRequestHistory,
+
+        /// <summary>
+        /// Read full request history detail.
+        /// </summary>
+        ReadRequestHistoryDetail,
+
+        /// <summary>
+        /// Delete a request history entry.
+        /// </summary>
+        DeleteRequestHistory,
+
+        /// <summary>
+        /// Bulk delete request history entries.
+        /// </summary>
+        DeleteRequestHistoryBulk,
+
+        /// <summary>
+        /// Read request history summary.
+        /// </summary>
+        ReadRequestHistorySummary,
+
+        // ==================== Observability Operations ====================
+
+        /// <summary>
+        /// Read Prometheus-formatted metrics.
+        /// </summary>
+        ReadObservabilityMetrics,
+
+        /// <summary>
+        /// Read JSON metrics summary.
+        /// </summary>
+        ReadObservabilityMetricsSummary
     }
 }

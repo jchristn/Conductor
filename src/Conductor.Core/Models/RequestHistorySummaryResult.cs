@@ -43,6 +43,21 @@ namespace Conductor.Core.Models
         public long TotalFailure { get; set; } = 0;
 
         /// <summary>
+        /// Counts grouped by HTTP status class.
+        /// </summary>
+        public Dictionary<string, long> StatusClassCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
+        /// Counts grouped by denial reason code.
+        /// </summary>
+        public Dictionary<string, long> DenialReasonCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
+        /// Counts grouped by session-affinity outcome.
+        /// </summary>
+        public Dictionary<string, long> SessionAffinityOutcomeCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
         /// Total requests across all buckets.
         /// </summary>
         public long TotalRequests => TotalSuccess + TotalFailure;

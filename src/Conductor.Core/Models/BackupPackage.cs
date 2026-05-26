@@ -11,7 +11,7 @@ namespace Conductor.Core.Models
         /// <summary>
         /// Schema version for forward/backward compatibility.
         /// </summary>
-        public string SchemaVersion { get; set; } = "1.1";
+        public string SchemaVersion { get; set; } = "1.2";
 
         /// <summary>
         /// UTC timestamp when the backup was created.

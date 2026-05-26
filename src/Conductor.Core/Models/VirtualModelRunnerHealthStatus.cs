@@ -34,6 +34,16 @@ namespace Conductor.Core.Models
         public int HealthyEndpointCount { get; set; }
 
         /// <summary>
+        /// Number of endpoints currently draining.
+        /// </summary>
+        public int DrainingEndpointCount { get; set; }
+
+        /// <summary>
+        /// Number of endpoints currently quarantined.
+        /// </summary>
+        public int QuarantinedEndpointCount { get; set; }
+
+        /// <summary>
         /// Total number of endpoints.
         /// </summary>
         public int TotalEndpointCount { get; set; }

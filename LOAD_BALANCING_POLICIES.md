@@ -22,14 +22,17 @@ Without a policy, a VMR uses its `LoadBalancingMode` directly.
 When a proxied request reaches a VMR, Conductor evaluates routing in this order:
 
 1. Conductor resolves the target VMR from the request path or host.
-2. Conductor builds a candidate list from the VMR's attached endpoints.
-3. Only endpoints that are active, healthy, and currently have capacity remain in the candidate pool.
-4. If the VMR has no active attached policy, Conductor uses the VMR's `LoadBalancingMode`.
-5. If a policy is attached and active, every `Filters` rule must pass.
-6. Every `Ranking` metric must also be available for a candidate to remain eligible.
-7. Conductor normalizes each ranking metric, applies `Weight`, and sums the scores.
-8. If the top candidates tie, `TieBreaker` decides between them.
-9. If policy evaluation cannot produce a candidate:
+2. Conductor applies request-type gating, strict-model checks, and any model/configuration mutation logic required by the VMR.
+3. Conductor checks session affinity before normal candidate selection.
+4. Conductor builds a candidate list from the VMR's attached endpoints.
+5. For new work, only endpoints that are active, not quarantined, not draining, healthy, and currently have capacity remain in the candidate pool.
+6. A draining endpoint may still be reused when an existing sticky-session pin already targets it.
+7. If the VMR has no active attached policy, Conductor uses the VMR's `LoadBalancingMode`.
+8. If a policy is attached and active, every `Filters` rule must pass.
+9. Every `Ranking` metric must also be available for a candidate to remain eligible.
+10. Conductor normalizes each ranking metric, applies `Weight`, and sums the scores.
+11. If the top candidates tie, `TieBreaker` decides between them.
+12. If policy evaluation cannot produce a candidate:
    - `UseLegacyLoadBalancingMode` falls back to the VMR's `LoadBalancingMode`
    - `FailClosed` returns an error instead of routing the request
 
@@ -43,6 +46,21 @@ When a proxied request reaches a VMR, Conductor evaluates routing in this order:
 - `MaxTelemetryAgeMs` controls how old cached telemetry may be before those metrics are treated as unavailable.
 - `FiltersJson`, `RankingJson`, `LabelsJson`, `TagsJson`, and `MetadataJson` are persistence fields. Do not send them in REST payloads.
 - `health.isHealthy` and `health.hasCapacity` are usually redundant because the proxy already pre-filters to healthy endpoints with capacity. They are still valid if you want to make that requirement explicit.
+
+## Explainability and simulation
+
+Policy behavior is now inspectable through two management-plane workflows:
+
+- `POST /v1.0/virtualmodelrunners/{id}/explain-routing` simulates a representative request and returns the same structured `RoutingDecision` model that the live proxy path uses internally.
+- Request-history detail responses can include the captured `RoutingDecision` when request history is enabled on the VMR.
+
+Use these surfaces to answer questions such as:
+
+- which candidates were eliminated before policy evaluation
+- which filter rule removed a specific endpoint
+- which ranking metrics produced the winning score
+- whether a draining endpoint was reused because of session affinity
+- which request properties were mutated and why
 
 ## Top-level policy JSON
 

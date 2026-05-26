@@ -19,6 +19,7 @@ namespace Conductor.Server.Controllers
     public class BackupController : BaseController
     {
         private string _Header = "[BackupController] ";
+        private readonly ConfigurationValidationService _ValidationService;
 
         /// <summary>
         /// Instantiate the backup controller.
@@ -27,9 +28,11 @@ namespace Conductor.Server.Controllers
         /// <param name="authService">Authentication service.</param>
         /// <param name="serializer">Serializer.</param>
         /// <param name="logging">Logging module.</param>
-        public BackupController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging)
+        /// <param name="validationService">Shared configuration validation service.</param>
+        public BackupController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, ConfigurationValidationService validationService = null)
             : base(database, authService, serializer, logging)
         {
+            _ValidationService = validationService;
         }
 
         /// <summary>
@@ -135,6 +138,7 @@ namespace Conductor.Server.Controllers
 
             BackupPackage package = restoreRequest.Package;
             RestoreOptions options = restoreRequest.Options ?? new RestoreOptions();
+            NormalizeBackupPackage(package);
 
             Logging.Info(_Header + "starting restore operation with conflict resolution: " + options.ConflictResolution);
 
@@ -191,6 +195,7 @@ namespace Conductor.Server.Controllers
                 foreach (ModelRunnerEndpoint endpoint in package.ModelRunnerEndpoints.Where(e => tenantIdsToRestore.Contains(e.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
+                    await ValidateBackupEndpointAsync(endpoint, token).ConfigureAwait(false);
                     await RestoreModelRunnerEndpointAsync(endpoint, options.ConflictResolution, result.Summary.ModelRunnerEndpoints, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored model runner endpoints: " + result.Summary.ModelRunnerEndpoints.Created + " created, " + result.Summary.ModelRunnerEndpoints.Updated + " updated, " + result.Summary.ModelRunnerEndpoints.Skipped + " skipped");
@@ -199,6 +204,7 @@ namespace Conductor.Server.Controllers
                 foreach (ModelDefinition modelDef in package.ModelDefinitions.Where(m => tenantIdsToRestore.Contains(m.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
+                    await ValidateBackupModelDefinitionAsync(modelDef, token).ConfigureAwait(false);
                     await RestoreModelDefinitionAsync(modelDef, options.ConflictResolution, result.Summary.ModelDefinitions, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored model definitions: " + result.Summary.ModelDefinitions.Created + " created, " + result.Summary.ModelDefinitions.Updated + " updated, " + result.Summary.ModelDefinitions.Skipped + " skipped");
@@ -207,6 +213,7 @@ namespace Conductor.Server.Controllers
                 foreach (ModelConfiguration modelConfig in package.ModelConfigurations.Where(m => tenantIdsToRestore.Contains(m.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
+                    await ValidateBackupModelConfigurationAsync(modelConfig, token).ConfigureAwait(false);
                     await RestoreModelConfigurationAsync(modelConfig, options.ConflictResolution, result.Summary.ModelConfigurations, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored model configurations: " + result.Summary.ModelConfigurations.Created + " created, " + result.Summary.ModelConfigurations.Updated + " updated, " + result.Summary.ModelConfigurations.Skipped + " skipped");
@@ -215,6 +222,7 @@ namespace Conductor.Server.Controllers
                 foreach (LoadBalancingPolicy policy in package.LoadBalancingPolicies.Where(p => tenantIdsToRestore.Contains(p.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
+                    await ValidateBackupPolicyAsync(policy, token).ConfigureAwait(false);
                     await RestoreLoadBalancingPolicyAsync(policy, options.ConflictResolution, result.Summary.LoadBalancingPolicies, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored load-balancing policies: " + result.Summary.LoadBalancingPolicies.Created + " created, " + result.Summary.LoadBalancingPolicies.Updated + " updated, " + result.Summary.LoadBalancingPolicies.Skipped + " skipped");
@@ -223,6 +231,7 @@ namespace Conductor.Server.Controllers
                 foreach (VirtualModelRunner vmr in package.VirtualModelRunners.Where(v => tenantIdsToRestore.Contains(v.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
+                    await ValidateBackupVirtualModelRunnerAsync(vmr, token).ConfigureAwait(false);
                     await RestoreVirtualModelRunnerAsync(vmr, options.ConflictResolution, result.Summary.VirtualModelRunners, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored virtual model runners: " + result.Summary.VirtualModelRunners.Created + " created, " + result.Summary.VirtualModelRunners.Updated + " updated, " + result.Summary.VirtualModelRunners.Skipped + " skipped");
@@ -258,6 +267,7 @@ namespace Conductor.Server.Controllers
                 throw new ArgumentNullException(nameof(package));
 
             Logging.Info(_Header + "validating backup package");
+            NormalizeBackupPackage(package);
 
             ValidationResult result = new ValidationResult { IsValid = true };
 
@@ -340,6 +350,15 @@ namespace Conductor.Server.Controllers
                 foreach (ModelRunnerEndpoint endpoint in package.ModelRunnerEndpoints)
                 {
                     token.ThrowIfCancellationRequested();
+                    await AppendBackupValidationErrorsAsync(
+                        result,
+                        "endpoint",
+                        endpoint.Name ?? endpoint.Id,
+                        endpoint.Id,
+                        _ValidationService != null
+                            ? await _ValidationService.ValidateModelRunnerEndpointAsync(endpoint.TenantId, endpoint, endpoint.Id, token).ConfigureAwait(false)
+                            : null).ConfigureAwait(false);
+
                     if (await Database.ModelRunnerEndpoint.ExistsAsync(endpoint.TenantId, endpoint.Id, token).ConfigureAwait(false))
                     {
                         result.Conflicts.Add("Model Runner Endpoint '" + endpoint.Name + "' (ID: " + endpoint.Id + ") already exists.");
@@ -353,6 +372,15 @@ namespace Conductor.Server.Controllers
                 foreach (ModelDefinition modelDef in package.ModelDefinitions)
                 {
                     token.ThrowIfCancellationRequested();
+                    await AppendBackupValidationErrorsAsync(
+                        result,
+                        "model definition",
+                        modelDef.Name ?? modelDef.Id,
+                        modelDef.Id,
+                        _ValidationService != null
+                            ? await _ValidationService.ValidateModelDefinitionAsync(modelDef.TenantId, modelDef, modelDef.Id, token).ConfigureAwait(false)
+                            : null).ConfigureAwait(false);
+
                     if (await Database.ModelDefinition.ExistsAsync(modelDef.TenantId, modelDef.Id, token).ConfigureAwait(false))
                     {
                         result.Conflicts.Add("Model Definition '" + modelDef.Name + "' (ID: " + modelDef.Id + ") already exists.");
@@ -366,6 +394,15 @@ namespace Conductor.Server.Controllers
                 foreach (ModelConfiguration modelConfig in package.ModelConfigurations)
                 {
                     token.ThrowIfCancellationRequested();
+                    await AppendBackupValidationErrorsAsync(
+                        result,
+                        "model configuration",
+                        modelConfig.Name ?? modelConfig.Id,
+                        modelConfig.Id,
+                        _ValidationService != null
+                            ? await _ValidationService.ValidateModelConfigurationAsync(modelConfig.TenantId, modelConfig, modelConfig.Id, token).ConfigureAwait(false)
+                            : null).ConfigureAwait(false);
+
                     if (await Database.ModelConfiguration.ExistsAsync(modelConfig.TenantId, modelConfig.Id, token).ConfigureAwait(false))
                     {
                         result.Conflicts.Add("Model Configuration '" + modelConfig.Name + "' (ID: " + modelConfig.Id + ") already exists.");
@@ -379,6 +416,15 @@ namespace Conductor.Server.Controllers
                 foreach (VirtualModelRunner vmr in package.VirtualModelRunners)
                 {
                     token.ThrowIfCancellationRequested();
+                    await AppendBackupValidationErrorsAsync(
+                        result,
+                        "virtual model runner",
+                        vmr.Name ?? vmr.Id,
+                        vmr.Id,
+                        _ValidationService != null
+                            ? await _ValidationService.ValidateVirtualModelRunnerAsync(vmr.TenantId, vmr, vmr.Id, token).ConfigureAwait(false)
+                            : null).ConfigureAwait(false);
+
                     if (await Database.VirtualModelRunner.ExistsAsync(vmr.TenantId, vmr.Id, token).ConfigureAwait(false))
                     {
                         result.Conflicts.Add("Virtual Model Runner '" + vmr.Name + "' (ID: " + vmr.Id + ") already exists.");
@@ -392,6 +438,15 @@ namespace Conductor.Server.Controllers
                 foreach (LoadBalancingPolicy policy in package.LoadBalancingPolicies)
                 {
                     token.ThrowIfCancellationRequested();
+                    await AppendBackupValidationErrorsAsync(
+                        result,
+                        "load-balancing policy",
+                        policy.Name ?? policy.Id,
+                        policy.Id,
+                        _ValidationService != null
+                            ? await _ValidationService.ValidateLoadBalancingPolicyAsync(policy.TenantId, policy, policy.Id, token).ConfigureAwait(false)
+                            : null).ConfigureAwait(false);
+
                     if (await Database.LoadBalancingPolicy.ExistsAsync(policy.TenantId, policy.Id, token).ConfigureAwait(false))
                     {
                         result.Conflicts.Add("Load Balancing Policy '" + policy.Name + "' (ID: " + policy.Id + ") already exists.");
@@ -399,9 +454,117 @@ namespace Conductor.Server.Controllers
                 }
             }
 
+            result.IsValid = result.Errors.Count < 1;
+
             Logging.Info(_Header + "validation completed: " + (result.IsValid ? "valid" : "invalid") + " with " + result.Conflicts.Count + " conflicts");
 
             return result;
+        }
+
+        private void NormalizeBackupPackage(BackupPackage package)
+        {
+            if (package == null) return;
+
+            package.SchemaVersion = String.IsNullOrWhiteSpace(package.SchemaVersion) ? "1.0" : package.SchemaVersion;
+            package.Tenants = package.Tenants;
+            package.Users = package.Users;
+            package.Credentials = package.Credentials;
+            package.ModelDefinitions = package.ModelDefinitions;
+            package.ModelConfigurations = package.ModelConfigurations;
+            package.ModelRunnerEndpoints = package.ModelRunnerEndpoints;
+            package.VirtualModelRunners = package.VirtualModelRunners;
+            package.LoadBalancingPolicies = package.LoadBalancingPolicies;
+            package.Administrators = package.Administrators;
+
+            foreach (ModelRunnerEndpoint endpoint in package.ModelRunnerEndpoints)
+            {
+                endpoint.ServiceState = endpoint.ServiceState;
+                endpoint.RigMonitor = endpoint.RigMonitor;
+                endpoint.Labels = endpoint.Labels;
+                endpoint.Tags = endpoint.Tags;
+            }
+
+            foreach (VirtualModelRunner vmr in package.VirtualModelRunners)
+            {
+                vmr.ModelRunnerEndpointIds = vmr.ModelRunnerEndpointIds;
+                vmr.ModelConfigurationIds = vmr.ModelConfigurationIds;
+                vmr.ModelDefinitionIds = vmr.ModelDefinitionIds;
+                vmr.ModelConfigurationMappings = vmr.ModelConfigurationMappings;
+                vmr.Labels = vmr.Labels;
+                vmr.Tags = vmr.Tags;
+            }
+        }
+
+        private async Task ValidateBackupEndpointAsync(ModelRunnerEndpoint endpoint, CancellationToken token)
+        {
+            if (_ValidationService == null || endpoint == null) return;
+
+            ResourceValidationResult validation = await _ValidationService.ValidateModelRunnerEndpointAsync(endpoint.TenantId, endpoint, endpoint.Id, token).ConfigureAwait(false);
+            ThrowIfInvalid(validation, "endpoint");
+        }
+
+        private async Task ValidateBackupModelDefinitionAsync(ModelDefinition definition, CancellationToken token)
+        {
+            if (_ValidationService == null || definition == null) return;
+
+            ResourceValidationResult validation = await _ValidationService.ValidateModelDefinitionAsync(definition.TenantId, definition, definition.Id, token).ConfigureAwait(false);
+            ThrowIfInvalid(validation, "model definition");
+        }
+
+        private async Task ValidateBackupModelConfigurationAsync(ModelConfiguration configuration, CancellationToken token)
+        {
+            if (_ValidationService == null || configuration == null) return;
+
+            ResourceValidationResult validation = await _ValidationService.ValidateModelConfigurationAsync(configuration.TenantId, configuration, configuration.Id, token).ConfigureAwait(false);
+            ThrowIfInvalid(validation, "model configuration");
+        }
+
+        private async Task ValidateBackupPolicyAsync(LoadBalancingPolicy policy, CancellationToken token)
+        {
+            if (_ValidationService == null || policy == null) return;
+
+            ResourceValidationResult validation = await _ValidationService.ValidateLoadBalancingPolicyAsync(policy.TenantId, policy, policy.Id, token).ConfigureAwait(false);
+            ThrowIfInvalid(validation, "load-balancing policy");
+        }
+
+        private async Task ValidateBackupVirtualModelRunnerAsync(VirtualModelRunner vmr, CancellationToken token)
+        {
+            if (_ValidationService == null || vmr == null) return;
+
+            ResourceValidationResult validation = await _ValidationService.ValidateVirtualModelRunnerAsync(vmr.TenantId, vmr, vmr.Id, token).ConfigureAwait(false);
+            ThrowIfInvalid(validation, "virtual model runner");
+        }
+
+        private static void ThrowIfInvalid(ResourceValidationResult validation, string resourceType)
+        {
+            if (validation == null || validation.IsValid)
+            {
+                return;
+            }
+
+            throw new WebserverException(ApiResultEnum.BadRequest, "Backup " + resourceType + " failed validation: " + String.Join(" ", validation.Errors.Select(item => item.Message)));
+        }
+
+        private static Task AppendBackupValidationErrorsAsync(
+            ValidationResult result,
+            string resourceType,
+            string resourceName,
+            string resourceId,
+            ResourceValidationResult validation)
+        {
+            if (result == null || validation == null || validation.IsValid)
+            {
+                return Task.CompletedTask;
+            }
+
+            string displayName = !String.IsNullOrWhiteSpace(resourceName) ? resourceName : resourceId;
+            foreach (ResourceValidationIssue issue in validation.Errors)
+            {
+                result.Errors.Add("Backup " + resourceType + " '" + displayName + "' (ID: " + resourceId + ") failed validation: " + issue.Message);
+            }
+
+            result.IsValid = false;
+            return Task.CompletedTask;
         }
 
         private async Task RestoreAdministratorAsync(Administrator admin, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)

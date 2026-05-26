@@ -149,6 +149,34 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Explicit model-to-configuration mappings.
+        /// </summary>
+        public Dictionary<string, string> ModelConfigurationMappings
+        {
+            get => _ModelConfigurationMappings;
+            set
+            {
+                _ModelConfigurationMappings = (value != null ? value : new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase));
+                _ModelConfigurationMappingsJson = _Serializer.SerializeJson(_ModelConfigurationMappings, false);
+            }
+        }
+
+        /// <summary>
+        /// JSON-serialized model-to-configuration mappings for database storage.
+        /// </summary>
+        [JsonIgnore]
+        public string ModelConfigurationMappingsJson
+        {
+            get => _ModelConfigurationMappingsJson;
+            set
+            {
+                _ModelConfigurationMappingsJson = (String.IsNullOrEmpty(value) ? "{}" : value);
+                _ModelConfigurationMappings = _Serializer.DeserializeJson<Dictionary<string, string>>(_ModelConfigurationMappingsJson)
+                    ?? new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+            }
+        }
+
+        /// <summary>
         /// Request timeout in milliseconds.
         /// </summary>
         public int TimeoutMs
@@ -309,6 +337,8 @@ namespace Conductor.Core.Models
         private string _ModelConfigurationIdsJson = "[]";
         private List<string> _ModelDefinitionIds = new List<string>();
         private string _ModelDefinitionIdsJson = "[]";
+        private Dictionary<string, string> _ModelConfigurationMappings = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+        private string _ModelConfigurationMappingsJson = "{}";
         private int _TimeoutMs = 60000;
         private int _SessionTimeoutMs = 600000;
         private int _SessionMaxEntries = 10000;
@@ -373,6 +403,12 @@ namespace Conductor.Core.Models
             if (!String.IsNullOrEmpty(configIdsJson))
             {
                 obj.ModelConfigurationIdsJson = configIdsJson;
+            }
+
+            string configMappingsJson = DataTableHelper.GetStringValue(row, "modelconfigurationmappings");
+            if (!String.IsNullOrEmpty(configMappingsJson))
+            {
+                obj.ModelConfigurationMappingsJson = configMappingsJson;
             }
 
             string defIdsJson = DataTableHelper.GetStringValue(row, "modeldefinitionids");

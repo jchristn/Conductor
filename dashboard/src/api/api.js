@@ -307,6 +307,11 @@ class ConductorApi {
     return this.request('POST', '/v1.0/modelrunnerendpoints', endpoint);
   }
 
+  async validateModelRunnerEndpoint(endpoint, existingId = null) {
+    const query = existingId ? `?existingId=${encodeURIComponent(existingId)}` : '';
+    return this.request('POST', `/v1.0/modelrunnerendpoints/validate${query}`, endpoint);
+  }
+
   async updateModelRunnerEndpoint(id, endpoint) {
     return this.request('PUT', `/v1.0/modelrunnerendpoints/${id}`, endpoint);
   }
@@ -330,6 +335,21 @@ class ConductorApi {
     return this.request('GET', `/v1.0/modelrunnerendpoints/${id}/rigmonitor${query}`);
   }
 
+  async drainModelRunnerEndpoint(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/drain${query}`);
+  }
+
+  async resumeModelRunnerEndpoint(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/resume${query}`);
+  }
+
+  async quarantineModelRunnerEndpoint(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/quarantine${query}`);
+  }
+
   // Model Definition APIs
   async listModelDefinitions(params = {}) {
     const query = this.buildQueryString(params);
@@ -342,6 +362,11 @@ class ConductorApi {
 
   async createModelDefinition(definition) {
     return this.request('POST', '/v1.0/modeldefinitions', definition);
+  }
+
+  async validateModelDefinition(definition, existingId = null) {
+    const query = existingId ? `?existingId=${encodeURIComponent(existingId)}` : '';
+    return this.request('POST', `/v1.0/modeldefinitions/validate${query}`, definition);
   }
 
   async updateModelDefinition(id, definition) {
@@ -367,6 +392,11 @@ class ConductorApi {
     return this.request('POST', '/v1.0/modelconfigurations', configuration);
   }
 
+  async validateModelConfiguration(configuration, existingId = null) {
+    const query = existingId ? `?existingId=${encodeURIComponent(existingId)}` : '';
+    return this.request('POST', `/v1.0/modelconfigurations/validate${query}`, configuration);
+  }
+
   async updateModelConfiguration(id, configuration) {
     return this.request('PUT', `/v1.0/modelconfigurations/${id}`, configuration);
   }
@@ -389,6 +419,11 @@ class ConductorApi {
 
   async createLoadBalancingPolicy(policy) {
     return this.request('POST', '/v1.0/loadbalancingpolicies', policy);
+  }
+
+  async validateLoadBalancingPolicy(policy, existingId = null) {
+    const query = existingId ? `?existingId=${encodeURIComponent(existingId)}` : '';
+    return this.request('POST', `/v1.0/loadbalancingpolicies/validate${query}`, policy);
   }
 
   async updateLoadBalancingPolicy(id, policy) {
@@ -419,6 +454,11 @@ class ConductorApi {
     return this.request('POST', '/v1.0/virtualmodelrunners', vmr);
   }
 
+  async validateVirtualModelRunner(vmr, existingId = null) {
+    const query = existingId ? `?existingId=${encodeURIComponent(existingId)}` : '';
+    return this.request('POST', `/v1.0/virtualmodelrunners/validate${query}`, vmr);
+  }
+
   async updateVirtualModelRunner(id, vmr) {
     return this.request('PUT', `/v1.0/virtualmodelrunners/${id}`, vmr);
   }
@@ -431,6 +471,43 @@ class ConductorApi {
   async getVirtualModelRunnerHealth(id, tenantId = null) {
     const query = tenantId ? `?tenantId=${tenantId}` : '';
     return this.request('GET', `/v1.0/virtualmodelrunners/${id}/health${query}`);
+  }
+
+  async getVirtualModelRunnerEffectiveConfiguration(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/virtualmodelrunners/${id}/effective${query}`);
+  }
+
+  async explainVirtualModelRunnerRouting(id, payload = {}, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/virtualmodelrunners/${id}/explain-routing${query}`, payload);
+  }
+
+  async getObservabilityMetricsSummary() {
+    return this.request('GET', '/v1.0/observability/metrics/summary');
+  }
+
+  async getObservabilityMetricsText() {
+    const headers = {};
+
+    if (this.adminEmail && this.adminPassword) {
+      headers['x-admin-email'] = this.adminEmail;
+      headers['x-admin-password'] = this.adminPassword;
+    } else if (this.bearerToken) {
+      headers['Authorization'] = `Bearer ${this.bearerToken}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}/v1.0/observability/metrics`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw createApiError(response, errorData, '/v1.0/observability/metrics', 'GET');
+    }
+
+    return response.text();
   }
 
   // Admin Login API
@@ -522,12 +599,22 @@ class ConductorApi {
    * @returns {Promise<Object>} Summary result with Data (array of buckets), StartUtc, EndUtc, Interval, TotalSuccess, TotalFailure, TotalRequests
    */
   async getRequestHistorySummary(params = {}) {
-    const parts = [];
-    if (params.vmrGuid) parts.push('vmrGuid=' + encodeURIComponent(params.vmrGuid));
-    if (params.startUtc) parts.push('startUtc=' + params.startUtc);
-    if (params.endUtc) parts.push('endUtc=' + params.endUtc);
-    if (params.interval) parts.push('interval=' + params.interval);
-    const queryString = parts.length > 0 ? '?' + parts.join('&') : '';
+    const query = new URLSearchParams();
+    if (params.vmrGuid) query.append('vmrGuid', params.vmrGuid);
+    if (params.startUtc) query.append('startUtc', params.startUtc);
+    if (params.endUtc) query.append('endUtc', params.endUtc);
+    if (params.interval) query.append('interval', params.interval);
+    if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
+    if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
+    if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
+    if (params.loadBalancingPolicyGuid) query.append('loadBalancingPolicyGuid', params.loadBalancingPolicyGuid);
+    if (params.modelName) query.append('modelName', params.modelName);
+    if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
+    if (params.sessionAffinityOutcome) query.append('sessionAffinityOutcome', params.sessionAffinityOutcome);
+    if (params.statusClass) query.append('statusClass', params.statusClass);
+    if (params.sourceIp) query.append('sourceIp', params.sourceIp);
+    if (params.httpStatus) query.append('httpStatus', params.httpStatus);
+    const queryString = query.toString() ? '?' + query.toString() : '';
     return this.request('GET', `/v1.0/requesthistory/summary${queryString}`);
   }
 
@@ -547,6 +634,16 @@ class ConductorApi {
     const query = new URLSearchParams();
     if (params.vmrGuid) query.append('vmrGuid', params.vmrGuid);
     if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
+    if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
+    if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
+    if (params.loadBalancingPolicyGuid) query.append('loadBalancingPolicyGuid', params.loadBalancingPolicyGuid);
+    if (params.modelName) query.append('modelName', params.modelName);
+    if (params.mutationSummary) query.append('mutationSummary', params.mutationSummary);
+    if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
+    if (params.sessionAffinityOutcome) query.append('sessionAffinityOutcome', params.sessionAffinityOutcome);
+    if (params.statusClass) query.append('statusClass', params.statusClass);
+    if (params.createdAfterUtc) query.append('createdAfterUtc', params.createdAfterUtc);
+    if (params.createdBeforeUtc) query.append('createdBeforeUtc', params.createdBeforeUtc);
     if (params.sourceIp) query.append('sourceIp', params.sourceIp);
     if (params.httpStatus) query.append('httpStatus', params.httpStatus);
     if (params.page) query.append('page', params.page);
@@ -595,6 +692,16 @@ class ConductorApi {
     const query = new URLSearchParams();
     if (params.vmrGuid) query.append('vmrGuid', params.vmrGuid);
     if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
+    if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
+    if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
+    if (params.loadBalancingPolicyGuid) query.append('loadBalancingPolicyGuid', params.loadBalancingPolicyGuid);
+    if (params.modelName) query.append('modelName', params.modelName);
+    if (params.mutationSummary) query.append('mutationSummary', params.mutationSummary);
+    if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
+    if (params.sessionAffinityOutcome) query.append('sessionAffinityOutcome', params.sessionAffinityOutcome);
+    if (params.statusClass) query.append('statusClass', params.statusClass);
+    if (params.createdAfterUtc) query.append('createdAfterUtc', params.createdAfterUtc);
+    if (params.createdBeforeUtc) query.append('createdBeforeUtc', params.createdBeforeUtc);
     if (params.sourceIp) query.append('sourceIp', params.sourceIp);
     if (params.httpStatus) query.append('httpStatus', params.httpStatus);
     const queryString = query.toString() ? '?' + query.toString() : '';

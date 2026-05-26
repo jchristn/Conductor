@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.git/
+.vs/
+.idea/
+dashboard/node_modules/
+dashboard/dist/
+docker/data/
+docker/logs/
+*.db
+*.db-shm
+*.db-wal
+*.log
