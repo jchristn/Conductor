@@ -68,6 +68,12 @@ function TimeSeriesChart({ data }) {
   const innerHeight = height - padTop - padBottom;
   const maxRequests = Math.max(1, ...buckets.map(item => item.RequestCount || 0));
   const maxLatency = Math.max(1, ...buckets.map(item => item.P95DurationMs || 0));
+  const requestAxisTicks = maxRequests <= 1
+    ? [{ ratio: 0, label: 0 }, { ratio: 1, label: 1 }]
+    : [0, 0.25, 0.5, 0.75, 1].map(tick => ({
+      ratio: tick,
+      label: Math.round(maxRequests * tick)
+    }));
   const groupWidth = buckets.length > 0 ? innerWidth / buckets.length : innerWidth;
   const barWidth = Math.max(2, Math.min(24, groupWidth * 0.62));
 
@@ -106,13 +112,13 @@ function TimeSeriesChart({ data }) {
         <>
           <svg className="analytics-chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={CHART_TOOLTIP}>
             <title>{CHART_TOOLTIP}</title>
-            {[0, 0.25, 0.5, 0.75, 1].map(tick => {
-              const y = padTop + innerHeight - tick * innerHeight;
+            {requestAxisTicks.map(tick => {
+              const y = padTop + innerHeight - tick.ratio * innerHeight;
               return (
-                <g key={tick}>
+                <g key={tick.ratio}>
                   <title>Request-count grid line used to read stacked bar height against the highest-volume bucket in the active range.</title>
                   <line x1={padLeft} x2={width - padRight} y1={y} y2={y} />
-                  <text x={padLeft - 8} y={y + 4} textAnchor="end">{Math.round(maxRequests * tick)}</text>
+                  <text x={padLeft - 8} y={y + 4} textAnchor="end">{tick.label}</text>
                 </g>
               );
             })}
