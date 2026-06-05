@@ -218,7 +218,7 @@ function DataTable({
                 title={col.tooltip || ''}
               >
                 <div className="th-content">
-                  <span>{col.label}</span>
+                  <span>{col.headerRender ? col.headerRender() : col.label}</span>
                   {col.sortable !== false && getSortIcon(col.key)}
                 </div>
               </th>

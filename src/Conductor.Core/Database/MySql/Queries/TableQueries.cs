@@ -306,6 +306,19 @@ namespace Conductor.Core.Database.MySql.Queries
                 httpstatus INT,
                 firsttokentimems INT,
                 responsetimems INT,
+                traceid VARCHAR(48),
+                providerrequestid VARCHAR(255),
+                providername VARCHAR(128),
+                prompttokens INT,
+                completiontokens INT,
+                totaltokens INT,
+                tokenspersecondoverall DECIMAL(18,6),
+                tokenspersecondgeneration DECIMAL(18,6),
+                analyticscaptured TINYINT(1) NOT NULL DEFAULT 0,
+                analyticsversion INT NOT NULL DEFAULT 1,
+                dominantstagekind VARCHAR(128),
+                dominantstagedurationms INT,
+                analyticsfailurecode VARCHAR(128),
                 objectkey VARCHAR(512) NOT NULL,
                 createdutc DATETIME(6) NOT NULL,
                 requesttransfertype INT NOT NULL DEFAULT 0,
@@ -318,6 +331,57 @@ namespace Conductor.Core.Database.MySql.Queries
                 INDEX idx_requesthistory_requestorsourceip (requestorsourceip),
                 FOREIGN KEY (tenantguid) REFERENCES tenants(id),
                 FOREIGN KEY (virtualmodelrunnerguid) REFERENCES virtualmodelrunners(id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create request analytics events table.
+        /// </summary>
+        public static readonly string CreateRequestAnalyticsEventsTable = @"
+            CREATE TABLE IF NOT EXISTS requestanalyticsevents (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantguid VARCHAR(48),
+                requesthistoryid VARCHAR(48),
+                traceid VARCHAR(48),
+                virtualmodelrunnerguid VARCHAR(48),
+                virtualmodelrunnername VARCHAR(255),
+                modelendpointguid VARCHAR(48),
+                modelendpointname VARCHAR(255),
+                modelendpointurl VARCHAR(512),
+                providername VARCHAR(128),
+                apiformat VARCHAR(128),
+                modelname VARCHAR(255),
+                sequence INT NOT NULL DEFAULT 0,
+                stagekind VARCHAR(128),
+                phase VARCHAR(128),
+                stagename VARCHAR(255),
+                startedutc DATETIME(6) NOT NULL,
+                completedutc DATETIME(6),
+                durationms INT,
+                success TINYINT(1) NOT NULL DEFAULT 1,
+                httpstatus INT,
+                errortype VARCHAR(128),
+                errormessage TEXT,
+                endpointlimiterwaitms INT,
+                requesttoheadersms INT,
+                headerstofirsttokenms INT,
+                firsttokentolasttokenms INT,
+                clienttotalms INT,
+                prompttokens INT,
+                completiontokens INT,
+                totaltokens INT,
+                requestbytes BIGINT,
+                responsebytes BIGINT,
+                tokenspersecond DECIMAL(18,6),
+                rawprovidermetrics TEXT,
+                createdutc DATETIME(6) NOT NULL,
+                INDEX idx_requestanalyticsevents_tenant_created (tenantguid, createdutc),
+                INDEX idx_requestanalyticsevents_requesthistoryid (requesthistoryid),
+                INDEX idx_requestanalyticsevents_traceid (traceid),
+                INDEX idx_requestanalyticsevents_stagekind (stagekind),
+                INDEX idx_requestanalyticsevents_endpoint_created (modelendpointguid, createdutc),
+                INDEX idx_requestanalyticsevents_vmr_created (virtualmodelrunnerguid, createdutc),
+                FOREIGN KEY (requesthistoryid) REFERENCES requesthistory(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
 

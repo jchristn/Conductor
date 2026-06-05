@@ -9,7 +9,7 @@ import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 import { copyToClipboard } from '../utils/clipboard';
 
-function CollapsibleSection({ title, meta, content, defaultExpanded = false, showFormatJson = false }) {
+function CollapsibleSection({ title, meta, content, defaultExpanded = false, showFormatJson = false, tooltip }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
   const [formatted, setFormatted] = useState(false);
@@ -48,7 +48,7 @@ function CollapsibleSection({ title, meta, content, defaultExpanded = false, sho
 
   return (
     <div className="collapsible-section">
-      <div className="collapsible-header" onClick={() => setExpanded(!expanded)}>
+      <div className="collapsible-header" onClick={() => setExpanded(!expanded)} title={tooltip || 'Captured request history payload detail. Expand to inspect the retained value.'}>
         <div className="collapsible-header-left">
           <svg
             width="12"
@@ -59,8 +59,8 @@ function CollapsibleSection({ title, meta, content, defaultExpanded = false, sho
           >
             <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
           </svg>
-          <span className="collapsible-title">{title}</span>
-          {meta && <span className="collapsible-meta">{meta}</span>}
+          <span className="collapsible-title" title={tooltip || 'Captured request history payload detail. Expand to inspect the retained value.'}>{title}</span>
+          {meta && <span className="collapsible-meta" title="Retention and redaction metadata for this captured value">{meta}</span>}
         </div>
         <div className="collapsible-actions">
           {showFormatJson && (
@@ -93,16 +93,33 @@ function CollapsibleSection({ title, meta, content, defaultExpanded = false, sho
         </div>
       </div>
       {expanded && (
-        <div className="collapsible-content">
-          <pre>{displayContent || '(empty)'}</pre>
+        <div className="collapsible-content" title={tooltip || 'Retained request history payload content for this section'}>
+          <pre title={tooltip || 'Retained request history payload content for this section'}>{displayContent || '(empty)'}</pre>
         </div>
       )}
     </div>
   );
 }
 
-function formatFacetEntries(facets) {
-  return Object.entries(facets || {})
+const DEFAULT_STATUS_CLASS_COUNTS = {
+  NoStatus: 0,
+  '1xx': 0,
+  '2xx': 0,
+  '3xx': 0,
+  '4xx': 0,
+  '5xx': 0
+};
+
+const DEFAULT_DENIAL_REASON_COUNTS = {
+  None: 0
+};
+
+const DEFAULT_SESSION_AFFINITY_COUNTS = {
+  None: 0
+};
+
+function formatFacetEntries(facets, defaults = {}) {
+  return Object.entries({ ...defaults, ...(facets || {}) })
     .sort((left, right) => right[1] - left[1]);
 }
 
@@ -125,6 +142,15 @@ function getStageOutcomeTone(outcome) {
     default:
       return 'neutral';
   }
+}
+
+function DetailItem({ label, tooltip, children }) {
+  return (
+    <div className="detail-item" title={tooltip}>
+      <label title={tooltip}>{label}:</label>
+      <span title={tooltip}>{children}</span>
+    </div>
+  );
 }
 
 function toLocalDateTimeValue(value) {
@@ -155,11 +181,16 @@ function RequestHistory() {
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [detailData, setDetailData] = useState(null);
+  const [detailAnalytics, setDetailAnalytics] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showSelectedDeleteConfirm, setShowSelectedDeleteConfirm] = useState(false);
+  const [selectedDeleteLoading, setSelectedDeleteLoading] = useState(false);
+  const [deleteResult, setDeleteResult] = useState(null);
   const [showJsonModal, setShowJsonModal] = useState(false);
   const [jsonModalData, setJsonModalData] = useState(null);
   const [requestHistoryIssue, setRequestHistoryIssue] = useState(null);
@@ -272,16 +303,25 @@ function RequestHistory() {
     fetchSummary();
   }, [fetchSummary]);
 
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page, pageSize, filters]);
+
   const handleViewDetail = async (entry) => {
     setSelectedEntry(entry);
     setShowDetail(true);
     setDetailLoading(true);
     try {
-      const detail = await api.getRequestHistoryDetail(entry.Id);
+      const [detail, analytics] = await Promise.all([
+        api.getRequestHistoryDetail(entry.Id),
+        api.getRequestHistoryAnalytics(entry.Id).catch(() => null)
+      ]);
       setDetailData(detail);
+      setDetailAnalytics(analytics);
     } catch (err) {
       setError('Failed to fetch detail: ' + err.message);
       setDetailData(null);
+      setDetailAnalytics(null);
     } finally {
       setDetailLoading(false);
     }
@@ -325,12 +365,62 @@ function RequestHistory() {
       const result = await api.bulkDeleteRequestHistory(params);
       setShowBulkDeleteConfirm(false);
       setError(null);
-      alert(`Deleted ${result.DeletedCount} entries`);
+      setDeleteResult({
+        title: 'Request History Deleted',
+        message: `Deleted ${result.DeletedCount} entries matching the active filters.`
+      });
       fetchEntries();
     } catch (err) {
       setError('Failed to bulk delete: ' + err.message);
     } finally {
       setBulkDeleteLoading(false);
+    }
+  };
+
+  const handleToggleSelect = (id, checked) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectPage = (checked) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      entries.forEach((entry) => {
+        if (checked) {
+          next.add(entry.Id);
+        } else {
+          next.delete(entry.Id);
+        }
+      });
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    try {
+      setSelectedDeleteLoading(true);
+      const ids = Array.from(selectedIds);
+      const result = await api.deleteRequestHistoryEntries(ids);
+      setShowSelectedDeleteConfirm(false);
+      setSelectedIds(new Set());
+      setError(null);
+      setDeleteResult({
+        title: 'Selected Entries Deleted',
+        message: `Deleted ${result.DeletedCount} selected ${result.DeletedCount === 1 ? 'entry' : 'entries'}.`
+      });
+      fetchEntries();
+      fetchSummary();
+    } catch (err) {
+      setError('Failed to delete selected entries: ' + err.message);
+    } finally {
+      setSelectedDeleteLoading(false);
     }
   };
 
@@ -388,6 +478,61 @@ function RequestHistory() {
     return <span className="badge badge-info">{label}</span>;
   };
 
+  const renderAnalyticsTimeline = () => {
+    const events = detailAnalytics?.Events || [];
+    if (!detailAnalytics && !detailData?.AnalyticsCaptured) {
+      return null;
+    }
+
+    const maxDuration = Math.max(1, ...events.map(event => event.DurationMs || 0));
+
+    return (
+      <div className="detail-section">
+        <h3 title="Request analytics captured across Conductor routing, upstream provider handling, and streaming lifecycle stages">Performance</h3>
+        <div className="detail-grid detail-grid-two">
+          <DetailItem label="Trace" tooltip="Trace identifier that correlates this request history entry with analytics events, logs, and provider metadata">
+            {detailData.TraceId ? <CopyableId value={detailData.TraceId} /> : '-'}
+          </DetailItem>
+          <DetailItem label="Provider" tooltip="Normalized upstream provider family inferred from the selected endpoint or provider response">
+            {detailData.ProviderName || '-'}
+          </DetailItem>
+          <DetailItem label="Provider Request" tooltip="Provider-native request identifier captured from safe response headers or response body when available">
+            {detailData.ProviderRequestId ? <CopyableId value={detailData.ProviderRequestId} /> : '-'}
+          </DetailItem>
+          <DetailItem label="Tokens" tooltip="Total provider-reported prompt and completion token count when the provider returned usage metrics">
+            {detailData.TotalTokens != null ? `${detailData.TotalTokens} total` : '-'}
+          </DetailItem>
+          <DetailItem label="TPS" tooltip="Generation tokens per second when available, otherwise overall tokens per second for the request">
+            {detailData.TokensPerSecondGeneration ?? detailData.TokensPerSecondOverall ?? '-'}
+          </DetailItem>
+          <DetailItem label="Dominant Stage" tooltip="Longest captured analytics stage, or the analytics failure code if detailed capture was unavailable">
+            {detailData.DominantStageKind || detailData.AnalyticsFailureCode || '-'}
+          </DetailItem>
+        </div>
+        <div className="analytics-stage-list modal-list">
+          {events.length < 1 ? (
+            <div className="analytics-empty" title="Detailed analytics were enabled for this request, but no per-stage timing events were retained">No stage events were recorded for this request.</div>
+          ) : events.map(event => (
+            <div
+              className="analytics-stage-row"
+              key={event.Id || `${event.Sequence}-${event.StageKind}`}
+              title="One captured request analytics stage. The bar shows this stage duration relative to the slowest recorded stage for this request."
+            >
+              <div className="analytics-stage-label" title="Stage name, stable stage kind, and success state captured during request processing">
+                <strong title="Human-readable analytics stage name">{event.StageName || event.StageKind}</strong>
+                <span title="Stable analytics stage kind and whether the stage completed successfully">{event.StageKind} / {event.Success ? 'success' : 'failed'}</span>
+              </div>
+              <div className="analytics-stage-track" title="Relative duration bar compared with the slowest captured stage in this request">
+                <div className="analytics-stage-fill" style={{ width: `${Math.max(2, ((event.DurationMs || 0) / maxDuration) * 100)}%` }} />
+              </div>
+              <span className="analytics-stage-total" title="Measured duration for this individual analytics stage">{event.DurationMs != null ? `${event.DurationMs} ms` : '-'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const getVmrName = (id) => {
     const vmr = virtualModelRunners.find(v => v.Id === id);
     return vmr ? vmr.Name : id || '-';
@@ -398,7 +543,40 @@ function RequestHistory() {
     return ep ? ep.Name : id || '-';
   };
 
+  const selectedCount = selectedIds.size;
+  const allPageSelected = entries.length > 0 && entries.every(entry => selectedIds.has(entry.Id));
+  const somePageSelected = entries.some(entry => selectedIds.has(entry.Id));
+
   const columns = [
+    {
+      key: 'selection',
+      label: '',
+      tooltip: 'Select request history entries on this page',
+      width: '44px',
+      sortable: false,
+      filterable: false,
+      headerRender: () => (
+        <input
+          type="checkbox"
+          checked={allPageSelected}
+          ref={(input) => {
+            if (input) {
+              input.indeterminate = !allPageSelected && somePageSelected;
+            }
+          }}
+          onChange={(event) => handleToggleSelectPage(event.target.checked)}
+          title="Select all request history entries on this page"
+        />
+      ),
+      render: (item) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(item.Id)}
+          onChange={(event) => handleToggleSelect(item.Id, event.target.checked)}
+          title={`Select request history entry ${item.Id}`}
+        />
+      )
+    },
     {
       key: 'Id',
       label: 'ID',
@@ -529,19 +707,19 @@ function RequestHistory() {
             <div className="facet-grid">
               <div className="facet-card">
                 <strong>Status Classes</strong>
-                {formatFacetEntries(summary.StatusClassCounts).map(([key, value]) => (
+                {formatFacetEntries(summary.StatusClassCounts, DEFAULT_STATUS_CLASS_COUNTS).map(([key, value]) => (
                   <div className="facet-row" key={`status-class-${key}`}><span>{key}</span><span>{value}</span></div>
                 ))}
               </div>
               <div className="facet-card">
                 <strong>Denial Reasons</strong>
-                {formatFacetEntries(summary.DenialReasonCounts).slice(0, 6).map(([key, value]) => (
+                {formatFacetEntries(summary.DenialReasonCounts, DEFAULT_DENIAL_REASON_COUNTS).slice(0, 6).map(([key, value]) => (
                   <div className="facet-row" key={`denial-${key}`}><span>{key}</span><span>{value}</span></div>
                 ))}
               </div>
               <div className="facet-card">
                 <strong>Session Affinity</strong>
-                {formatFacetEntries(summary.SessionAffinityOutcomeCounts).map(([key, value]) => (
+                {formatFacetEntries(summary.SessionAffinityOutcomeCounts, DEFAULT_SESSION_AFFINITY_COUNTS).map(([key, value]) => (
                   <div className="facet-row" key={`session-${key}`}><span>{key}</span><span>{value}</span></div>
                 ))}
               </div>
@@ -696,6 +874,17 @@ function RequestHistory() {
         </div>
 
         <div className="pagination-controls">
+          {selectedCount > 0 && (
+            <button
+              className="btn-icon request-history-selected-delete"
+              onClick={() => setShowSelectedDeleteConfirm(true)}
+              title={`Delete ${selectedCount} selected request history ${selectedCount === 1 ? 'entry' : 'entries'}`}
+            >
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
           <select
             value={pageSize}
             onChange={(e) => {
@@ -747,7 +936,7 @@ function RequestHistory() {
         </div>
       </div>
 
-      <DataTable data={entries} columns={columns} loading={loading} hidePagination={true} onRowClick={handleViewDetail} />
+      <DataTable data={entries} columns={columns} loading={loading} pageSize={pageSize} hidePagination={true} onRowClick={handleViewDetail} />
 
       <Modal
         isOpen={Boolean(requestHistoryIssue)}
@@ -791,7 +980,7 @@ function RequestHistory() {
 
       <Modal
         isOpen={showDetail}
-        onClose={() => { setShowDetail(false); setDetailData(null); }}
+        onClose={() => { setShowDetail(false); setDetailData(null); setDetailAnalytics(null); }}
         onDelete={detailData ? () => {
           setShowDetail(false);
           setSelectedEntry(detailData);
@@ -806,138 +995,118 @@ function RequestHistory() {
           <div className="detail-content">
             <div className="detail-section">
               <div className="detail-header-row">
-                <div className="detail-id">
+                <div className="detail-id" title="Primary request history record ID used for support lookup, API queries, and correlation with retained request details">
                   <label>ID:</label>
                   <code>{detailData.Id}</code>
                   <CopyButton value={detailData.Id} title="Copy ID" />
                 </div>
               </div>
-              <div className="detail-grid">
-                <div className="detail-item">
-                  <label>Time:</label>
-                  <span>{formatDate(detailData.CreatedUtc)}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Completed:</label>
-                  <span>{formatDate(detailData.CompletedUtc)}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Response Time:</label>
-                  <span>{detailData.ResponseTimeMs != null ? `${detailData.ResponseTimeMs} ms` : '-'}</span>
-                </div>
-                <div className="detail-item">
-                  <label>TTFT:</label>
-                  <span>{detailData.FirstTokenTimeMs != null ? `${detailData.FirstTokenTimeMs} ms` : '-'}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Source IP:</label>
-                  <span>{detailData.RequestorSourceIp}</span>
-                </div>
-                <div className="detail-item">
-                  <label>HTTP Status:</label>
+              <div className="detail-grid detail-grid-three">
+                <DetailItem label="Time" tooltip="When Conductor received the request">
+                  {formatDate(detailData.CreatedUtc)}
+                </DetailItem>
+                <DetailItem label="Completed" tooltip="When Conductor finished processing the request">
+                  {formatDate(detailData.CompletedUtc)}
+                </DetailItem>
+                <DetailItem label="Response Time" tooltip="Total elapsed request duration measured by Conductor">
+                  {detailData.ResponseTimeMs != null ? `${detailData.ResponseTimeMs} ms` : '-'}
+                </DetailItem>
+                <DetailItem label="TTFT" tooltip="Time to first token or first response byte; for non-streaming responses this can match total response time">
+                  {detailData.FirstTokenTimeMs != null ? `${detailData.FirstTokenTimeMs} ms` : '-'}
+                </DetailItem>
+                <DetailItem label="Source IP" tooltip="Client source IP address recorded for the request">
+                  {detailData.RequestorSourceIp || '-'}
+                </DetailItem>
+                <DetailItem label="HTTP Status" tooltip="Final HTTP status code returned to the caller">
                   <span className={`http-status ${getStatusClass(detailData.HttpStatus)}`}>
                     {detailData.HttpStatus || '-'}
                   </span>
-                </div>
-                <div className="detail-item">
-                  <label>Request Transfer:</label>
-                  <span>{getTransferTypeLabel(detailData.RequestTransferType)}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Response Transfer:</label>
-                  <span>{getTransferTypeLabel(detailData.ResponseTransferType)}</span>
-                </div>
-                <div className="detail-item">
-                  <label>URL:</label>
-                  <span><code>{detailData.HttpMethod} {detailData.HttpUrl}</code></span>
-                </div>
+                </DetailItem>
+                <DetailItem label="Request Transfer" tooltip="Request body transfer mode observed by Conductor">
+                  {getTransferTypeLabel(detailData.RequestTransferType)}
+                </DetailItem>
+                <DetailItem label="Response Transfer" tooltip="Response transfer mode returned by Conductor, including streaming responses">
+                  {getTransferTypeLabel(detailData.ResponseTransferType)}
+                </DetailItem>
+                <DetailItem label="URL" tooltip="HTTP method and request URL path that reached Conductor">
+                  <code>{detailData.HttpMethod} {detailData.HttpUrl}</code>
+                </DetailItem>
               </div>
             </div>
 
+              {renderAnalyticsTimeline()}
+
               <div className="detail-section">
-                <h3>Routing</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <label>VMR:</label>
-                  <span>{detailData.VirtualModelRunnerName || detailData.VirtualModelRunnerGuid || '-'}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Endpoint:</label>
-                  <span>{detailData.ModelEndpointName || detailData.ModelEndpointGuid || '-'}</span>
-                </div>
-                <div className="detail-item">
-                  <label>Model Definition:</label>
-                  <span>{detailData.ModelDefinitionName || detailData.ModelDefinitionGuid || '-'}</span>
-                </div>
-                  <div className="detail-item">
-                    <label>Endpoint URL:</label>
-                    <span>{detailData.ModelEndpointUrl || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Requested Model:</label>
-                    <span>{detailData.RequestedModel || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Effective Model:</label>
-                    <span>{detailData.EffectiveModel || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Policy:</label>
-                    <span>{detailData.LoadBalancingPolicyName || detailData.LoadBalancingPolicyGuid || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Request Type:</label>
-                    <span>{detailData.RequestType || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Outcome:</label>
-                    <span>{detailData.RoutingOutcomeCode || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Denied Because:</label>
-                    <span>{detailData.DenialReasonCode || detailData.DenialReason || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Session Affinity:</label>
-                    <span>{detailData.SessionAffinityOutcome || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Mutation Summary:</label>
-                    <span>{detailData.MutationSummary || '-'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <label>Explanation:</label>
-                    <span>{detailData.ExplanationSummary || '-'}</span>
-                  </div>
+                <h3 title="Routing metadata showing how Conductor matched the request to a VMR, endpoint, model, and policy outcome">Routing</h3>
+                <div className="detail-grid detail-grid-three">
+                  <DetailItem label="VMR" tooltip="Virtual Model Runner that matched this request">
+                    {detailData.VirtualModelRunnerName || detailData.VirtualModelRunnerGuid || '-'}
+                  </DetailItem>
+                  <DetailItem label="Endpoint" tooltip="Model Runner Endpoint selected by routing">
+                    {detailData.ModelEndpointName || detailData.ModelEndpointGuid || '-'}
+                  </DetailItem>
+                  <DetailItem label="Model Definition" tooltip="Model definition associated with the routed model, when captured">
+                    {detailData.ModelDefinitionName || detailData.ModelDefinitionGuid || '-'}
+                  </DetailItem>
+                  <DetailItem label="Endpoint URL" tooltip="Upstream endpoint URL selected for the request">
+                    {detailData.ModelEndpointUrl || '-'}
+                  </DetailItem>
+                  <DetailItem label="Requested Model" tooltip="Model name requested by the caller before Conductor mapping or mutation">
+                    {detailData.RequestedModel || '-'}
+                  </DetailItem>
+                  <DetailItem label="Effective Model" tooltip="Final upstream model name after VMR mapping and request mutation">
+                    {detailData.EffectiveModel || '-'}
+                  </DetailItem>
+                  <DetailItem label="Policy" tooltip="Load-balancing policy used during routing, if one was attached">
+                    {detailData.LoadBalancingPolicyName || detailData.LoadBalancingPolicyGuid || '-'}
+                  </DetailItem>
+                  <DetailItem label="Request Type" tooltip="Conductor request type resolved from the HTTP method and URL path">
+                    {detailData.RequestType || '-'}
+                  </DetailItem>
+                  <DetailItem label="Outcome" tooltip="Stable routing outcome code recorded by the routing decision">
+                    {detailData.RoutingOutcomeCode || '-'}
+                  </DetailItem>
+                  <DetailItem label="Denied Because" tooltip="Routing denial reason when Conductor could not select an endpoint">
+                    {detailData.DenialReasonCode || detailData.DenialReason || '-'}
+                  </DetailItem>
+                  <DetailItem label="Session Affinity" tooltip="Session affinity outcome such as hit, miss, created, expired, or disabled">
+                    {detailData.SessionAffinityOutcome || '-'}
+                  </DetailItem>
+                  <DetailItem label="Mutation Summary" tooltip="Summary of request model or parameter mutations applied before proxying">
+                    {detailData.MutationSummary || '-'}
+                  </DetailItem>
+                  <DetailItem label="Explanation" tooltip="Compact explanation of the routing decision">
+                    {detailData.ExplanationSummary || '-'}
+                  </DetailItem>
                 </div>
 
                 {detailData.RoutingDecision && (
                   <div className="explain-detail-panel">
                     <div className="summary-badge-row compact">
-                      <span className={`service-state-badge ${detailData.RoutingDecision.Success ? 'success' : 'danger'}`}>
+                      <span className={`service-state-badge ${detailData.RoutingDecision.Success ? 'success' : 'danger'}`} title="Overall routing result showing whether Conductor selected an endpoint or denied the request">
                         {detailData.RoutingDecision.Success ? 'Routed' : 'Denied'}
                       </span>
-                      <span className="service-state-badge neutral">HTTP {detailData.RoutingDecision.HttpStatusCode}</span>
-                      {detailData.RoutingDecision.PolicyFallbackUsed && <span className="service-state-badge warning">Policy Fallback</span>}
+                      <span className="service-state-badge neutral" title="HTTP status code Conductor associated with the routing decision">HTTP {detailData.RoutingDecision.HttpStatusCode}</span>
+                      {detailData.RoutingDecision.PolicyFallbackUsed && <span className="service-state-badge warning" title="The attached load-balancing policy could not select a route, so Conductor used fallback routing">Policy Fallback</span>}
                     </div>
 
                     <div className="detail-table-container">
                       <table className="detail-table explanation-table">
                         <thead>
                           <tr>
-                            <th>Title</th>
-                            <th>Description</th>
-                            <th>Status</th>
+                            <th title="Name of the routing decision step that was evaluated">Title</th>
+                            <th title="Explanation recorded by the routing engine for this decision step">Description</th>
+                            <th title="Outcome of the routing decision step, such as passed, denied, fallback, or unknown">Status</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(detailData.RoutingDecision.Timeline || []).length > 0 ? (
                             (detailData.RoutingDecision.Timeline || []).map((stage, index) => (
-                              <tr key={`detail-stage-${index}`}>
-                                <td className="detail-table-title-cell">{stage.Title || '-'}</td>
-                                <td>{stage.Message || '-'}</td>
-                                <td className="detail-table-status-cell">
-                                  <span className={`service-state-badge ${getStageOutcomeTone(stage.Outcome)}`}>
+                              <tr key={`detail-stage-${index}`} title="One routing decision step recorded while Conductor evaluated endpoint eligibility and selected or denied a route">
+                                <td className="detail-table-title-cell" title="Name of the routing decision step that was evaluated">{stage.Title || '-'}</td>
+                                <td title="Explanation recorded by the routing engine for this decision step">{stage.Message || '-'}</td>
+                                <td className="detail-table-status-cell" title="Outcome of this routing decision step">
+                                  <span className={`service-state-badge ${getStageOutcomeTone(stage.Outcome)}`} title="Routing step outcome code recorded for this decision point">
                                     {stage.Outcome || 'Unknown'}
                                   </span>
                                 </td>
@@ -945,7 +1114,7 @@ function RequestHistory() {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan="3" className="detail-table-empty-cell">No routing explanation steps recorded.</td>
+                              <td colSpan="3" className="detail-table-empty-cell" title="No per-step routing timeline was captured for this request">No routing explanation steps recorded.</td>
                             </tr>
                           )}
                         </tbody>
@@ -956,12 +1125,13 @@ function RequestHistory() {
               </div>
 
               <div className="detail-section">
-                <h3>Request</h3>
+                <h3 title="Captured caller request data after Conductor applies configured retention, truncation, and redaction rules">Request</h3>
                 <CollapsibleSection
                   title="Headers"
                   meta={detailData.RequestHeadersRedacted ? 'Redacted' : null}
                   content={detailData.RequestHeaders || {}}
                   defaultExpanded={false}
+                  tooltip="HTTP request headers captured from the caller after Conductor redaction. Sensitive headers may be masked or omitted."
                 />
                 <CollapsibleSection
                   title="Body"
@@ -969,16 +1139,18 @@ function RequestHistory() {
                   content={detailData.RequestBody}
                   defaultExpanded={false}
                   showFormatJson={true}
+                  tooltip="HTTP request body captured from the caller when body retention is enabled. The metadata indicates retained, redacted, truncated, or metadata-only storage."
               />
             </div>
 
               <div className="detail-section">
-                <h3>Response</h3>
+                <h3 title="Captured response data after Conductor receives the upstream response and applies retention, truncation, and redaction rules">Response</h3>
                 <CollapsibleSection
                   title="Headers"
                   meta={detailData.ResponseHeadersRedacted ? 'Redacted' : null}
                   content={detailData.ResponseHeaders || {}}
                   defaultExpanded={false}
+                  tooltip="HTTP response headers captured from the upstream provider or Conductor response after redaction. Sensitive headers may be masked or omitted."
                 />
                 <CollapsibleSection
                   title="Body"
@@ -986,6 +1158,7 @@ function RequestHistory() {
                   content={detailData.ResponseBody}
                   defaultExpanded={false}
                   showFormatJson={true}
+                  tooltip="HTTP response body captured when response retention and size limits allow it. The metadata indicates retained, redacted, truncated, or metadata-only storage."
               />
             </div>
           </div>
@@ -1020,6 +1193,30 @@ function RequestHistory() {
         entityType="request history entries"
         loading={bulkDeleteLoading}
       />
+
+      <DeleteConfirmModal
+        isOpen={showSelectedDeleteConfirm}
+        onClose={() => setShowSelectedDeleteConfirm(false)}
+        onConfirm={handleDeleteSelected}
+        entityName={`${selectedCount} selected ${selectedCount === 1 ? 'entry' : 'entries'}`}
+        entityType="request history entries"
+        loading={selectedDeleteLoading}
+      />
+
+      <Modal
+        isOpen={Boolean(deleteResult)}
+        onClose={() => setDeleteResult(null)}
+        title={deleteResult?.title || 'Request History Deleted'}
+      >
+        <div className="request-history-delete-result-modal">
+          <p>{deleteResult?.message}</p>
+          <div className="request-history-issue-actions">
+            <button className="btn-primary" onClick={() => setDeleteResult(null)}>
+              Close
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

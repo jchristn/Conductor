@@ -306,6 +306,19 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 httpstatus INTEGER,
                 firsttokentimems INTEGER,
                 responsetimems INTEGER,
+                traceid VARCHAR(48),
+                providerrequestid VARCHAR(255),
+                providername VARCHAR(128),
+                prompttokens INTEGER,
+                completiontokens INTEGER,
+                totaltokens INTEGER,
+                tokenspersecondoverall NUMERIC(18,6),
+                tokenspersecondgeneration NUMERIC(18,6),
+                analyticscaptured BOOLEAN NOT NULL DEFAULT FALSE,
+                analyticsversion INTEGER NOT NULL DEFAULT 1,
+                dominantstagekind VARCHAR(128),
+                dominantstagedurationms INTEGER,
+                analyticsfailurecode VARCHAR(128),
                 objectkey VARCHAR(255) NOT NULL,
                 createdutc TIMESTAMP NOT NULL,
                 requesttransfertype INTEGER NOT NULL DEFAULT 0,
@@ -319,6 +332,57 @@ namespace Conductor.Core.Database.PostgreSql.Queries
             CREATE INDEX IF NOT EXISTS idx_requesthistory_createdutc ON requesthistory(createdutc);
             CREATE INDEX IF NOT EXISTS idx_requesthistory_httpstatus ON requesthistory(httpstatus);
             CREATE INDEX IF NOT EXISTS idx_requesthistory_requestorsourceip ON requesthistory(requestorsourceip);
+        ";
+
+        /// <summary>
+        /// Create request analytics events table.
+        /// </summary>
+        public static readonly string CreateRequestAnalyticsEventsTable = @"
+            CREATE TABLE IF NOT EXISTS requestanalyticsevents (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantguid VARCHAR(48),
+                requesthistoryid VARCHAR(48),
+                traceid VARCHAR(48),
+                virtualmodelrunnerguid VARCHAR(48),
+                virtualmodelrunnername VARCHAR(255),
+                modelendpointguid VARCHAR(48),
+                modelendpointname VARCHAR(255),
+                modelendpointurl VARCHAR(512),
+                providername VARCHAR(128),
+                apiformat VARCHAR(128),
+                modelname VARCHAR(255),
+                sequence INTEGER NOT NULL DEFAULT 0,
+                stagekind VARCHAR(128),
+                phase VARCHAR(128),
+                stagename VARCHAR(255),
+                startedutc TIMESTAMP NOT NULL,
+                completedutc TIMESTAMP,
+                durationms INTEGER,
+                success BOOLEAN NOT NULL DEFAULT TRUE,
+                httpstatus INTEGER,
+                errortype VARCHAR(128),
+                errormessage TEXT,
+                endpointlimiterwaitms INTEGER,
+                requesttoheadersms INTEGER,
+                headerstofirsttokenms INTEGER,
+                firsttokentolasttokenms INTEGER,
+                clienttotalms INTEGER,
+                prompttokens INTEGER,
+                completiontokens INTEGER,
+                totaltokens INTEGER,
+                requestbytes BIGINT,
+                responsebytes BIGINT,
+                tokenspersecond NUMERIC(18,6),
+                rawprovidermetrics TEXT,
+                createdutc TIMESTAMP NOT NULL,
+                FOREIGN KEY (requesthistoryid) REFERENCES requesthistory(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_tenant_created ON requestanalyticsevents(tenantguid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_requesthistoryid ON requestanalyticsevents(requesthistoryid);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalyticsevents(traceid);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
         ";
 
         /// <summary>

@@ -38,7 +38,9 @@ namespace Conductor.Core.Database.MySql.Implementations
                            "modelconfigurationguid, requestedmodel, effectivemodel, requesttype, routingoutcomecode, denialreasoncode, denialreason, " +
                            "sessionaffinityoutcome, mutationsummary, explanationsummary, requestbodyretained, requestbodyredacted, requestheadersredacted, " +
                            "responsebodyretained, responsebodyredacted, responseheadersredacted, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
-                           "httpstatus, firsttokentimems, responsetimems, objectkey, requesttransfertype, responsetransfertype, createdutc, completedutc) " +
+                           "httpstatus, firsttokentimems, responsetimems, traceid, providerrequestid, providername, prompttokens, completiontokens, totaltokens, " +
+                           "tokenspersecondoverall, tokenspersecondgeneration, analyticscaptured, analyticsversion, dominantstagekind, dominantstagedurationms, analyticsfailurecode, " +
+                           "objectkey, requesttransfertype, responsetransfertype, createdutc, completedutc) " +
                            "VALUES ('" + _Driver.Sanitize(entry.Id) + "', " +
                            "'" + _Driver.Sanitize(entry.TenantGuid) + "', " +
                            "'" + _Driver.Sanitize(entry.VirtualModelRunnerGuid) + "', " +
@@ -78,6 +80,19 @@ namespace Conductor.Core.Database.MySql.Implementations
                            _Driver.FormatNullable(entry.HttpStatus) + ", " +
                            _Driver.FormatNullable(entry.FirstTokenTimeMs) + ", " +
                            _Driver.FormatNullable(entry.ResponseTimeMs) + ", " +
+                           _Driver.FormatNullableString(entry.TraceId) + ", " +
+                           _Driver.FormatNullableString(entry.ProviderRequestId) + ", " +
+                           _Driver.FormatNullableString(entry.ProviderName) + ", " +
+                           _Driver.FormatNullable(entry.PromptTokens) + ", " +
+                           _Driver.FormatNullable(entry.CompletionTokens) + ", " +
+                           _Driver.FormatNullable(entry.TotalTokens) + ", " +
+                           _Driver.FormatNullable(entry.TokensPerSecondOverall) + ", " +
+                           _Driver.FormatNullable(entry.TokensPerSecondGeneration) + ", " +
+                           _Driver.FormatBoolean(entry.AnalyticsCaptured) + ", " +
+                           entry.AnalyticsVersion + ", " +
+                           _Driver.FormatNullableString(entry.DominantStageKind) + ", " +
+                           _Driver.FormatNullable(entry.DominantStageDurationMs) + ", " +
+                           _Driver.FormatNullableString(entry.AnalyticsFailureCode) + ", " +
                            "'" + _Driver.Sanitize(entry.ObjectKey) + "', " +
                            (int)entry.RequestTransferType + ", " +
                            (int)entry.ResponseTransferType + ", " +
@@ -127,6 +142,19 @@ namespace Conductor.Core.Database.MySql.Implementations
                            "httpstatus = " + _Driver.FormatNullable(entry.HttpStatus) + ", " +
                            "firsttokentimems = " + _Driver.FormatNullable(entry.FirstTokenTimeMs) + ", " +
                            "responsetimems = " + _Driver.FormatNullable(entry.ResponseTimeMs) + ", " +
+                           "traceid = " + _Driver.FormatNullableString(entry.TraceId) + ", " +
+                           "providerrequestid = " + _Driver.FormatNullableString(entry.ProviderRequestId) + ", " +
+                           "providername = " + _Driver.FormatNullableString(entry.ProviderName) + ", " +
+                           "prompttokens = " + _Driver.FormatNullable(entry.PromptTokens) + ", " +
+                           "completiontokens = " + _Driver.FormatNullable(entry.CompletionTokens) + ", " +
+                           "totaltokens = " + _Driver.FormatNullable(entry.TotalTokens) + ", " +
+                           "tokenspersecondoverall = " + _Driver.FormatNullable(entry.TokensPerSecondOverall) + ", " +
+                           "tokenspersecondgeneration = " + _Driver.FormatNullable(entry.TokensPerSecondGeneration) + ", " +
+                           "analyticscaptured = " + _Driver.FormatBoolean(entry.AnalyticsCaptured) + ", " +
+                           "analyticsversion = " + entry.AnalyticsVersion + ", " +
+                           "dominantstagekind = " + _Driver.FormatNullableString(entry.DominantStageKind) + ", " +
+                           "dominantstagedurationms = " + _Driver.FormatNullable(entry.DominantStageDurationMs) + ", " +
+                           "analyticsfailurecode = " + _Driver.FormatNullableString(entry.AnalyticsFailureCode) + ", " +
                            "requesttransfertype = " + (int)entry.RequestTransferType + ", " +
                            "responsetransfertype = " + (int)entry.ResponseTransferType + ", " +
                            "completedutc = " + (entry.CompletedUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.CompletedUtc.Value) + "'" : "NULL") + " " +

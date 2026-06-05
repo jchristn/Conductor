@@ -170,6 +170,7 @@ function Login() {
         </form>
 
       </div>
+      <p className="login-default-credentials">Default login credentials are tenant default, admin@conductor, password</p>
     </div>
   );
 }

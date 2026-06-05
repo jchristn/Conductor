@@ -791,15 +791,18 @@ Restore response shape:
 
 Auth level: `Authenticated`
 
-Request history routes are registered only when request history is enabled in server settings. When it is disabled, only `/v1.0/requesthistory/summary` remains available and returns an empty summary payload.
+Request history routes are registered only when request history is enabled in server settings. When it is disabled, `/v1.0/requesthistory/summary` and `/v1.0/requesthistory/analytics/overview` remain available and return empty payloads.
 
 | Method | Path | Notes |
 | --- | --- | --- |
+| `GET` | `/v1.0/requesthistory/analytics/overview` | Chart-ready aggregate analytics. Query: `tenantId`, `range`, `startUtc`, `endUtc`, `bucketSeconds`, `limit`, `vmrGuid`, `endpointGuid`, `providerName`, `modelName`, `stageKind`, `statusClass`. |
 | `GET` | `/v1.0/requesthistory/summary` | Aggregated time buckets. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `startUtc`, `endUtc`, `interval`. |
 | `GET` | `/v1.0/requesthistory` | Search entries. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`, `page`, `pageSize`. |
 | `GET` | `/v1.0/requesthistory/{id}` | Read entry metadata. Query: optional `tenantId` for cross-tenant callers. |
 | `GET` | `/v1.0/requesthistory/{id}/detail` | Read full request/response detail. Query: optional `tenantId`. |
+| `GET` | `/v1.0/requesthistory/{id}/analytics` | Read normalized analytics events for one request history entry. Query: optional `tenantId`. |
 | `DELETE` | `/v1.0/requesthistory/{id}` | Delete one entry. Query: optional `tenantId`. |
+| `POST` | `/v1.0/requesthistory/delete` | Delete selected entries by ID. Body: `{ "Ids": ["req_..."] }`. Query: optional `tenantId`. |
 | `DELETE` | `/v1.0/requesthistory/bulk` | Bulk delete by filter. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`. |
 
 Summary interval values:
@@ -819,6 +822,14 @@ Search response shape:
   "PageSize": 10,
   "TotalCount": 0,
   "TotalPages": 0
+}
+```
+
+Selected delete response shape:
+
+```jsonc
+{
+  "DeletedCount": 2
 }
 ```
 
@@ -854,6 +865,33 @@ Summary response shape:
   "TotalRequests": 123
 }
 ```
+
+Analytics overview response shape:
+
+```jsonc
+{
+  "StartUtc": "2026-06-05T00:00:00Z",
+  "EndUtc": "2026-06-06T00:00:00Z",
+  "BucketSeconds": 900,
+  "TotalRequests": 123,
+  "SuccessCount": 120,
+  "FailureCount": 3,
+  "AnalyticsCapturedCount": 118,
+  "AnalyticsCoveragePercent": 95.93,
+  "AverageDurationMs": 842.4,
+  "P50DurationMs": 600,
+  "P95DurationMs": 1900,
+  "P99DurationMs": 3200,
+  "TotalTokens": 456789,
+  "AverageTokensPerSecond": 42.5,
+  "TimeSeries": [],
+  "StageBreakdown": [],
+  "EndpointSummaries": [],
+  "SlowestRequests": []
+}
+```
+
+Analytics stage events use stable `StageKind` values such as `routing`, `capacity_wait`, `upstream_headers`, `first_token_wait`, `generation`, `completion`, `provider_load`, `provider_prompt_eval`, and `provider_generation`. Provider-native timings are best-effort and missing values are returned as `null`, not zero.
 
 Request history entry fields include:
 
@@ -896,6 +934,19 @@ Request history entry fields include:
 - `HttpStatus`
 - `FirstTokenTimeMs`
 - `ResponseTimeMs`
+- `TraceId`
+- `ProviderRequestId`
+- `ProviderName`
+- `PromptTokens`
+- `CompletionTokens`
+- `TotalTokens`
+- `TokensPerSecondOverall`
+- `TokensPerSecondGeneration`
+- `AnalyticsCaptured`
+- `AnalyticsVersion`
+- `DominantStageKind`
+- `DominantStageDurationMs`
+- `AnalyticsFailureCode`
 - `ObjectKey`
 - `RequestTransferType`
 - `ResponseTransferType`

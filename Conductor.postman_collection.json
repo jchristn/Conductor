@@ -34,6 +34,66 @@
       "key": "historyEntryId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "requestHistoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "traceId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "vmrGuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "endpointGuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "providerName",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "modelName",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analyticsRange",
+      "value": "lastHour",
+      "type": "string"
+    },
+    {
+      "key": "analyticsStartUtc",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analyticsEndUtc",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analyticsBucketSeconds",
+      "value": "60",
+      "type": "string"
+    },
+    {
+      "key": "analyticsStage",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analyticsLimit",
+      "value": "500",
+      "type": "string"
     }
   ],
   "auth": {
@@ -763,6 +823,40 @@
               ]
             },
             "description": "Get aggregated request counts grouped by time buckets with success/failure breakdown. Returns time-bucketed data suitable for charting."
+          }
+        },
+        {
+          "name": "Get Request Analytics Overview",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/analytics/overview?range=lastDay",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory", "analytics", "overview"],
+              "query": [
+                { "key": "range", "value": "lastDay", "description": "Operator range: 'lastHour', 'lastDay', 'lastWeek', or 'lastMonth'. Default: 'lastDay'" },
+                { "key": "startUtc", "value": "", "disabled": true, "description": "Explicit start of time range (UTC, ISO 8601). Overrides range when paired with endUtc" },
+                { "key": "endUtc", "value": "", "disabled": true, "description": "Explicit end of time range (UTC, ISO 8601). Overrides range when paired with startUtc" },
+                { "key": "bucketSeconds", "value": "", "disabled": true, "description": "Explicit chart bucket size in seconds" },
+                { "key": "vmrGuid", "value": "", "disabled": true, "description": "Filter by Virtual Model Runner GUID" },
+                { "key": "endpointGuid", "value": "", "disabled": true, "description": "Filter by model endpoint GUID" },
+                { "key": "providerName", "value": "", "disabled": true, "description": "Filter by provider name" },
+                { "key": "model", "value": "", "disabled": true, "description": "Filter by requested or selected model" }
+              ]
+            },
+            "description": "Get chart-ready request analytics: request volume, latency, stage breakdown, endpoint summaries, provider/token metrics, and slowest requests."
+          }
+        },
+        {
+          "name": "Get Request History Analytics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}/analytics",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}", "analytics"]
+            },
+            "description": "Get per-request analytics events and normalized timing stages for a captured request history entry."
           }
         },
         {

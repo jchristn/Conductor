@@ -24,7 +24,13 @@ namespace Test.Shared.Core.Database
             "idx_requesthistory_requestedmodel",
             "idx_requesthistory_effectivemodel",
             "idx_requesthistory_denialreasoncode",
-            "idx_requesthistory_sessionaffinityoutcome"
+            "idx_requesthistory_sessionaffinityoutcome",
+            "idx_requesthistory_traceid",
+            "idx_requesthistory_providerrequestid",
+            "idx_requesthistory_providername",
+            "idx_requesthistory_analyticscaptured",
+            "idx_requesthistory_dominantstagekind",
+            "idx_requesthistory_analyticsfailurecode"
         };
 
         private static readonly string[] _FreshSchemaColumns =
@@ -35,7 +41,14 @@ namespace Test.Shared.Core.Database
             "requestedmodel",
             "effectivemodel",
             "denialreasoncode",
-            "sessionaffinityoutcome"
+            "sessionaffinityoutcome",
+            "traceid",
+            "providerrequestid",
+            "prompttokens",
+            "completiontokens",
+            "totaltokens",
+            "analyticscaptured",
+            "dominantstagekind"
         };
 
         private static readonly string[] _BaselineIndexNames =
@@ -47,6 +60,16 @@ namespace Test.Shared.Core.Database
             "idx_requesthistory_requestorsourceip"
         };
 
+        private static readonly string[] _AnalyticsIndexNames =
+        {
+            "idx_requestanalyticsevents_tenant_created",
+            "idx_requestanalyticsevents_requesthistoryid",
+            "idx_requestanalyticsevents_traceid",
+            "idx_requestanalyticsevents_stagekind",
+            "idx_requestanalyticsevents_endpoint_created",
+            "idx_requestanalyticsevents_vmr_created"
+        };
+
         public void CreateRequestHistoryTable_AllSupportedDialects_DefersMigratedIndexes()
         {
             AssertRequestHistoryCreateSchema(SqliteTableQueries.CreateRequestHistoryTable);
@@ -55,12 +78,21 @@ namespace Test.Shared.Core.Database
             AssertRequestHistoryCreateSchema(SqlServerTableQueries.CreateRequestHistoryTable);
         }
 
+        public void CreateRequestAnalyticsEventsTable_AllSupportedDialects_ContainsRequiredIndexes()
+        {
+            AssertRequestAnalyticsCreateSchema(SqliteTableQueries.CreateRequestAnalyticsEventsTable);
+            AssertRequestAnalyticsCreateSchema(PostgreSqlTableQueries.CreateRequestAnalyticsEventsTable);
+            AssertRequestAnalyticsCreateSchema(MySqlTableQueries.CreateRequestAnalyticsEventsTable);
+            AssertRequestAnalyticsCreateSchema(SqlServerTableQueries.CreateRequestAnalyticsEventsTable);
+        }
+
         public void FactorySchema_DefersMigratedIndexes()
         {
             string schemaPath = FindRepositoryPath("docker", "factory", "schema.sql");
             string schemaSql = File.ReadAllText(schemaPath);
 
             AssertRequestHistoryCreateSchema(schemaSql);
+            AssertRequestAnalyticsCreateSchema(schemaSql);
         }
 
         private static void AssertRequestHistoryCreateSchema(string schema)
@@ -80,6 +112,21 @@ namespace Test.Shared.Core.Database
             foreach (string indexName in _DeferredIndexNames)
             {
                 schema.Should().NotContain(indexName);
+            }
+        }
+
+        private static void AssertRequestAnalyticsCreateSchema(string schema)
+        {
+            schema.Should().NotBeNullOrWhiteSpace();
+            schema.Should().Contain("requestanalyticsevents");
+            schema.Should().Contain("requesthistoryid");
+            schema.Should().Contain("stagekind");
+            schema.Should().Contain("durationms");
+            schema.Should().Contain("tokenspersecond");
+
+            foreach (string indexName in _AnalyticsIndexNames)
+            {
+                schema.Should().Contain(indexName);
             }
         }
 

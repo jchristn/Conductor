@@ -306,6 +306,19 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 httpstatus INTEGER,
                 firsttokentimems INTEGER,
                 responsetimems INTEGER,
+                traceid TEXT,
+                providerrequestid TEXT,
+                providername TEXT,
+                prompttokens INTEGER,
+                completiontokens INTEGER,
+                totaltokens INTEGER,
+                tokenspersecondoverall REAL,
+                tokenspersecondgeneration REAL,
+                analyticscaptured INTEGER NOT NULL DEFAULT 0,
+                analyticsversion INTEGER NOT NULL DEFAULT 1,
+                dominantstagekind TEXT,
+                dominantstagedurationms INTEGER,
+                analyticsfailurecode TEXT,
                 objectkey TEXT NOT NULL,
                 createdutc TEXT NOT NULL,
                 requesttransfertype INTEGER NOT NULL DEFAULT 0,
@@ -319,6 +332,57 @@ namespace Conductor.Core.Database.Sqlite.Queries
             CREATE INDEX IF NOT EXISTS idx_requesthistory_createdutc ON requesthistory(createdutc);
             CREATE INDEX IF NOT EXISTS idx_requesthistory_httpstatus ON requesthistory(httpstatus);
             CREATE INDEX IF NOT EXISTS idx_requesthistory_requestorsourceip ON requesthistory(requestorsourceip);
+        ";
+
+        /// <summary>
+        /// Create request analytics events table.
+        /// </summary>
+        public static readonly string CreateRequestAnalyticsEventsTable = @"
+            CREATE TABLE IF NOT EXISTS requestanalyticsevents (
+                id TEXT PRIMARY KEY,
+                tenantguid TEXT,
+                requesthistoryid TEXT,
+                traceid TEXT,
+                virtualmodelrunnerguid TEXT,
+                virtualmodelrunnername TEXT,
+                modelendpointguid TEXT,
+                modelendpointname TEXT,
+                modelendpointurl TEXT,
+                providername TEXT,
+                apiformat TEXT,
+                modelname TEXT,
+                sequence INTEGER NOT NULL DEFAULT 0,
+                stagekind TEXT,
+                phase TEXT,
+                stagename TEXT,
+                startedutc TEXT NOT NULL,
+                completedutc TEXT,
+                durationms INTEGER,
+                success INTEGER NOT NULL DEFAULT 1,
+                httpstatus INTEGER,
+                errortype TEXT,
+                errormessage TEXT,
+                endpointlimiterwaitms INTEGER,
+                requesttoheadersms INTEGER,
+                headerstofirsttokenms INTEGER,
+                firsttokentolasttokenms INTEGER,
+                clienttotalms INTEGER,
+                prompttokens INTEGER,
+                completiontokens INTEGER,
+                totaltokens INTEGER,
+                requestbytes INTEGER,
+                responsebytes INTEGER,
+                tokenspersecond REAL,
+                rawprovidermetrics TEXT,
+                createdutc TEXT NOT NULL,
+                FOREIGN KEY (requesthistoryid) REFERENCES requesthistory(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_tenant_created ON requestanalyticsevents(tenantguid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_requesthistoryid ON requestanalyticsevents(requesthistoryid);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalyticsevents(traceid);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
         ";
 
         /// <summary>

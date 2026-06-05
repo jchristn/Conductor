@@ -10,7 +10,7 @@ namespace Test.Shared.Server.Integration
     using Conductor.Core.Models;
     using Conductor.Core.Settings;
     using FluentAssertions;
-    
+
     /// <summary>
     /// Integration tests for database operations using SQLite.
     /// Tests CRUD operations and data integrity across all entity types.
@@ -618,6 +618,53 @@ namespace Test.Shared.Server.Integration
             result.TotalFailure.Should().Be(1);
             result.DenialReasonCounts.Should().ContainKey("AllEndpointsAtCapacity");
             result.DenialReasonCounts["AllEndpointsAtCapacity"].Should().Be(1);
+        }
+
+        public async Task RequestAnalytics_CreateAndList_RoundTrips()
+        {
+            DateTime now = DateTime.UtcNow;
+            VirtualModelRunner vmr = await _Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "Analytics VMR",
+                BasePath = $"/analytics/{Guid.NewGuid():N}/"
+            });
+
+            RequestHistoryEntry entry = await _Database.RequestHistory.CreateAsync(new RequestHistoryDetail
+            {
+                TenantGuid = _TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "analytics.json",
+                CreatedUtc = now,
+                TraceId = "trc_test"
+            });
+
+            await _Database.RequestAnalytics.CreateAsync(new RequestAnalyticsEvent
+            {
+                TenantGuid = _TestTenantId,
+                RequestHistoryId = entry.Id,
+                TraceId = entry.TraceId,
+                VirtualModelRunnerGuid = entry.VirtualModelRunnerGuid,
+                VirtualModelRunnerName = entry.VirtualModelRunnerName,
+                StageKind = "generation",
+                StageName = "Streaming Generation",
+                StartedUtc = now,
+                CompletedUtc = now.AddMilliseconds(125),
+                DurationMs = 125,
+                Success = true,
+                HttpStatus = 200,
+                CreatedUtc = now
+            });
+
+            List<RequestAnalyticsEvent> events = await _Database.RequestAnalytics.ListByRequestHistoryIdAsync(entry.Id);
+
+            events.Should().HaveCount(1);
+            events[0].StageKind.Should().Be("generation");
+            events[0].DurationMs.Should().Be(125);
         }
 
         #endregion

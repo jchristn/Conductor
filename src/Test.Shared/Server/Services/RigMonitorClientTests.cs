@@ -1,5 +1,6 @@
 namespace Test.Shared.Server.Services
 {
+    using System.Collections.Generic;
     using System.Text.Json;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
@@ -57,7 +58,7 @@ namespace Test.Shared.Server.Services
                 }
             };
 
-            var selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
+            List<string> selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
 
             selectors.Should().Equal("system", "cpu", "memory");
         }
@@ -73,7 +74,7 @@ namespace Test.Shared.Server.Services
                 }
             };
 
-            var selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
+            List<string> selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
 
             selectors.Should().Equal("system", "cpu", "memory", "gpu");
         }
@@ -89,7 +90,7 @@ namespace Test.Shared.Server.Services
                 }
             };
 
-            var selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
+            List<string> selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
 
             selectors.Should().Equal("system", "cpu", "memory", "ollama");
         }
@@ -106,7 +107,7 @@ namespace Test.Shared.Server.Services
                 }
             };
 
-            var selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
+            List<string> selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
 
             selectors.Should().Equal("cpu", "gpu", "ollama");
         }
@@ -122,7 +123,7 @@ namespace Test.Shared.Server.Services
                 }
             };
 
-            var selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
+            List<string> selectors = RigMonitorClient.ResolveTelemetrySelectors(endpoint);
 
             selectors.Should().BeEmpty();
         }

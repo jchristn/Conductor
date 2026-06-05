@@ -11,7 +11,7 @@ namespace Conductor.Server.Controllers
     using Conductor.Server.Services;
     using SyslogLogging;
     using WatsonWebserver.Core;
-    
+
 
     /// <summary>
     /// Virtual Model Runner API controller.
@@ -177,7 +177,7 @@ namespace Conductor.Server.Controllers
             if (vmr == null)
                 throw new WebserverException(ApiResultEnum.NotFound);
 
-            var status = new VirtualModelRunnerHealthStatus
+            VirtualModelRunnerHealthStatus status = new VirtualModelRunnerHealthStatus
             {
                 VirtualModelRunnerId = vmr.Id,
                 VirtualModelRunnerName = vmr.Name,
@@ -194,7 +194,7 @@ namespace Conductor.Server.Controllers
             {
                 foreach (string endpointId in vmr.ModelRunnerEndpointIds)
                 {
-                    var state = _HealthCheckService.GetHealthState(endpointId);
+                    EndpointHealthState state = _HealthCheckService.GetHealthState(endpointId);
 
                     ModelRunnerEndpoint endpoint;
                     if (String.IsNullOrEmpty(tenantId))

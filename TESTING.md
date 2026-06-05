@@ -124,6 +124,133 @@ public class MyComponentTests
 }
 ```
 
+## Request Analytics Release Gate
+
+Request analytics changes must be verified across backend capture, database retention, aggregate query behavior, dashboard build output, SDK helpers, Postman examples, and operator-facing documentation.
+
+Run the full product gate before marking request analytics complete:
+
+```powershell
+dotnet build src/Conductor.sln
+dotnet test src/Test.Xunit/Test.Xunit.csproj
+dotnet test src/Test.Nunit/Test.Nunit.csproj
+dotnet run --project src/Test.Automated/Test.Automated.csproj
+Push-Location dashboard; npm run build; Pop-Location
+Push-Location sdk/javascript; npm test; Pop-Location
+Push-Location sdk/python; $env:PYTHONPATH='src'; python -m unittest discover -s tests; Pop-Location
+Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null
+```
+
+The focused shared tests for this feature live in:
+
+- `src/Test.Shared/Server/Services/RequestAnalyticsServiceTests.cs`
+- `src/Test.Shared/Server/Services/RequestHistoryCleanupServiceTests.cs`
+- `src/Test.Shared/Core/Database/RequestHistorySchemaTests.cs`
+- `src/Test.Shared/Server/Integration/DatabaseMigrationTests.cs`
+
+These tests should prove that:
+
+- Provider metrics are parsed when OpenAI-compatible usage data is available.
+- Malformed or missing provider usage remains `null`, not zero.
+- Analytics overview aggregation returns request counts, success counts, percentiles, telemetry coverage, stage breakdowns, endpoint summaries, slowest requests, and chart buckets.
+- Explicit over-large analytics ranges are capped to a bounded range and bucket count.
+- Metadata retention cleanup deletes analytics events with expired request history rows.
+- Fresh and upgraded databases create the request analytics columns, table, and indexes.
+
+## Request Analytics Manual QA
+
+Dashboard visual QA requires realistic request-history rows with full analytics, partial analytics, missing analytics, failures, long names, and null provider metrics. Use a local server and the dashboard dev server:
+
+```powershell
+dotnet run --project src/Conductor.Server/Conductor.Server.csproj
+Push-Location dashboard; npm run dev; Pop-Location
+```
+
+Validate at 1280px, 768px, and 390px:
+
+- Request Analytics loads without layout overlap, clipped controls, or chart text collisions.
+- Range controls switch between `lastHour`, `lastDay`, `lastWeek`, and `lastMonth`.
+- Volume/outcome, latency, stage composition, provider timing, endpoint/model mix, token throughput, slowest requests, errors/statuses, and telemetry coverage are visible without fetching raw history rows in React.
+- Empty states distinguish no traffic from traffic with no analytics captured.
+- Null provider metrics render as unavailable, not as zero.
+- Long VMR, endpoint, provider, and model names wrap or truncate predictably.
+- Chart tooltips stay inside the viewport and do not cover the control that opened them.
+- Keyboard users can reach filters, charts, slowest-request links, detail modals, copy controls, and close actions.
+- Focus returns to the invoking row or action after closing a modal.
+- Request History detail shows trace ID, timing bars, stage table, provider metrics, token profile, and old-row/missing-analytics state.
+
+API Explorer replay is deferred in the current implementation. Until it lands, verify that the dashboard does not offer exact replay for scrubbed, redacted, truncated, or missing bodies.
+
+## Request Analytics Postman QA
+
+The Postman collection must import without JSON errors and expose analytics requests without manual URL surgery. Required variables:
+
+- `baseUrl`
+- `bearerToken`
+- `tenantGuid`
+- `requestHistoryId`
+- `traceId`
+- `vmrGuid`
+- `endpointGuid`
+- `providerName`
+- `modelName`
+- `analyticsRange`
+- `analyticsStartUtc`
+- `analyticsEndUtc`
+- `analyticsBucketSeconds`
+- `analyticsStage`
+- `analyticsLimit`
+
+If Newman is available, run:
+
+```powershell
+newman run Conductor.postman_collection.json --env-var baseUrl=http://localhost:9000 --env-var bearerToken=$env:CONDUCTOR_BEARER_TOKEN
+```
+
+If Newman is not available, import `Conductor.postman_collection.json` into Postman, set the variables above, and exercise:
+
+- Request analytics overview with `analyticsRange=lastHour`.
+- Request analytics overview with explicit `analyticsStartUtc`, `analyticsEndUtc`, and `analyticsBucketSeconds`.
+- Per-request analytics detail by `requestHistoryId`.
+- Tenant-scoped calls with a tenant user.
+- Cross-tenant or missing-auth calls, which must be rejected by the server.
+
+Record the server version, collection import result, request names run, status codes, and any response-shape mismatches before marking Postman QA complete.
+
+## Request Analytics Troubleshooting Runbook
+
+Use Request Analytics to diagnose by dominant slow stage before changing routing or endpoint settings.
+
+High `capacity_wait` means the request waited for an endpoint capacity slot. Check endpoint concurrency limits, drain/quarantine state, health status, and whether one VMR is saturating shared capacity.
+
+High `upstream_headers` or request-to-headers time means Conductor dispatched upstream but the provider did not return headers quickly. Check provider cold start, network path, DNS/TLS behavior, provider queueing, and upstream service saturation.
+
+High `first_token_wait` means headers arrived but the first token or byte was delayed. Check prompt size, provider prompt-eval metrics, model load duration, tool or schema overhead, and whether streaming final-usage chunks are missing.
+
+High `generation` or low generation TPS means the model is spending time producing output. Check completion token count, max token settings, model size, endpoint hardware, and whether the endpoint is sharing GPU/CPU with other workloads.
+
+High provider load duration, when reported, points to cold model load or eviction. Confirm model residency, keep-warm policy, endpoint memory pressure, and recent health-check or deployment activity.
+
+Denied routing with analytics captured should show routing-only stages. Inspect the routing explanation, denial reason, policy fallback, session affinity, VMR settings, endpoint health, and auth context.
+
+Missing analytics on new rows usually means request history capture is disabled, VMR history capture is disabled, analytics capture failed, or the request predates the analytics schema. Missing analytics on old rows can also be expected after retention cleanup.
+
+Null token or provider timing metrics mean the provider did not report those fields or the response was malformed. Do not interpret null metrics as zero-cost or zero-duration work.
+
+Redacted, scrubbed, truncated, or metadata-only bodies cannot be replayed exactly. Use the visible retained metadata and redaction state to reconstruct a safe test request manually.
+
+## Request Analytics Security And Performance Checks
+
+Before release, confirm:
+
+- Persisted analytics never include authorization headers, cookies, bearer tokens, API keys, or secret-like provider headers.
+- Raw provider metrics are bounded and redacted before persistence.
+- Tenant scoping is enforced on analytics overview, detail, delete, retention, SDK, and Postman flows.
+- Request history metadata deletion and retention cleanup remove child analytics events.
+- Prometheus metrics remain low-cardinality and do not include request IDs, trace IDs, endpoint URLs, model names, or provider request IDs as labels.
+- Analytics overview queries are bounded by tenant and date range, with at most 31 days and 720 returned buckets in the initial implementation.
+- Large or over-limit analytics scans produce warning logs and stay within the server-side row limit.
+
 ## Packages
 
 | Project | Key Packages |

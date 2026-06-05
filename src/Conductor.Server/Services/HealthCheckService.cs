@@ -399,13 +399,13 @@ namespace Conductor.Server.Services
 
                     if (endpoint.RigMonitor?.Enabled == true)
                     {
-                        (bool rigSuccess, string rigError) = await RefreshRigMonitorStatusAsync(endpoint, token).ConfigureAwait(false);
+                        RigMonitorRefreshResult rigMonitorResult = await RefreshRigMonitorStatusAsync(endpoint, token).ConfigureAwait(false);
                         if (endpoint.RigMonitor.HealthAffectedByRigMonitor)
                         {
-                            success = success && rigSuccess;
-                            if (!rigSuccess && String.IsNullOrEmpty(error))
+                            success = success && rigMonitorResult.Success;
+                            if (!rigMonitorResult.Success && String.IsNullOrEmpty(error))
                             {
-                                error = rigError;
+                                error = rigMonitorResult.Error;
                             }
                         }
                     }
@@ -424,16 +424,20 @@ namespace Conductor.Server.Services
             }
         }
 
-        private async Task<(bool Success, string Error)> RefreshRigMonitorStatusAsync(ModelRunnerEndpoint endpoint, CancellationToken token)
+        private async Task<RigMonitorRefreshResult> RefreshRigMonitorStatusAsync(ModelRunnerEndpoint endpoint, CancellationToken token)
         {
             if (endpoint == null || endpoint.RigMonitor == null || !endpoint.RigMonitor.Enabled)
             {
-                return (true, null);
+                return new RigMonitorRefreshResult { Success = true };
             }
 
             if (!_HealthStates.TryGetValue(endpoint.Id, out EndpointHealthState state))
             {
-                return (false, "No endpoint health state is available.");
+                return new RigMonitorRefreshResult
+                {
+                    Success = false,
+                    Error = "No endpoint health state is available."
+                };
             }
 
             DateTime now = DateTime.UtcNow;
@@ -538,7 +542,11 @@ namespace Conductor.Server.Services
                 }
             }
 
-            return (success, error);
+            return new RigMonitorRefreshResult
+            {
+                Success = success,
+                Error = error
+            };
         }
 
         private async Task<bool> PerformHealthCheck(ModelRunnerEndpoint endpoint, CancellationToken token)
@@ -654,6 +662,13 @@ namespace Conductor.Server.Services
                     }
                 }
             }
+        }
+
+        private sealed class RigMonitorRefreshResult
+        {
+            public bool Success { get; set; } = false;
+
+            public string Error { get; set; } = null;
         }
 
         /// <summary>

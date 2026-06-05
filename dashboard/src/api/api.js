@@ -2,6 +2,20 @@ import { DEFAULT_SERVER_URL, persistServerUrl, resolveInitialServerUrl } from '.
 
 const DEFAULT_API_URL = DEFAULT_SERVER_URL;
 
+function readStoredJson(key) {
+  const value = localStorage.getItem(key);
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
+
 function createApiError(response, errorData, endpoint, method) {
   const error = new Error(
     errorData?.error ||
@@ -22,27 +36,24 @@ class ConductorApi {
   constructor() {
     this.baseUrl = resolveInitialServerUrl() || DEFAULT_API_URL;
     this.pendingRequests = new Map();
+    this.bearerToken = localStorage.getItem('conductor_token') || '';
+    this.adminEmail = '';
+    this.adminPassword = '';
 
     // Check if logged in as admin
     const isAdmin = localStorage.getItem('conductor_is_admin') === 'true';
-    const adminStr = localStorage.getItem('conductor_admin');
+    const admin = readStoredJson('conductor_admin');
 
-    if (isAdmin && adminStr) {
-      // Admin login - use admin credentials, clear bearer token
-      try {
-        const admin = JSON.parse(adminStr);
+    if (isAdmin && admin) {
+      if (admin.ApiKey) {
+        // Admin API key login - use bearer auth after a browser refresh.
+        this.bearerToken = admin.ApiKey || this.bearerToken;
+      } else {
+        // Admin password login - use admin credentials, clear bearer token.
         this.adminEmail = admin.Email || '';
         this.adminPassword = admin.password || '';
-      } catch (e) {
-        this.adminEmail = '';
-        this.adminPassword = '';
+        this.bearerToken = '';
       }
-      this.bearerToken = '';
-    } else {
-      // User login or not logged in - use bearer token, clear admin credentials
-      this.bearerToken = localStorage.getItem('conductor_token') || '';
-      this.adminEmail = '';
-      this.adminPassword = '';
     }
   }
 
@@ -76,26 +87,43 @@ class ConductorApi {
   setAdminInfo(admin) {
     localStorage.setItem('conductor_admin', JSON.stringify(admin));
     localStorage.setItem('conductor_is_admin', 'true');
-    this.adminEmail = admin.Email;
-    this.adminPassword = admin.password; // Store temporarily for API calls
+    if (admin.ApiKey) {
+      this.bearerToken = admin.ApiKey;
+      this.adminEmail = '';
+      this.adminPassword = '';
+      localStorage.setItem('conductor_token', admin.ApiKey);
+    } else {
+      this.bearerToken = '';
+      this.adminEmail = admin.Email;
+      this.adminPassword = admin.password; // Store temporarily for API calls
+      localStorage.removeItem('conductor_token');
+    }
   }
 
   getUserInfo() {
-    const userStr = localStorage.getItem('conductor_user');
-    const tenantStr = localStorage.getItem('conductor_tenant');
     return {
-      user: userStr ? JSON.parse(userStr) : null,
-      tenant: tenantStr ? JSON.parse(tenantStr) : null
+      user: readStoredJson('conductor_user'),
+      tenant: readStoredJson('conductor_tenant')
     };
   }
 
   getAdminInfo() {
-    const adminStr = localStorage.getItem('conductor_admin');
     const isAdmin = localStorage.getItem('conductor_is_admin') === 'true';
     return {
-      admin: adminStr ? JSON.parse(adminStr) : null,
+      admin: readStoredJson('conductor_admin'),
       isAdmin
     };
+  }
+
+  hasStoredAuth() {
+    const { user, tenant } = this.getUserInfo();
+    const { admin, isAdmin } = this.getAdminInfo();
+
+    if (isAdmin) {
+      return Boolean((admin && admin.ApiKey) || this.bearerToken || (this.adminEmail && this.adminPassword));
+    }
+
+    return Boolean(this.bearerToken && user && tenant);
   }
 
   async request(method, endpoint, body = null) {
@@ -133,6 +161,8 @@ class ConductorApi {
     if (this.adminEmail && this.adminPassword) {
       headers['x-admin-email'] = this.adminEmail;
       headers['x-admin-password'] = this.adminPassword;
+    } else if (this.bearerToken) {
+      headers['Authorization'] = `Bearer ${this.bearerToken}`;
     }
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -618,6 +648,23 @@ class ConductorApi {
     return this.request('GET', `/v1.0/requesthistory/summary${queryString}`);
   }
 
+  async getRequestAnalyticsOverview(params = {}) {
+    const query = new URLSearchParams();
+    if (params.range) query.append('range', params.range);
+    if (params.startUtc) query.append('startUtc', params.startUtc);
+    if (params.endUtc) query.append('endUtc', params.endUtc);
+    if (params.bucketSeconds) query.append('bucketSeconds', params.bucketSeconds);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.vmrGuid) query.append('vmrGuid', params.vmrGuid);
+    if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
+    if (params.providerName) query.append('providerName', params.providerName);
+    if (params.modelName) query.append('modelName', params.modelName);
+    if (params.stageKind) query.append('stageKind', params.stageKind);
+    if (params.statusClass) query.append('statusClass', params.statusClass);
+    const queryString = query.toString() ? '?' + query.toString() : '';
+    return this.request('GET', `/v1.0/requesthistory/analytics/overview${queryString}`);
+  }
+
   // Request History APIs
   /**
    * Search request history entries with pagination.
@@ -670,6 +717,10 @@ class ConductorApi {
     return this.request('GET', `/v1.0/requesthistory/${id}/detail`);
   }
 
+  async getRequestHistoryAnalytics(id) {
+    return this.request('GET', `/v1.0/requesthistory/${id}/analytics`);
+  }
+
   /**
    * Delete a request history entry.
    * @param {string} id - The entry ID
@@ -677,6 +728,15 @@ class ConductorApi {
    */
   async deleteRequestHistoryEntry(id) {
     return this.request('DELETE', `/v1.0/requesthistory/${id}`);
+  }
+
+  /**
+   * Delete selected request history entries by ID.
+   * @param {string[]} ids - Request history entry IDs to delete
+   * @returns {Promise<Object>} Result with DeletedCount
+   */
+  async deleteRequestHistoryEntries(ids = []) {
+    return this.request('POST', '/v1.0/requesthistory/delete', { Ids: ids });
   }
 
   /**

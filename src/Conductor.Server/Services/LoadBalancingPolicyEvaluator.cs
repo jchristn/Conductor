@@ -2,7 +2,6 @@ namespace Conductor.Server.Services
 {
     using System;
     using System.Collections.Generic;
-    using System.Globalization;
     using System.Linq;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
@@ -187,21 +186,11 @@ namespace Conductor.Server.Services
             public string Message { get; set; } = null;
         }
 
-        private sealed class MetricValue
+        private sealed class EndpointEvaluationItem
         {
-            public LoadBalancingMetricValueTypeEnum Type { get; set; }
-            public double? Number { get; set; }
-            public bool? Boolean { get; set; }
-            public string String { get; set; }
-        }
-
-        private sealed class MetricResolutionResult
-        {
-            public bool Success { get; set; } = false;
-            public MetricValue Value { get; set; } = null;
-            public string FailureCode { get; set; } = null;
-            public string FailureReason { get; set; } = null;
-            public bool TelemetryFreshnessFailure { get; set; } = false;
+            public EndpointAvailability Availability { get; set; } = null;
+            public EndpointHealthState State { get; set; } = null;
+            public EndpointDiagnostic Diagnostic { get; set; } = null;
         }
 
         /// <summary>
@@ -259,7 +248,7 @@ namespace Conductor.Server.Services
                         return false;
                     }
 
-                    if (!TryParseFilterValue(filter.ValueType, filter.Value, out _))
+                    if (!LoadBalancingPolicyMetricResolver.TryParseFilterValue(filter.ValueType, filter.Value, out _))
                     {
                         error = "Value '" + filter.Value + "' is invalid for metric '" + filter.Metric + "'.";
                         return false;
@@ -331,7 +320,7 @@ namespace Conductor.Server.Services
             if (policy == null) return new EvaluationResult { FailureReason = "Policy is required." };
             if (availableEndpoints == null || availableEndpoints.Count < 1) return new EvaluationResult { FailureReason = "No endpoints available." };
 
-            List<(EndpointAvailability Availability, EndpointHealthState State, EndpointDiagnostic Diagnostic)> filtered = new List<(EndpointAvailability, EndpointHealthState, EndpointDiagnostic)>();
+            List<EndpointEvaluationItem> filtered = new List<EndpointEvaluationItem>();
             List<EndpointDiagnostic> diagnostics = new List<EndpointDiagnostic>();
             int telemetryFreshnessFailures = 0;
 
@@ -352,7 +341,12 @@ namespace Conductor.Server.Services
 
                 if (diagnostic.Included)
                 {
-                    filtered.Add((availability, state, diagnostic));
+                    filtered.Add(new EndpointEvaluationItem
+                    {
+                        Availability = availability,
+                        State = state,
+                        Diagnostic = diagnostic
+                    });
                 }
             }
 
@@ -372,10 +366,10 @@ namespace Conductor.Server.Services
             {
                 Dictionary<string, double> ruleValues = new Dictionary<string, double>();
 
-                foreach ((EndpointAvailability availability, EndpointHealthState state, EndpointDiagnostic diagnostic) in filtered)
+                foreach (EndpointEvaluationItem filteredItem in filtered)
                 {
-                    MetricResolutionResult resolution = ResolveMetric(rule.Metric, availability, state, policy.MaxTelemetryAgeMs);
-                    RankingDiagnostic rankingDiagnostic = diagnostic.Ranking.Find(item => String.Equals(item.Metric, rule.Metric, StringComparison.OrdinalIgnoreCase));
+                    LoadBalancingPolicyMetricResolutionResult resolution = LoadBalancingPolicyMetricResolver.ResolveMetric(rule.Metric, filteredItem.Availability, filteredItem.State, policy.MaxTelemetryAgeMs);
+                    RankingDiagnostic rankingDiagnostic = filteredItem.Diagnostic.Ranking.Find(item => String.Equals(item.Metric, rule.Metric, StringComparison.OrdinalIgnoreCase));
                     rankingDiagnostic ??= new RankingDiagnostic
                     {
                         Metric = rule.Metric,
@@ -387,9 +381,9 @@ namespace Conductor.Server.Services
                     {
                         rankingDiagnostic.FailureCode = resolution.FailureCode ?? "MetricUnavailable";
                         rankingDiagnostic.Message = resolution.FailureReason ?? ("Metric '" + rule.Metric + "' was unavailable.");
-                        if (!diagnostic.Ranking.Contains(rankingDiagnostic))
+                        if (!filteredItem.Diagnostic.Ranking.Contains(rankingDiagnostic))
                         {
-                            diagnostic.Ranking.Add(rankingDiagnostic);
+                            filteredItem.Diagnostic.Ranking.Add(rankingDiagnostic);
                         }
 
                         return new EvaluationResult
@@ -401,10 +395,10 @@ namespace Conductor.Server.Services
                     }
 
                     rankingDiagnostic.RawValue = resolution.Value.Number.Value;
-                    ruleValues[availability.Endpoint.Id] = resolution.Value.Number.Value;
-                    if (!diagnostic.Ranking.Contains(rankingDiagnostic))
+                    ruleValues[filteredItem.Availability.Endpoint.Id] = resolution.Value.Number.Value;
+                    if (!filteredItem.Diagnostic.Ranking.Contains(rankingDiagnostic))
                     {
-                        diagnostic.Ranking.Add(rankingDiagnostic);
+                        filteredItem.Diagnostic.Ranking.Add(rankingDiagnostic);
                     }
                 }
 
@@ -416,9 +410,8 @@ namespace Conductor.Server.Services
                     double normalized = Normalize(kvp.Value, min, max, rule.Direction);
                     scores[kvp.Key] += normalized * rule.Weight;
 
-                    (EndpointAvailability availability, EndpointHealthState state, EndpointDiagnostic diagnostic) filteredItem =
-                        filtered.First(item => String.Equals(item.Availability.Endpoint.Id, kvp.Key, StringComparison.Ordinal));
-                    RankingDiagnostic rankingDiagnostic = filteredItem.diagnostic.Ranking.Find(item => String.Equals(item.Metric, rule.Metric, StringComparison.OrdinalIgnoreCase));
+                    EndpointEvaluationItem filteredItem = filtered.First(item => String.Equals(item.Availability.Endpoint.Id, kvp.Key, StringComparison.Ordinal));
+                    RankingDiagnostic rankingDiagnostic = filteredItem.Diagnostic.Ranking.Find(item => String.Equals(item.Metric, rule.Metric, StringComparison.OrdinalIgnoreCase));
                     if (rankingDiagnostic != null)
                     {
                         rankingDiagnostic.NormalizedValue = normalized;
@@ -479,7 +472,7 @@ namespace Conductor.Server.Services
                     ExpectedValue = filter.Value
                 };
 
-                MetricResolutionResult actualResolution = ResolveMetric(filter.Metric, availability, state, policy.MaxTelemetryAgeMs);
+                LoadBalancingPolicyMetricResolutionResult actualResolution = LoadBalancingPolicyMetricResolver.ResolveMetric(filter.Metric, availability, state, policy.MaxTelemetryAgeMs);
                 if (!actualResolution.Success)
                 {
                     filterDiagnostic.Passed = false;
@@ -492,9 +485,9 @@ namespace Conductor.Server.Services
                     return diagnostic;
                 }
 
-                filterDiagnostic.ActualValue = FormatMetricValue(actualResolution.Value);
+                filterDiagnostic.ActualValue = LoadBalancingPolicyMetricResolver.FormatMetricValue(actualResolution.Value);
 
-                if (!TryParseFilterValue(filter.ValueType, filter.Value, out MetricValue expected))
+                if (!LoadBalancingPolicyMetricResolver.TryParseFilterValue(filter.ValueType, filter.Value, out LoadBalancingPolicyMetricValue expected))
                 {
                     filterDiagnostic.Passed = false;
                     filterDiagnostic.FailureCode = "InvalidExpectedValue";
@@ -506,7 +499,7 @@ namespace Conductor.Server.Services
                     return diagnostic;
                 }
 
-                filterDiagnostic.Passed = Compare(actualResolution.Value, expected, filter.Operator);
+                filterDiagnostic.Passed = LoadBalancingPolicyMetricResolver.Compare(actualResolution.Value, expected, filter.Operator);
                 filterDiagnostic.Message = filterDiagnostic.Passed
                     ? "Filter matched."
                     : "Metric '" + filter.Metric + "' did not satisfy the filter.";
@@ -532,7 +525,7 @@ namespace Conductor.Server.Services
                     Weight = rule.Weight
                 };
 
-                MetricResolutionResult resolution = ResolveMetric(rule.Metric, availability, state, policy.MaxTelemetryAgeMs);
+                LoadBalancingPolicyMetricResolutionResult resolution = LoadBalancingPolicyMetricResolver.ResolveMetric(rule.Metric, availability, state, policy.MaxTelemetryAgeMs);
                 if (!resolution.Success || !resolution.Value.Number.HasValue)
                 {
                     rankingDiagnostic.FailureCode = resolution.FailureCode ?? "MetricUnavailable";
@@ -565,334 +558,5 @@ namespace Conductor.Server.Services
             return ratio;
         }
 
-        private static bool TryParseFilterValue(LoadBalancingMetricValueTypeEnum valueType, string value, out MetricValue parsed)
-        {
-            parsed = new MetricValue { Type = valueType };
-
-            switch (valueType)
-            {
-                case LoadBalancingMetricValueTypeEnum.Boolean:
-                    if (Boolean.TryParse(value, out bool boolValue))
-                    {
-                        parsed.Boolean = boolValue;
-                        return true;
-                    }
-                    break;
-                case LoadBalancingMetricValueTypeEnum.String:
-                    parsed.String = value ?? String.Empty;
-                    return true;
-                case LoadBalancingMetricValueTypeEnum.Number:
-                default:
-                    if (Double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double numberValue))
-                    {
-                        parsed.Number = numberValue;
-                        return true;
-                    }
-                    break;
-            }
-
-            return false;
-        }
-
-        private static bool Compare(MetricValue actual, MetricValue expected, LoadBalancingPolicyOperatorEnum op)
-        {
-            if (actual == null || expected == null || actual.Type != expected.Type) return false;
-
-            switch (actual.Type)
-            {
-                case LoadBalancingMetricValueTypeEnum.Boolean:
-                    if (!actual.Boolean.HasValue || !expected.Boolean.HasValue) return false;
-                    return CompareComparable(actual.Boolean.Value, expected.Boolean.Value, op);
-                case LoadBalancingMetricValueTypeEnum.String:
-                    return CompareStrings(actual.String, expected.String, op);
-                case LoadBalancingMetricValueTypeEnum.Number:
-                default:
-                    if (!actual.Number.HasValue || !expected.Number.HasValue) return false;
-                    return CompareComparable(actual.Number.Value, expected.Number.Value, op);
-            }
-        }
-
-        private static bool CompareStrings(string actual, string expected, LoadBalancingPolicyOperatorEnum op)
-        {
-            switch (op)
-            {
-                case LoadBalancingPolicyOperatorEnum.Equal:
-                    return String.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
-                case LoadBalancingPolicyOperatorEnum.NotEqual:
-                    return !String.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
-                default:
-                    return false;
-            }
-        }
-
-        private static bool CompareComparable<T>(T actual, T expected, LoadBalancingPolicyOperatorEnum op) where T : IComparable<T>
-        {
-            int comparison = actual.CompareTo(expected);
-
-            switch (op)
-            {
-                case LoadBalancingPolicyOperatorEnum.Equal:
-                    return comparison == 0;
-                case LoadBalancingPolicyOperatorEnum.NotEqual:
-                    return comparison != 0;
-                case LoadBalancingPolicyOperatorEnum.LessThan:
-                    return comparison < 0;
-                case LoadBalancingPolicyOperatorEnum.LessThanOrEqual:
-                    return comparison <= 0;
-                case LoadBalancingPolicyOperatorEnum.GreaterThan:
-                    return comparison > 0;
-                case LoadBalancingPolicyOperatorEnum.GreaterThanOrEqual:
-                    return comparison >= 0;
-                default:
-                    return false;
-            }
-        }
-
-        private static bool TryResolveMetric(string metricId, EndpointAvailability availability, EndpointHealthState state, int maxTelemetryAgeMs, out MetricValue value)
-        {
-            MetricResolutionResult resolution = ResolveMetric(metricId, availability, state, maxTelemetryAgeMs);
-            value = resolution.Value;
-            return resolution.Success;
-        }
-
-        private static MetricResolutionResult ResolveMetric(string metricId, EndpointAvailability availability, EndpointHealthState state, int maxTelemetryAgeMs)
-        {
-            MetricResolutionResult result = new MetricResolutionResult();
-            if (availability == null || availability.Endpoint == null)
-            {
-                result.FailureCode = "MetricUnavailable";
-                result.FailureReason = "Endpoint availability was not supplied.";
-                return result;
-            }
-
-            switch (metricId)
-            {
-                case "health.isHealthy":
-                    result.Success = true;
-                    result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Boolean, Boolean = availability.IsHealthy };
-                    return result;
-                case "health.hasCapacity":
-                    result.Success = true;
-                    result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Boolean, Boolean = availability.HasCapacity };
-                    return result;
-                case "health.inFlightRequests":
-                    result.Success = true;
-                    result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = state?.InFlightRequests ?? 0 };
-                    return result;
-                case "endpoint.weight":
-                    result.Success = true;
-                    result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = availability.Endpoint.Weight };
-                    return result;
-                case "endpoint.maxParallelRequests":
-                    result.Success = true;
-                    result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = availability.Endpoint.MaxParallelRequests };
-                    return result;
-                case "rig.ready":
-                    if (state?.RigMonitor?.Ready.HasValue == true)
-                    {
-                        result.Success = true;
-                        result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Boolean, Boolean = state.RigMonitor.Ready.Value };
-                        return result;
-                    }
-                    result.FailureCode = "MetricUnavailable";
-                    result.FailureReason = "RigMonitor ready state was unavailable.";
-                    return result;
-                case "rig.telemetry.ageMs":
-                    return ResolveTelemetryAge(state);
-                case "rig.cpu.utilizationPercent":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => s?.Cpu?.UtilizationPercent);
-                case "rig.memory.utilizationPercent":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => s?.Memory?.UtilizationPercent);
-                case "rig.memory.availableBytes":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => s?.Memory?.AvailableBytes);
-                case "rig.network.totalReceiveBytesPerSecond":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => s?.Network?.TotalReceiveBytesPerSecond);
-                case "rig.network.totalTransmitBytesPerSecond":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => s?.Network?.TotalTransmitBytesPerSecond);
-                case "rig.disk.maxVolumeUtilizationPercent":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => s?.Disk?.Volumes?.Where(v => v.UtilizationPercent.HasValue).Select(v => v.UtilizationPercent.Value).DefaultIfEmpty().Max());
-                case "rig.gpu.available":
-                    bool? gpuAvailable = state?.RigMonitor?.Capabilities?.NvidiaAvailable;
-                    if (!gpuAvailable.HasValue && state?.RigMonitor?.Telemetry != null)
-                    {
-                        gpuAvailable = state.RigMonitor.Telemetry.NvidiaAvailable;
-                    }
-                    if (gpuAvailable.HasValue)
-                    {
-                        result.Success = true;
-                        result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Boolean, Boolean = gpuAvailable.Value };
-                        return result;
-                    }
-                    result.FailureCode = "MetricUnavailable";
-                    result.FailureReason = "GPU availability telemetry was unavailable.";
-                    return result;
-                case "rig.gpu.avgUtilizationPercent":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => AverageGpuMetric(s, m => m.GpuUtilizationPercent));
-                case "rig.gpu.minFreeMemoryMegabytes":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => MinGpuMetric(s, m => m.MemoryFreeMegabytes));
-                case "rig.gpu.maxTemperatureCelsius":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => MaxGpuMetric(s, m => m.TemperatureCelsius));
-                case "rig.ollama.available":
-                    bool? ollamaAvailable = state?.RigMonitor?.Capabilities?.OllamaAvailable;
-                    if (!ollamaAvailable.HasValue && state?.RigMonitor?.Telemetry?.Ollama != null)
-                    {
-                        ollamaAvailable = state.RigMonitor.Telemetry.Ollama.Available;
-                    }
-                    if (ollamaAvailable.HasValue)
-                    {
-                        result.Success = true;
-                        result.Value = new MetricValue { Type = LoadBalancingMetricValueTypeEnum.Boolean, Boolean = ollamaAvailable.Value };
-                        return result;
-                    }
-                    result.FailureCode = "MetricUnavailable";
-                    result.FailureReason = "Ollama availability telemetry was unavailable.";
-                    return result;
-                case "rig.ollama.loadedModelCount":
-                    return ResolveTelemetryNumber(state, maxTelemetryAgeMs, s => s?.Ollama?.LoadedModelCount);
-                default:
-                    result.FailureCode = "UnsupportedMetric";
-                    result.FailureReason = "Metric '" + metricId + "' is not supported.";
-                    return result;
-            }
-        }
-
-        private static MetricResolutionResult ResolveTelemetryAge(EndpointHealthState state)
-        {
-            MetricResolutionResult result = new MetricResolutionResult();
-            if (!state?.RigMonitor?.LastTelemetryUtc.HasValue ?? true)
-            {
-                result.FailureCode = "MetricUnavailable";
-                result.FailureReason = "RigMonitor telemetry age was unavailable.";
-                return result;
-            }
-
-            result.Success = true;
-            result.Value = new MetricValue
-            {
-                Type = LoadBalancingMetricValueTypeEnum.Number,
-                Number = (DateTime.UtcNow - state.RigMonitor.LastTelemetryUtc.Value).TotalMilliseconds
-            };
-            return result;
-        }
-
-        private static MetricResolutionResult ResolveTelemetryNumber(
-            EndpointHealthState state,
-            int maxTelemetryAgeMs,
-            Func<RigMonitorTelemetrySnapshot, double?> selector)
-        {
-            MetricResolutionResult result = new MetricResolutionResult();
-            if (!IsTelemetryFresh(state, maxTelemetryAgeMs))
-            {
-                result.FailureCode = "TelemetryFreshnessUnavailable";
-                result.FailureReason = "RigMonitor telemetry was missing or older than the policy's max telemetry age.";
-                result.TelemetryFreshnessFailure = true;
-                return result;
-            }
-
-            double? number = selector(state.RigMonitor.Telemetry);
-            if (!number.HasValue)
-            {
-                result.FailureCode = "MetricUnavailable";
-                result.FailureReason = "RigMonitor telemetry did not contain the requested numeric metric.";
-                return result;
-            }
-
-            result.Success = true;
-            result.Value = new MetricValue
-            {
-                Type = LoadBalancingMetricValueTypeEnum.Number,
-                Number = number.Value
-            };
-            return result;
-        }
-
-        private static MetricResolutionResult ResolveTelemetryNumber(
-            EndpointHealthState state,
-            int maxTelemetryAgeMs,
-            Func<RigMonitorTelemetrySnapshot, long?> selector)
-        {
-            MetricResolutionResult result = new MetricResolutionResult();
-            if (!IsTelemetryFresh(state, maxTelemetryAgeMs))
-            {
-                result.FailureCode = "TelemetryFreshnessUnavailable";
-                result.FailureReason = "RigMonitor telemetry was missing or older than the policy's max telemetry age.";
-                result.TelemetryFreshnessFailure = true;
-                return result;
-            }
-
-            long? number = selector(state.RigMonitor.Telemetry);
-            if (!number.HasValue)
-            {
-                result.FailureCode = "MetricUnavailable";
-                result.FailureReason = "RigMonitor telemetry did not contain the requested numeric metric.";
-                return result;
-            }
-
-            result.Success = true;
-            result.Value = new MetricValue
-            {
-                Type = LoadBalancingMetricValueTypeEnum.Number,
-                Number = number.Value
-            };
-            return result;
-        }
-
-        private static bool IsTelemetryFresh(EndpointHealthState state, int maxTelemetryAgeMs)
-        {
-            if (state?.RigMonitor?.Telemetry == null || !state.RigMonitor.LastTelemetryUtc.HasValue) return false;
-            return (DateTime.UtcNow - state.RigMonitor.LastTelemetryUtc.Value).TotalMilliseconds <= maxTelemetryAgeMs;
-        }
-
-        private static string FormatMetricValue(MetricValue value)
-        {
-            if (value == null) return null;
-
-            switch (value.Type)
-            {
-                case LoadBalancingMetricValueTypeEnum.Boolean:
-                    return value.Boolean.HasValue ? value.Boolean.Value.ToString() : null;
-                case LoadBalancingMetricValueTypeEnum.String:
-                    return value.String;
-                case LoadBalancingMetricValueTypeEnum.Number:
-                default:
-                    return value.Number.HasValue ? value.Number.Value.ToString("G", CultureInfo.InvariantCulture) : null;
-            }
-        }
-
-        private static double? AverageGpuMetric(RigMonitorTelemetrySnapshot telemetry, Func<RigMonitorGpuMetricsTelemetry, double?> selector)
-        {
-            List<double> values = telemetry?.Gpu?.Devices?
-                .Where(d => d.Metrics != null)
-                .Select(d => selector(d.Metrics))
-                .Where(v => v.HasValue)
-                .Select(v => v.Value)
-                .ToList();
-            if (values == null || values.Count < 1) return null;
-            return values.Average();
-        }
-
-        private static double? MinGpuMetric(RigMonitorTelemetrySnapshot telemetry, Func<RigMonitorGpuMetricsTelemetry, double?> selector)
-        {
-            List<double> values = telemetry?.Gpu?.Devices?
-                .Where(d => d.Metrics != null)
-                .Select(d => selector(d.Metrics))
-                .Where(v => v.HasValue)
-                .Select(v => v.Value)
-                .ToList();
-            if (values == null || values.Count < 1) return null;
-            return values.Min();
-        }
-
-        private static double? MaxGpuMetric(RigMonitorTelemetrySnapshot telemetry, Func<RigMonitorGpuMetricsTelemetry, double?> selector)
-        {
-            List<double> values = telemetry?.Gpu?.Devices?
-                .Where(d => d.Metrics != null)
-                .Select(d => selector(d.Metrics))
-                .Where(v => v.HasValue)
-                .Select(v => v.Value)
-                .ToList();
-            if (values == null || values.Count < 1) return null;
-            return values.Max();
-        }
     }
 }

@@ -50,6 +50,43 @@ test('builds request-history search query string', async () => {
   );
 });
 
+test('builds request analytics overview query string', async () => {
+  let capturedUrl = '';
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url) => {
+      capturedUrl = url;
+      return createJsonResponse({ TotalRequests: 0 });
+    }
+  });
+
+  await client.getRequestAnalyticsOverview({
+    range: 'lastWeek',
+    vmrGuid: 'vmr_1',
+    providerName: 'Ollama'
+  });
+
+  assert.equal(
+    capturedUrl,
+    'http://localhost:9000/v1.0/requesthistory/analytics/overview?range=lastWeek&vmrGuid=vmr_1&providerName=Ollama'
+  );
+});
+
+test('builds request history analytics detail URL', async () => {
+  let capturedUrl = '';
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url) => {
+      capturedUrl = url;
+      return createJsonResponse({ Events: [] });
+    }
+  });
+
+  await client.getRequestHistoryAnalytics('req_123');
+
+  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/requesthistory/req_123/analytics');
+});
+
 test('returns raw text for the observability metrics endpoint', async () => {
   const client = new ConductorClient({
     baseUrl: 'http://localhost:9000',

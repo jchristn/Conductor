@@ -166,11 +166,17 @@ namespace Conductor.Server.Services
                 }
 
                 // Delete database entries
+                long analyticsEventsDeleted = 0;
+                if (_Database.RequestAnalytics != null)
+                {
+                    analyticsEventsDeleted = await _Database.RequestAnalytics.DeleteExpiredAsync(metadataCutoff, token).ConfigureAwait(false);
+                }
+
                 long entriesDeleted = await _Database.RequestHistory.DeleteExpiredAsync(metadataCutoff, token).ConfigureAwait(false);
 
-                if (entriesDeleted > 0 || filesDeleted > 0 || bodiesScrubbed > 0)
+                if (entriesDeleted > 0 || analyticsEventsDeleted > 0 || filesDeleted > 0 || bodiesScrubbed > 0)
                 {
-                    _Logging.Info(_Header + "cleaned up " + entriesDeleted + " entries, " + filesDeleted + " files, scrubbed " + bodiesScrubbed + " retained body snapshots");
+                    _Logging.Info(_Header + "cleaned up " + entriesDeleted + " entries, " + analyticsEventsDeleted + " analytics events, " + filesDeleted + " files, scrubbed " + bodiesScrubbed + " retained body snapshots");
                 }
             }
             catch (Exception ex)

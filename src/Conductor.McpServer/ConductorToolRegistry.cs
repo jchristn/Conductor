@@ -51,6 +51,7 @@ namespace Conductor.McpServer
         #region Private-Members
 
         private readonly DatabaseDriverBase _Database;
+        private readonly ConductorToolRegistrationCatalog _RegistrationCatalog;
         private Func<string, EndpointHealthState> _GetHealthStateFunc;
         private Func<string, List<EndpointHealthState>> _GetAllHealthStatesFunc;
 
@@ -66,6 +67,22 @@ namespace Conductor.McpServer
         public ConductorToolRegistry(DatabaseDriverBase database)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
+            _RegistrationCatalog = new ConductorToolRegistrationCatalog(new ConductorToolHandlers
+            {
+                ListModels = ListModelsHandler,
+                GetModel = GetModelHandler,
+                ListEndpoints = ListEndpointsHandler,
+                GetEndpointHealth = GetEndpointHealthHandler,
+                GetEndpoint = GetEndpointHandler,
+                ListVmrs = ListVmrsHandler,
+                GetVmr = GetVmrHandler,
+                CreateVmr = CreateVmrHandler,
+                ListConfigs = ListConfigsHandler,
+                GetConfig = GetConfigHandler,
+                CreateConfig = CreateConfigHandler,
+                ListTenants = ListTenantsHandler,
+                GetTenant = GetTenantHandler
+            });
         }
 
         #endregion
@@ -81,11 +98,7 @@ namespace Conductor.McpServer
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
 
-            RegisterModelDiscoveryTools(server);
-            RegisterEndpointTools(server);
-            RegisterVmrTools(server);
-            RegisterConfigurationTools(server);
-            RegisterTenantTools(server);
+            _RegistrationCatalog.RegisterTools(server);
         }
 
         /// <summary>
@@ -97,274 +110,7 @@ namespace Conductor.McpServer
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
 
-            RegisterModelDiscoveryToolsTcp(server);
-            RegisterEndpointToolsTcp(server);
-            RegisterVmrToolsTcp(server);
-            RegisterConfigurationToolsTcp(server);
-            RegisterTenantToolsTcp(server);
-        }
-
-        #endregion
-
-        #region Private-Methods-HTTP
-
-        private void RegisterModelDiscoveryTools(McpHttpServer server)
-        {
-            server.RegisterTool(
-                "conductor_list_models",
-                "List all available model definitions in Conductor. Returns model metadata including name, family, parameter size, and quantization level.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID to query (required)" },
-                        family = new { type = "string", description = "Filter by model family (optional, e.g., 'llama', 'mistral', 'qwen')" },
-                        active_only = new { type = "boolean", description = "Only return active models (default: true)" }
-                    },
-                    required = new[] { "tenant_id" }
-                },
-                ListModelsHandler);
-
-            server.RegisterTool(
-                "conductor_get_model",
-                "Get details for a specific model definition by ID.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID" },
-                        model_id = new { type = "string", description = "Model definition ID (md_xxx)" }
-                    },
-                    required = new[] { "tenant_id", "model_id" }
-                },
-                GetModelHandler);
-        }
-
-        private void RegisterEndpointTools(McpHttpServer server)
-        {
-            server.RegisterTool(
-                "conductor_list_endpoints",
-                "List all model runner endpoints in Conductor. Returns endpoint configuration including hostname, port, and API type.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID to query (required)" },
-                        active_only = new { type = "boolean", description = "Only return active endpoints (default: true)" }
-                    },
-                    required = new[] { "tenant_id" }
-                },
-                ListEndpointsHandler);
-
-            server.RegisterTool(
-                "conductor_get_endpoint_health",
-                "Get health status of model runner endpoints. Returns health state, in-flight requests, and uptime statistics.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID (required)" },
-                        endpoint_id = new { type = "string", description = "Specific endpoint ID to check (optional, returns all if not specified)" }
-                    },
-                    required = new[] { "tenant_id" }
-                },
-                GetEndpointHealthHandler);
-
-            server.RegisterTool(
-                "conductor_get_endpoint",
-                "Get details for a specific model runner endpoint by ID.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID" },
-                        endpoint_id = new { type = "string", description = "Endpoint ID (mre_xxx)" }
-                    },
-                    required = new[] { "tenant_id", "endpoint_id" }
-                },
-                GetEndpointHandler);
-        }
-
-        private void RegisterVmrTools(McpHttpServer server)
-        {
-            server.RegisterTool(
-                "conductor_list_vmrs",
-                "List all virtual model runners (VMRs) for a tenant. VMRs are virtualized endpoints that aggregate multiple physical endpoints.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID to query (required)" },
-                        active_only = new { type = "boolean", description = "Only return active VMRs (default: true)" }
-                    },
-                    required = new[] { "tenant_id" }
-                },
-                ListVmrsHandler);
-
-            server.RegisterTool(
-                "conductor_get_vmr",
-                "Get details for a specific virtual model runner by ID.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID" },
-                        vmr_id = new { type = "string", description = "Virtual model runner ID (vmr_xxx)" }
-                    },
-                    required = new[] { "tenant_id", "vmr_id" }
-                },
-                GetVmrHandler);
-
-            server.RegisterTool(
-                "conductor_create_vmr",
-                "Create a new virtual model runner. Links multiple physical endpoints and configurations into a unified API.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID" },
-                        name = new { type = "string", description = "Name for the VMR" },
-                        api_type = new { type = "string", description = "API type: 'Ollama', 'OpenAI', 'vLLM', or 'Gemini' (default: Ollama)" },
-                        endpoint_ids = new { type = "array", items = new { type = "string" }, description = "List of endpoint IDs to include" },
-                        configuration_ids = new { type = "array", items = new { type = "string" }, description = "List of configuration IDs to apply (optional)" },
-                        load_balancing = new { type = "string", description = "Load balancing mode: 'RoundRobin', 'Random', or 'FirstAvailable' (default: RoundRobin)" },
-                        allow_completions = new { type = "boolean", description = "Allow completion requests (default: true)" },
-                        allow_embeddings = new { type = "boolean", description = "Allow embedding requests (default: true)" }
-                    },
-                    required = new[] { "tenant_id", "name" }
-                },
-                CreateVmrHandler);
-        }
-
-        private void RegisterConfigurationTools(McpHttpServer server)
-        {
-            server.RegisterTool(
-                "conductor_list_configs",
-                "List all model configurations for a tenant. Configurations define pinned parameters for inference requests.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID to query (required)" },
-                        active_only = new { type = "boolean", description = "Only return active configurations (default: true)" }
-                    },
-                    required = new[] { "tenant_id" }
-                },
-                ListConfigsHandler);
-
-            server.RegisterTool(
-                "conductor_get_config",
-                "Get details for a specific model configuration by ID.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID" },
-                        config_id = new { type = "string", description = "Configuration ID (mc_xxx)" }
-                    },
-                    required = new[] { "tenant_id", "config_id" }
-                },
-                GetConfigHandler);
-
-            server.RegisterTool(
-                "conductor_create_config",
-                "Create a new model configuration with pinned parameters.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID" },
-                        name = new { type = "string", description = "Name for the configuration" },
-                        temperature = new { type = "number", description = "Temperature for generation (0.0 to 2.0)" },
-                        top_p = new { type = "number", description = "Top-P sampling parameter" },
-                        top_k = new { type = "integer", description = "Top-K sampling parameter" },
-                        max_tokens = new { type = "integer", description = "Maximum tokens to generate" },
-                        pinned_completions = new { type = "object", description = "Additional pinned properties for completions (JSON object)" },
-                        pinned_embeddings = new { type = "object", description = "Additional pinned properties for embeddings (JSON object)" }
-                    },
-                    required = new[] { "tenant_id", "name" }
-                },
-                CreateConfigHandler);
-        }
-
-        private void RegisterTenantTools(McpHttpServer server)
-        {
-            server.RegisterTool(
-                "conductor_list_tenants",
-                "List all tenants in Conductor. Tenants provide isolation for multi-tenant deployments.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        active_only = new { type = "boolean", description = "Only return active tenants (default: true)" }
-                    },
-                    required = new string[] { }
-                },
-                ListTenantsHandler);
-
-            server.RegisterTool(
-                "conductor_get_tenant",
-                "Get details for a specific tenant by ID.",
-                new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        tenant_id = new { type = "string", description = "Tenant ID to retrieve" }
-                    },
-                    required = new[] { "tenant_id" }
-                },
-                GetTenantHandler);
-        }
-
-        #endregion
-
-        #region Private-Methods-TCP
-
-        private void RegisterModelDiscoveryToolsTcp(McpTcpServer server)
-        {
-            // TCP server uses RegisterMethod - tools are invoked via tools/call
-            server.RegisterMethod("conductor_list_models", ListModelsHandler);
-            server.RegisterMethod("conductor_get_model", GetModelHandler);
-        }
-
-        private void RegisterEndpointToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_endpoints", ListEndpointsHandler);
-            server.RegisterMethod("conductor_get_endpoint_health", GetEndpointHealthHandler);
-            server.RegisterMethod("conductor_get_endpoint", GetEndpointHandler);
-        }
-
-        private void RegisterVmrToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_vmrs", ListVmrsHandler);
-            server.RegisterMethod("conductor_get_vmr", GetVmrHandler);
-            server.RegisterMethod("conductor_create_vmr", CreateVmrHandler);
-        }
-
-        private void RegisterConfigurationToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_configs", ListConfigsHandler);
-            server.RegisterMethod("conductor_get_config", GetConfigHandler);
-            server.RegisterMethod("conductor_create_config", CreateConfigHandler);
-        }
-
-        private void RegisterTenantToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_tenants", ListTenantsHandler);
-            server.RegisterMethod("conductor_get_tenant", GetTenantHandler);
+            _RegistrationCatalog.RegisterTools(server);
         }
 
         #endregion

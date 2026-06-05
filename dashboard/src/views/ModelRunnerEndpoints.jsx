@@ -1428,7 +1428,7 @@ function ModelRunnerEndpoints() {
                   {h.RigMonitor?.Enabled && (
                     <>
                       <div className="health-section-label" style={{ marginTop: '20px' }}>RigMonitor</div>
-                      <div className="health-stats-row">
+                      <div className="health-stats-row health-stats-row-four">
                         <div className="health-stat-card" title="Cached RigMonitor readiness">
                           <div className="health-stat-label">Ready</div>
                           <div className="health-stat-value">

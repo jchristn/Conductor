@@ -6,7 +6,7 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - effective configuration preview
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
-- request-history search, summary, detail, and bulk delete
+- request-history search, summary, detail, analytics, and bulk delete
 - observability summary and raw Prometheus metrics
 
 ## Install
@@ -35,6 +35,11 @@ explanation = client.explain_virtual_model_runner_routing(
     },
     tenant_id="tenant_123",
 )
+
+analytics = client.get_request_analytics_overview({
+    "range": "lastDay",
+    "vmrGuid": "vmr_123",
+})
 ```
 
 ## Test

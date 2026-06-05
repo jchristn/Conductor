@@ -20,7 +20,7 @@ function buildLoginError(url, err) {
 
 export function AppProvider({ children }) {
   const [serverUrl, setServerUrl] = useState(() => resolveInitialServerUrl());
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(() => api.hasStoredAuth());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -88,6 +88,8 @@ export function AppProvider({ children }) {
         setServerUrl(url);
         setCurrentUser(response.User);
         setCurrentTenant(response.Tenant);
+        setCurrentAdmin(null);
+        setIsAdmin(false);
         setIsConnected(true);
         setError(null);
         return true;

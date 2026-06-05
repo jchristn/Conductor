@@ -1,6 +1,7 @@
 namespace Test.Shared.Server.Services
 {
     using System;
+    using System.Collections.Generic;
     using System.IO;
     using System.Threading.Tasks;
     using Conductor.Core.Models;
@@ -90,6 +91,63 @@ namespace Test.Shared.Server.Services
             scrubbed.ResponseBody.Should().BeNull();
             scrubbed.RequestBodyRetained.Should().BeFalse();
             scrubbed.ResponseBodyRetained.Should().BeFalse();
+        }
+
+        /// <summary>
+        /// Verify metadata retention cleanup deletes expired analytics events with the parent request history row.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task StartAsync_DeletesExpiredAnalyticsEventsWithMetadata()
+        {
+            VirtualModelRunner vmr = await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = TestTenantId,
+                Name = "Analytics Cleanup VMR",
+                BasePath = "/cleanup/analytics/"
+            }).ConfigureAwait(false);
+
+            RequestHistoryDetail detail = new RequestHistoryDetail
+            {
+                TenantGuid = TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "analytics-cleanup-test.json",
+                CreatedUtc = DateTime.UtcNow.AddDays(-45),
+                TraceId = "trc_cleanup",
+                AnalyticsCaptured = true
+            };
+
+            await Database.RequestHistory.CreateAsync(detail).ConfigureAwait(false);
+            await Database.RequestAnalytics.CreateAsync(new RequestAnalyticsEvent
+            {
+                TenantGuid = TestTenantId,
+                RequestHistoryId = detail.Id,
+                TraceId = detail.TraceId,
+                StageKind = "generation",
+                StageName = "Generation",
+                StartedUtc = detail.CreatedUtc,
+                CompletedUtc = detail.CreatedUtc.AddMilliseconds(20),
+                DurationMs = 20,
+                Success = true,
+                HttpStatus = 200,
+                CreatedUtc = detail.CreatedUtc
+            }).ConfigureAwait(false);
+
+            string filePath = Path.Combine(_HistoryDirectory, detail.ObjectKey);
+            await File.WriteAllTextAsync(filePath, _Serializer.SerializeJson(detail, true)).ConfigureAwait(false);
+
+            using RequestHistoryCleanupService cleanupService = new RequestHistoryCleanupService(Database, Logging, _Settings);
+            await cleanupService.StartAsync().ConfigureAwait(false);
+            await cleanupService.StopAsync().ConfigureAwait(false);
+
+            RequestHistoryEntry entry = await Database.RequestHistory.ReadByIdAsync(detail.Id).ConfigureAwait(false);
+            List<RequestAnalyticsEvent> events = await Database.RequestAnalytics.ListByRequestHistoryIdAsync(detail.Id).ConfigureAwait(false);
+
+            entry.Should().BeNull();
+            events.Should().BeEmpty();
         }
 
         /// <summary>

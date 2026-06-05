@@ -39,6 +39,7 @@ namespace Conductor.Core.Database.Sqlite
             LoadBalancingPolicy = new LoadBalancingPolicyMethods(this);
             Administrator = new AdministratorMethods(this);
             RequestHistory = new RequestHistoryMethods(this);
+            RequestAnalytics = new Conductor.Core.Database.RequestAnalyticsMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.Sqlite);
         }
 
         /// <summary>
@@ -59,7 +60,8 @@ namespace Conductor.Core.Database.Sqlite
                 TableQueries.CreateLoadBalancingPoliciesTable,
                 TableQueries.CreateVirtualModelRunnersTable,
                 TableQueries.CreateAdministratorsTable,
-                TableQueries.CreateRequestHistoryTable
+                TableQueries.CreateRequestHistoryTable,
+                TableQueries.CreateRequestAnalyticsEventsTable
             };
 
             await ExecuteQueriesAsync(queries, false, token).ConfigureAwait(false);
@@ -244,6 +246,19 @@ namespace Conductor.Core.Database.Sqlite
             await EnsureColumnAsync("requesthistory", "responsebodyretained", "ALTER TABLE requesthistory ADD COLUMN responsebodyretained INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "responsebodyredacted", "ALTER TABLE requesthistory ADD COLUMN responsebodyredacted INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "responseheadersredacted", "ALTER TABLE requesthistory ADD COLUMN responseheadersredacted INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "traceid", "ALTER TABLE requesthistory ADD COLUMN traceid TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "providerrequestid", "ALTER TABLE requesthistory ADD COLUMN providerrequestid TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "providername", "ALTER TABLE requesthistory ADD COLUMN providername TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "prompttokens", "ALTER TABLE requesthistory ADD COLUMN prompttokens INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "completiontokens", "ALTER TABLE requesthistory ADD COLUMN completiontokens INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "totaltokens", "ALTER TABLE requesthistory ADD COLUMN totaltokens INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "tokenspersecondoverall", "ALTER TABLE requesthistory ADD COLUMN tokenspersecondoverall REAL;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "tokenspersecondgeneration", "ALTER TABLE requesthistory ADD COLUMN tokenspersecondgeneration REAL;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "analyticscaptured", "ALTER TABLE requesthistory ADD COLUMN analyticscaptured INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "analyticsversion", "ALTER TABLE requesthistory ADD COLUMN analyticsversion INTEGER NOT NULL DEFAULT 1;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "dominantstagekind", "ALTER TABLE requesthistory ADD COLUMN dominantstagekind TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "dominantstagedurationms", "ALTER TABLE requesthistory ADD COLUMN dominantstagedurationms INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "analyticsfailurecode", "ALTER TABLE requesthistory ADD COLUMN analyticsfailurecode TEXT;", token).ConfigureAwait(false);
 
             await EnsureIndexAsync("idx_requesthistory_requestoruserguid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_requestoruserguid ON requesthistory(requestoruserguid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_credentialguid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_credentialguid ON requesthistory(credentialguid);", token).ConfigureAwait(false);
@@ -252,6 +267,18 @@ namespace Conductor.Core.Database.Sqlite
             await EnsureIndexAsync("idx_requesthistory_effectivemodel", "CREATE INDEX IF NOT EXISTS idx_requesthistory_effectivemodel ON requesthistory(effectivemodel);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_denialreasoncode", "CREATE INDEX IF NOT EXISTS idx_requesthistory_denialreasoncode ON requesthistory(denialreasoncode);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_sessionaffinityoutcome", "CREATE INDEX IF NOT EXISTS idx_requesthistory_sessionaffinityoutcome ON requesthistory(sessionaffinityoutcome);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_traceid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_traceid ON requesthistory(traceid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_providerrequestid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_providerrequestid ON requesthistory(providerrequestid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_providername", "CREATE INDEX IF NOT EXISTS idx_requesthistory_providername ON requesthistory(providername);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_analyticscaptured", "CREATE INDEX IF NOT EXISTS idx_requesthistory_analyticscaptured ON requesthistory(analyticscaptured);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_dominantstagekind", "CREATE INDEX IF NOT EXISTS idx_requesthistory_dominantstagekind ON requesthistory(dominantstagekind);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_analyticsfailurecode", "CREATE INDEX IF NOT EXISTS idx_requesthistory_analyticsfailurecode ON requesthistory(analyticsfailurecode);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requestanalyticsevents_tenant_created", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_tenant_created ON requestanalyticsevents(tenantguid, createdutc);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requestanalyticsevents_requesthistoryid", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_requesthistoryid ON requestanalyticsevents(requesthistoryid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requestanalyticsevents_traceid", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalyticsevents(traceid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requestanalyticsevents_stagekind", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requestanalyticsevents_endpoint_created", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requestanalyticsevents_vmr_created", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);", token).ConfigureAwait(false);
         }
 
         /// <summary>

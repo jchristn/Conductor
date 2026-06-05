@@ -1,6 +1,8 @@
 namespace Conductor.Server.Controllers
 {
     using System;
+    using System.Collections.Generic;
+    using System.Linq;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Models;
@@ -8,7 +10,7 @@ namespace Conductor.Server.Controllers
     using Conductor.Server.Services;
     using SyslogLogging;
     using WatsonWebserver.Core;
-    
+
 
     /// <summary>
     /// Controller for request history endpoints.
@@ -109,6 +111,47 @@ namespace Conductor.Server.Controllers
         }
 
         /// <summary>
+        /// Get request analytics events for a request history entry.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID (from auth).</param>
+        /// <param name="id">Entry ID.</param>
+        /// <returns>Request analytics detail.</returns>
+        public async Task<RequestAnalyticsDetailResult> ReadAnalytics(string tenantId, string id)
+        {
+            if (String.IsNullOrEmpty(id))
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+            }
+
+            RequestAnalyticsDetailResult result = await _RequestHistoryService.GetAnalyticsAsync(id).ConfigureAwait(false);
+            if (result == null)
+            {
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
+            }
+
+            RequestHistoryEntry entry = await _RequestHistoryService.GetEntryAsync(id).ConfigureAwait(false);
+            if (entry == null || (!String.IsNullOrEmpty(tenantId) && entry.TenantGuid != tenantId))
+            {
+                throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Get aggregate request analytics.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID (from auth).</param>
+        /// <param name="filter">Analytics filter.</param>
+        /// <returns>Aggregate request analytics.</returns>
+        public async Task<RequestAnalyticsOverviewResult> AnalyticsOverview(string tenantId, RequestAnalyticsFilter filter)
+        {
+            filter ??= new RequestAnalyticsFilter();
+            filter.TenantGuid = tenantId;
+            return await _RequestHistoryService.GetAnalyticsOverviewAsync(filter).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Delete a request history entry.
         /// </summary>
         /// <param name="tenantId">Tenant ID (from auth).</param>
@@ -163,6 +206,62 @@ namespace Conductor.Server.Controllers
             long deletedCount = await _RequestHistoryService.DeleteBulkAsync(filter).ConfigureAwait(false);
             return new BulkDeleteResult { DeletedCount = deletedCount };
         }
+
+        /// <summary>
+        /// Delete selected request history entries by ID.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID from auth.</param>
+        /// <param name="request">Selected request history IDs.</param>
+        /// <returns>Number of deleted entries.</returns>
+        /// <exception cref="WebserverException">Thrown when IDs are missing, an entry is not found, or access is denied.</exception>
+        public async Task<BulkDeleteResult> DeleteSelected(string tenantId, RequestHistoryBulkDeleteRequest request)
+        {
+            if (request == null || request.Ids == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "Request history IDs are required");
+            }
+
+            List<string> ids = request.Ids
+                .Where(id => !String.IsNullOrWhiteSpace(id))
+                .Select(id => id.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (ids.Count < 1)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "At least one request history ID is required");
+            }
+
+            List<RequestHistoryEntry> entries = new List<RequestHistoryEntry>();
+            foreach (string id in ids)
+            {
+                RequestHistoryEntry entry = await _RequestHistoryService.GetEntryAsync(id).ConfigureAwait(false);
+                if (entry == null || (!String.IsNullOrEmpty(tenantId) && entry.TenantGuid != tenantId))
+                {
+                    throw new WebserverException(ApiResultEnum.NotFound, "Request history entry not found");
+                }
+
+                entries.Add(entry);
+            }
+
+            foreach (RequestHistoryEntry entry in entries)
+            {
+                await _RequestHistoryService.DeleteAsync(entry.Id).ConfigureAwait(false);
+            }
+
+            return new BulkDeleteResult { DeletedCount = entries.Count };
+        }
+    }
+
+    /// <summary>
+    /// Request body for deleting selected request history entries.
+    /// </summary>
+    public class RequestHistoryBulkDeleteRequest
+    {
+        /// <summary>
+        /// Request history entry IDs to delete.
+        /// </summary>
+        public List<string> Ids { get; set; } = new List<string>();
     }
 
     /// <summary>

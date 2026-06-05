@@ -120,6 +120,7 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.DeleteRequestHistory,
             RequestTypeEnum.DeleteRequestHistoryBulk,
             RequestTypeEnum.ReadRequestHistorySummary,
+            RequestTypeEnum.ReadRequestHistoryAnalytics,
             RequestTypeEnum.ReadObservabilityMetrics,
             RequestTypeEnum.ReadObservabilityMetricsSummary,
             // Proxied API operations

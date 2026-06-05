@@ -59,6 +59,16 @@ namespace Conductor.Core.Helpers
         public const string RequestHistoryPrefix = "req_";
 
         /// <summary>
+        /// Request analytics event ID prefix.
+        /// </summary>
+        public const string RequestAnalyticsEventPrefix = "rae_";
+
+        /// <summary>
+        /// Request trace ID prefix.
+        /// </summary>
+        public const string TracePrefix = "trc_";
+
+        /// <summary>
         /// Default ID length including prefix.
         /// </summary>
         public const int DefaultIdLength = 48;
@@ -153,6 +163,24 @@ namespace Conductor.Core.Helpers
         public static string NewRequestHistoryId()
         {
             return _Generator.GenerateKSortable(RequestHistoryPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new request analytics event ID.
+        /// </summary>
+        /// <returns>K-sortable request analytics event ID.</returns>
+        public static string NewRequestAnalyticsEventId()
+        {
+            return _Generator.GenerateKSortable(RequestAnalyticsEventPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new trace ID.
+        /// </summary>
+        /// <returns>K-sortable trace ID.</returns>
+        public static string NewTraceId()
+        {
+            return _Generator.GenerateKSortable(TracePrefix, DefaultIdLength);
         }
 
         /// <summary>

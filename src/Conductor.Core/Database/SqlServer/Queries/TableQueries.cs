@@ -346,6 +346,19 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 httpstatus INT,
                 firsttokentimems INT,
                 responsetimems INT,
+                traceid NVARCHAR(48),
+                providerrequestid NVARCHAR(255),
+                providername NVARCHAR(128),
+                prompttokens INT,
+                completiontokens INT,
+                totaltokens INT,
+                tokenspersecondoverall DECIMAL(18,6),
+                tokenspersecondgeneration DECIMAL(18,6),
+                analyticscaptured BIT NOT NULL DEFAULT 0,
+                analyticsversion INT NOT NULL DEFAULT 1,
+                dominantstagekind NVARCHAR(128),
+                dominantstagedurationms INT,
+                analyticsfailurecode NVARCHAR(128),
                 objectkey NVARCHAR(255) NOT NULL,
                 createdutc DATETIME2 NOT NULL,
                 requesttransfertype INT NOT NULL DEFAULT 0,
@@ -364,6 +377,64 @@ namespace Conductor.Core.Database.SqlServer.Queries
             CREATE INDEX idx_requesthistory_httpstatus ON requesthistory(httpstatus);
             IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requesthistory_requestorsourceip')
             CREATE INDEX idx_requesthistory_requestorsourceip ON requesthistory(requestorsourceip);
+        ";
+
+        /// <summary>
+        /// Create request analytics events table.
+        /// </summary>
+        public static readonly string CreateRequestAnalyticsEventsTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='requestanalyticsevents' AND xtype='U')
+            CREATE TABLE requestanalyticsevents (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantguid NVARCHAR(48),
+                requesthistoryid NVARCHAR(48),
+                traceid NVARCHAR(48),
+                virtualmodelrunnerguid NVARCHAR(48),
+                virtualmodelrunnername NVARCHAR(255),
+                modelendpointguid NVARCHAR(48),
+                modelendpointname NVARCHAR(255),
+                modelendpointurl NVARCHAR(MAX),
+                providername NVARCHAR(128),
+                apiformat NVARCHAR(128),
+                modelname NVARCHAR(255),
+                sequence INT NOT NULL DEFAULT 0,
+                stagekind NVARCHAR(128),
+                phase NVARCHAR(128),
+                stagename NVARCHAR(255),
+                startedutc DATETIME2 NOT NULL,
+                completedutc DATETIME2,
+                durationms INT,
+                success BIT NOT NULL DEFAULT 1,
+                httpstatus INT,
+                errortype NVARCHAR(128),
+                errormessage NVARCHAR(MAX),
+                endpointlimiterwaitms INT,
+                requesttoheadersms INT,
+                headerstofirsttokenms INT,
+                firsttokentolasttokenms INT,
+                clienttotalms INT,
+                prompttokens INT,
+                completiontokens INT,
+                totaltokens INT,
+                requestbytes BIGINT,
+                responsebytes BIGINT,
+                tokenspersecond DECIMAL(18,6),
+                rawprovidermetrics NVARCHAR(MAX),
+                createdutc DATETIME2 NOT NULL,
+                FOREIGN KEY (requesthistoryid) REFERENCES requesthistory(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_tenant_created')
+            CREATE INDEX idx_requestanalyticsevents_tenant_created ON requestanalyticsevents(tenantguid, createdutc);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_requesthistoryid')
+            CREATE INDEX idx_requestanalyticsevents_requesthistoryid ON requestanalyticsevents(requesthistoryid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_traceid')
+            CREATE INDEX idx_requestanalyticsevents_traceid ON requestanalyticsevents(traceid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_stagekind')
+            CREATE INDEX idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_endpoint_created')
+            CREATE INDEX idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_vmr_created')
+            CREATE INDEX idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
         ";
 
         /// <summary>

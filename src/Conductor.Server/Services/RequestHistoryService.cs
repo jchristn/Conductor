@@ -28,6 +28,7 @@ namespace Conductor.Server.Services
         private readonly LoggingModule _Logging;
         private readonly RequestHistorySettings _Settings;
         private readonly Serializer _Serializer;
+        private readonly RequestAnalyticsCaptureProcessor _AnalyticsProcessor;
         private readonly string _Directory;
 
         /// <summary>
@@ -43,6 +44,7 @@ namespace Conductor.Server.Services
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _Settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _Serializer = new Serializer();
+            _AnalyticsProcessor = new RequestAnalyticsCaptureProcessor(_Settings);
             _Directory = Path.GetFullPath(settings.Directory);
 
             // Ensure directory exists
@@ -157,6 +159,7 @@ namespace Conductor.Server.Services
         /// <param name="stopwatch">Stopwatch started at request beginning.</param>
         /// <param name="token">Cancellation token.</param>
         /// <param name="firstTokenTimeMs">Time to first token/byte in milliseconds. If null, response time is used.</param>
+        /// <param name="analyticsCapture">Captured proxy-stage timings and transfer sizes.</param>
         /// <returns>Task.</returns>
         public async Task UpdateWithResponseAsync(
             RequestHistoryDetail detail,
@@ -169,7 +172,8 @@ namespace Conductor.Server.Services
             string responseBody,
             Stopwatch stopwatch,
             CancellationToken token = default,
-            int? firstTokenTimeMs = null)
+            int? firstTokenTimeMs = null,
+            RequestAnalyticsCapture analyticsCapture = null)
         {
             if (detail == null) return;
 
@@ -216,8 +220,31 @@ namespace Conductor.Server.Services
                 detail.ResponseBodyRedacted = responseBodyRedacted;
                 detail.ResponseBodyTruncated = responseBodyTruncated;
 
+                RequestProviderMetrics providerMetrics = _AnalyticsProcessor.ApplyProviderAnalytics(detail, endpoint, responseHeaders, responseBody, analyticsCapture);
+                List<RequestAnalyticsEvent> analyticsEvents = _AnalyticsProcessor.BuildAnalyticsEvents(
+                    detail,
+                    routingDecision,
+                    endpoint,
+                    httpStatus,
+                    analyticsCapture,
+                    providerMetrics,
+                    firstTokenTimeMs);
+                _AnalyticsProcessor.ApplyAnalyticsSummary(detail, analyticsEvents);
+
                 // Update database entry
                 await _Database.RequestHistory.UpdateAsync(detail, token).ConfigureAwait(false);
+
+                if (analyticsEvents.Count > 0 && _Database.RequestAnalytics != null)
+                {
+                    try
+                    {
+                        await _Database.RequestAnalytics.CreateManyAsync(analyticsEvents, token).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _Logging.Warn(_Header + "failed to persist request analytics events for " + detail.Id + ": " + ex.Message);
+                    }
+                }
 
                 // Persist full detail to filesystem
                 await PersistDetailAsync(detail, token).ConfigureAwait(false);
@@ -259,6 +286,98 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Get request analytics events for a request history entry.
+        /// </summary>
+        /// <param name="id">Request history ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Analytics detail result.</returns>
+        public async Task<RequestAnalyticsDetailResult> GetAnalyticsAsync(string id, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) return null;
+
+            RequestHistoryEntry entry = await _Database.RequestHistory.ReadByIdAsync(id, token).ConfigureAwait(false);
+            if (entry == null) return null;
+
+            List<RequestAnalyticsEvent> events = _Database.RequestAnalytics != null
+                ? await _Database.RequestAnalytics.ListByRequestHistoryIdAsync(id, token).ConfigureAwait(false)
+                : new List<RequestAnalyticsEvent>();
+
+            return new RequestAnalyticsDetailResult
+            {
+                RequestHistoryId = entry.Id,
+                TraceId = entry.TraceId,
+                AnalyticsCaptured = entry.AnalyticsCaptured,
+                AnalyticsFailureCode = entry.AnalyticsFailureCode,
+                Events = events
+            };
+        }
+
+        /// <summary>
+        /// Get aggregate request analytics.
+        /// </summary>
+        /// <param name="filter">Analytics filter.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Aggregate request analytics.</returns>
+        public async Task<RequestAnalyticsOverviewResult> GetAnalyticsOverviewAsync(RequestAnalyticsFilter filter, CancellationToken token = default)
+        {
+            filter ??= new RequestAnalyticsFilter();
+            RequestAnalyticsOverviewBuilder.NormalizeFilter(filter);
+            if (RequestAnalyticsOverviewBuilder.IsLargeScan(filter))
+            {
+                _Logging.Warn(
+                    _Header
+                    + "large request analytics overview scan requested"
+                    + " tenant=" + (filter.TenantGuid ?? "(all)")
+                    + " startUtc=" + filter.StartUtc
+                    + " endUtc=" + filter.EndUtc
+                    + " limit=" + filter.Limit
+                    + " bucketSeconds=" + filter.BucketSeconds);
+            }
+
+            RequestHistorySearchFilter historyFilter = new RequestHistorySearchFilter
+            {
+                TenantGuid = filter.TenantGuid,
+                VirtualModelRunnerGuid = filter.VirtualModelRunnerGuid,
+                ModelEndpointGuid = filter.ModelEndpointGuid,
+                ModelName = filter.ModelName,
+                StatusClass = filter.StatusClass,
+                CreatedAfterUtc = filter.StartUtc,
+                CreatedBeforeUtc = filter.EndUtc,
+                Page = 1,
+                PageSize = filter.Limit
+            };
+
+            List<RequestHistoryEntry> entries = new List<RequestHistoryEntry>();
+            while (entries.Count < filter.Limit)
+            {
+                RequestHistorySearchResult historyResult = await _Database.RequestHistory.SearchAsync(historyFilter, token).ConfigureAwait(false);
+                if (historyResult == null || historyResult.Data == null || historyResult.Data.Count < 1)
+                {
+                    break;
+                }
+
+                entries.AddRange(historyResult.Data);
+                if (historyResult.Data.Count < historyFilter.PageSize)
+                {
+                    break;
+                }
+
+                historyFilter.Page++;
+            }
+
+            if (entries.Count > filter.Limit)
+            {
+                entries = entries.Take(filter.Limit).ToList();
+            }
+
+            List<RequestAnalyticsEvent> events = _Database.RequestAnalytics != null
+                ? await _Database.RequestAnalytics.SearchAsync(filter, token).ConfigureAwait(false)
+                : new List<RequestAnalyticsEvent>();
+
+            return RequestAnalyticsOverviewBuilder.BuildOverview(filter, entries, events);
+        }
+
+        /// <summary>
         /// Search request history entries.
         /// </summary>
         /// <param name="filter">Search filter.</param>
@@ -296,6 +415,11 @@ namespace Conductor.Server.Services
             // Delete file
             DeleteFile(entry.ObjectKey);
 
+            if (_Database.RequestAnalytics != null)
+            {
+                await _Database.RequestAnalytics.DeleteByRequestHistoryIdAsync(id, token).ConfigureAwait(false);
+            }
+
             // Delete database entry
             await _Database.RequestHistory.DeleteByIdAsync(id, token).ConfigureAwait(false);
 
@@ -315,18 +439,29 @@ namespace Conductor.Server.Services
             workingFilter.PageSize = 100;
 
             long totalDeleted = 0;
+            List<string> requestHistoryIds = new List<string>();
             RequestHistorySearchResult result = await _Database.RequestHistory.SearchAsync(workingFilter, token).ConfigureAwait(false);
             while (result.Data.Count > 0)
             {
                 foreach (RequestHistoryEntry entry in result.Data)
                 {
                     DeleteFile(entry.ObjectKey);
+                    requestHistoryIds.Add(entry.Id);
                 }
                 totalDeleted += result.Data.Count;
 
                 if (result.Data.Count < 100) break;
 
+                workingFilter.Page++;
                 result = await _Database.RequestHistory.SearchAsync(workingFilter, token).ConfigureAwait(false);
+            }
+
+            if (_Database.RequestAnalytics != null)
+            {
+                foreach (string requestHistoryId in requestHistoryIds)
+                {
+                    await _Database.RequestAnalytics.DeleteByRequestHistoryIdAsync(requestHistoryId, token).ConfigureAwait(false);
+                }
             }
 
             // Delete database entries
@@ -562,6 +697,19 @@ namespace Conductor.Server.Services
             }
 
             return detail;
+        }
+
+        private class ProviderMetrics
+        {
+            public string ProviderRequestId { get; set; } = null;
+            public int? PromptTokens { get; set; } = null;
+            public int? CompletionTokens { get; set; } = null;
+            public int? TotalTokens { get; set; } = null;
+            public int? ProviderLoadDurationMs { get; set; } = null;
+            public int? ProviderPromptEvalDurationMs { get; set; } = null;
+            public int? ProviderGenerationDurationMs { get; set; } = null;
+            public int? ProviderTotalDurationMs { get; set; } = null;
+            public string RawProviderMetrics { get; set; } = null;
         }
     }
 }

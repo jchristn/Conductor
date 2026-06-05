@@ -17,6 +17,7 @@ import ModelConfigurations from './views/ModelConfigurations';
 import LoadBalancingPolicies from './views/LoadBalancingPolicies';
 import VirtualModelRunners from './views/VirtualModelRunners';
 import RequestHistory from './views/RequestHistory';
+import RequestAnalytics from './views/RequestAnalytics';
 import ApiExplorer from './views/ApiExplorer';
 import Administrators from './views/Administrators';
 import BackupRestore from './views/BackupRestore';
@@ -50,6 +51,7 @@ function App() {
             <Route path="/policies" element={<LoadBalancingPolicies />} />
             <Route path="/vmr" element={<VirtualModelRunners />} />
             <Route path="/request-history" element={<RequestHistory />} />
+            <Route path="/request-analytics" element={<RequestAnalytics />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             {isAdmin && <Route path="/administrators" element={<Administrators />} />}
             {hasAdminAccess && <Route path="/backup" element={<BackupRestore />} />}

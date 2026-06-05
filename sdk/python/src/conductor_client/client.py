@@ -73,8 +73,14 @@ class ConductorClient:
     def get_request_history_summary(self, filters: dict[str, Any]) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/requesthistory/summary{self._query_string(filters)}")
 
+    def get_request_analytics_overview(self, filters: dict[str, Any]) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/requesthistory/analytics/overview{self._query_string(filters)}")
+
     def get_request_history_detail(self, entry_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/requesthistory/{entry_id}/detail{self._tenant_query(tenant_id)}")
+
+    def get_request_history_analytics(self, entry_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/requesthistory/{entry_id}/analytics{self._tenant_query(tenant_id)}")
 
     def bulk_delete_request_history(self, filters: dict[str, Any]) -> dict[str, Any]:
         return self._request("DELETE", f"/v1.0/requesthistory/bulk{self._query_string(filters)}")

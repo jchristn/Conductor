@@ -3,7 +3,7 @@ namespace Test.Shared.Core.Models
     using System;
     using Conductor.Core.Models;
     using FluentAssertions;
-    
+
     /// <summary>
     /// Unit tests for request history models.
     /// </summary>
@@ -13,6 +13,13 @@ namespace Test.Shared.Core.Models
         {
             RequestHistoryEntry entry = new RequestHistoryEntry();
             entry.FirstTokenTimeMs.Should().BeNull();
+        }
+        public void AnalyticsFields_DefaultToUsableValues()
+        {
+            RequestHistoryEntry entry = new RequestHistoryEntry();
+            entry.TraceId.Should().StartWith(Conductor.Core.Helpers.IdGenerator.TracePrefix);
+            entry.AnalyticsCaptured.Should().BeFalse();
+            entry.AnalyticsVersion.Should().Be(1);
         }
         public void CanSetFirstTokenTimeMs()
         {
@@ -32,13 +39,29 @@ namespace Test.Shared.Core.Models
                 ObjectKey = "req_test.json",
                 CreatedUtc = DateTime.UtcNow,
                 FirstTokenTimeMs = 42,
-                ResponseTimeMs = 100
+                ResponseTimeMs = 100,
+                ProviderRequestId = "chatcmpl_123",
+                ProviderName = "OpenAI",
+                PromptTokens = 10,
+                CompletionTokens = 20,
+                TotalTokens = 30,
+                AnalyticsCaptured = true,
+                DominantStageKind = "generation",
+                DominantStageDurationMs = 75
             };
 
             RequestHistoryDetail detail = RequestHistoryDetail.FromEntry(entry);
 
             detail.FirstTokenTimeMs.Should().Be(42);
             detail.ResponseTimeMs.Should().Be(100);
+            detail.ProviderRequestId.Should().Be("chatcmpl_123");
+            detail.ProviderName.Should().Be("OpenAI");
+            detail.PromptTokens.Should().Be(10);
+            detail.CompletionTokens.Should().Be(20);
+            detail.TotalTokens.Should().Be(30);
+            detail.AnalyticsCaptured.Should().BeTrue();
+            detail.DominantStageKind.Should().Be("generation");
+            detail.DominantStageDurationMs.Should().Be(75);
         }
         public void DetailFromEntry_CopiesRoutingLedgerFields()
         {

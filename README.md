@@ -23,7 +23,7 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Operational Metrics**: Export Prometheus-friendly latency, denial, fallback, session-affinity, saturation, and telemetry-freshness signals
 - **Drain And Quarantine Controls**: Keep endpoints visible for health diagnostics while intentionally excluding them from new routing
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
-- **Request History**: Optional per-VMR request/response capture for debugging and auditing with configurable retention, redaction, and metadata-only retention modes
+- **Request History and Analytics**: Optional per-VMR request/response capture with trace IDs, stage timings, provider request IDs, token counts, throughput, dashboard drill-down, configurable retention, redaction, and metadata-only retention modes
 - **React Dashboard**: Full-featured UI for managing all entities including real-time health status
 
 ## Quick Start
@@ -94,7 +94,7 @@ Both SDKs include helpers for:
 - VMR effective configuration preview
 - explain-routing simulations
 - endpoint drain, resume, and quarantine actions
-- request-history search, summary, detail, and bulk deletion
+- request-history search, summary, detail, analytics, and bulk deletion
 - observability metrics summary and text export
 
 ## API Overview
@@ -146,6 +146,7 @@ Users have three permission levels:
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
 | Request History | `req_` | `/v1.0/requesthistory` |
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
+| Request Analytics | `rae_` | `/v1.0/requesthistory/analytics/overview` |
 | Observability Metrics | - | `/v1.0/observability/metrics` |
 
 ## RigMonitor And Policy Routing
@@ -374,7 +375,7 @@ Request history captures request/response data for Virtual Model Runners with `R
 
 **Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property).
 
-Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, policy attachment, requested/effective model names, routing outcome, denial reason, mutation summary, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), and time to first token/byte (`FirstTokenTimeMs`).
+Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, policy attachment, requested/effective model names, routing outcome, denial reason, mutation summary, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), time to first token/byte (`FirstTokenTimeMs`), trace ID, provider request ID, token counts, token throughput, analytics coverage, and dominant latency stage.
 
 When `BodyRetentionDays` is shorter than `MetadataRetentionDays`, Conductor scrubs request and response bodies from detail files while preserving the searchable routing and latency ledger.
 
@@ -385,6 +386,15 @@ The summary endpoint returns aggregated request counts grouped by time buckets, 
 ```
 GET /v1.0/requesthistory/summary?startUtc={ISO8601}&endUtc={ISO8601}&interval={hour|day}&vmrGuid={guid}
 ```
+
+Request analytics extends the history ledger with trace-linked performance events and aggregate dashboard data:
+
+```text
+GET /v1.0/requesthistory/analytics/overview?range=lastDay&vmrGuid={guid}&endpointGuid={guid}
+GET /v1.0/requesthistory/{id}/analytics
+```
+
+The overview response includes request counts, success/failure counts, latency percentiles, analytics coverage, token totals, token throughput, time-series buckets, stage breakdowns, endpoint summaries, and slowest-request links.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

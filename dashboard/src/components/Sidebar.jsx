@@ -125,6 +125,17 @@ function Sidebar() {
       )
     },
     {
+      path: '/request-analytics',
+      label: 'Request Analytics',
+      tourId: 'nav-request-analytics',
+      tooltip: 'Analyze request volume, latency, stage timing, endpoints, and token throughput',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v6H2v-6zM7 7a1 1 0 011-1h2a1 1 0 011 1v10H7V7zM12 3a1 1 0 011-1h2a1 1 0 011 1v14h-4V3z" />
+        </svg>
+      )
+    },
+    {
       path: '/api-explorer',
       label: 'API Explorer',
       tourId: 'nav-api-explorer',

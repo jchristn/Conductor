@@ -611,32 +611,6 @@ function LoadBalancingPolicies() {
         </div>
       </div>
 
-      <div
-        className="health-summary-banner"
-        style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}
-      >
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: '6px' }}>Quick Start Templates</div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-            Seed a policy with a common routing strategy, clone it, and refine the JSON rules.
-          </div>
-        </div>
-        <div>
-          <div style={{ fontWeight: 600, marginBottom: '6px' }}>Fleet Coverage</div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '10px' }}>
-            {endpoints.filter((endpoint) => endpoint.RigMonitor?.Enabled === true).length} of {endpoints.length} endpoints currently have RigMonitor enabled.
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            <span className="health-badge" title="Policies currently configured in Conductor">
-              {policies.length} policies
-            </span>
-            <span className="health-badge" title="Virtual model runners currently attached to a policy">
-              {vmrs.filter((vmr) => vmr.LoadBalancingPolicyId).length} attached VMRs
-            </span>
-          </div>
-        </div>
-      </div>
-
       <DataTable data={policies} columns={columns} loading={loading} onRowClick={handleEdit} />
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Load Balancing Policy' : 'Create Load Balancing Policy'} wide>

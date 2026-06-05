@@ -39,6 +39,38 @@ class ConductorClientTests(unittest.TestCase):
             "http://localhost:9000/v1.0/requesthistory?vmrGuid=vmr_1&statusClass=5xx",
         )
 
+    def test_request_analytics_overview_serializes_filters(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"TotalRequests": 0}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        client.get_request_analytics_overview({"range": "lastWeek", "providerName": "Ollama"})
+
+        self.assertEqual(
+            session.request.call_args.kwargs["url"],
+            "http://localhost:9000/v1.0/requesthistory/analytics/overview?range=lastWeek&providerName=Ollama",
+        )
+
+    def test_request_history_analytics_detail_uses_entry_id(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"Events": []}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        client.get_request_history_analytics("req_123")
+
+        self.assertEqual(
+            session.request.call_args.kwargs["url"],
+            "http://localhost:9000/v1.0/requesthistory/req_123/analytics",
+        )
+
     def test_observability_metrics_text_returns_raw_body(self) -> None:
         session = MagicMock()
         response = MagicMock()

@@ -4,10 +4,8 @@ namespace Conductor.Server.Controllers
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
-    using System.Linq;
     using System.Net.Http;
     using System.Text;
-    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using ConductorConstants = Conductor.Core.Constants;
@@ -16,7 +14,6 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Models;
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
-    using JsonMerge;
     using SyslogLogging;
     using WatsonWebserver.Core;
 
@@ -27,17 +24,10 @@ namespace Conductor.Server.Controllers
     public class ProxyController : BaseController
     {
         private static readonly string _Header = "[ProxyController] ";
-        private static readonly Dictionary<string, HttpClientCacheEntry> _HttpClients = new Dictionary<string, HttpClientCacheEntry>();
-        private static readonly object _HttpClientLock = new object();
-        private static int _RoundRobinIndex = 0;
-        private static readonly object _RoundRobinLock = new object();
-        private static readonly Random _Random = new Random();
         private readonly HealthCheckService _HealthCheckService;
-        private readonly SessionAffinityService _SessionAffinityService;
         private readonly RequestHistoryService _RequestHistoryService;
         private readonly RoutingDecisionService _RoutingDecisionService;
         private readonly OperationalMetricsService _Metrics;
-        private readonly LoadBalancingPolicyEvaluator _LoadBalancingPolicyEvaluator = new LoadBalancingPolicyEvaluator();
 
         /// <summary>
         /// Buffer size for streaming responses. Default is 8KB.
@@ -69,7 +59,6 @@ namespace Conductor.Server.Controllers
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
-            _SessionAffinityService = sessionAffinityService;
             _RequestHistoryService = requestHistoryService;
             _RoutingDecisionService = routingDecisionService;
             _Metrics = metrics;
@@ -92,6 +81,7 @@ namespace Conductor.Server.Controllers
             ModelRunnerEndpoint endpoint = null;
             VirtualModelRunner vmr = null;
             bool incrementedInFlight = false;
+            RequestAnalyticsCapture analyticsCapture = new RequestAnalyticsCapture();
 
             try
             {
@@ -110,6 +100,7 @@ namespace Conductor.Server.Controllers
                 }
 
                 PopulateRequestContext(ctx, requestContext, urlContext, vmr);
+                analyticsCapture.RequestBytes = requestContext?.Data?.LongLength;
 
                 if (_RequestHistoryService != null && _RequestHistoryService.IsEnabled && vmr.RequestHistoryEnabled)
                 {
@@ -126,10 +117,13 @@ namespace Conductor.Server.Controllers
                 }
 
                 routingResult = await _RoutingDecisionService.EvaluateAsync(vmr, urlContext, requestContext, true, cancellationToken).ConfigureAwait(false);
+                analyticsCapture.RoutingDurationMs = (int)stopwatch.ElapsedMilliseconds;
                 endpoint = routingResult.Endpoint;
 
                 if (routingResult.Decision == null || !routingResult.Decision.Success || endpoint == null)
                 {
+                    analyticsCapture.ErrorType = routingResult?.Decision?.DenialReasonCode ?? "RoutingDenied";
+                    analyticsCapture.ErrorMessage = routingResult?.Decision?.DenialReason;
                     await SendRoutingDecisionResponse(ctx, routingResult?.Decision).ConfigureAwait(false);
                     if (historyDetail != null && _RequestHistoryService != null)
                     {
@@ -143,14 +137,18 @@ namespace Conductor.Server.Controllers
                             null,
                             null,
                             stopwatch,
-                            cancellationToken).ConfigureAwait(false);
+                            cancellationToken,
+                            null,
+                            analyticsCapture).ConfigureAwait(false);
                     }
                     return;
                 }
 
                 if (_HealthCheckService != null)
                 {
+                    int limiterStartMs = (int)stopwatch.ElapsedMilliseconds;
                     incrementedInFlight = _HealthCheckService.TryIncrementInFlight(endpoint.Id, endpoint.MaxParallelRequests);
+                    analyticsCapture.EndpointLimiterWaitMs = Math.Max(0, (int)stopwatch.ElapsedMilliseconds - limiterStartMs);
                     if (!incrementedInFlight)
                     {
                         routingResult.Decision.Success = false;
@@ -159,6 +157,8 @@ namespace Conductor.Server.Controllers
                         routingResult.Decision.DenialReasonCode = "EndpointAtCapacity";
                         routingResult.Decision.DenialReason = "The selected endpoint reached capacity before the request was admitted.";
                         routingResult.Decision.Message = routingResult.Decision.DenialReason;
+                        analyticsCapture.ErrorType = routingResult.Decision.DenialReasonCode;
+                        analyticsCapture.ErrorMessage = routingResult.Decision.DenialReason;
                         await SendRoutingDecisionResponse(ctx, routingResult.Decision).ConfigureAwait(false);
                         if (historyDetail != null && _RequestHistoryService != null)
                         {
@@ -172,13 +172,16 @@ namespace Conductor.Server.Controllers
                                 null,
                                 null,
                                 stopwatch,
-                                cancellationToken).ConfigureAwait(false);
+                                cancellationToken,
+                                null,
+                                analyticsCapture).ConfigureAwait(false);
                         }
                         return;
                     }
                 }
 
                 string targetUrl = BuildTargetUrl(endpoint, routingResult.UrlContext);
+                analyticsCapture.UpstreamStartOffsetMs = (int)stopwatch.ElapsedMilliseconds;
                 using (HttpResponseMessage response = await ForwardRequestAsync(
                     ctx,
                     targetUrl,
@@ -187,6 +190,7 @@ namespace Conductor.Server.Controllers
                     routingResult.RequestBody,
                     cancellationToken).ConfigureAwait(false))
                 {
+                    analyticsCapture.UpstreamHeadersOffsetMs = (int)stopwatch.ElapsedMilliseconds;
                     await SendProxyResponse(
                         ctx,
                         response,
@@ -195,12 +199,15 @@ namespace Conductor.Server.Controllers
                         requestContext,
                         historyDetail,
                         stopwatch,
+                        analyticsCapture,
                         cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
             {
                 Logging.Warn(_Header + "proxy exception:" + Environment.NewLine + ex.ToString());
+                analyticsCapture.ErrorType = ex.GetType().Name;
+                analyticsCapture.ErrorMessage = ex.Message;
                 await SendBadGateway(ctx, "Proxy error: " + ex.Message);
 
                 if (historyDetail != null && _RequestHistoryService != null)
@@ -215,7 +222,9 @@ namespace Conductor.Server.Controllers
                         null,
                         "Proxy error: " + ex.Message,
                         stopwatch,
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken,
+                        null,
+                        analyticsCapture).ConfigureAwait(false);
                 }
             }
             finally
@@ -224,78 +233,6 @@ namespace Conductor.Server.Controllers
                 {
                     _HealthCheckService.DecrementInFlight(endpoint.Id);
                 }
-            }
-        }
-
-        private static LoadBalancingModeEnum MapTieBreaker(LoadBalancingPolicyTieBreakerEnum tieBreaker)
-        {
-            switch (tieBreaker)
-            {
-                case LoadBalancingPolicyTieBreakerEnum.Random:
-                    return LoadBalancingModeEnum.Random;
-                case LoadBalancingPolicyTieBreakerEnum.FirstAvailable:
-                    return LoadBalancingModeEnum.FirstAvailable;
-                case LoadBalancingPolicyTieBreakerEnum.RoundRobin:
-                default:
-                    return LoadBalancingModeEnum.RoundRobin;
-            }
-        }
-
-        private ModelRunnerEndpoint SelectEndpointWithWeight(List<EndpointAvailability> endpoints, LoadBalancingModeEnum mode)
-        {
-            if (endpoints.Count == 0) return null;
-            if (endpoints.Count == 1) return endpoints[0].Endpoint;
-
-            switch (mode)
-            {
-                case LoadBalancingModeEnum.Random:
-                    // Weighted random selection
-                    int totalWeight = 0;
-                    foreach (EndpointAvailability item in endpoints)
-                    {
-                        totalWeight += item.Endpoint.Weight;
-                    }
-
-                    int randomValue = _Random.Next(totalWeight);
-                    int cumulative = 0;
-                    foreach (EndpointAvailability item in endpoints)
-                    {
-                        cumulative += item.Endpoint.Weight;
-                        if (randomValue < cumulative)
-                        {
-                            return item.Endpoint;
-                        }
-                    }
-                    return endpoints[endpoints.Count - 1].Endpoint;
-
-                case LoadBalancingModeEnum.FirstAvailable:
-                    return endpoints[0].Endpoint;
-
-                case LoadBalancingModeEnum.RoundRobin:
-                default:
-                    // Weighted round-robin: build expanded list based on weights
-                    lock (_RoundRobinLock)
-                    {
-                        int totalWeightRR = 0;
-                        foreach (EndpointAvailability item in endpoints)
-                        {
-                            totalWeightRR += item.Endpoint.Weight;
-                        }
-
-                        int index = _RoundRobinIndex % totalWeightRR;
-                        _RoundRobinIndex++;
-
-                        int cumulativeRR = 0;
-                        foreach (EndpointAvailability item in endpoints)
-                        {
-                            cumulativeRR += item.Endpoint.Weight;
-                            if (index < cumulativeRR)
-                            {
-                                return item.Endpoint;
-                            }
-                        }
-                        return endpoints[endpoints.Count - 1].Endpoint;
-                    }
             }
         }
 
@@ -308,356 +245,6 @@ namespace Conductor.Server.Controllers
             // Conductor credential) with the endpoint's own upstream API key.
             string endpointApiKey = endpoint.ApiType == ApiTypeEnum.Gemini ? endpoint.ApiKey : null;
             return urlContext.BuildTargetUrl(baseUrl, endpointApiKey);
-        }
-
-        /// <summary>
-        /// Applies model definitions and configurations to the request body.
-        /// </summary>
-        /// <param name="requestBody">The original request body.</param>
-        /// <param name="vmr">The virtual model runner.</param>
-        /// <param name="urlContext">The URL context containing request type information.</param>
-        /// <param name="ctx">HTTP context for sending error responses.</param>
-        /// <returns>A ModelResolutionResult containing the success status, modified body, and resolved model name.</returns>
-        private async Task<ModelResolutionResult> ApplyModelDefinitionAndConfigurationAsync(
-            byte[] requestBody,
-            VirtualModelRunner vmr,
-            UrlContext urlContext,
-            HttpContextBase ctx)
-        {
-            try
-            {
-                // Only process embeddings and completions requests
-                if (!urlContext.IsCompletionsRequest && !urlContext.IsEmbeddingsRequest)
-                {
-                    return new ModelResolutionResult(true, requestBody, null);
-                }
-
-                if (requestBody == null || requestBody.Length == 0)
-                {
-                    return new ModelResolutionResult(true, requestBody, null);
-                }
-
-                string bodyJson = Encoding.UTF8.GetString(requestBody);
-                Dictionary<string, object> bodyDict = Serializer.DeserializeJson<Dictionary<string, object>>(bodyJson);
-                if (bodyDict == null)
-                {
-                    return new ModelResolutionResult(true, requestBody, null);
-                }
-
-                // Extract the current model from request
-                string requestedModel = null;
-                if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                {
-                    requestedModel = urlContext.RequestedModel;
-                }
-                else if (bodyDict.TryGetValue("model", out object modelValue) && modelValue != null)
-                {
-                    requestedModel = modelValue.ToString();
-                }
-
-                // Retrieve model definitions
-                List<ModelDefinition> modelDefinitions = new List<ModelDefinition>();
-                if (vmr.ModelDefinitionIds != null && vmr.ModelDefinitionIds.Count > 0)
-                {
-                    foreach (string defId in vmr.ModelDefinitionIds)
-                    {
-                        ModelDefinition def = await Database.ModelDefinition.ReadAsync(vmr.TenantId, defId).ConfigureAwait(false);
-                        if (def != null && def.Active)
-                        {
-                            modelDefinitions.Add(def);
-                        }
-                    }
-                }
-
-                // Enforce StrictMode: only accept requests for models defined by attached ModelDefinitions
-                if (vmr.StrictMode)
-                {
-                    if (modelDefinitions.Count == 0)
-                    {
-                        // No ModelDefinitions attached, reject all requests in strict mode
-                        Logging.Warn(_Header + "strict mode enabled but no model definitions attached");
-                        await SendUnauthorized(ctx, "No models available").ConfigureAwait(false);
-                        return new ModelResolutionResult(false, null, null);
-                    }
-
-                    if (String.IsNullOrEmpty(requestedModel))
-                    {
-                        // No model specified in request, reject in strict mode
-                        Logging.Warn(_Header + "strict mode: no model specified in request");
-                        await SendUnauthorized(ctx, "Model not specified").ConfigureAwait(false);
-                        return new ModelResolutionResult(false, null, null);
-                    }
-
-                    // Check if requested model is in the list of defined models
-                    bool modelAllowed = false;
-                    foreach (ModelDefinition def in modelDefinitions)
-                    {
-                        if (String.Equals(def.Name, requestedModel, StringComparison.OrdinalIgnoreCase))
-                        {
-                            modelAllowed = true;
-                            break;
-                        }
-                    }
-
-                    if (!modelAllowed)
-                    {
-                        Logging.Warn(_Header + "strict mode: invalid model requested: " + requestedModel);
-                        await SendUnauthorized(ctx, "Invalid model requested").ConfigureAwait(false);
-                        return new ModelResolutionResult(false, null, null);
-                    }
-                }
-
-                // Apply model definition logic
-                string effectiveModel = requestedModel;
-
-                if (modelDefinitions.Count == 1)
-                {
-                    // Step 1: If one ModelDefinition is found, apply the model from the ModelDefinition
-                    effectiveModel = modelDefinitions[0].Name;
-                    if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                    {
-                        urlContext.RelativePath = ReplaceGeminiModelInPath(urlContext.RelativePath, effectiveModel);
-                        urlContext.RequestedModel = effectiveModel;
-                    }
-                    else
-                    {
-                        bodyDict["model"] = effectiveModel;
-                    }
-                }
-                else if (modelDefinitions.Count > 1)
-                {
-                    // Step 2: If multiple ModelDefinition objects are found, ensure that the specified model
-                    // is listed in one of the ModelDefinition objects
-                    if (String.IsNullOrEmpty(requestedModel))
-                    {
-                        Logging.Warn(_Header + "invalid model requested: (empty) - no model specified and multiple definitions available");
-                        await SendUnauthorized(ctx, "Model not specified").ConfigureAwait(false);
-                        return new ModelResolutionResult(false, null, null);
-                    }
-
-                    bool modelFound = false;
-                    foreach (ModelDefinition def in modelDefinitions)
-                    {
-                        if (String.Equals(def.Name, requestedModel, StringComparison.OrdinalIgnoreCase))
-                        {
-                            modelFound = true;
-                            effectiveModel = def.Name;
-                            if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                            {
-                                urlContext.RelativePath = ReplaceGeminiModelInPath(urlContext.RelativePath, effectiveModel);
-                                urlContext.RequestedModel = effectiveModel;
-                            }
-                            break;
-                        }
-                    }
-
-                    if (!modelFound)
-                    {
-                        Logging.Warn(_Header + "invalid model requested: " + requestedModel);
-                        await SendUnauthorized(ctx, "Invalid model requested").ConfigureAwait(false);
-                        return new ModelResolutionResult(false, null, null);
-                    }
-                }
-
-                // Retrieve model configurations
-                List<ModelConfiguration> modelConfigurations = new List<ModelConfiguration>();
-                if (vmr.ModelConfigurationIds != null && vmr.ModelConfigurationIds.Count > 0)
-                {
-                    foreach (string configId in vmr.ModelConfigurationIds)
-                    {
-                        ModelConfiguration config = await Database.ModelConfiguration.ReadAsync(vmr.TenantId, configId).ConfigureAwait(false);
-                        if (config != null && config.Active)
-                        {
-                            modelConfigurations.Add(config);
-                        }
-                    }
-                }
-
-                // Apply model configuration logic (only for completions requests)
-                if (urlContext.IsCompletionsRequest && modelConfigurations.Count > 0)
-                {
-                    if (modelConfigurations.Count == 1)
-                    {
-                        // Step 3: If one ModelConfiguration is available, apply its settings
-                        // But only if its Model is null/empty (applies to all) or matches the effective model
-                        ModelConfiguration singleConfig = modelConfigurations[0];
-                        if (String.IsNullOrEmpty(singleConfig.Model) ||
-                            String.Equals(singleConfig.Model, effectiveModel, StringComparison.OrdinalIgnoreCase))
-                        {
-                            ApplyConfigurationToBody(bodyDict, singleConfig, urlContext);
-                        }
-                    }
-                    else
-                    {
-                        // Step 4: If multiple ModelConfigurations are available, find the first one
-                        // that matches the effective model (which may have been set in step 1)
-                        ModelConfiguration matchingConfig = null;
-
-                        foreach (ModelConfiguration config in modelConfigurations)
-                        {
-                            // Match if config.Model is null/empty (applies to all) or matches the effective model
-                            if (String.IsNullOrEmpty(config.Model) ||
-                                String.Equals(config.Model, effectiveModel, StringComparison.OrdinalIgnoreCase))
-                            {
-                                matchingConfig = config;
-                                break;
-                            }
-                        }
-
-                        if (matchingConfig != null)
-                        {
-                            ApplyConfigurationToBody(bodyDict, matchingConfig, urlContext);
-                        }
-                        // If no matching config found, no changes are applied (as specified)
-                    }
-                }
-
-                // Serialize back to bytes
-                string modifiedJson = Serializer.SerializeJson(bodyDict, false);
-                return new ModelResolutionResult(true, Encoding.UTF8.GetBytes(modifiedJson), effectiveModel);
-            }
-            catch (Exception ex)
-            {
-                Logging.Warn(_Header + "model definition/configuration exception:" + Environment.NewLine + ex.ToString());
-                return new ModelResolutionResult(true, requestBody, null);
-            }
-        }
-
-        /// <summary>
-        /// Applies configuration parameters to the request body dictionary.
-        /// </summary>
-        /// <param name="bodyDict">Request body dictionary to modify.</param>
-        /// <param name="config">Model configuration to apply.</param>
-        /// <param name="urlContext">URL context for request type information.</param>
-        private void ApplyConfigurationToBody(Dictionary<string, object> bodyDict, ModelConfiguration config, UrlContext urlContext)
-        {
-            // Apply temperature if set
-            if (config.Temperature.HasValue)
-            {
-                if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                {
-                    SetGeminiGenerationConfigValue(bodyDict, "temperature", config.Temperature.Value);
-                }
-                else
-                {
-                    bodyDict["temperature"] = config.Temperature.Value;
-                }
-            }
-
-            // Apply top_p if set
-            if (config.TopP.HasValue)
-            {
-                if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                {
-                    SetGeminiGenerationConfigValue(bodyDict, "topP", config.TopP.Value);
-                }
-                else
-                {
-                    bodyDict["top_p"] = config.TopP.Value;
-                }
-            }
-
-            // Apply top_k if set (for Ollama-style APIs)
-            if (config.TopK.HasValue)
-            {
-                if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                {
-                    SetGeminiGenerationConfigValue(bodyDict, "topK", config.TopK.Value);
-                }
-                else
-                {
-                    bodyDict["top_k"] = config.TopK.Value;
-                }
-            }
-
-            // Apply max_tokens if set
-            if (config.MaxTokens.HasValue)
-            {
-                if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                {
-                    SetGeminiGenerationConfigValue(bodyDict, "maxOutputTokens", config.MaxTokens.Value);
-                }
-                else
-                {
-                    bodyDict["max_tokens"] = config.MaxTokens.Value;
-                }
-            }
-
-            // Apply repeat_penalty if set (for Ollama-style APIs)
-            if (config.RepeatPenalty.HasValue)
-            {
-                if (urlContext.ApiType != ApiTypeEnum.Gemini)
-                {
-                    bodyDict["repeat_penalty"] = config.RepeatPenalty.Value;
-                }
-            }
-
-            // Apply context window size if set
-            // Note: This is typically used in Ollama APIs as num_ctx
-            if (config.ContextWindowSize.HasValue)
-            {
-                if (urlContext.ApiType != ApiTypeEnum.Gemini)
-                {
-                    bodyDict["num_ctx"] = config.ContextWindowSize.Value;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Applies pinned properties from model configurations to the request body.
-        /// </summary>
-        /// <param name="requestBody">The original request body.</param>
-        /// <param name="vmr">The virtual model runner.</param>
-        /// <param name="urlContext">The URL context containing request type information.</param>
-        /// <returns>The modified request body with pinned properties merged in.</returns>
-        private async Task<byte[]> ApplyPinningAsync(byte[] requestBody, VirtualModelRunner vmr, UrlContext urlContext)
-        {
-            try
-            {
-                // Check if VMR has any model configurations
-                List<string> configIds = vmr.ModelConfigurationIds;
-                if (configIds == null || configIds.Count == 0) return requestBody;
-
-                string bodyJson = Encoding.UTF8.GetString(requestBody);
-
-                // Get pinned properties based on request type
-                Dictionary<string, object> pinnedProps = null;
-
-                foreach (string configId in configIds)
-                {
-                    ModelConfiguration config = await Database.ModelConfiguration.ReadAsync(vmr.TenantId, configId).ConfigureAwait(false);
-                    if (config == null) continue;
-
-                    if (urlContext.IsEmbeddingsRequest && config.PinnedEmbeddingsProperties != null && config.PinnedEmbeddingsProperties.Count > 0)
-                    {
-                        pinnedProps = config.PinnedEmbeddingsProperties;
-                        break;
-                    }
-                    else if (urlContext.IsCompletionsRequest && config.PinnedCompletionsProperties != null && config.PinnedCompletionsProperties.Count > 0)
-                    {
-                        pinnedProps = config.PinnedCompletionsProperties;
-                        break;
-                    }
-                }
-
-                if (pinnedProps == null || pinnedProps.Count == 0) return requestBody;
-
-                // Merge pinned properties into request body
-                string pinnedJson = Serializer.SerializeJson(pinnedProps, false);
-                string mergedJson = JsonMerger.MergeJson(bodyJson, pinnedJson);
-
-                if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                {
-                    mergedJson = SanitizeGeminiJson(mergedJson);
-                }
-
-                return Encoding.UTF8.GetBytes(mergedJson);
-            }
-            catch (Exception ex)
-            {
-                Logging.Warn(_Header + "pinning exception:" + Environment.NewLine + ex.ToString());
-                return requestBody;
-            }
         }
 
         private async Task<HttpResponseMessage> ForwardRequestAsync(
@@ -752,7 +339,7 @@ namespace Conductor.Server.Controllers
                 effectiveTimeoutMs = Math.Min(vmr.TimeoutMs, endpoint.TimeoutMs);
             }
 
-            HttpClient httpClient = GetHttpClient(endpoint);
+            HttpClient httpClient = ProxyHttpClientCache.GetHttpClient(endpoint);
 
             // Create a cancellation token with timeout
             using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeoutMs)))
@@ -775,107 +362,6 @@ namespace Conductor.Server.Controllers
             }
         }
 
-        private static HttpClient GetHttpClient(ModelRunnerEndpoint endpoint)
-        {
-            if (endpoint == null) throw new ArgumentNullException(nameof(endpoint));
-
-            lock (_HttpClientLock)
-            {
-                if (_HttpClients.TryGetValue(endpoint.Id, out HttpClientCacheEntry existing))
-                {
-                    if (existing.TimeoutMs == endpoint.TimeoutMs)
-                    {
-                        return existing.Client;
-                    }
-
-                    existing.Client.Dispose();
-                    _HttpClients.Remove(endpoint.Id);
-                }
-
-                HttpClient client = new HttpClient
-                {
-                    Timeout = TimeSpan.FromMilliseconds(endpoint.TimeoutMs)
-                };
-
-                _HttpClients[endpoint.Id] = new HttpClientCacheEntry
-                {
-                    Client = client,
-                    TimeoutMs = endpoint.TimeoutMs
-                };
-
-                return client;
-            }
-        }
-
-        private static string ReplaceGeminiModelInPath(string relativePath, string modelName)
-        {
-            if (String.IsNullOrEmpty(relativePath) || String.IsNullOrEmpty(modelName)) return relativePath;
-
-            const string prefix = "/v1beta/models/";
-            if (!relativePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return relativePath;
-            }
-
-            string remainder = relativePath.Substring(prefix.Length);
-            int separator = remainder.IndexOfAny(new[] { ':', '/', '?' });
-            if (separator < 0)
-            {
-                return prefix + modelName;
-            }
-
-            return prefix + modelName + remainder.Substring(separator);
-        }
-
-        private static void SetGeminiGenerationConfigValue(Dictionary<string, object> bodyDict, string key, object value)
-        {
-            if (bodyDict == null || String.IsNullOrEmpty(key)) return;
-
-            Dictionary<string, object> generationConfig = null;
-
-            if (bodyDict.TryGetValue("generationConfig", out object existing))
-            {
-                if (existing is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Object)
-                {
-                    generationConfig = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonElement.GetRawText());
-                }
-                else if (existing is Dictionary<string, object> dict)
-                {
-                    generationConfig = dict;
-                }
-            }
-
-            generationConfig ??= new Dictionary<string, object>();
-            generationConfig[key] = value;
-            bodyDict["generationConfig"] = generationConfig;
-        }
-
-        private string SanitizeGeminiJson(string bodyJson)
-        {
-            if (String.IsNullOrEmpty(bodyJson)) return bodyJson;
-
-            try
-            {
-                Dictionary<string, object> bodyDict = Serializer.DeserializeJson<Dictionary<string, object>>(bodyJson);
-                if (bodyDict == null) return bodyJson;
-
-                bodyDict.Remove("repeat_penalty");
-                bodyDict.Remove("num_ctx");
-
-                return Serializer.SerializeJson(bodyDict, false);
-            }
-            catch
-            {
-                return bodyJson;
-            }
-        }
-
-        private class HttpClientCacheEntry
-        {
-            public HttpClient Client { get; set; }
-            public int TimeoutMs { get; set; }
-        }
-
         private async Task SendProxyResponse(
             HttpContextBase ctx,
             HttpResponseMessage response,
@@ -884,6 +370,7 @@ namespace Conductor.Server.Controllers
             RequestContext requestContext,
             RequestHistoryDetail historyDetail,
             Stopwatch stopwatch,
+            RequestAnalyticsCapture analyticsCapture,
             CancellationToken cancellationToken)
         {
             RoutingDecision decision = routingResult?.Decision ?? new RoutingDecision();
@@ -950,6 +437,11 @@ namespace Conductor.Server.Controllers
 
             if (isStreaming)
             {
+                if (analyticsCapture != null)
+                {
+                    analyticsCapture.IsStreaming = true;
+                }
+
                 // Capture streaming body when request history is enabled
                 StringBuilder streamBody = null;
                 int maxCaptureBytes = 0;
@@ -959,13 +451,18 @@ namespace Conductor.Server.Controllers
                     streamBody = new StringBuilder(Math.Min(maxCaptureBytes, 65536));
                 }
 
-                firstTokenTimeMs = await SendStreamingResponseAsync(ctx, response, maxCaptureBytes, streamBody, stopwatch, cancellationToken).ConfigureAwait(false);
+                firstTokenTimeMs = await SendStreamingResponseAsync(ctx, response, maxCaptureBytes, streamBody, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                 responseBodyString = streamBody != null ? streamBody.ToString() : null;
             }
             else
             {
                 // Standard response - read entire body and send
                 byte[] responseBody = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                if (analyticsCapture != null)
+                {
+                    analyticsCapture.IsStreaming = false;
+                    analyticsCapture.ResponseBytes = responseBody?.LongLength;
+                }
                 await ctx.Response.Send(responseBody).ConfigureAwait(false);
                 responseBodyString = responseBody != null ? Encoding.UTF8.GetString(responseBody) : null;
             }
@@ -986,7 +483,8 @@ namespace Conductor.Server.Controllers
                     responseBodyString,
                     stopwatch,
                     cancellationToken,
-                    firstTokenTimeMs).ConfigureAwait(false);
+                    firstTokenTimeMs,
+                    analyticsCapture).ConfigureAwait(false);
             }
 
             if (_Metrics != null && vmr != null)
@@ -1046,6 +544,7 @@ namespace Conductor.Server.Controllers
         /// <param name="maxCaptureBytes">Maximum number of bytes to capture for request history. Zero disables capture.</param>
         /// <param name="capturedBody">StringBuilder to accumulate the captured body text. May be null to skip capture.</param>
         /// <param name="stopwatch">Stopwatch started at request beginning.</param>
+        /// <param name="analyticsCapture">Captured proxy-stage timings and transfer sizes.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         private async Task<int?> SendStreamingResponseAsync(
             HttpContextBase ctx,
@@ -1053,6 +552,7 @@ namespace Conductor.Server.Controllers
             int maxCaptureBytes,
             StringBuilder capturedBody,
             Stopwatch stopwatch,
+            RequestAnalyticsCapture analyticsCapture,
             CancellationToken cancellationToken)
         {
             // For SSE, set appropriate headers
@@ -1073,10 +573,14 @@ namespace Conductor.Server.Controllers
                 byte[] buffer = new byte[StreamingBufferSize];
                 int bytesRead;
                 int? firstTokenTimeMs = null;
+                long totalBytes = 0;
+                int chunkCount = 0;
 
                 while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    totalBytes += bytesRead;
+                    chunkCount++;
 
                     if (!firstTokenTimeMs.HasValue)
                     {
@@ -1107,45 +611,16 @@ namespace Conductor.Server.Controllers
                     }
                 }
 
+                if (analyticsCapture != null)
+                {
+                    analyticsCapture.ResponseBytes = totalBytes;
+                    analyticsCapture.StreamingChunkCount = chunkCount;
+                }
+
                 // Send final empty chunk to signal end of stream
                 await ctx.Response.SendChunk(Array.Empty<byte>(), true, cancellationToken).ConfigureAwait(false);
 
                 return firstTokenTimeMs ?? (int)stopwatch.ElapsedMilliseconds;
-            }
-        }
-
-        private string DeriveClientKey(HttpContextBase ctx, Conductor.Core.Enums.SessionAffinityModeEnum mode, string headerName)
-        {
-            switch (mode)
-            {
-                case Conductor.Core.Enums.SessionAffinityModeEnum.SourceIP:
-                    string forwardedFor = ctx.Request.Headers.Get(ConductorConstants.HeaderXForwardedFor);
-                    if (!String.IsNullOrEmpty(forwardedFor))
-                    {
-                        // Use the leftmost (original client) IP
-                        string firstIp = forwardedFor.Split(',')[0].Trim();
-                        if (!String.IsNullOrEmpty(firstIp)) return firstIp;
-                    }
-                    return ctx.Request.Source.IpAddress;
-
-                case Conductor.Core.Enums.SessionAffinityModeEnum.ApiKey:
-                    string authHeader = ctx.Request.Headers.Get("Authorization");
-                    if (!String.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                    {
-                        string token = authHeader.Substring(7).Trim();
-                        if (!String.IsNullOrEmpty(token)) return token;
-                    }
-                    return null;
-
-                case Conductor.Core.Enums.SessionAffinityModeEnum.Header:
-                    if (String.IsNullOrEmpty(headerName)) return null;
-                    string headerValue = ctx.Request.Headers.Get(headerName);
-                    if (!String.IsNullOrEmpty(headerValue)) return headerValue;
-                    return null;
-
-                case Conductor.Core.Enums.SessionAffinityModeEnum.None:
-                default:
-                    return null;
             }
         }
 

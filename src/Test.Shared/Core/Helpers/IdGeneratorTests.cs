@@ -5,7 +5,7 @@ namespace Test.Shared.Core.Helpers
     using System.Threading.Tasks;
     using Conductor.Core.Helpers;
     using FluentAssertions;
-    
+
     /// <summary>
     /// Unit tests for IdGenerator helper.
     /// </summary>
@@ -59,6 +59,18 @@ namespace Test.Shared.Core.Helpers
             string id = IdGenerator.NewAdministratorId();
             id.Should().StartWith(IdGenerator.AdministratorPrefix);
             id.Should().StartWith("admin_");
+        }
+        public void NewRequestAnalyticsEventId_StartsWithCorrectPrefix()
+        {
+            string id = IdGenerator.NewRequestAnalyticsEventId();
+            id.Should().StartWith(IdGenerator.RequestAnalyticsEventPrefix);
+            id.Should().StartWith("rae_");
+        }
+        public void NewTraceId_StartsWithCorrectPrefix()
+        {
+            string id = IdGenerator.NewTraceId();
+            id.Should().StartWith(IdGenerator.TracePrefix);
+            id.Should().StartWith("trc_");
         }
 
         #endregion

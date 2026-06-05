@@ -11,7 +11,7 @@ namespace Conductor.Server.Controllers
     using Conductor.Server.Services;
     using SyslogLogging;
     using WatsonWebserver.Core;
-    
+
 
     /// <summary>
     /// Backup and restore API controller.
@@ -20,6 +20,7 @@ namespace Conductor.Server.Controllers
     {
         private string _Header = "[BackupController] ";
         private readonly ConfigurationValidationService _ValidationService;
+        private readonly BackupEntityRestorer _EntityRestorer;
 
         /// <summary>
         /// Instantiate the backup controller.
@@ -33,6 +34,7 @@ namespace Conductor.Server.Controllers
             : base(database, authService, serializer, logging)
         {
             _ValidationService = validationService;
+            _EntityRestorer = new BackupEntityRestorer(database);
         }
 
         /// <summary>
@@ -159,7 +161,7 @@ namespace Conductor.Server.Controllers
                     foreach (Administrator admin in package.Administrators)
                     {
                         token.ThrowIfCancellationRequested();
-                        await RestoreAdministratorAsync(admin, options.ConflictResolution, result.Summary.Administrators, token).ConfigureAwait(false);
+                        await _EntityRestorer.RestoreAdministratorAsync(admin, options.ConflictResolution, result.Summary.Administrators, token).ConfigureAwait(false);
                     }
                     Logging.Debug(_Header + "restored administrators: " + result.Summary.Administrators.Created + " created, " + result.Summary.Administrators.Updated + " updated, " + result.Summary.Administrators.Skipped + " skipped");
                 }
@@ -168,7 +170,7 @@ namespace Conductor.Server.Controllers
                 foreach (TenantMetadata tenant in package.Tenants.Where(t => tenantIdsToRestore.Contains(t.Id)))
                 {
                     token.ThrowIfCancellationRequested();
-                    await RestoreTenantAsync(tenant, options.ConflictResolution, result.Summary.Tenants, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreTenantAsync(tenant, options.ConflictResolution, result.Summary.Tenants, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored tenants: " + result.Summary.Tenants.Created + " created, " + result.Summary.Tenants.Updated + " updated, " + result.Summary.Tenants.Skipped + " skipped");
 
@@ -176,7 +178,7 @@ namespace Conductor.Server.Controllers
                 foreach (UserMaster user in package.Users.Where(u => tenantIdsToRestore.Contains(u.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
-                    await RestoreUserAsync(user, options.ConflictResolution, result.Summary.Users, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreUserAsync(user, options.ConflictResolution, result.Summary.Users, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored users: " + result.Summary.Users.Created + " created, " + result.Summary.Users.Updated + " updated, " + result.Summary.Users.Skipped + " skipped");
 
@@ -186,7 +188,7 @@ namespace Conductor.Server.Controllers
                     foreach (Credential credential in package.Credentials.Where(c => tenantIdsToRestore.Contains(c.TenantId)))
                     {
                         token.ThrowIfCancellationRequested();
-                        await RestoreCredentialAsync(credential, options.ConflictResolution, result.Summary.Credentials, token).ConfigureAwait(false);
+                        await _EntityRestorer.RestoreCredentialAsync(credential, options.ConflictResolution, result.Summary.Credentials, token).ConfigureAwait(false);
                     }
                     Logging.Debug(_Header + "restored credentials: " + result.Summary.Credentials.Created + " created, " + result.Summary.Credentials.Updated + " updated, " + result.Summary.Credentials.Skipped + " skipped");
                 }
@@ -196,7 +198,7 @@ namespace Conductor.Server.Controllers
                 {
                     token.ThrowIfCancellationRequested();
                     await ValidateBackupEndpointAsync(endpoint, token).ConfigureAwait(false);
-                    await RestoreModelRunnerEndpointAsync(endpoint, options.ConflictResolution, result.Summary.ModelRunnerEndpoints, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreModelRunnerEndpointAsync(endpoint, options.ConflictResolution, result.Summary.ModelRunnerEndpoints, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored model runner endpoints: " + result.Summary.ModelRunnerEndpoints.Created + " created, " + result.Summary.ModelRunnerEndpoints.Updated + " updated, " + result.Summary.ModelRunnerEndpoints.Skipped + " skipped");
 
@@ -205,7 +207,7 @@ namespace Conductor.Server.Controllers
                 {
                     token.ThrowIfCancellationRequested();
                     await ValidateBackupModelDefinitionAsync(modelDef, token).ConfigureAwait(false);
-                    await RestoreModelDefinitionAsync(modelDef, options.ConflictResolution, result.Summary.ModelDefinitions, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreModelDefinitionAsync(modelDef, options.ConflictResolution, result.Summary.ModelDefinitions, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored model definitions: " + result.Summary.ModelDefinitions.Created + " created, " + result.Summary.ModelDefinitions.Updated + " updated, " + result.Summary.ModelDefinitions.Skipped + " skipped");
 
@@ -214,7 +216,7 @@ namespace Conductor.Server.Controllers
                 {
                     token.ThrowIfCancellationRequested();
                     await ValidateBackupModelConfigurationAsync(modelConfig, token).ConfigureAwait(false);
-                    await RestoreModelConfigurationAsync(modelConfig, options.ConflictResolution, result.Summary.ModelConfigurations, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreModelConfigurationAsync(modelConfig, options.ConflictResolution, result.Summary.ModelConfigurations, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored model configurations: " + result.Summary.ModelConfigurations.Created + " created, " + result.Summary.ModelConfigurations.Updated + " updated, " + result.Summary.ModelConfigurations.Skipped + " skipped");
 
@@ -223,7 +225,7 @@ namespace Conductor.Server.Controllers
                 {
                     token.ThrowIfCancellationRequested();
                     await ValidateBackupPolicyAsync(policy, token).ConfigureAwait(false);
-                    await RestoreLoadBalancingPolicyAsync(policy, options.ConflictResolution, result.Summary.LoadBalancingPolicies, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreLoadBalancingPolicyAsync(policy, options.ConflictResolution, result.Summary.LoadBalancingPolicies, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored load-balancing policies: " + result.Summary.LoadBalancingPolicies.Created + " created, " + result.Summary.LoadBalancingPolicies.Updated + " updated, " + result.Summary.LoadBalancingPolicies.Skipped + " skipped");
 
@@ -232,7 +234,7 @@ namespace Conductor.Server.Controllers
                 {
                     token.ThrowIfCancellationRequested();
                     await ValidateBackupVirtualModelRunnerAsync(vmr, token).ConfigureAwait(false);
-                    await RestoreVirtualModelRunnerAsync(vmr, options.ConflictResolution, result.Summary.VirtualModelRunners, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreVirtualModelRunnerAsync(vmr, options.ConflictResolution, result.Summary.VirtualModelRunners, token).ConfigureAwait(false);
                 }
                 Logging.Debug(_Header + "restored virtual model runners: " + result.Summary.VirtualModelRunners.Created + " created, " + result.Summary.VirtualModelRunners.Updated + " updated, " + result.Summary.VirtualModelRunners.Skipped + " skipped");
 
@@ -567,254 +569,5 @@ namespace Conductor.Server.Controllers
             return Task.CompletedTask;
         }
 
-        private async Task RestoreAdministratorAsync(Administrator admin, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.Administrator.ExistsAsync(admin.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.Administrator.UpdateAsync(admin, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Administrator with ID '" + admin.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.Administrator.CreateAsync(admin, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreTenantAsync(TenantMetadata tenant, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.Tenant.ExistsAsync(tenant.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.Tenant.UpdateAsync(tenant, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Tenant with ID '" + tenant.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.Tenant.CreateAsync(tenant, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreUserAsync(UserMaster user, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.User.ExistsAsync(user.TenantId, user.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.User.UpdateAsync(user, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("User with ID '" + user.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.User.CreateAsync(user, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreCredentialAsync(Credential credential, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.Credential.ExistsAsync(credential.TenantId, credential.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.Credential.UpdateAsync(credential, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Credential with ID '" + credential.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.Credential.CreateAsync(credential, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreModelRunnerEndpointAsync(ModelRunnerEndpoint endpoint, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.ModelRunnerEndpoint.ExistsAsync(endpoint.TenantId, endpoint.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.ModelRunnerEndpoint.UpdateAsync(endpoint, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Model Runner Endpoint with ID '" + endpoint.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.ModelRunnerEndpoint.CreateAsync(endpoint, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreModelDefinitionAsync(ModelDefinition modelDef, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.ModelDefinition.ExistsAsync(modelDef.TenantId, modelDef.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.ModelDefinition.UpdateAsync(modelDef, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Model Definition with ID '" + modelDef.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.ModelDefinition.CreateAsync(modelDef, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreModelConfigurationAsync(ModelConfiguration modelConfig, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.ModelConfiguration.ExistsAsync(modelConfig.TenantId, modelConfig.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.ModelConfiguration.UpdateAsync(modelConfig, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Model Configuration with ID '" + modelConfig.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.ModelConfiguration.CreateAsync(modelConfig, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreVirtualModelRunnerAsync(VirtualModelRunner vmr, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.VirtualModelRunner.ExistsAsync(vmr.TenantId, vmr.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.VirtualModelRunner.UpdateAsync(vmr, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Virtual Model Runner with ID '" + vmr.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.VirtualModelRunner.CreateAsync(vmr, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
-
-        private async Task RestoreLoadBalancingPolicyAsync(LoadBalancingPolicy policy, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
-        {
-            bool exists = await Database.LoadBalancingPolicy.ExistsAsync(policy.TenantId, policy.Id, token).ConfigureAwait(false);
-
-            if (exists)
-            {
-                switch (conflictResolution)
-                {
-                    case ConflictResolutionMode.Skip:
-                        counter.Skipped++;
-                        break;
-                    case ConflictResolutionMode.Overwrite:
-                        await Database.LoadBalancingPolicy.UpdateAsync(policy, token).ConfigureAwait(false);
-                        counter.Updated++;
-                        break;
-                    case ConflictResolutionMode.Fail:
-                        throw new InvalidOperationException("Load Balancing Policy with ID '" + policy.Id + "' already exists.");
-                }
-            }
-            else
-            {
-                await Database.LoadBalancingPolicy.CreateAsync(policy, token).ConfigureAwait(false);
-                counter.Created++;
-            }
-        }
     }
 }

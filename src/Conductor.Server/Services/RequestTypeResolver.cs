@@ -117,11 +117,14 @@ namespace Conductor.Server.Services
             { new RouteKey("POST", "/v1.0/backup/validate"), RequestTypeEnum.ValidateBackup },
 
             // Request history
+            { new RouteKey("GET", "/v1.0/requesthistory/analytics/overview"), RequestTypeEnum.ReadRequestHistoryAnalytics },
             { new RouteKey("GET", "/v1.0/requesthistory/summary"), RequestTypeEnum.ReadRequestHistorySummary },
+            { new RouteKey("GET", "/v1.0/requesthistory/{id}/analytics"), RequestTypeEnum.ReadRequestHistoryAnalytics },
             { new RouteKey("GET", "/v1.0/requesthistory/{id}/detail"), RequestTypeEnum.ReadRequestHistoryDetail },
             { new RouteKey("GET", "/v1.0/requesthistory/{id}"), RequestTypeEnum.ReadRequestHistory },
             { new RouteKey("DELETE", "/v1.0/requesthistory/{id}"), RequestTypeEnum.DeleteRequestHistory },
             { new RouteKey("DELETE", "/v1.0/requesthistory/bulk"), RequestTypeEnum.DeleteRequestHistoryBulk },
+            { new RouteKey("POST", "/v1.0/requesthistory/delete"), RequestTypeEnum.DeleteRequestHistoryBulk },
             { new RouteKey("GET", "/v1.0/requesthistory"), RequestTypeEnum.ListRequestHistory },
 
             // Observability

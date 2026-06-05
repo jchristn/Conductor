@@ -79,8 +79,16 @@ export class ConductorClient {
     return this.#request('GET', `/v1.0/requesthistory/summary${this.#queryString(filters)}`);
   }
 
+  async getRequestAnalyticsOverview(filters = {}) {
+    return this.#request('GET', `/v1.0/requesthistory/analytics/overview${this.#queryString(filters)}`);
+  }
+
   async getRequestHistoryDetail(id, tenantId = null) {
     return this.#request('GET', `/v1.0/requesthistory/${encodeURIComponent(id)}/detail${this.#tenantQuery(tenantId)}`);
+  }
+
+  async getRequestHistoryAnalytics(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/requesthistory/${encodeURIComponent(id)}/analytics${this.#tenantQuery(tenantId)}`);
   }
 
   async bulkDeleteRequestHistory(filters = {}) {

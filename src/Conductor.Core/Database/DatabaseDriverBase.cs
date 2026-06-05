@@ -63,6 +63,11 @@ namespace Conductor.Core.Database
         public IRequestHistoryMethods RequestHistory { get; protected set; }
 
         /// <summary>
+        /// Request analytics methods.
+        /// </summary>
+        public IRequestAnalyticsMethods RequestAnalytics { get; protected set; }
+
+        /// <summary>
         /// Connection string.
         /// </summary>
         protected string ConnectionString { get; set; }

@@ -232,6 +232,71 @@ namespace Conductor.Core.Models
         public int? ResponseTimeMs { get; set; } = null;
 
         /// <summary>
+        /// Trace ID linking request history, analytics events, logs, and provider IDs.
+        /// </summary>
+        public string TraceId { get; set; } = IdGenerator.NewTraceId();
+
+        /// <summary>
+        /// Provider request ID when returned by the upstream service.
+        /// </summary>
+        public string ProviderRequestId { get; set; } = null;
+
+        /// <summary>
+        /// Provider family, such as OpenAI, Gemini, Ollama, or vLLM.
+        /// </summary>
+        public string ProviderName { get; set; } = null;
+
+        /// <summary>
+        /// Prompt/input token count.
+        /// </summary>
+        public int? PromptTokens { get; set; } = null;
+
+        /// <summary>
+        /// Completion/output token count.
+        /// </summary>
+        public int? CompletionTokens { get; set; } = null;
+
+        /// <summary>
+        /// Total token count.
+        /// </summary>
+        public int? TotalTokens { get; set; } = null;
+
+        /// <summary>
+        /// Overall token throughput.
+        /// </summary>
+        public decimal? TokensPerSecondOverall { get; set; } = null;
+
+        /// <summary>
+        /// Generation token throughput.
+        /// </summary>
+        public decimal? TokensPerSecondGeneration { get; set; } = null;
+
+        /// <summary>
+        /// Whether detailed request analytics events were captured.
+        /// </summary>
+        public bool AnalyticsCaptured { get; set; } = false;
+
+        /// <summary>
+        /// Request analytics schema version.
+        /// </summary>
+        public int AnalyticsVersion { get; set; } = 1;
+
+        /// <summary>
+        /// Longest measured stage kind.
+        /// </summary>
+        public string DominantStageKind { get; set; } = null;
+
+        /// <summary>
+        /// Longest measured stage duration.
+        /// </summary>
+        public int? DominantStageDurationMs { get; set; } = null;
+
+        /// <summary>
+        /// Stable code describing why analytics were not captured.
+        /// </summary>
+        public string AnalyticsFailureCode { get; set; } = null;
+
+        /// <summary>
         /// Filesystem object key for the full request/response data.
         /// </summary>
         public string ObjectKey
@@ -327,6 +392,19 @@ namespace Conductor.Core.Models
                 HttpStatus = DataTableHelper.GetNullableIntValue(row, "httpstatus"),
                 FirstTokenTimeMs = DataTableHelper.GetNullableIntValue(row, "firsttokentimems"),
                 ResponseTimeMs = DataTableHelper.GetNullableIntValue(row, "responsetimems"),
+                TraceId = DataTableHelper.GetStringValue(row, "traceid") ?? IdGenerator.NewTraceId(),
+                ProviderRequestId = DataTableHelper.GetStringValue(row, "providerrequestid"),
+                ProviderName = DataTableHelper.GetStringValue(row, "providername"),
+                PromptTokens = DataTableHelper.GetNullableIntValue(row, "prompttokens"),
+                CompletionTokens = DataTableHelper.GetNullableIntValue(row, "completiontokens"),
+                TotalTokens = DataTableHelper.GetNullableIntValue(row, "totaltokens"),
+                TokensPerSecondOverall = DataTableHelper.GetNullableDecimalValue(row, "tokenspersecondoverall"),
+                TokensPerSecondGeneration = DataTableHelper.GetNullableDecimalValue(row, "tokenspersecondgeneration"),
+                AnalyticsCaptured = DataTableHelper.GetBooleanValue(row, "analyticscaptured"),
+                AnalyticsVersion = DataTableHelper.GetIntValue(row, "analyticsversion") > 0 ? DataTableHelper.GetIntValue(row, "analyticsversion") : 1,
+                DominantStageKind = DataTableHelper.GetStringValue(row, "dominantstagekind"),
+                DominantStageDurationMs = DataTableHelper.GetNullableIntValue(row, "dominantstagedurationms"),
+                AnalyticsFailureCode = DataTableHelper.GetStringValue(row, "analyticsfailurecode"),
                 ObjectKey = DataTableHelper.GetStringValue(row, "objectkey"),
                 RequestTransferType = DataTableHelper.GetEnumValue<TransferTypeEnum>(row, "requesttransfertype", TransferTypeEnum.Normal),
                 ResponseTransferType = DataTableHelper.GetEnumValue<TransferTypeEnum>(row, "responsetransfertype", TransferTypeEnum.Normal),

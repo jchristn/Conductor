@@ -6,7 +6,7 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - effective configuration preview
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
-- request-history search, summary, detail, and bulk delete
+- request-history search, summary, detail, analytics, and bulk delete
 - observability summary and raw Prometheus metrics
 
 ## Install
@@ -34,6 +34,11 @@ const explanation = await client.explainVirtualModelRunnerRouting('vmr_123', {
     messages: [{ role: 'user', content: 'hello' }]
   })
 }, 'tenant_123');
+
+const analytics = await client.getRequestAnalyticsOverview({
+  range: 'lastDay',
+  vmrGuid: 'vmr_123'
+});
 ```
 
 ## Test
