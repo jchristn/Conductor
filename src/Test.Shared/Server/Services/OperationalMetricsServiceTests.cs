@@ -38,6 +38,8 @@ namespace Test.Shared.Server.Services
 
             metrics.RecordRoutingDecision("ten_test", "vmr_one", "VMR One", "Ollama", true, "Routed", null, null, false, 10);
             metrics.RecordRequestCompletion("ten_test", "vmr_one", "VMR One", "Ollama", 120, 22);
+            metrics.RecordModelLoadRequest("ten_test", "ModelRunnerEndpoint", "mre_one", true, "Loaded", 3000);
+            metrics.RecordModelLoadEndpointAttempt("ten_test", "ModelRunnerEndpoint", "mre_one", "mre_one", "Ollama", "OllamaGenerate", true, "Loaded", 3000);
 
             string output = metrics.RenderPrometheus();
 
@@ -45,6 +47,10 @@ namespace Test.Shared.Server.Services
             output.Should().Contain("conductor_route_decision_duration_ms_bucket");
             output.Should().Contain("conductor_total_duration_ms_count");
             output.Should().Contain("conductor_first_token_time_ms_sum");
+            output.Should().Contain("conductor_model_load_requests_total");
+            output.Should().Contain("conductor_model_load_endpoint_attempts_total");
+            output.Should().Contain("conductor_model_load_duration_ms_count");
+            output.Should().Contain("conductor_model_load_endpoint_duration_ms_count");
         }
     }
 }

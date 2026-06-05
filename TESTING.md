@@ -93,6 +93,7 @@ Changes in the following areas should ship with targeted shared-suite coverage:
 - request-history search, summary, redaction, and retention behavior
 - observability metrics aggregation and export
 - endpoint drain, resume, quarantine, and health-payload visibility
+- shared health-check coalescing when multiple endpoints point at the same effective health URL
 - compatibility behavior where new fields must default cleanly when older payloads omit them
 
 When a feature spans the dashboard or SDKs, verify those surfaces too:
@@ -104,6 +105,50 @@ cd dashboard && npm run build
 cd sdk/javascript && npm test
 cd sdk/python && set PYTHONPATH=src && python -m unittest discover -s tests
 ```
+
+## Model Loading Release Gate
+
+Model loading changes must be verified across backend routing/auth, provider probe construction, dashboard UX, SDK helpers, docs, and the Postman collection.
+
+Run the focused product gate before marking model loading complete:
+
+```powershell
+dotnet build src/Conductor.sln
+dotnet test src/Conductor.sln
+Push-Location dashboard; npm.cmd run build; Pop-Location
+Push-Location sdk/javascript; npm.cmd test; Pop-Location
+Push-Location sdk/python; $env:PYTHONPATH='src'; python -m unittest discover -s tests; Pop-Location
+Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null
+```
+
+Manual dashboard checks:
+
+- Open a model runner endpoint action menu, select `Load Model`, submit `gemma3:4b`, and confirm the result table shows endpoint outcome, HTTP status, mechanism, duration, and verification.
+- On an Ollama-type model runner endpoint, select `Manage Models`, refresh the list, verify the pull form accepts a model name, and confirm delete uses the inline confirmation state before sending the request.
+- Open a VMR action menu, select `Load Model`, verify attached model definitions are selectable, switch `TargetMode` through `SelectedEndpoint`, `AllEligibleEndpoints`, `AllConfiguredEndpoints`, and `SpecificEndpointIds`, and confirm target endpoints render correctly.
+- For OpenAI and Gemini, select `ChatCompletion` or `Embeddings` and confirm the hosted-provider billing warning appears before submit.
+- Verify at 1280px, 768px, and 390px that the modal controls, result table, long endpoint names, and long model names do not overlap.
+
+Optional local Ollama smoke test:
+
+```powershell
+$body = @{
+  Model = "gemma3:4b"
+  ProbeKind = "Auto"
+  KeepAlive = "30m"
+  VerifyLoaded = $true
+  TimeoutMs = 300000
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:9000/v1.0/modelrunnerendpoints/$env:CONDUCTOR_ENDPOINT_ID/load-model?tenantId=$env:CONDUCTOR_TENANT_ID" `
+  -Headers @{ Authorization = "Bearer $env:CONDUCTOR_TOKEN" } `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+Expected result: `Success=true`, `OutcomeCode=Loaded` or `AlreadyAvailable`, and `VerifiedLoaded=true` when Ollama `/api/ps` confirms residency. Missing local models should fail clearly; this feature must not call Ollama `/api/pull`.
 
 Example:
 

@@ -6,6 +6,8 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - effective configuration preview
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
+- endpoint and virtual model runner model load or verification requests
+- Ollama endpoint model list, pull, and delete requests
 - request-history search, summary, detail, analytics, and bulk delete
 - observability summary and raw Prometheus metrics
 
@@ -40,7 +42,47 @@ analytics = client.get_request_analytics_overview({
     "range": "lastDay",
     "vmrGuid": "vmr_123",
 })
+
+endpoint_load = client.load_model_runner_endpoint_model(
+    "mre_123",
+    {
+        "Model": "gemma3:4b",
+        "ProbeKind": "Auto",
+        "KeepAlive": "30m",
+        "VerifyLoaded": True,
+    },
+    tenant_id="tenant_123",
+)
+
+vmr_load = client.load_virtual_model_runner_model(
+    "vmr_123",
+    {
+        "Model": "gemma3:4b",
+        "TargetMode": "SelectedEndpoint",
+        "ProbeKind": "Auto",
+    },
+    tenant_id="tenant_123",
+)
+
+ollama_models = client.list_ollama_endpoint_models("mre_123", tenant_id="tenant_123")
+pull_result = client.pull_ollama_endpoint_model(
+    "mre_123",
+    {
+        "Model": "llama3.2:latest",
+        "TimeoutMs": 1800000,
+    },
+    tenant_id="tenant_123",
+)
+delete_result = client.delete_ollama_endpoint_model(
+    "mre_123",
+    {
+        "Model": "llama3.2:latest",
+    },
+    tenant_id="tenant_123",
+)
 ```
+
+For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.
 
 ## Test
 

@@ -99,6 +99,47 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Record a top-level model load request.
+        /// </summary>
+        public void RecordModelLoadRequest(
+            string tenantId,
+            string targetType,
+            string targetId,
+            bool success,
+            string outcomeCode,
+            double durationMs)
+        {
+            Dictionary<string, string> labels = BuildModelLoadLabels(tenantId, targetType, targetId, null, null, null);
+            labels["success"] = success ? "true" : "false";
+            labels["outcome"] = String.IsNullOrEmpty(outcomeCode) ? "Unknown" : outcomeCode;
+
+            IncrementCounter("conductor_model_load_requests_total", labels, 1);
+            ObserveHistogram("conductor_model_load_duration_ms", labels, durationMs, _LatencyBucketsMs);
+        }
+
+        /// <summary>
+        /// Record a per-endpoint model load attempt.
+        /// </summary>
+        public void RecordModelLoadEndpointAttempt(
+            string tenantId,
+            string targetType,
+            string targetId,
+            string endpointId,
+            string apiFamily,
+            string mechanism,
+            bool success,
+            string outcomeCode,
+            double durationMs)
+        {
+            Dictionary<string, string> labels = BuildModelLoadLabels(tenantId, targetType, targetId, endpointId, apiFamily, mechanism);
+            labels["success"] = success ? "true" : "false";
+            labels["outcome"] = String.IsNullOrEmpty(outcomeCode) ? "Unknown" : outcomeCode;
+
+            IncrementCounter("conductor_model_load_endpoint_attempts_total", labels, 1);
+            ObserveHistogram("conductor_model_load_endpoint_duration_ms", labels, durationMs, _LatencyBucketsMs);
+        }
+
+        /// <summary>
         /// Render the current metrics in Prometheus text exposition format.
         /// </summary>
         public string RenderPrometheus()
@@ -111,10 +152,14 @@ namespace Conductor.Server.Services
             AppendCounterFamily(sb, "conductor_session_affinity_total", "Session-affinity outcomes observed by Conductor.");
             AppendCounterFamily(sb, "conductor_saturation_denials_total", "Requests denied because all eligible endpoints were at capacity.");
             AppendCounterFamily(sb, "conductor_telemetry_freshness_failures_total", "Policy evaluations that failed due to stale or missing telemetry.");
+            AppendCounterFamily(sb, "conductor_model_load_requests_total", "Control-plane model load requests observed by Conductor.");
+            AppendCounterFamily(sb, "conductor_model_load_endpoint_attempts_total", "Per-endpoint model load attempts observed by Conductor.");
 
             AppendHistogramFamily(sb, "conductor_route_decision_duration_ms", "Latency spent evaluating routing decisions in milliseconds.");
             AppendHistogramFamily(sb, "conductor_total_duration_ms", "End-to-end proxied request duration in milliseconds.");
             AppendHistogramFamily(sb, "conductor_first_token_time_ms", "Time to first token or first response byte in milliseconds.");
+            AppendHistogramFamily(sb, "conductor_model_load_duration_ms", "Control-plane model load request duration in milliseconds.");
+            AppendHistogramFamily(sb, "conductor_model_load_endpoint_duration_ms", "Per-endpoint model load attempt duration in milliseconds.");
 
             return sb.ToString();
         }
@@ -391,6 +436,24 @@ namespace Conductor.Server.Services
             if (!String.IsNullOrEmpty(vmrId)) labels["vmr_id"] = vmrId;
             if (!String.IsNullOrEmpty(vmrName)) labels["vmr_name"] = vmrName;
             if (!String.IsNullOrEmpty(apiFamily)) labels["api_family"] = apiFamily;
+            return labels;
+        }
+
+        private static Dictionary<string, string> BuildModelLoadLabels(
+            string tenantId,
+            string targetType,
+            string targetId,
+            string endpointId,
+            string apiFamily,
+            string mechanism)
+        {
+            Dictionary<string, string> labels = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+            if (!String.IsNullOrEmpty(tenantId)) labels["tenant_id"] = tenantId;
+            if (!String.IsNullOrEmpty(targetType)) labels["target_type"] = targetType;
+            if (!String.IsNullOrEmpty(targetId)) labels["target_id"] = targetId;
+            if (!String.IsNullOrEmpty(endpointId)) labels["endpoint_id"] = endpointId;
+            if (!String.IsNullOrEmpty(apiFamily)) labels["api_family"] = apiFamily;
+            if (!String.IsNullOrEmpty(mechanism)) labels["mechanism"] = mechanism;
             return labels;
         }
 

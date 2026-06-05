@@ -3,10 +3,13 @@ namespace Conductor.Server.Controllers
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Helpers;
     using Conductor.Core.Models;
+    using Conductor.Core.Requests;
+    using Conductor.Core.Responses;
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
@@ -23,6 +26,7 @@ namespace Conductor.Server.Controllers
         private readonly SessionAffinityService _SessionAffinityService;
         private readonly ConfigurationValidationService _ValidationService;
         private readonly RoutingDecisionService _RoutingDecisionService;
+        private readonly ModelLoadService _ModelLoadService;
 
         /// <summary>
         /// Instantiate the virtual model runner controller.
@@ -35,13 +39,15 @@ namespace Conductor.Server.Controllers
             HealthCheckService healthCheckService = null,
             SessionAffinityService sessionAffinityService = null,
             ConfigurationValidationService validationService = null,
-            RoutingDecisionService routingDecisionService = null)
+            RoutingDecisionService routingDecisionService = null,
+            ModelLoadService modelLoadService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
             _SessionAffinityService = sessionAffinityService;
             _ValidationService = validationService;
             _RoutingDecisionService = routingDecisionService;
+            _ModelLoadService = modelLoadService;
         }
 
         /// <summary>
@@ -272,6 +278,31 @@ namespace Conductor.Server.Controllers
             }
 
             return await _RoutingDecisionService.ExplainAsync(vmr, request ?? new RoutingSimulationRequest()).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Load or verify a model through a virtual model runner.
+        /// </summary>
+        public async Task<ModelLoadResponse> LoadModel(
+            string tenantId,
+            string id,
+            ModelLoadRequest request,
+            CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            if (_ModelLoadService == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "Model loading is not available.");
+
+            VirtualModelRunner vmr = String.IsNullOrEmpty(tenantId)
+                ? await Database.VirtualModelRunner.ReadByIdAsync(id, token).ConfigureAwait(false)
+                : await Database.VirtualModelRunner.ReadAsync(tenantId, id, token).ConfigureAwait(false);
+
+            if (vmr == null)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            return await _ModelLoadService.LoadVirtualModelRunnerAsync(vmr, request, token).ConfigureAwait(false);
         }
 
         /// <summary>

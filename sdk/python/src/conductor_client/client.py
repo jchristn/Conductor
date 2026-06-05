@@ -43,6 +43,14 @@ class ConductorClient:
     def get_virtual_model_runner_effective_configuration(self, vmr_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/virtualmodelrunners/{vmr_id}/effective{self._tenant_query(tenant_id)}")
 
+    def load_virtual_model_runner_model(
+        self,
+        vmr_id: str,
+        payload: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/virtualmodelrunners/{vmr_id}/load-model{self._tenant_query(tenant_id)}", payload or {})
+
     def explain_virtual_model_runner_routing(self, vmr_id: str, payload: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/virtualmodelrunners/{vmr_id}/explain-routing{self._tenant_query(tenant_id)}", payload)
 
@@ -66,6 +74,33 @@ class ConductorClient:
 
     def quarantine_model_runner_endpoint(self, endpoint_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/modelrunnerendpoints/{endpoint_id}/quarantine{self._tenant_query(tenant_id)}")
+
+    def load_model_runner_endpoint_model(
+        self,
+        endpoint_id: str,
+        payload: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/modelrunnerendpoints/{endpoint_id}/load-model{self._tenant_query(tenant_id)}", payload or {})
+
+    def list_ollama_endpoint_models(self, endpoint_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/modelrunnerendpoints/{endpoint_id}/ollama/models{self._tenant_query(tenant_id)}")
+
+    def pull_ollama_endpoint_model(
+        self,
+        endpoint_id: str,
+        payload: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/modelrunnerendpoints/{endpoint_id}/ollama/models/pull{self._tenant_query(tenant_id)}", payload or {})
+
+    def delete_ollama_endpoint_model(
+        self,
+        endpoint_id: str,
+        payload: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/modelrunnerendpoints/{endpoint_id}/ollama/models/delete{self._tenant_query(tenant_id)}", payload or {})
 
     def search_request_history(self, filters: dict[str, Any]) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/requesthistory{self._query_string(filters)}")

@@ -206,6 +206,26 @@ namespace Conductor.Core.Enums
         /// </summary>
         QuarantineModelRunnerEndpoint,
 
+        /// <summary>
+        /// Execute a control-plane model load or verification request on a model runner endpoint.
+        /// </summary>
+        LoadModelRunnerEndpointModel,
+
+        /// <summary>
+        /// List locally available Ollama models on a model runner endpoint.
+        /// </summary>
+        ListOllamaEndpointModels,
+
+        /// <summary>
+        /// Pull a model onto an Ollama model runner endpoint.
+        /// </summary>
+        PullOllamaEndpointModel,
+
+        /// <summary>
+        /// Delete a model from an Ollama model runner endpoint.
+        /// </summary>
+        DeleteOllamaEndpointModel,
+
         // ==================== Model Definition Operations ====================
 
         /// <summary>
@@ -316,6 +336,11 @@ namespace Conductor.Core.Enums
         /// Read the effective configuration for a virtual model runner.
         /// </summary>
         ReadVirtualModelRunnerEffective,
+
+        /// <summary>
+        /// Execute a control-plane model load or verification request through a virtual model runner.
+        /// </summary>
+        LoadVirtualModelRunnerModel,
 
         // ==================== Load-Balancing Policy Operations ====================
 

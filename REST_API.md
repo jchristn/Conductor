@@ -558,6 +558,10 @@ Auth level: `Authenticated`
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/drain` | Move the endpoint to `Draining` service state. Optional `tenantId` query. |
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/resume` | Move the endpoint back to `Normal` service state. Optional `tenantId` query. |
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/quarantine` | Move the endpoint to `Quarantined` service state. Optional `tenantId` query. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/load-model` | Tenant-admin route to load or verify a model on one concrete endpoint. Optional `tenantId` query. |
+| `GET` | `/v1.0/modelrunnerendpoints/{id}/ollama/models` | Tenant-admin route to list local models on an Ollama endpoint. Optional `tenantId` query. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/ollama/models/pull` | Tenant-admin route to pull a model onto an Ollama endpoint. Optional `tenantId` query. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/ollama/models/delete` | Tenant-admin route to delete a local model from an Ollama endpoint. Optional `tenantId` query. |
 | `GET` | `/v1.0/modelrunnerendpoints/health` | List cached health state for all endpoints in scope. Optional `tenantId` query. |
 | `GET` | `/v1.0/modelrunnerendpoints/{id}/health` | Get cached health state for one endpoint. Optional `tenantId` query. |
 | `GET` | `/v1.0/modelrunnerendpoints/{id}/rigmonitor` | Get cached RigMonitor status for one endpoint. Optional `tenantId` query. |
@@ -585,6 +589,8 @@ Endpoint health response fields include:
 - `History`
 - `RigMonitor`
 
+Health checks are coalesced by effective request. When multiple active model runner endpoints use the same health-check method, base URL, health-check path, and auth context, Conductor sends one upstream health-check HTTP request and applies the result to each endpoint's own expected status code, thresholds, service state, and history.
+
 RigMonitor status response fields include:
 
 - `Enabled`
@@ -600,6 +606,39 @@ RigMonitor status response fields include:
 - `Telemetry`
 
 `Capabilities` is a cached summary of platform support. `Telemetry` contains nested `System`, `Cpu`, `Memory`, `Network`, `Disk`, `Gpu`, and `Ollama` sections.
+
+#### Ollama Endpoint Model Management
+
+Auth level: `TenantAdmin`
+
+These routes are available only when the target model runner endpoint has `ApiType=Ollama`. They call the configured endpoint directly and return upstream status details without creating request-history entries.
+
+| Method | Path | Upstream Ollama API | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/v1.0/modelrunnerendpoints/{id}/ollama/models` | `GET /api/tags` | Lists local models available on the endpoint. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/ollama/models/pull` | `POST /api/pull` | Pulls a model with `stream=false`; large downloads should use a larger `TimeoutMs`. |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/ollama/models/delete` | `DELETE /api/delete` | Deletes a local model. Conductor uses a POST control-plane wrapper so the model name can be sent as JSON reliably. |
+
+Pull request:
+
+```json
+{
+  "Model": "gemma3:4b",
+  "Insecure": false,
+  "TimeoutMs": 1800000
+}
+```
+
+Delete request:
+
+```json
+{
+  "Model": "gemma3:4b",
+  "TimeoutMs": 300000
+}
+```
+
+The dashboard exposes these routes from the `Manage Models` action on Ollama-type model runner endpoints.
 
 ### Model Definitions
 
@@ -683,6 +722,7 @@ Auth level: `Authenticated`
 | `GET` | `/v1.0/virtualmodelrunners/{id}/health` | Get aggregated health for the VMR and its endpoints. Optional `tenantId` query. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}/effective` | Return the resolved read-only effective configuration for the VMR. Optional `tenantId` query. |
 | `POST` | `/v1.0/virtualmodelrunners/{id}/explain-routing` | Simulate routing for a representative request. Optional `tenantId` query. |
+| `POST` | `/v1.0/virtualmodelrunners/{id}/load-model` | Tenant-admin route to resolve VMR targets, then load or verify a model. Optional `tenantId` query. |
 
 VMR health response fields include:
 
@@ -698,6 +738,101 @@ VMR health response fields include:
 - `Endpoints`
 
 Validation routes return a `ResourceValidationResult` with `Errors` and `Warnings`. The VMR `effective` response resolves the endpoint inventory, request permissions, session-affinity settings, attached policy metadata, model definitions, model configurations, and `ModelConfigurationMappings` that the proxy path will use. The VMR `explain-routing` response returns a `RoutingDecision` containing a timeline, selected endpoint, session-affinity outcome, policy metadata, mutation summary, and per-candidate evidence.
+
+### Model loading
+
+Auth level: `TenantAdmin`
+
+Model loading is a management-plane operation. It can consume GPU memory on local runners and can trigger billable upstream calls when an operator explicitly selects a hosted-provider generation or embedding probe.
+
+Model loading calls are not proxied VMR inference requests and are not written to request history. Use the typed response, server logs, and `conductor_model_load_*` Prometheus metrics for audit and troubleshooting.
+
+Routes:
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/v1.0/modelrunnerendpoints/{id}/load-model` | Load or verify a model on one concrete endpoint. Direct endpoint loading is allowed even when the endpoint is inactive, so operators can warm before resuming traffic. |
+| `POST` | `/v1.0/virtualmodelrunners/{id}/load-model` | Resolve the VMR model and endpoint target set, then load or verify the model. Inactive endpoints are skipped unless `IncludeInactive=true`. |
+
+Request body:
+
+```json
+{
+  "Model": "gemma3:4b",
+  "ModelDefinitionId": null,
+  "ProbeKind": "Auto",
+  "TargetMode": "SelectedEndpoint",
+  "EndpointIds": [],
+  "InputText": "conductor warmup",
+  "KeepAlive": "30m",
+  "TimeoutMs": 300000,
+  "MaxRetries": 0,
+  "VerifyLoaded": true,
+  "IncludeInactive": false,
+  "DryRun": false
+}
+```
+
+Fields:
+
+| Field | Notes |
+| --- | --- |
+| `Model` | Required for direct endpoint loading. For VMR loading it may be omitted only when exactly one active attached `ModelDefinition` exists. |
+| `ModelDefinitionId` | Optional VMR selector. If supplied, `Model` must be empty or match the definition name. |
+| `ProbeKind` | `Auto`, `MetadataOnly`, `ChatCompletion`, `Completion`, `Embeddings`, or `NativeGenerate`. |
+| `TargetMode` | VMR only: `SelectedEndpoint`, `AllEligibleEndpoints`, `AllConfiguredEndpoints`, or `SpecificEndpointIds`. |
+| `EndpointIds` | Required only when `TargetMode=SpecificEndpointIds`; IDs must already be attached to the VMR. |
+| `InputText` | Tiny non-sensitive probe text. It may be sent to hosted providers for explicit generation or embedding probes. |
+| `KeepAlive` | Ollama retention hint. Other providers report it in `IgnoredFields`. |
+| `TimeoutMs` | Per-attempt upstream timeout, clamped by the server from 1,000 to 1,800,000 ms. |
+| `MaxRetries` | Per-endpoint retry count, clamped from 0 to 3. |
+| `VerifyLoaded` | Runs provider-specific verification after a probe, such as Ollama `/api/ps` or metadata list checks. |
+| `IncludeInactive` | VMR target selection includes inactive configured endpoints when true. |
+| `DryRun` | Returns the planned mechanism and target endpoints without sending upstream traffic. |
+
+Response body:
+
+```json
+{
+  "Success": true,
+  "TenantId": "default",
+  "TargetType": "ModelRunnerEndpoint",
+  "TargetId": "mre_123",
+  "Model": "gemma3:4b",
+  "ProbeKind": "Auto",
+  "OutcomeCode": "Loaded",
+  "Message": "Model load probe completed on 1 of 1 endpoint(s).",
+  "DurationMs": 4211,
+  "EndpointResults": [
+    {
+      "EndpointId": "mre_123",
+      "EndpointName": "gpu-host-01",
+      "ApiType": "Ollama",
+      "BaseUrl": "http://gpu-host-01:11434",
+      "Success": true,
+      "OutcomeCode": "Loaded",
+      "ProviderStatusCode": 200,
+      "Mechanism": "OllamaGenerate",
+      "RequestPath": "/api/generate",
+      "DurationMs": 4211,
+      "VerifiedLoaded": true,
+      "IgnoredFields": [],
+      "ErrorMessage": null
+    }
+  ]
+}
+```
+
+Stable outcome codes include `Loaded`, `AlreadyAvailable`, `Verified`, `VerifiedRemote`, `DryRun`, `Skipped`, `Failed`, `TimedOut`, `UnauthorizedUpstream`, `ModelRequired`, `ModelNotAttached`, `NoEligibleEndpoints`, and `UnsupportedApiType`.
+
+Provider behavior:
+
+| Provider | `Auto` behavior | Result semantics |
+| --- | --- | --- |
+| Ollama | `POST /api/generate` with minimal output and optional `keep_alive`; embeddings use `/api/embed`. | `Loaded` or `AlreadyAvailable` when `/api/ps` confirms residency. Missing models fail; Conductor does not pull models. |
+| vLLM | `GET /v1/models` metadata verification unless an explicit probe is requested. | `Verified` when the model is served. Explicit probes can warm tokenization or graph paths, but do not load arbitrary new weights. |
+| OpenAI | `GET /v1/models` metadata verification unless an explicit probe is requested. | `VerifiedRemote`; hosted OpenAI has no host-local load primitive. Explicit generation or embedding probes may be billable. |
+| Gemini | `GET /v1beta/models` metadata verification unless an explicit probe is requested. | `VerifiedRemote`; hosted Gemini has no host-local load primitive. Explicit generation or embedding probes may be billable. |
 
 ### Backup and restore
 
@@ -1107,6 +1242,34 @@ curl -X POST http://localhost:9000/v1.0/api/my-vmr/v1/chat/completions \
     "messages":[
       {"role":"user","content":"Hello"}
     ]
+  }'
+```
+
+### Load or verify a model on an endpoint
+
+```bash
+curl -X POST "http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/load-model?tenantId=default" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "Model":"gemma3:4b",
+    "ProbeKind":"Auto",
+    "KeepAlive":"30m",
+    "VerifyLoaded":true
+  }'
+```
+
+### Load or verify a model through a VMR
+
+```bash
+curl -X POST "http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/load-model?tenantId=default" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "Model":"gemma3:4b",
+    "TargetMode":"SelectedEndpoint",
+    "ProbeKind":"Auto",
+    "VerifyLoaded":true
   }'
 ```
 

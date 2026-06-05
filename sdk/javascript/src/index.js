@@ -39,6 +39,10 @@ export class ConductorClient {
     return this.#request('GET', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/effective${this.#tenantQuery(tenantId)}`);
   }
 
+  async loadVirtualModelRunnerModel(id, payload = {}, tenantId = null) {
+    return this.#request('POST', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/load-model${this.#tenantQuery(tenantId)}`, payload);
+  }
+
   async explainVirtualModelRunnerRouting(id, payload = {}, tenantId = null) {
     return this.#request('POST', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/explain-routing${this.#tenantQuery(tenantId)}`, payload);
   }
@@ -57,6 +61,22 @@ export class ConductorClient {
 
   async quarantineModelRunnerEndpoint(id, tenantId = null) {
     return this.#request('POST', `/v1.0/modelrunnerendpoints/${encodeURIComponent(id)}/quarantine${this.#tenantQuery(tenantId)}`);
+  }
+
+  async loadModelRunnerEndpointModel(id, payload = {}, tenantId = null) {
+    return this.#request('POST', `/v1.0/modelrunnerendpoints/${encodeURIComponent(id)}/load-model${this.#tenantQuery(tenantId)}`, payload);
+  }
+
+  async listOllamaEndpointModels(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/modelrunnerendpoints/${encodeURIComponent(id)}/ollama/models${this.#tenantQuery(tenantId)}`);
+  }
+
+  async pullOllamaEndpointModel(id, payload = {}, tenantId = null) {
+    return this.#request('POST', `/v1.0/modelrunnerendpoints/${encodeURIComponent(id)}/ollama/models/pull${this.#tenantQuery(tenantId)}`, payload);
+  }
+
+  async deleteOllamaEndpointModel(id, payload = {}, tenantId = null) {
+    return this.#request('POST', `/v1.0/modelrunnerendpoints/${encodeURIComponent(id)}/ollama/models/delete${this.#tenantQuery(tenantId)}`, payload);
   }
 
   async validateModelDefinition(draft, existingId = null) {

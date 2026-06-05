@@ -1051,6 +1051,150 @@ body {
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
+/* Load Model */
+.modal.modal-load-model {
+  max-width: 1040px;
+}
+
+.load-model-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.load-model-target,
+.load-model-result-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.load-model-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.load-model-warning {
+  padding: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.10);
+  color: var(--warning-color);
+  font-size: 13px;
+}
+
+.load-model-result {
+  border-top: 1px solid var(--border-color);
+  padding-top: 18px;
+}
+
+.load-model-summary-grid {
+  margin: 14px 0;
+}
+
+.load-model-error-cell {
+  max-width: 280px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.load-model-json {
+  margin-top: 14px;
+}
+
+.load-model-json summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.load-model-json pre {
+  margin-top: 10px;
+  padding: 12px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: var(--bg-color);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+/* Ollama Model Management */
+.modal.modal-ollama-models {
+  max-width: 1120px;
+}
+
+.ollama-model-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ollama-model-manager-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.ollama-model-pull-form {
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+}
+
+.ollama-model-pull-form .form-row {
+  align-items: flex-end;
+}
+
+.ollama-model-pull-form .form-actions {
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
+.ollama-pull-insecure {
+  min-height: 68px;
+  justify-content: center;
+}
+
+.ollama-model-table-container {
+  max-height: 460px;
+  overflow: auto;
+}
+
+.ollama-model-table th:last-child,
+.ollama-model-table td:last-child {
+  min-width: 170px;
+}
+
+.ollama-model-name-cell {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.ollama-model-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 /* Login */
 .login-container {
   min-height: 100vh;

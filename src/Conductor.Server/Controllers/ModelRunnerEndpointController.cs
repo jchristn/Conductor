@@ -3,10 +3,13 @@ namespace Conductor.Server.Controllers
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Helpers;
     using Conductor.Core.Models;
+    using Conductor.Core.Requests;
+    using Conductor.Core.Responses;
     using Conductor.Core.Serialization;
     using Conductor.Server.Services;
     using SyslogLogging;
@@ -20,15 +23,27 @@ namespace Conductor.Server.Controllers
     {
         private readonly HealthCheckService _HealthCheckService;
         private readonly ConfigurationValidationService _ValidationService;
+        private readonly ModelLoadService _ModelLoadService;
+        private readonly OllamaModelManagementService _OllamaModelManagementService;
 
         /// <summary>
         /// Instantiate the model runner endpoint controller.
         /// </summary>
-        public ModelRunnerEndpointController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, HealthCheckService healthCheckService = null, ConfigurationValidationService validationService = null)
+        public ModelRunnerEndpointController(
+            DatabaseDriverBase database,
+            AuthenticationService authService,
+            Serializer serializer,
+            LoggingModule logging,
+            HealthCheckService healthCheckService = null,
+            ConfigurationValidationService validationService = null,
+            ModelLoadService modelLoadService = null,
+            OllamaModelManagementService ollamaModelManagementService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
             _ValidationService = validationService;
+            _ModelLoadService = modelLoadService;
+            _OllamaModelManagementService = ollamaModelManagementService;
         }
 
         /// <summary>
@@ -244,6 +259,105 @@ namespace Conductor.Server.Controllers
             }
 
             return await _ValidationService.ValidateModelRunnerEndpointAsync(tenantId, endpoint, existingId).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Load or verify a model on a model runner endpoint.
+        /// </summary>
+        public async Task<ModelLoadResponse> LoadModel(
+            string tenantId,
+            string id,
+            ModelLoadRequest request,
+            CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            if (_ModelLoadService == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "Model loading is not available.");
+
+            ModelRunnerEndpoint endpoint = String.IsNullOrEmpty(tenantId)
+                ? await Database.ModelRunnerEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false)
+                : await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id, token).ConfigureAwait(false);
+
+            if (endpoint == null)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            return await _ModelLoadService.LoadEndpointAsync(endpoint, request, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// List locally available Ollama models on a model runner endpoint.
+        /// </summary>
+        public async Task<OllamaModelListResponse> ListOllamaModels(
+            string tenantId,
+            string id,
+            CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            if (_OllamaModelManagementService == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "Ollama model management is not available.");
+
+            ModelRunnerEndpoint endpoint = String.IsNullOrEmpty(tenantId)
+                ? await Database.ModelRunnerEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false)
+                : await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id, token).ConfigureAwait(false);
+
+            if (endpoint == null)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            return await _OllamaModelManagementService.ListModelsAsync(endpoint, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Pull a model onto an Ollama model runner endpoint.
+        /// </summary>
+        public async Task<OllamaModelOperationResponse> PullOllamaModel(
+            string tenantId,
+            string id,
+            OllamaModelPullRequest request,
+            CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            if (_OllamaModelManagementService == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "Ollama model management is not available.");
+
+            ModelRunnerEndpoint endpoint = String.IsNullOrEmpty(tenantId)
+                ? await Database.ModelRunnerEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false)
+                : await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id, token).ConfigureAwait(false);
+
+            if (endpoint == null)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            return await _OllamaModelManagementService.PullModelAsync(endpoint, request, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete a model from an Ollama model runner endpoint.
+        /// </summary>
+        public async Task<OllamaModelOperationResponse> DeleteOllamaModel(
+            string tenantId,
+            string id,
+            OllamaModelDeleteRequest request,
+            CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            if (_OllamaModelManagementService == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "Ollama model management is not available.");
+
+            ModelRunnerEndpoint endpoint = String.IsNullOrEmpty(tenantId)
+                ? await Database.ModelRunnerEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false)
+                : await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id, token).ConfigureAwait(false);
+
+            if (endpoint == null)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            return await _OllamaModelManagementService.DeleteModelAsync(endpoint, request, token).ConfigureAwait(false);
         }
 
         /// <summary>

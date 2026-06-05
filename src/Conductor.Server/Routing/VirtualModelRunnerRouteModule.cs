@@ -5,6 +5,8 @@ namespace Conductor.Server.Routing
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Requests;
+    using Conductor.Core.Responses;
     using Conductor.Server;
     using WatsonWebserver.Core.OpenApi;
     using Controllers = Conductor.Server.Controllers;
@@ -52,6 +54,25 @@ namespace Conductor.Server.Routing
                 .WithRequestBody(Api.JsonRequestBody<VirtualModelRunner>("Virtual model runner draft", true))
                 .WithResponse(200, Api.JsonResponse<ResourceValidationResult>("Validation result"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
+            _App.Post<ModelLoadRequest>("/v1.0/virtualmodelrunners/{id}/load-model", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.LoadModel(tenantId, req.Parameters["id"], req.Data as ModelLoadRequest);
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Load model through virtual model runner")
+                .WithDescription("Resolve a virtual model runner target, then load or verify the effective model on the selected endpoint or explicit endpoint set.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithRequestBody(Api.JsonRequestBody<ModelLoadRequest>("Model load request", true))
+                .WithResponse(200, Api.JsonResponse<ModelLoadResponse>("Model load result"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);
 
             _App.Get("/v1.0/virtualmodelrunners/{id}", async (req) =>

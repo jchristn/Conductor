@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Coalesced duplicate model runner endpoint health checks so endpoints sharing the same effective health-check URL reuse one upstream probe while retaining per-endpoint health state.
+- Added Ollama endpoint model management APIs and dashboard `Manage Models` action for listing local models, pulling a model, and deleting a model from an Ollama-type runner endpoint.
+- Added tenant-admin model load and verification APIs for model runner endpoints and virtual model runners, with dashboard actions, SDK helpers, Postman examples, provider-specific outcome semantics, and Prometheus model-load metrics.
 - Added first-class routing explanation via VMR explain-routing APIs, persisted request-history routing decisions, and matching dashboard inspection UX.
 - Added shared draft validation routes for endpoints, model definitions, model configurations, load-balancing policies, and VMRs, plus VMR effective-configuration preview APIs.
 - Expanded request history into a richer operational ledger with new indexed routing fields, additional summary/search filters, metadata-vs-body retention controls, and body scrubbing during cleanup.

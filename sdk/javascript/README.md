@@ -6,6 +6,8 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - effective configuration preview
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
+- endpoint and virtual model runner model load or verification requests
+- Ollama endpoint model list, pull, and delete requests
 - request-history search, summary, detail, analytics, and bulk delete
 - observability summary and raw Prometheus metrics
 
@@ -39,7 +41,31 @@ const analytics = await client.getRequestAnalyticsOverview({
   range: 'lastDay',
   vmrGuid: 'vmr_123'
 });
+
+const endpointLoad = await client.loadModelRunnerEndpointModel('mre_123', {
+  Model: 'gemma3:4b',
+  ProbeKind: 'Auto',
+  KeepAlive: '30m',
+  VerifyLoaded: true
+}, 'tenant_123');
+
+const vmrLoad = await client.loadVirtualModelRunnerModel('vmr_123', {
+  Model: 'gemma3:4b',
+  TargetMode: 'SelectedEndpoint',
+  ProbeKind: 'Auto'
+}, 'tenant_123');
+
+const ollamaModels = await client.listOllamaEndpointModels('mre_123', 'tenant_123');
+const pullResult = await client.pullOllamaEndpointModel('mre_123', {
+  Model: 'llama3.2:latest',
+  TimeoutMs: 1800000
+}, 'tenant_123');
+const deleteResult = await client.deleteOllamaEndpointModel('mre_123', {
+  Model: 'llama3.2:latest'
+}, 'tenant_123');
 ```
+
+For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.
 
 ## Test
 

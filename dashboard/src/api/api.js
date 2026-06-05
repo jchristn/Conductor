@@ -380,6 +380,26 @@ class ConductorApi {
     return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/quarantine${query}`);
   }
 
+  async loadModelRunnerEndpointModel(id, payload = {}, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/load-model${query}`, payload);
+  }
+
+  async listOllamaEndpointModels(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/modelrunnerendpoints/${id}/ollama/models${query}`);
+  }
+
+  async pullOllamaEndpointModel(id, payload = {}, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/ollama/models/pull${query}`, payload);
+  }
+
+  async deleteOllamaEndpointModel(id, payload = {}, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/ollama/models/delete${query}`, payload);
+  }
+
   // Model Definition APIs
   async listModelDefinitions(params = {}) {
     const query = this.buildQueryString(params);
@@ -511,6 +531,11 @@ class ConductorApi {
   async explainVirtualModelRunnerRouting(id, payload = {}, tenantId = null) {
     const query = tenantId ? `?tenantId=${tenantId}` : '';
     return this.request('POST', `/v1.0/virtualmodelrunners/${id}/explain-routing${query}`, payload);
+  }
+
+  async loadVirtualModelRunnerModel(id, payload = {}, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/virtualmodelrunners/${id}/load-model${query}`, payload);
   }
 
   async getObservabilityMetricsSummary() {

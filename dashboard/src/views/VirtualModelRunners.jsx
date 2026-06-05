@@ -9,6 +9,7 @@ import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
+import LoadModelModal from '../components/LoadModelModal';
 
 const VMR_BASE_PATH_PREFIX = '/v1.0/api/';
 
@@ -99,6 +100,7 @@ function VirtualModelRunners() {
   const [selectedVmr, setSelectedVmr] = useState(null);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLoadModel, setShowLoadModel] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showHealth, setShowHealth] = useState(false);
   const [healthData, setHealthData] = useState(null);
@@ -247,6 +249,11 @@ function VirtualModelRunners() {
   const handleDeleteClick = (vmr) => {
     setSelectedVmr(vmr);
     setShowDeleteConfirm(true);
+  };
+
+  const handleOpenLoadModel = (vmr) => {
+    setSelectedVmr(vmr);
+    setShowLoadModel(true);
   };
 
   const handleDelete = async () => {
@@ -605,6 +612,7 @@ function VirtualModelRunners() {
               { label: 'Health Data', onClick: () => handleViewHealth(item) },
               { label: 'Effective Config', onClick: () => handleViewEffectiveConfiguration(item) },
               { label: 'Explain Routing', onClick: () => handleOpenExplainRouting(item) },
+              { label: 'Load Model', onClick: () => handleOpenLoadModel(item) },
               { label: 'Edit', onClick: () => handleEdit(item) },
               { divider: true },
               { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
@@ -1044,6 +1052,17 @@ function VirtualModelRunners() {
         entityName={selectedVmr?.Name}
         entityType="virtual model runner"
         loading={deleteLoading}
+      />
+
+      <LoadModelModal
+        isOpen={showLoadModel}
+        onClose={() => { setShowLoadModel(false); setSelectedVmr(null); }}
+        target={selectedVmr}
+        targetType="vmr"
+        api={api}
+        definitions={definitions}
+        endpoints={endpoints}
+        onComplete={() => { fetchData(); }}
       />
 
       <Modal

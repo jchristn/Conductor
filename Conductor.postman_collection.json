@@ -94,6 +94,11 @@
       "key": "analyticsLimit",
       "value": "500",
       "type": "string"
+    },
+    {
+      "key": "tenantId",
+      "value": "default",
+      "type": "string"
     }
   ],
   "auth": {
@@ -115,7 +120,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -123,8 +131,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/auth/login/credential",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "auth", "login", "credential"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "auth",
+                "login",
+                "credential"
+              ]
             }
           }
         },
@@ -133,7 +148,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -141,8 +159,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/auth/login/apikey",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "auth", "login", "apikey"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "auth",
+                "login",
+                "apikey"
+              ]
             }
           }
         },
@@ -151,7 +176,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -159,8 +187,15 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/auth/login/admin",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "auth", "login", "admin"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "auth",
+                "login",
+                "admin"
+              ]
             }
           }
         }
@@ -175,8 +210,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/tenants",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "tenants"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "tenants"
+              ]
             }
           }
         },
@@ -186,8 +226,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "tenants", "{{tenantId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "tenants",
+                "{{tenantId}}"
+              ]
             }
           }
         },
@@ -196,7 +242,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -204,8 +253,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/tenants",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "tenants"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "tenants"
+              ]
             }
           }
         },
@@ -214,7 +268,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -222,8 +279,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "tenants", "{{tenantId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "tenants",
+                "{{tenantId}}"
+              ]
             }
           }
         },
@@ -233,8 +296,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "tenants", "{{tenantId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "tenants",
+                "{{tenantId}}"
+              ]
             }
           }
         }
@@ -249,8 +318,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "users"
+              ]
             }
           }
         },
@@ -260,8 +334,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "users", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "users",
+                "{{userId}}"
+              ]
             }
           }
         },
@@ -270,7 +350,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -278,8 +361,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "users"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "users"
+              ]
             }
           }
         },
@@ -288,7 +376,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -296,8 +387,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "users", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "users",
+                "{{userId}}"
+              ]
             }
           }
         },
@@ -307,8 +404,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/users/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "users", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "users",
+                "{{userId}}"
+              ]
             }
           }
         }
@@ -323,8 +426,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/credentials",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "credentials"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "credentials"
+              ]
             }
           }
         },
@@ -334,8 +442,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "credentials", "{{credentialId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "credentials",
+                "{{credentialId}}"
+              ]
             }
           }
         },
@@ -344,7 +458,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -352,8 +469,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/credentials",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "credentials"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "credentials"
+              ]
             }
           }
         },
@@ -363,8 +485,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "credentials", "{{credentialId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "credentials",
+                "{{credentialId}}"
+              ]
             }
           }
         }
@@ -379,8 +507,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints"
+              ]
             }
           }
         },
@@ -390,8 +523,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}"
+              ]
             }
           }
         },
@@ -400,7 +539,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -408,8 +550,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints"
+              ]
             }
           }
         },
@@ -418,7 +565,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -426,8 +576,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}"
+              ]
             }
           }
         },
@@ -437,8 +593,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}"
+              ]
             }
           }
         },
@@ -448,8 +610,112 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Ollama Endpoint Models",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/ollama/models?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "ollama",
+                "models"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Pull Ollama Endpoint Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"Insecure\": false,\n  \"TimeoutMs\": 1800000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/ollama/models/pull?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "ollama",
+                "models",
+                "pull"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Ollama Endpoint Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"TimeoutMs\": 300000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/ollama/models/delete?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "ollama",
+                "models",
+                "delete"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
             }
           }
         },
@@ -459,8 +725,15 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/rigmonitor",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "rigmonitor"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "rigmonitor"
+              ]
             }
           }
         }
@@ -475,8 +748,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modeldefinitions",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modeldefinitions"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modeldefinitions"
+              ]
             }
           }
         },
@@ -486,8 +764,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modeldefinitions/{{definitionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modeldefinitions", "{{definitionId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modeldefinitions",
+                "{{definitionId}}"
+              ]
             }
           }
         },
@@ -496,7 +780,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -504,8 +791,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modeldefinitions",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modeldefinitions"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modeldefinitions"
+              ]
             }
           }
         },
@@ -514,7 +806,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -522,8 +817,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modeldefinitions/{{definitionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modeldefinitions", "{{definitionId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modeldefinitions",
+                "{{definitionId}}"
+              ]
             }
           }
         },
@@ -533,8 +834,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modeldefinitions/{{definitionId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modeldefinitions", "{{definitionId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modeldefinitions",
+                "{{definitionId}}"
+              ]
             }
           }
         }
@@ -549,8 +856,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelconfigurations",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelconfigurations"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelconfigurations"
+              ]
             }
           }
         },
@@ -560,8 +872,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelconfigurations/{{configurationId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelconfigurations", "{{configurationId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelconfigurations",
+                "{{configurationId}}"
+              ]
             }
           }
         },
@@ -570,7 +888,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -578,8 +899,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelconfigurations",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelconfigurations"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelconfigurations"
+              ]
             }
           }
         },
@@ -588,7 +914,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -596,8 +925,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelconfigurations/{{configurationId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelconfigurations", "{{configurationId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelconfigurations",
+                "{{configurationId}}"
+              ]
             }
           }
         },
@@ -607,8 +942,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelconfigurations/{{configurationId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelconfigurations", "{{configurationId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelconfigurations",
+                "{{configurationId}}"
+              ]
             }
           }
         }
@@ -623,8 +964,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "loadbalancingpolicies"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "loadbalancingpolicies"
+              ]
             }
           }
         },
@@ -634,8 +980,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/{{policyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "loadbalancingpolicies", "{{policyId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "loadbalancingpolicies",
+                "{{policyId}}"
+              ]
             }
           }
         },
@@ -644,7 +996,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -652,8 +1007,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "loadbalancingpolicies"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "loadbalancingpolicies"
+              ]
             }
           }
         },
@@ -662,7 +1022,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -670,8 +1033,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/{{policyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "loadbalancingpolicies", "{{policyId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "loadbalancingpolicies",
+                "{{policyId}}"
+              ]
             }
           }
         },
@@ -681,8 +1050,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/{{policyId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "loadbalancingpolicies", "{{policyId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "loadbalancingpolicies",
+                "{{policyId}}"
+              ]
             }
           }
         },
@@ -692,8 +1067,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/metrics",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "loadbalancingpolicies", "metrics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "loadbalancingpolicies",
+                "metrics"
+              ]
             }
           }
         }
@@ -708,8 +1089,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners"
+              ]
             }
           }
         },
@@ -719,8 +1105,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}"
+              ]
             }
           }
         },
@@ -729,7 +1121,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -737,8 +1132,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners"
+              ]
             }
           }
         },
@@ -747,7 +1147,10 @@
           "request": {
             "method": "PUT",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -755,8 +1158,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}"
+              ]
             }
           }
         },
@@ -766,8 +1175,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}"
+              ]
             }
           }
         },
@@ -777,10 +1192,276 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "health"
+              ]
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "Model Loading",
+      "item": [
+        {
+          "name": "Load Model On Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"ProbeKind\": \"Auto\",\n  \"InputText\": \"conductor warmup\",\n  \"KeepAlive\": \"30m\",\n  \"TimeoutMs\": 300000,\n  \"MaxRetries\": 0,\n  \"VerifyLoaded\": true,\n  \"DryRun\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/load-model?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "load-model"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            },
+            "description": "Tenant-admin control-plane request. Hosted providers verify availability by metadata unless an explicit generation or embedding probe is requested."
+          },
+          "response": [
+            {
+              "name": "Ollama loaded",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"ProbeKind\": \"Auto\",\n  \"InputText\": \"conductor warmup\",\n  \"KeepAlive\": \"30m\",\n  \"TimeoutMs\": 300000,\n  \"MaxRetries\": 0,\n  \"VerifyLoaded\": true,\n  \"DryRun\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/load-model?tenantId={{tenantId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1.0",
+                    "modelrunnerendpoints",
+                    "{{endpointId}}",
+                    "load-model"
+                  ],
+                  "query": [
+                    {
+                      "key": "tenantId",
+                      "value": "{{tenantId}}"
+                    }
+                  ]
+                },
+                "description": "Tenant-admin control-plane request. Hosted providers verify availability by metadata unless an explicit generation or embedding probe is requested."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"Success\": true,\n  \"TenantId\": \"default\",\n  \"TargetType\": \"ModelRunnerEndpoint\",\n  \"TargetId\": \"mre_123\",\n  \"Model\": \"gemma3:4b\",\n  \"ProbeKind\": \"Auto\",\n  \"DurationMs\": 4211,\n  \"OutcomeCode\": \"Loaded\",\n  \"Message\": \"Model load probe completed on 1 of 1 endpoint(s).\",\n  \"EndpointResults\": [\n    {\n      \"EndpointId\": \"mre_123\",\n      \"EndpointName\": \"gpu-host-01\",\n      \"ApiType\": \"Ollama\",\n      \"BaseUrl\": \"http://gpu-host-01:11434\",\n      \"Success\": true,\n      \"OutcomeCode\": \"Loaded\",\n      \"ProviderStatusCode\": 200,\n      \"Mechanism\": \"OllamaGenerate\",\n      \"RequestPath\": \"/api/generate\",\n      \"DurationMs\": 4211,\n      \"VerifiedLoaded\": true,\n      \"IgnoredFields\": [],\n      \"ErrorMessage\": null\n    }\n  ]\n}"
+            },
+            {
+              "name": "vLLM verified",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"ProbeKind\": \"Auto\",\n  \"InputText\": \"conductor warmup\",\n  \"KeepAlive\": \"30m\",\n  \"TimeoutMs\": 300000,\n  \"MaxRetries\": 0,\n  \"VerifyLoaded\": true,\n  \"DryRun\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/load-model?tenantId={{tenantId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1.0",
+                    "modelrunnerendpoints",
+                    "{{endpointId}}",
+                    "load-model"
+                  ],
+                  "query": [
+                    {
+                      "key": "tenantId",
+                      "value": "{{tenantId}}"
+                    }
+                  ]
+                },
+                "description": "Tenant-admin control-plane request. Hosted providers verify availability by metadata unless an explicit generation or embedding probe is requested."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"Success\": true,\n  \"TenantId\": \"default\",\n  \"TargetType\": \"ModelRunnerEndpoint\",\n  \"TargetId\": \"mre_456\",\n  \"Model\": \"gemma3:4b\",\n  \"ProbeKind\": \"Auto\",\n  \"DurationMs\": 85,\n  \"OutcomeCode\": \"Verified\",\n  \"Message\": \"Model load probe completed on 1 of 1 endpoint(s).\",\n  \"EndpointResults\": [\n    {\n      \"EndpointId\": \"mre_456\",\n      \"EndpointName\": \"vllm-host-01\",\n      \"ApiType\": \"vLLM\",\n      \"BaseUrl\": \"http://vllm-host-01:8000\",\n      \"Success\": true,\n      \"OutcomeCode\": \"Verified\",\n      \"ProviderStatusCode\": 200,\n      \"Mechanism\": \"vLLMListModels\",\n      \"RequestPath\": \"/v1/models\",\n      \"DurationMs\": 84,\n      \"VerifiedLoaded\": true,\n      \"IgnoredFields\": [\n        \"KeepAlive\"\n      ],\n      \"ErrorMessage\": null\n    }\n  ]\n}"
+            },
+            {
+              "name": "Hosted provider verified remote",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"ProbeKind\": \"Auto\",\n  \"InputText\": \"conductor warmup\",\n  \"KeepAlive\": \"30m\",\n  \"TimeoutMs\": 300000,\n  \"MaxRetries\": 0,\n  \"VerifyLoaded\": true,\n  \"DryRun\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/load-model?tenantId={{tenantId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1.0",
+                    "modelrunnerendpoints",
+                    "{{endpointId}}",
+                    "load-model"
+                  ],
+                  "query": [
+                    {
+                      "key": "tenantId",
+                      "value": "{{tenantId}}"
+                    }
+                  ]
+                },
+                "description": "Tenant-admin control-plane request. Hosted providers verify availability by metadata unless an explicit generation or embedding probe is requested."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"Success\": true,\n  \"TenantId\": \"default\",\n  \"TargetType\": \"ModelRunnerEndpoint\",\n  \"TargetId\": \"mre_789\",\n  \"Model\": \"gpt-4o-mini\",\n  \"ProbeKind\": \"Auto\",\n  \"DurationMs\": 143,\n  \"OutcomeCode\": \"VerifiedRemote\",\n  \"Message\": \"Hosted provider does not expose host-local loading; metadata verified model availability.\",\n  \"EndpointResults\": [\n    {\n      \"EndpointId\": \"mre_789\",\n      \"EndpointName\": \"openai-hosted\",\n      \"ApiType\": \"OpenAI\",\n      \"BaseUrl\": \"https://api.openai.com:443\",\n      \"Success\": true,\n      \"OutcomeCode\": \"VerifiedRemote\",\n      \"ProviderStatusCode\": 200,\n      \"Mechanism\": \"OpenAIListModels\",\n      \"RequestPath\": \"/v1/models\",\n      \"DurationMs\": 142,\n      \"VerifiedLoaded\": true,\n      \"IgnoredFields\": [\n        \"KeepAlive\"\n      ],\n      \"ErrorMessage\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Load Model On Virtual Model Runner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"ProbeKind\": \"Auto\",\n  \"TargetMode\": \"SelectedEndpoint\",\n  \"EndpointIds\": [],\n  \"InputText\": \"conductor warmup\",\n  \"KeepAlive\": \"30m\",\n  \"TimeoutMs\": 300000,\n  \"MaxRetries\": 0,\n  \"VerifyLoaded\": true,\n  \"IncludeInactive\": false,\n  \"DryRun\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/load-model?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "load-model"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            },
+            "description": "Tenant-admin control-plane request. Hosted providers verify availability by metadata unless an explicit generation or embedding probe is requested."
+          },
+          "response": [
+            {
+              "name": "Selected endpoint loaded",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"Model\": \"{{modelName}}\",\n  \"ProbeKind\": \"Auto\",\n  \"TargetMode\": \"SelectedEndpoint\",\n  \"EndpointIds\": [],\n  \"InputText\": \"conductor warmup\",\n  \"KeepAlive\": \"30m\",\n  \"TimeoutMs\": 300000,\n  \"MaxRetries\": 0,\n  \"VerifyLoaded\": true,\n  \"IncludeInactive\": false,\n  \"DryRun\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/load-model?tenantId={{tenantId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "v1.0",
+                    "virtualmodelrunners",
+                    "{{vmrId}}",
+                    "load-model"
+                  ],
+                  "query": [
+                    {
+                      "key": "tenantId",
+                      "value": "{{tenantId}}"
+                    }
+                  ]
+                },
+                "description": "Tenant-admin control-plane request. Hosted providers verify availability by metadata unless an explicit generation or embedding probe is requested."
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"Success\": true,\n  \"TenantId\": \"default\",\n  \"TargetType\": \"VirtualModelRunner\",\n  \"TargetId\": \"vmr_123\",\n  \"Model\": \"gemma3:4b\",\n  \"ProbeKind\": \"Auto\",\n  \"DurationMs\": 4211,\n  \"OutcomeCode\": \"Loaded\",\n  \"Message\": \"Model load probe completed on 1 of 1 endpoint(s).\",\n  \"RoutingDecision\": {\n    \"Success\": true,\n    \"SelectedEndpointId\": \"mre_123\",\n    \"EffectiveModel\": \"gemma3:4b\"\n  },\n  \"EndpointResults\": [\n    {\n      \"EndpointId\": \"mre_123\",\n      \"EndpointName\": \"gpu-host-01\",\n      \"ApiType\": \"Ollama\",\n      \"Success\": true,\n      \"OutcomeCode\": \"Loaded\",\n      \"ProviderStatusCode\": 200,\n      \"Mechanism\": \"OllamaGenerate\",\n      \"RequestPath\": \"/api/generate\",\n      \"DurationMs\": 4211,\n      \"VerifiedLoaded\": true,\n      \"IgnoredFields\": [],\n      \"ErrorMessage\": null\n    }\n  ]\n}"
+            }
+          ]
         }
       ]
     },
@@ -793,15 +1474,42 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory?page=1&pageSize=10",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory"
+              ],
               "query": [
-                { "key": "page", "value": "1" },
-                { "key": "pageSize", "value": "10" },
-                { "key": "vmrGuid", "value": "", "disabled": true },
-                { "key": "endpointGuid", "value": "", "disabled": true },
-                { "key": "sourceIp", "value": "", "disabled": true },
-                { "key": "httpStatus", "value": "", "disabled": true }
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                },
+                {
+                  "key": "vmrGuid",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "endpointGuid",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sourceIp",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "httpStatus",
+                  "value": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "Search request history entries with pagination and filtering."
@@ -813,13 +1521,38 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory/summary?interval=hour",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory", "summary"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "summary"
+              ],
               "query": [
-                { "key": "startUtc", "value": "", "disabled": true, "description": "Start of time range (UTC, ISO 8601). Default: 1 hour ago" },
-                { "key": "endUtc", "value": "", "disabled": true, "description": "End of time range (UTC, ISO 8601). Default: now" },
-                { "key": "interval", "value": "hour", "description": "Bucket interval: 'minute', '15minute', 'hour', '6hour', or 'day'. Default: 'hour'" },
-                { "key": "vmrGuid", "value": "", "disabled": true, "description": "Filter by Virtual Model Runner GUID" }
+                {
+                  "key": "startUtc",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Start of time range (UTC, ISO 8601). Default: 1 hour ago"
+                },
+                {
+                  "key": "endUtc",
+                  "value": "",
+                  "disabled": true,
+                  "description": "End of time range (UTC, ISO 8601). Default: now"
+                },
+                {
+                  "key": "interval",
+                  "value": "hour",
+                  "description": "Bucket interval: 'minute', '15minute', 'hour', '6hour', or 'day'. Default: 'hour'"
+                },
+                {
+                  "key": "vmrGuid",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by Virtual Model Runner GUID"
+                }
               ]
             },
             "description": "Get aggregated request counts grouped by time buckets with success/failure breakdown. Returns time-bucketed data suitable for charting."
@@ -831,17 +1564,63 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory/analytics/overview?range=lastDay",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory", "analytics", "overview"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "analytics",
+                "overview"
+              ],
               "query": [
-                { "key": "range", "value": "lastDay", "description": "Operator range: 'lastHour', 'lastDay', 'lastWeek', or 'lastMonth'. Default: 'lastDay'" },
-                { "key": "startUtc", "value": "", "disabled": true, "description": "Explicit start of time range (UTC, ISO 8601). Overrides range when paired with endUtc" },
-                { "key": "endUtc", "value": "", "disabled": true, "description": "Explicit end of time range (UTC, ISO 8601). Overrides range when paired with startUtc" },
-                { "key": "bucketSeconds", "value": "", "disabled": true, "description": "Explicit chart bucket size in seconds" },
-                { "key": "vmrGuid", "value": "", "disabled": true, "description": "Filter by Virtual Model Runner GUID" },
-                { "key": "endpointGuid", "value": "", "disabled": true, "description": "Filter by model endpoint GUID" },
-                { "key": "providerName", "value": "", "disabled": true, "description": "Filter by provider name" },
-                { "key": "model", "value": "", "disabled": true, "description": "Filter by requested or selected model" }
+                {
+                  "key": "range",
+                  "value": "lastDay",
+                  "description": "Operator range: 'lastHour', 'lastDay', 'lastWeek', or 'lastMonth'. Default: 'lastDay'"
+                },
+                {
+                  "key": "startUtc",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Explicit start of time range (UTC, ISO 8601). Overrides range when paired with endUtc"
+                },
+                {
+                  "key": "endUtc",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Explicit end of time range (UTC, ISO 8601). Overrides range when paired with startUtc"
+                },
+                {
+                  "key": "bucketSeconds",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Explicit chart bucket size in seconds"
+                },
+                {
+                  "key": "vmrGuid",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by Virtual Model Runner GUID"
+                },
+                {
+                  "key": "endpointGuid",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by model endpoint GUID"
+                },
+                {
+                  "key": "providerName",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by provider name"
+                },
+                {
+                  "key": "model",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Filter by requested or selected model"
+                }
               ]
             },
             "description": "Get chart-ready request analytics: request volume, latency, stage breakdown, endpoint summaries, provider/token metrics, and slowest requests."
@@ -853,8 +1632,15 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}/analytics",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}", "analytics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "{{requestHistoryId}}",
+                "analytics"
+              ]
             },
             "description": "Get per-request analytics events and normalized timing stages for a captured request history entry."
           }
@@ -865,8 +1651,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "{{requestHistoryId}}"
+              ]
             },
             "description": "Get request history entry metadata by ID."
           }
@@ -877,8 +1669,15 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}/detail",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}", "detail"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "{{requestHistoryId}}",
+                "detail"
+              ]
             },
             "description": "Get full request history detail including request/response headers and bodies."
           }
@@ -889,8 +1688,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory/{{requestHistoryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory", "{{requestHistoryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "{{requestHistoryId}}"
+              ]
             },
             "description": "Delete a single request history entry by ID."
           }
@@ -901,13 +1706,35 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/requesthistory/bulk",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "requesthistory", "bulk"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "bulk"
+              ],
               "query": [
-                { "key": "vmrGuid", "value": "", "disabled": true },
-                { "key": "endpointGuid", "value": "", "disabled": true },
-                { "key": "sourceIp", "value": "", "disabled": true },
-                { "key": "httpStatus", "value": "", "disabled": true }
+                {
+                  "key": "vmrGuid",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "endpointGuid",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sourceIp",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "httpStatus",
+                  "value": "",
+                  "disabled": true
+                }
               ]
             },
             "description": "Delete all request history entries matching the filter criteria."
@@ -923,7 +1750,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -931,8 +1761,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners", "validate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "validate"
+              ]
             }
           }
         },
@@ -941,7 +1777,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -949,8 +1788,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "validate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "validate"
+              ]
             }
           }
         },
@@ -960,10 +1805,20 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/effective?tenantId={{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}", "effective"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "effective"
+              ],
               "query": [
-                { "key": "tenantId", "value": "{{tenantId}}" }
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
               ]
             }
           }
@@ -978,7 +1833,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -986,10 +1844,20 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/explain-routing?tenantId={{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "virtualmodelrunners", "{{vmrId}}", "explain-routing"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "explain-routing"
+              ],
               "query": [
-                { "key": "tenantId", "value": "{{tenantId}}" }
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
               ]
             }
           }
@@ -1005,10 +1873,20 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/drain?tenantId={{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "drain"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "drain"
+              ],
               "query": [
-                { "key": "tenantId", "value": "{{tenantId}}" }
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
               ]
             }
           }
@@ -1019,10 +1897,20 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/resume?tenantId={{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "resume"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "resume"
+              ],
               "query": [
-                { "key": "tenantId", "value": "{{tenantId}}" }
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
               ]
             }
           }
@@ -1033,10 +1921,20 @@
             "method": "POST",
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}/quarantine?tenantId={{tenantId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "modelrunnerendpoints", "{{endpointId}}", "quarantine"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{endpointId}}",
+                "quarantine"
+              ],
               "query": [
-                { "key": "tenantId", "value": "{{tenantId}}" }
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
               ]
             }
           }
@@ -1052,8 +1950,15 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/observability/metrics/summary",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "observability", "metrics", "summary"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "observability",
+                "metrics",
+                "summary"
+              ]
             }
           }
         },
@@ -1063,8 +1968,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/observability/metrics",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "observability", "metrics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "observability",
+                "metrics"
+              ]
             }
           }
         }
@@ -1079,8 +1990,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/administrators",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "administrators"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "administrators"
+              ]
             }
           }
         },
@@ -1090,8 +2006,14 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/administrators/{{adminId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "administrators", "{{adminId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "administrators",
+                "{{adminId}}"
+              ]
             }
           }
         },
@@ -1100,7 +2022,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -1108,8 +2033,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/administrators",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "administrators"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "administrators"
+              ]
             }
           }
         },
@@ -1119,8 +2049,14 @@
             "method": "DELETE",
             "url": {
               "raw": "{{baseUrl}}/v1.0/administrators/{{adminId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "administrators", "{{adminId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "administrators",
+                "{{adminId}}"
+              ]
             }
           }
         }
@@ -1135,8 +2071,13 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/v1.0/backup",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "backup"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "backup"
+              ]
             },
             "description": "Export all data as a JSON backup."
           }
@@ -1146,7 +2087,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -1154,8 +2098,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/backup/restore",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "backup", "restore"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "backup",
+                "restore"
+              ]
             },
             "description": "Restore from a JSON backup. Pass the backup JSON as the request body."
           }
@@ -1165,7 +2115,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -1173,8 +2126,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/backup/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["v1.0", "backup", "validate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "backup",
+                "validate"
+              ]
             },
             "description": "Validate a backup file without applying changes."
           }

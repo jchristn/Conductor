@@ -87,6 +87,79 @@ test('builds request history analytics detail URL', async () => {
   assert.equal(capturedUrl, 'http://localhost:9000/v1.0/requesthistory/req_123/analytics');
 });
 
+test('builds endpoint model load request with tenant query and body', async () => {
+  let capturedUrl = '';
+  let capturedOptions = null;
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      return createJsonResponse({ Success: true, OutcomeCode: 'Loaded' });
+    }
+  });
+
+  const payload = { Model: 'gemma3:4b', ProbeKind: 'Auto' };
+  const result = await client.loadModelRunnerEndpointModel('mre_123', payload, 'ten_123');
+
+  assert.equal(result.OutcomeCode, 'Loaded');
+  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/load-model?tenantId=ten_123');
+  assert.equal(capturedOptions.method, 'POST');
+  assert.equal(capturedOptions.body, JSON.stringify(payload));
+});
+
+test('builds ollama endpoint model management requests', async () => {
+  const captured = [];
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options) => {
+      captured.push({ url, options });
+      return createJsonResponse({ Success: true, Models: [] });
+    }
+  });
+
+  const pullPayload = { Model: 'llama3.2:latest', TimeoutMs: 1800000 };
+  const deletePayload = { Model: 'llama3.2:latest' };
+
+  await client.listOllamaEndpointModels('mre_123', 'ten_123');
+  await client.pullOllamaEndpointModel('mre_123', pullPayload, 'ten_123');
+  await client.deleteOllamaEndpointModel('mre_123', deletePayload, 'ten_123');
+
+  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models?tenantId=ten_123');
+  assert.equal(captured[0].options.method, 'GET');
+  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models/pull?tenantId=ten_123');
+  assert.equal(captured[1].options.method, 'POST');
+  assert.equal(captured[1].options.body, JSON.stringify(pullPayload));
+  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models/delete?tenantId=ten_123');
+  assert.equal(captured[2].options.method, 'POST');
+  assert.equal(captured[2].options.body, JSON.stringify(deletePayload));
+});
+
+test('builds virtual model runner model load request with target mode', async () => {
+  let capturedUrl = '';
+  let capturedOptions = null;
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      return createJsonResponse({ Success: true, OutcomeCode: 'Verified' });
+    }
+  });
+
+  const payload = {
+    Model: 'gemma3:4b',
+    TargetMode: 'AllEligibleEndpoints',
+    VerifyLoaded: true
+  };
+  const result = await client.loadVirtualModelRunnerModel('vmr_123', payload, 'ten_123');
+
+  assert.equal(result.OutcomeCode, 'Verified');
+  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/load-model?tenantId=ten_123');
+  assert.equal(capturedOptions.method, 'POST');
+  assert.equal(capturedOptions.body, JSON.stringify(payload));
+});
+
 test('returns raw text for the observability metrics endpoint', async () => {
   const client = new ConductorClient({
     baseUrl: 'http://localhost:9000',

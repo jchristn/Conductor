@@ -39,6 +39,8 @@ namespace Conductor.Server
         private static OperationalMetricsService _OperationalMetricsService;
         private static RoutingDecisionService _RoutingDecisionService;
         private static ConfigurationValidationService _ConfigurationValidationService;
+        private static ModelLoadService _ModelLoadService;
+        private static OllamaModelManagementService _OllamaModelManagementService;
         private static RequestHistoryService _RequestHistoryService;
         private static RequestHistoryCleanupService _RequestHistoryCleanupService;
         private static Serializer _Serializer;
@@ -148,6 +150,13 @@ namespace Conductor.Server
                 _SessionAffinityService,
                 _OperationalMetricsService);
             _ConfigurationValidationService = new ConfigurationValidationService(_Database, _Logging, _RoutingDecisionService);
+            _ModelLoadService = new ModelLoadService(
+                _Database,
+                _Logging,
+                _RoutingDecisionService,
+                _HealthCheckService,
+                _OperationalMetricsService);
+            _OllamaModelManagementService = new OllamaModelManagementService();
             _Logging.Info(_Header + "routing, validation, and observability services initialized");
 
             // Initialize request history service
@@ -261,6 +270,18 @@ namespace Conductor.Server
                 _Logging.Info(_Header + "request history cleanup service stopped");
             }
 
+            if (_ModelLoadService != null)
+            {
+                _ModelLoadService.Dispose();
+                _Logging.Info(_Header + "model load service stopped");
+            }
+
+            if (_OllamaModelManagementService != null)
+            {
+                _OllamaModelManagementService.Dispose();
+                _Logging.Info(_Header + "ollama model management service stopped");
+            }
+
             // Dispose cancellation token source
             _TokenSource?.Dispose();
         }
@@ -296,6 +317,8 @@ namespace Conductor.Server
                 _OperationalMetricsService,
                 _RoutingDecisionService,
                 _ConfigurationValidationService,
+                _ModelLoadService,
+                _OllamaModelManagementService,
                 _RequestHistoryService);
             Routing.ConductorRouteRegistry routeRegistry = new Routing.ConductorRouteRegistry(routeContext);
             routeRegistry.RegisterRoutes();

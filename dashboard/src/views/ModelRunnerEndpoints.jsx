@@ -10,6 +10,8 @@ import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import HealthHistogram from '../components/HealthHistogram';
 import SensitiveInput from '../components/SensitiveInput';
+import LoadModelModal from '../components/LoadModelModal';
+import OllamaModelManagerModal from '../components/OllamaModelManagerModal';
 
 function formatBytes(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return '-';
@@ -86,6 +88,8 @@ function ModelRunnerEndpoints() {
   const [selectedEndpoint, setSelectedEndpoint] = useState(null);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLoadModel, setShowLoadModel] = useState(false);
+  const [showManageOllamaModels, setShowManageOllamaModels] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [healthData, setHealthData] = useState({});
   const [showHealthDetail, setShowHealthDetail] = useState(false);
@@ -481,6 +485,16 @@ function ModelRunnerEndpoints() {
     setShowDeleteConfirm(true);
   };
 
+  const handleOpenLoadModel = (endpoint) => {
+    setSelectedEndpoint(endpoint);
+    setShowLoadModel(true);
+  };
+
+  const handleOpenManageOllamaModels = (endpoint) => {
+    setSelectedEndpoint(endpoint);
+    setShowManageOllamaModels(true);
+  };
+
   const handleDelete = async () => {
     try {
       setDeleteLoading(true);
@@ -780,6 +794,10 @@ function ModelRunnerEndpoints() {
             actions={[
               { label: 'View Details', onClick: () => handleViewMetadata(item) },
               { label: 'Health Data', onClick: () => handleViewHealth(item) },
+              { label: 'Load Model', onClick: () => handleOpenLoadModel(item) },
+              ...(item.ApiType === 'Ollama' ? [
+                { label: 'Manage Models', onClick: () => handleOpenManageOllamaModels(item) }
+              ] : []),
               { label: 'Edit', onClick: () => handleEdit(item) },
               { divider: true },
               {
@@ -1313,6 +1331,23 @@ function ModelRunnerEndpoints() {
         entityName={selectedEndpoint?.Name}
         entityType="endpoint"
         loading={deleteLoading}
+      />
+
+      <LoadModelModal
+        isOpen={showLoadModel}
+        onClose={() => { setShowLoadModel(false); setSelectedEndpoint(null); }}
+        target={selectedEndpoint}
+        targetType="endpoint"
+        api={api}
+        onComplete={() => { fetchHealth(); }}
+      />
+
+      <OllamaModelManagerModal
+        isOpen={showManageOllamaModels}
+        onClose={() => { setShowManageOllamaModels(false); setSelectedEndpoint(null); }}
+        endpoint={selectedEndpoint}
+        api={api}
+        onChanged={() => { fetchHealth(); }}
       />
 
       <Modal

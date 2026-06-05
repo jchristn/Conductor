@@ -14,10 +14,11 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Configuration Pinning**: Automatically inject model parameters into requests (like OllamaFlow)
 - **Session Affinity**: Pin clients to specific backend endpoints based on IP address, API key, or custom headers to minimize context drops and model swapping
 - **Load Balancing**: Round-robin, random, or first-available endpoint selection with weighted distribution and optional session affinity
-- **Health Checking**: Automatic background health monitoring of endpoints with configurable thresholds
+- **Health Checking**: Automatic background health monitoring of endpoints with configurable thresholds and shared probes for duplicate health URLs
 - **RigMonitor Telemetry**: Optionally enrich endpoint health with cached host CPU, memory, disk, network, GPU, and Ollama telemetry from RigMonitor sidecars
 - **Policy-Based Routing**: Create first-class load-balancing policies that filter or rank endpoints using health, capacity, and RigMonitor metrics
 - **Explainable Routing**: Simulate representative requests, inspect candidate elimination, review policy evidence, and persist routing explanations into request history
+- **Model Load Or Verification Controls**: Warm local models or verify hosted-provider availability from endpoint and virtual model runner workflows
 - **Preflight Validation**: Validate endpoints, model definitions, model configurations, load-balancing policies, and VMRs before saving them
 - **Effective Configuration Preview**: Resolve the endpoint set, request permissions, policy attachment, model pinning, and session-affinity settings that a VMR will actually use
 - **Operational Metrics**: Export Prometheus-friendly latency, denial, fallback, session-affinity, saturation, and telemetry-freshness signals
@@ -94,6 +95,7 @@ Both SDKs include helpers for:
 - VMR effective configuration preview
 - explain-routing simulations
 - endpoint drain, resume, and quarantine actions
+- endpoint and virtual model runner model load or verification requests
 - request-history search, summary, detail, analytics, and bulk deletion
 - observability metrics summary and text export
 
@@ -148,6 +150,27 @@ Users have three permission levels:
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
 | Request Analytics | `rae_` | `/v1.0/requesthistory/analytics/overview` |
 | Observability Metrics | - | `/v1.0/observability/metrics` |
+
+### Model Loading
+
+Tenant admins can ask Conductor to load or verify a model before user traffic reaches it:
+
+- `POST /v1.0/modelrunnerendpoints/{id}/load-model`
+- `POST /v1.0/virtualmodelrunners/{id}/load-model`
+
+For Ollama, `ProbeKind=Auto` uses a minimal native generation probe and can keep the model resident with `KeepAlive`. For vLLM, OpenAI, and Gemini, `Auto` defaults to metadata verification because those providers generally do not expose a host-local load primitive through their public APIs. Explicit generation or embedding probes for hosted providers may be billable.
+
+See [REST_API.md](./REST_API.md#model-loading) for request fields, outcome codes, dashboard behavior, SDK examples, and provider caveats.
+
+### Ollama Model Management
+
+Ollama-type model runner endpoints also expose tenant-admin model management:
+
+- `GET /v1.0/modelrunnerendpoints/{id}/ollama/models`
+- `POST /v1.0/modelrunnerendpoints/{id}/ollama/models/pull`
+- `POST /v1.0/modelrunnerendpoints/{id}/ollama/models/delete`
+
+In the dashboard, use `Manage Models` from an Ollama endpoint action menu to list local models, pull a new model, or delete an installed model.
 
 ## RigMonitor And Policy Routing
 
@@ -496,6 +519,7 @@ Model Runner Endpoints support comprehensive health checking with the following 
 
 - Endpoints start in an **unhealthy** state and transition to healthy after meeting the `HealthyThreshold`
 - Background tasks continuously monitor each active endpoint at the configured interval
+- Endpoints with the same effective health-check request share one upstream HTTP probe, then apply their own expected status codes and thresholds to that shared result
 - The proxy automatically excludes unhealthy endpoints from request routing
 - Draining endpoints continue to be probed and remain available for already-pinned session-affinity traffic, but they do not receive new assignments
 - Quarantined endpoints continue to be probed for diagnostics, but they are excluded from all routing, including pinned-session reuse

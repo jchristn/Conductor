@@ -5,6 +5,8 @@ namespace Conductor.Server.Routing
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Requests;
+    using Conductor.Core.Responses;
     using Conductor.Server;
     using WatsonWebserver.Core.OpenApi;
     using Controllers = Conductor.Server.Controllers;
@@ -144,6 +146,81 @@ namespace Conductor.Server.Routing
                 .WithSecurity("Bearer")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
                 .WithResponse(200, Api.JsonResponse<ModelRunnerEndpoint>("Updated model runner endpoint"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post<ModelLoadRequest>("/v1.0/modelrunnerendpoints/{id}/load-model", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.LoadModel(tenantId, req.Parameters["id"], req.Data as ModelLoadRequest);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Load model on endpoint")
+                .WithDescription("Load or verify a model on one concrete model runner endpoint. Hosted providers verify availability or run an explicit tiny probe; local runners such as Ollama can warm a resident model.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithRequestBody(Api.JsonRequestBody<ModelLoadRequest>("Model load request", true))
+                .WithResponse(200, Api.JsonResponse<ModelLoadResponse>("Model load result"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Get("/v1.0/modelrunnerendpoints/{id}/ollama/models", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.ListOllamaModels(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("List Ollama endpoint models")
+                .WithDescription("List locally available models on one Ollama model runner endpoint using Ollama /api/tags.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithResponse(200, Api.JsonResponse<OllamaModelListResponse>("Ollama model list result"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post<OllamaModelPullRequest>("/v1.0/modelrunnerendpoints/{id}/ollama/models/pull", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.PullOllamaModel(tenantId, req.Parameters["id"], req.Data as OllamaModelPullRequest);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Pull Ollama endpoint model")
+                .WithDescription("Pull a model onto one Ollama model runner endpoint using Ollama /api/pull with non-streaming progress.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithRequestBody(Api.JsonRequestBody<OllamaModelPullRequest>("Ollama model pull request", true))
+                .WithResponse(200, Api.JsonResponse<OllamaModelOperationResponse>("Ollama pull result"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post<OllamaModelDeleteRequest>("/v1.0/modelrunnerendpoints/{id}/ollama/models/delete", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.DeleteOllamaModel(tenantId, req.Parameters["id"], req.Data as OllamaModelDeleteRequest);
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Delete Ollama endpoint model")
+                .WithDescription("Delete a local model from one Ollama model runner endpoint using Ollama /api/delete.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithRequestBody(Api.JsonRequestBody<OllamaModelDeleteRequest>("Ollama model delete request", true))
+                .WithResponse(200, Api.JsonResponse<OllamaModelOperationResponse>("Ollama delete result"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);

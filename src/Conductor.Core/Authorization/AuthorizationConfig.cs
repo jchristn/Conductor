@@ -65,7 +65,12 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.ReadCredential,
             RequestTypeEnum.UpdateCredential,
             RequestTypeEnum.DeleteCredential,
-            RequestTypeEnum.ListCredentials
+            RequestTypeEnum.ListCredentials,
+            RequestTypeEnum.LoadModelRunnerEndpointModel,
+            RequestTypeEnum.ListOllamaEndpointModels,
+            RequestTypeEnum.PullOllamaEndpointModel,
+            RequestTypeEnum.DeleteOllamaEndpointModel,
+            RequestTypeEnum.LoadVirtualModelRunnerModel
         };
 
         /// <summary>

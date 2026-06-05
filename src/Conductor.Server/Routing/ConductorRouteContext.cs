@@ -22,6 +22,8 @@ namespace Conductor.Server.Routing
             OperationalMetricsService operationalMetricsService,
             RoutingDecisionService routingDecisionService,
             ConfigurationValidationService configurationValidationService,
+            ModelLoadService modelLoadService,
+            OllamaModelManagementService ollamaModelManagementService,
             RequestHistoryService requestHistoryService)
         {
             App = app;
@@ -35,16 +37,18 @@ namespace Conductor.Server.Routing
             OperationalMetricsService = operationalMetricsService;
             RoutingDecisionService = routingDecisionService;
             ConfigurationValidationService = configurationValidationService;
+            ModelLoadService = modelLoadService;
+            OllamaModelManagementService = ollamaModelManagementService;
             RequestHistoryService = requestHistoryService;
 
             TenantController = new TenantController(Database, AuthService, Serializer, Logging);
             UserController = new UserController(Database, AuthService, Serializer, Logging);
             CredentialController = new CredentialController(Database, AuthService, Serializer, Logging);
-            ModelRunnerEndpointController = new ModelRunnerEndpointController(Database, AuthService, Serializer, Logging, HealthCheckService, ConfigurationValidationService);
+            ModelRunnerEndpointController = new ModelRunnerEndpointController(Database, AuthService, Serializer, Logging, HealthCheckService, ConfigurationValidationService, ModelLoadService, OllamaModelManagementService);
             ModelDefinitionController = new ModelDefinitionController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             ModelConfigurationController = new ModelConfigurationController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             LoadBalancingPolicyController = new LoadBalancingPolicyController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
-            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService);
+            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService);
             AuthController = new AuthController(Database, AuthService, Serializer, Logging, Settings.AdminApiKeys);
             AdministratorController = new AdministratorController(Database, AuthService, Serializer, Logging);
             BackupController = new BackupController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
@@ -76,6 +80,10 @@ namespace Conductor.Server.Routing
         internal RoutingDecisionService RoutingDecisionService { get; }
 
         internal ConfigurationValidationService ConfigurationValidationService { get; }
+
+        internal ModelLoadService ModelLoadService { get; }
+
+        internal OllamaModelManagementService OllamaModelManagementService { get; }
 
         internal RequestHistoryService RequestHistoryService { get; }
 
