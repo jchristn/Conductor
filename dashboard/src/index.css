@@ -1130,12 +1130,29 @@ body {
 /* Ollama Model Management */
 .modal.modal-ollama-models {
   max-width: 1120px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal.modal-ollama-models .modal-header {
+  flex-shrink: 0;
+}
+
+.modal.modal-ollama-models .modal-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .ollama-model-manager {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
 }
 
 .ollama-model-manager-header {
@@ -1165,19 +1182,79 @@ body {
   justify-content: flex-end;
 }
 
+.ollama-pull-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ollama-pull-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ollama-pull-status-row span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ollama-pull-status-indicator {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.16);
+}
+
+.ollama-pull-progress {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+}
+
+.ollama-pull-progress-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -35%;
+  width: 35%;
+  border-radius: inherit;
+  background: var(--primary-color);
+  animation: ollama-pull-progress 1.2s ease-in-out infinite;
+}
+
+@keyframes ollama-pull-progress {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(385%);
+  }
+}
+
 .ollama-pull-insecure {
   min-height: 68px;
   justify-content: center;
 }
 
 .ollama-model-table-container {
-  max-height: 460px;
+  flex: 1;
+  min-height: 180px;
   overflow: auto;
 }
 
 .ollama-model-table th:last-child,
 .ollama-model-table td:last-child {
-  min-width: 170px;
+  min-width: 112px;
 }
 
 .ollama-model-name-cell {
@@ -1193,6 +1270,19 @@ body {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.ollama-model-delete-trigger {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--danger-color);
+}
+
+.ollama-model-delete-trigger:hover:not(:disabled) {
+  color: var(--danger-color);
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
 }
 
 /* Login */

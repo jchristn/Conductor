@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from './Modal';
 
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false">
+      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2h1v10a2 2 0 002 2h6a2 2 0 002-2V6h1a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zm-1 6a1 1 0 012 0v6a1 1 0 11-2 0V8zm4-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
 function formatBytes(value) {
   const numericValue = Number(value);
   if (value === null || value === undefined || Number.isNaN(numericValue)) return '-';
@@ -68,6 +76,7 @@ function OllamaModelManagerModal({ isOpen, onClose, endpoint, api, onChanged }) 
   const [message, setMessage] = useState('');
 
   const endpointId = endpoint?.Id || '';
+  const isPulling = operationLoading === 'pull';
   const sortedModels = useMemo(() => (
     [...models].sort((left, right) => getModelName(left).localeCompare(getModelName(right)))
   ), [models]);
@@ -127,8 +136,8 @@ function OllamaModelManagerModal({ isOpen, onClose, endpoint, api, onChanged }) 
       }
 
       setMessage(response?.Message || `Pulled ${model}.`);
-      setPullModel('');
       await fetchModels();
+      setPullModel('');
       if (onChanged) onChanged(response, endpoint);
     } catch (err) {
       setError(err.message || 'Ollama pull failed.');
@@ -222,6 +231,17 @@ function OllamaModelManagerModal({ isOpen, onClose, endpoint, api, onChanged }) 
               {operationLoading === 'pull' ? 'Pulling...' : 'Pull Model'}
             </button>
           </div>
+          {isPulling && (
+            <div className="ollama-pull-status" role="status" aria-live="polite">
+              <div className="ollama-pull-status-row">
+                <span className="ollama-pull-status-indicator" aria-hidden="true"></span>
+                <span>Pulling {pullModel.trim()} from Ollama</span>
+              </div>
+              <div className="ollama-pull-progress" aria-label="Pull in progress">
+                <div className="ollama-pull-progress-bar"></div>
+              </div>
+            </div>
+          )}
         </form>
 
         {error && <div className="validation-panel error"><strong>{error}</strong></div>}
@@ -252,6 +272,7 @@ function OllamaModelManagerModal({ isOpen, onClose, endpoint, api, onChanged }) 
                 </tr>
               ) : sortedModels.map((model) => {
                 const modelName = getModelName(model);
+                const deleteLabel = modelName ? `Delete ${modelName}` : 'Delete model';
                 const details = getModelDetails(model);
                 const rowLoading = operationLoading === `delete:${modelName}`;
                 const confirmingDelete = deleteCandidate === modelName;
@@ -288,11 +309,13 @@ function OllamaModelManagerModal({ isOpen, onClose, endpoint, api, onChanged }) 
                       ) : (
                         <button
                           type="button"
-                          className="btn-secondary btn-small"
+                          className="btn-icon ollama-model-delete-trigger"
                           onClick={() => setDeleteCandidate(modelName)}
                           disabled={Boolean(operationLoading) || !modelName}
+                          title={deleteLabel}
+                          aria-label={deleteLabel}
                         >
-                          Delete
+                          <TrashIcon />
                         </button>
                       )}
                     </td>
