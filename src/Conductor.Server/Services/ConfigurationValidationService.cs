@@ -95,6 +95,19 @@ namespace Conductor.Server.Services
                 }
             }
 
+            if (!String.IsNullOrWhiteSpace(vmr.ModelAccessPolicyId))
+            {
+                ModelAccessPolicy policy = await _Database.ModelAccessPolicy.ReadAsync(tenantId, vmr.ModelAccessPolicyId, token).ConfigureAwait(false);
+                if (policy == null)
+                {
+                    AddError(result, "ModelAccessPolicyMissing", "ModelAccessPolicyId", "ModelAccessPolicyId must reference an existing model access policy in the same tenant.");
+                }
+                else if (!policy.Active)
+                {
+                    AddWarning(result, "ModelAccessPolicyInactive", "ModelAccessPolicyId", "The attached model access policy is inactive and runtime behavior will fall back to the global default decision.");
+                }
+            }
+
             List<ModelRunnerEndpoint> endpoints = new List<ModelRunnerEndpoint>();
             foreach (string endpointId in vmr.ModelRunnerEndpointIds ?? new List<string>())
             {

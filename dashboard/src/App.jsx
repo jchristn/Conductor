@@ -15,6 +15,7 @@ import ModelRunnerEndpoints from './views/ModelRunnerEndpoints';
 import ModelDefinitions from './views/ModelDefinitions';
 import ModelConfigurations from './views/ModelConfigurations';
 import LoadBalancingPolicies from './views/LoadBalancingPolicies';
+import ModelAccessPolicies from './views/ModelAccessPolicies';
 import VirtualModelRunners from './views/VirtualModelRunners';
 import RequestHistory from './views/RequestHistory';
 import RequestAnalytics from './views/RequestAnalytics';
@@ -49,6 +50,7 @@ function App() {
             <Route path="/definitions" element={<ModelDefinitions />} />
             <Route path="/configurations" element={<ModelConfigurations />} />
             <Route path="/policies" element={<LoadBalancingPolicies />} />
+            <Route path="/model-access-policies" element={<ModelAccessPolicies />} />
             <Route path="/vmr" element={<VirtualModelRunners />} />
             <Route path="/request-history" element={<RequestHistory />} />
             <Route path="/request-analytics" element={<RequestAnalytics />} />

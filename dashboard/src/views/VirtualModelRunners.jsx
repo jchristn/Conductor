@@ -10,6 +10,7 @@ import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 import LoadModelModal from '../components/LoadModelModal';
+import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
 
 const VMR_BASE_PATH_PREFIX = '/v1.0/api/';
 
@@ -93,7 +94,8 @@ function VirtualModelRunners() {
   const [endpoints, setEndpoints] = useState([]);
   const [configurations, setConfigurations] = useState([]);
   const [definitions, setDefinitions] = useState([]);
-  const [policies, setPolicies] = useState([]);
+  const [loadBalancingPolicies, setLoadBalancingPolicies] = useState([]);
+  const [modelAccessPolicies, setModelAccessPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -122,6 +124,7 @@ function VirtualModelRunners() {
     ApiType: 'OpenAI',
     LoadBalancingMode: 'RoundRobin',
     LoadBalancingPolicyId: '',
+    ModelAccessPolicyId: '',
     ModelRunnerEndpointIds: [],
     ModelConfigurationIds: [],
     ModelDefinitionIds: [],
@@ -137,27 +140,29 @@ function VirtualModelRunners() {
     SessionTimeoutMs: 600000,
     SessionMaxEntries: 10000,
     Active: true,
-    LabelsJson: '[]',
-    TagsJson: '{}'
+    Labels: labelsFromValue([]),
+    Tags: tagsFromValue({})
   });
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [vmrResult, tenantsResult, endpointsResult, configurationsResult, definitionsResult, policiesResult] = await Promise.all([
+      const [vmrResult, tenantsResult, endpointsResult, configurationsResult, definitionsResult, policiesResult, modelAccessPolicyResult] = await Promise.all([
         api.listVirtualModelRunners({ maxResults: 1000 }),
         api.listTenants({ maxResults: 1000 }),
         api.listModelRunnerEndpoints({ maxResults: 1000 }),
         api.listModelConfigurations({ maxResults: 1000 }),
         api.listModelDefinitions({ maxResults: 1000 }),
-        api.listLoadBalancingPolicies({ maxResults: 1000 })
+        api.listLoadBalancingPolicies({ maxResults: 1000 }),
+        api.listModelAccessPolicies({ maxResults: 1000 })
       ]);
       setVmrs(vmrResult.Data || []);
       setTenants(tenantsResult.Data || []);
       setEndpoints(endpointsResult.Data || []);
       setConfigurations(configurationsResult.Data || []);
       setDefinitions(definitionsResult.Data || []);
-      setPolicies(policiesResult.Data || []);
+      setLoadBalancingPolicies(policiesResult.Data || []);
+      setModelAccessPolicies(modelAccessPolicyResult.Data || []);
     } catch (err) {
       setError('Failed to fetch data: ' + err.message);
     } finally {
@@ -187,6 +192,7 @@ function VirtualModelRunners() {
       ApiType: 'OpenAI',
       LoadBalancingMode: 'RoundRobin',
       LoadBalancingPolicyId: '',
+      ModelAccessPolicyId: '',
       ModelRunnerEndpointIds: [],
       ModelConfigurationIds: [],
       ModelDefinitionIds: [],
@@ -202,8 +208,8 @@ function VirtualModelRunners() {
       SessionTimeoutMs: 600000,
       SessionMaxEntries: 10000,
       Active: true,
-      LabelsJson: '[]',
-      TagsJson: '{}'
+      Labels: labelsFromValue([]),
+      Tags: tagsFromValue({})
     });
     setShowForm(true);
   };
@@ -220,6 +226,7 @@ function VirtualModelRunners() {
       ApiType: vmr.ApiType || 'OpenAI',
       LoadBalancingMode: vmr.LoadBalancingMode || 'RoundRobin',
       LoadBalancingPolicyId: vmr.LoadBalancingPolicyId || '',
+      ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
       ModelConfigurationIds: vmr.ModelConfigurationIds || [],
       ModelDefinitionIds: vmr.ModelDefinitionIds || [],
@@ -235,8 +242,8 @@ function VirtualModelRunners() {
       SessionTimeoutMs: vmr.SessionTimeoutMs || 600000,
       SessionMaxEntries: vmr.SessionMaxEntries || 10000,
       Active: vmr.Active !== false,
-      LabelsJson: JSON.stringify(vmr.Labels || [], null, 2),
-      TagsJson: JSON.stringify(vmr.Tags || {}, null, 2)
+      Labels: labelsFromValue(vmr.Labels),
+      Tags: tagsFromValue(vmr.Tags)
     });
     setShowForm(true);
   };
@@ -271,21 +278,7 @@ function VirtualModelRunners() {
   };
 
   const buildVmrPayload = () => {
-    let labels = [];
-    let tags = {};
     let modelConfigurationMappings = {};
-
-    try {
-      labels = JSON.parse(formData.LabelsJson || '[]');
-    } catch (err) {
-      throw new Error('Invalid JSON in Labels');
-    }
-
-    try {
-      tags = JSON.parse(formData.TagsJson || '{}');
-    } catch (err) {
-      throw new Error('Invalid JSON in Tags');
-    }
 
     try {
       modelConfigurationMappings = JSON.parse(formData.ModelConfigurationMappingsJson || '{}');
@@ -301,6 +294,7 @@ function VirtualModelRunners() {
       ApiType: formData.ApiType,
       LoadBalancingMode: formData.LoadBalancingMode,
       LoadBalancingPolicyId: formData.LoadBalancingPolicyId || null,
+      ModelAccessPolicyId: formData.ModelAccessPolicyId || null,
       ModelRunnerEndpointIds: formData.ModelRunnerEndpointIds,
       ModelConfigurationIds: formData.ModelConfigurationIds,
       ModelDefinitionIds: formData.ModelDefinitionIds,
@@ -316,8 +310,8 @@ function VirtualModelRunners() {
       SessionTimeoutMs: parseInt(formData.SessionTimeoutMs),
       SessionMaxEntries: parseInt(formData.SessionMaxEntries),
       Active: formData.Active,
-      Labels: labels,
-      Tags: tags
+      Labels: labelsToPayload(formData.Labels),
+      Tags: tagsToPayload(formData.Tags)
     };
   };
 
@@ -555,7 +549,7 @@ function VirtualModelRunners() {
       render: (item) => (
         <span>
           {item.LoadBalancingPolicyId
-            ? (policies.find((policy) => policy.Id === item.LoadBalancingPolicyId)?.Name || item.LoadBalancingPolicyId)
+            ? (loadBalancingPolicies.find((policy) => policy.Id === item.LoadBalancingPolicyId)?.Name || item.LoadBalancingPolicyId)
             : item.LoadBalancingMode}
           {item.LoadBalancingPolicyId && (
             <small style={{ color: 'var(--text-secondary)', marginLeft: '4px' }}>(Policy)</small>
@@ -565,6 +559,18 @@ function VirtualModelRunners() {
           )}
         </span>
       )
+    },
+    {
+      key: 'ModelAccessPolicyId',
+      label: 'Model Access',
+      tooltip: 'Model access policy attached to this VMR',
+      width: '180px',
+      render: (item) => item.ModelAccessPolicyId
+        ? (modelAccessPolicies.find((policy) => policy.Id === item.ModelAccessPolicyId)?.Name || item.ModelAccessPolicyId)
+        : <span className="text-muted">None</span>,
+      filterValue: (item) => item.ModelAccessPolicyId
+        ? (modelAccessPolicies.find((policy) => policy.Id === item.ModelAccessPolicyId)?.Name || item.ModelAccessPolicyId)
+        : 'none'
     },
       {
         key: 'Endpoints',
@@ -674,6 +680,7 @@ function VirtualModelRunners() {
                 ...formData,
                 TenantId: e.target.value,
                 LoadBalancingPolicyId: '',
+                ModelAccessPolicyId: '',
                 ModelRunnerEndpointIds: [],
                 ModelConfigurationIds: [],
                 ModelDefinitionIds: []
@@ -764,7 +771,7 @@ function VirtualModelRunners() {
                 onChange={(e) => setFormData({ ...formData, LoadBalancingPolicyId: e.target.value })}
               >
                 <option value="">None</option>
-                {policies
+                {loadBalancingPolicies
                   .filter((policy) => !formData.TenantId || policy.TenantId === formData.TenantId)
                   .map((policy) => (
                     <option key={policy.Id} value={policy.Id}>
@@ -773,6 +780,26 @@ function VirtualModelRunners() {
                   ))}
               </select>
             </div>
+            <div className="form-group">
+              <label htmlFor="modelAccessPolicyId" title="Attach a model access policy that controls which credentials and users can use models through this VMR">Model Access Policy</label>
+              <select
+                id="modelAccessPolicyId"
+                value={formData.ModelAccessPolicyId}
+                onChange={(e) => setFormData({ ...formData, ModelAccessPolicyId: e.target.value })}
+              >
+                <option value="">None</option>
+                {modelAccessPolicies
+                  .filter((policy) => !formData.TenantId || policy.TenantId === formData.TenantId)
+                  .map((policy) => (
+                    <option key={policy.Id} value={policy.Id}>
+                      {policy.Name} ({policy.Id})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
             <div className="form-group">
               <label htmlFor="loadBalancingMode" title="Selection mode used when no policy is attached and when an attached policy is configured to fall back">Load Balancing Mode</label>
               <select
@@ -932,29 +959,13 @@ function VirtualModelRunners() {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="labels" title="String array for categorization and filtering">Labels (JSON)</label>
-            <textarea
-              id="labels"
-              value={formData.LabelsJson}
-              onChange={(e) => setFormData({ ...formData, LabelsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="[]"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tags" title="Key-value pairs for custom metadata">Tags (JSON)</label>
-            <textarea
-              id="tags"
-              value={formData.TagsJson}
-              onChange={(e) => setFormData({ ...formData, TagsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="{}"
-            />
-          </div>
+          <LabelsTagsEditor
+            labels={formData.Labels}
+            tags={formData.Tags}
+            onLabelsChange={(Labels) => setFormData({ ...formData, Labels })}
+            onTagsChange={(Tags) => setFormData({ ...formData, Tags })}
+            idPrefix="virtual-model-runner"
+          />
 
           <div className="form-group checkbox-group">
             <label title="Enable embedding generation requests through this VMR">
@@ -1196,6 +1207,8 @@ function VirtualModelRunners() {
                   <div className="detail-item"><label>Base Path</label><code>{effectiveConfig.BasePath}</code></div>
                   <div className="detail-item"><label>API Type</label><span>{effectiveConfig.ApiType}</span></div>
                   <div className="detail-item"><label>Load Balancing</label><span>{effectiveConfig.Policy?.Name || effectiveConfig.LoadBalancingMode}</span></div>
+                  <div className="detail-item"><label>Model Access</label><span>{effectiveConfig.ModelAccessPolicy?.PolicyName || effectiveConfig.ModelAccessPolicy?.PolicyId || 'None'}</span></div>
+                  <div className="detail-item"><label>Access Mode</label><span>{effectiveConfig.ModelAccessPolicy?.Mode || 'Disabled'}</span></div>
                   <div className="detail-item"><label>Strict Mode</label><span>{effectiveConfig.StrictMode ? 'Enabled' : 'Disabled'}</span></div>
                   <div className="detail-item"><label>Request History</label><span>{effectiveConfig.RequestHistoryEnabled ? 'Enabled' : 'Disabled'}</span></div>
                   <div className="detail-item"><label>Session Affinity</label><span>{effectiveConfig.SessionAffinity?.Mode || 'None'}</span></div>
@@ -1308,8 +1321,16 @@ function VirtualModelRunners() {
                   <span className="service-state-badge neutral">HTTP {routingExplanation.HttpStatusCode}</span>
                   {routingExplanation.SessionAffinityOutcome && <span className="service-state-badge neutral">Session {routingExplanation.SessionAffinityOutcome}</span>}
                   {routingExplanation.PolicyFallbackUsed && <span className="service-state-badge warning">Policy Fallback</span>}
+                  {routingExplanation.ModelAccessDecision && <span className={`service-state-badge ${routingExplanation.ModelAccessDecision === 'Deny' ? 'warning' : 'success'}`}>Access {routingExplanation.ModelAccessDecision}</span>}
+                  {routingExplanation.ModelAccessWouldDeny && <span className="service-state-badge warning">Would Deny</span>}
                 </div>
                 <p className="section-description" style={{ marginTop: '12px', marginBottom: 0 }}>{routingExplanation.Message}</p>
+                {(routingExplanation.ModelAccessPolicyId || routingExplanation.ModelAccessRuleId) && (
+                  <div className="detail-grid detail-grid-two" style={{ marginTop: '12px' }}>
+                    <div className="detail-item"><label>Access Policy</label><span>{routingExplanation.ModelAccessPolicyName || routingExplanation.ModelAccessPolicyId || '-'}</span></div>
+                    <div className="detail-item"><label>Access Rule</label><span>{routingExplanation.ModelAccessRuleName || routingExplanation.ModelAccessRuleId || 'Default'}</span></div>
+                  </div>
+                )}
               </div>
 
               <div className="detail-section">

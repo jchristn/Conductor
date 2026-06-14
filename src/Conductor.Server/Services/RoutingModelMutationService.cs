@@ -28,18 +28,9 @@ namespace Conductor.Server.Services
             byte[] requestBody,
             CancellationToken token)
         {
-            RoutingModelMutationResult result = new RoutingModelMutationResult
-            {
-                Success = true,
-                HttpStatusCode = 200,
-                OutcomeCode = "Routed",
-                RequestBody = requestBody
-            };
-
-            if (!urlContext.IsCompletionsRequest && !urlContext.IsEmbeddingsRequest)
-            {
-                return result;
-            }
+            RoutingModelMutationResult result = await ResolveAsync(vmr, urlContext, requestBody, token).ConfigureAwait(false);
+            if (!result.Success) return result;
+            if (!urlContext.IsCompletionsRequest && !urlContext.IsEmbeddingsRequest) return result;
 
             if (requestBody == null || requestBody.Length < 1)
             {
@@ -53,72 +44,23 @@ namespace Conductor.Server.Services
                 return result;
             }
 
-            result.RequestedModel = urlContext.ApiType == ApiTypeEnum.Gemini
-                ? urlContext.RequestedModel
-                : (bodyDict.TryGetValue("model", out object modelValue) && modelValue != null ? modelValue.ToString() : null);
-            result.MutationSummary.RequestedModel = result.RequestedModel;
-
-            List<ModelDefinition> modelDefinitions = await ResolveActiveModelDefinitionsAsync(vmr, token).ConfigureAwait(false);
-            if (vmr.StrictMode)
+            if (result.ModelDefinition != null && !String.IsNullOrWhiteSpace(result.EffectiveModel))
             {
-                if (modelDefinitions.Count < 1)
-                {
-                    return DenyMutation(result, 401, "StrictModeNoModels", "Strict mode is enabled but no active model definitions are attached.");
-                }
-
-                if (String.IsNullOrWhiteSpace(result.RequestedModel))
-                {
-                    return DenyMutation(result, 401, "StrictModeModelRequired", "Strict mode requires the request to specify a model.");
-                }
-
-                if (!modelDefinitions.Exists(item => String.Equals(item.Name, result.RequestedModel, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return DenyMutation(result, 401, "StrictModeModelRejected", "The requested model is not attached to this virtual model runner.");
-                }
-            }
-
-            result.EffectiveModel = result.RequestedModel;
-
-            if (modelDefinitions.Count == 1)
-            {
-                result.ModelDefinition = modelDefinitions[0];
-                result.EffectiveModel = modelDefinitions[0].Name;
                 ApplyModelName(bodyDict, urlContext, result.EffectiveModel);
-                AddMutation(result.MutationSummary, "model", result.RequestedModel, result.EffectiveModel, "ModelDefinition:" + modelDefinitions[0].Name);
-            }
-            else if (modelDefinitions.Count > 1 && !String.IsNullOrWhiteSpace(result.RequestedModel))
-            {
-                ModelDefinition matchedDefinition = modelDefinitions.Find(item => String.Equals(item.Name, result.RequestedModel, StringComparison.OrdinalIgnoreCase));
-                if (matchedDefinition == null)
-                {
-                    return DenyMutation(result, 401, "ModelNotAttached", "The requested model is not attached to this virtual model runner.");
-                }
-
-                result.ModelDefinition = matchedDefinition;
-                result.EffectiveModel = matchedDefinition.Name;
-                if (urlContext.ApiType == ApiTypeEnum.Gemini)
-                {
-                    urlContext.RelativePath = ReplaceGeminiModelInPath(urlContext.RelativePath, result.EffectiveModel);
-                    urlContext.RequestedModel = result.EffectiveModel;
-                }
+                AddMutation(result.MutationSummary, "model", result.RequestedModel, result.EffectiveModel, "ModelDefinition:" + result.ModelDefinition.Name);
             }
 
             result.MutationSummary.EffectiveModel = result.EffectiveModel;
             result.MutationSummary.ModelDefinitionId = result.ModelDefinition?.Id;
 
-            List<ModelConfiguration> configurations = await ResolveActiveModelConfigurationsAsync(vmr, token).ConfigureAwait(false);
-            ModelConfiguration configuration = SelectConfiguration(vmr, configurations, result.EffectiveModel);
-            result.ModelConfiguration = configuration;
-            result.MutationSummary.ModelConfigurationId = configuration?.Id;
-
-            if (urlContext.IsCompletionsRequest && configuration != null)
+            if (urlContext.IsCompletionsRequest && result.ModelConfiguration != null)
             {
-                ApplyConfigurationToBody(bodyDict, configuration, urlContext, result.MutationSummary);
+                ApplyConfigurationToBody(bodyDict, result.ModelConfiguration, urlContext, result.MutationSummary);
             }
 
-            if (configuration != null)
+            if (result.ModelConfiguration != null)
             {
-                ApplyPinnedProperties(bodyDict, configuration, urlContext, result.MutationSummary);
+                ApplyPinnedProperties(bodyDict, result.ModelConfiguration, urlContext, result.MutationSummary);
             }
 
             string mutatedJson = _Serializer.SerializeJson(bodyDict, false);
@@ -128,6 +70,96 @@ namespace Conductor.Server.Services
             }
 
             result.RequestBody = Encoding.UTF8.GetBytes(mutatedJson);
+            return result;
+        }
+
+        internal async Task<RoutingModelMutationResult> ResolveAsync(
+            VirtualModelRunner vmr,
+            UrlContext urlContext,
+            byte[] requestBody,
+            CancellationToken token)
+        {
+            RoutingModelMutationResult result = new RoutingModelMutationResult
+            {
+                Success = true,
+                HttpStatusCode = 200,
+                OutcomeCode = "Routed",
+                RequestBody = requestBody
+            };
+
+            if (!CanResolveRequestModel(urlContext))
+            {
+                return result;
+            }
+
+            Dictionary<string, object> bodyDict = null;
+            if (requestBody != null && requestBody.Length > 0)
+            {
+                string bodyJson = Encoding.UTF8.GetString(requestBody);
+                bodyDict = _Serializer.DeserializeJson<Dictionary<string, object>>(bodyJson);
+            }
+
+            result.RequestedModel = ExtractRequestedModel(urlContext, bodyDict);
+            result.MutationSummary.RequestedModel = result.RequestedModel;
+            result.EffectiveModel = result.RequestedModel;
+            result.MutationSummary.EffectiveModel = result.EffectiveModel;
+
+            bool routeModelDefinitionEnforced = urlContext.IsCompletionsRequest || urlContext.IsEmbeddingsRequest;
+            List<ModelDefinition> modelDefinitions = await ResolveActiveModelDefinitionsAsync(vmr, token).ConfigureAwait(false);
+
+            if (routeModelDefinitionEnforced)
+            {
+                if (vmr.StrictMode)
+                {
+                    if (modelDefinitions.Count < 1)
+                    {
+                        return DenyMutation(result, 401, "StrictModeNoModels", "Strict mode is enabled but no active model definitions are attached.");
+                    }
+
+                    if (String.IsNullOrWhiteSpace(result.RequestedModel))
+                    {
+                        return DenyMutation(result, 401, "StrictModeModelRequired", "Strict mode requires the request to specify a model.");
+                    }
+
+                    if (!modelDefinitions.Exists(item => String.Equals(item.Name, result.RequestedModel, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return DenyMutation(result, 401, "StrictModeModelRejected", "The requested model is not attached to this virtual model runner.");
+                    }
+                }
+
+                if (modelDefinitions.Count == 1)
+                {
+                    result.ModelDefinition = modelDefinitions[0];
+                    result.EffectiveModel = modelDefinitions[0].Name;
+                }
+                else if (modelDefinitions.Count > 1 && !String.IsNullOrWhiteSpace(result.RequestedModel))
+                {
+                    ModelDefinition matchedDefinition = modelDefinitions.Find(item => String.Equals(item.Name, result.RequestedModel, StringComparison.OrdinalIgnoreCase));
+                    if (matchedDefinition == null)
+                    {
+                        return DenyMutation(result, 401, "ModelNotAttached", "The requested model is not attached to this virtual model runner.");
+                    }
+
+                    result.ModelDefinition = matchedDefinition;
+                    result.EffectiveModel = matchedDefinition.Name;
+                }
+
+                List<ModelConfiguration> configurations = await ResolveActiveModelConfigurationsAsync(vmr, token).ConfigureAwait(false);
+                result.ModelConfiguration = SelectConfiguration(vmr, configurations, result.EffectiveModel);
+                result.MutationSummary.ModelConfigurationId = result.ModelConfiguration?.Id;
+            }
+            else if (!String.IsNullOrWhiteSpace(result.RequestedModel))
+            {
+                ModelDefinition matchedDefinition = modelDefinitions.Find(item => String.Equals(item.Name, result.RequestedModel, StringComparison.OrdinalIgnoreCase));
+                if (matchedDefinition != null)
+                {
+                    result.ModelDefinition = matchedDefinition;
+                    result.EffectiveModel = matchedDefinition.Name;
+                }
+            }
+
+            result.MutationSummary.EffectiveModel = result.EffectiveModel;
+            result.MutationSummary.ModelDefinitionId = result.ModelDefinition?.Id;
             return result;
         }
 
@@ -189,6 +221,43 @@ namespace Conductor.Server.Services
             return configurations.Find(item =>
                 String.IsNullOrWhiteSpace(item.Model)
                 || String.Equals(item.Model, effectiveModel, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool CanResolveRequestModel(UrlContext urlContext)
+        {
+            if (urlContext == null) return false;
+            if (urlContext.IsCompletionsRequest || urlContext.IsEmbeddingsRequest) return true;
+
+            switch (urlContext.RequestType)
+            {
+                case RequestTypeEnum.OllamaPullModel:
+                case RequestTypeEnum.OllamaDeleteModel:
+                case RequestTypeEnum.OllamaShowModelInfo:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static string ExtractRequestedModel(UrlContext urlContext, Dictionary<string, object> bodyDict)
+        {
+            if (urlContext != null && urlContext.ApiType == ApiTypeEnum.Gemini && !String.IsNullOrWhiteSpace(urlContext.RequestedModel))
+            {
+                return urlContext.RequestedModel;
+            }
+
+            if (bodyDict == null) return null;
+            if (bodyDict.TryGetValue("model", out object modelValue) && modelValue != null)
+            {
+                return modelValue.ToString();
+            }
+
+            if (bodyDict.TryGetValue("name", out object nameValue) && nameValue != null)
+            {
+                return nameValue.ToString();
+            }
+
+            return null;
         }
 
         private static void ApplyModelName(Dictionary<string, object> bodyDict, UrlContext urlContext, string effectiveModel)

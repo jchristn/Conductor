@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added tenant-scoped model access policies with VMR attachment, enforce/monitor/disabled modes, proxy credential attribution, denied/would-deny request history, analytics counters, audit logging, list-model filtering or synthesis, backup/restore support, SDK helpers, Postman examples, and documented rollout semantics.
+- Added `ACCESS_POLICIES.md`, a user-facing model access policy authoring guide with dashboard/API workflow and real-world policy examples.
 - Coalesced duplicate model runner endpoint health checks so endpoints sharing the same effective health-check URL reuse one upstream probe while retaining per-endpoint health state.
 - Added Ollama endpoint model management APIs and dashboard `Manage Models` action for listing local models, pulling a model, and deleting a model from an Ollama-type runner endpoint.
 - Added tenant-admin model load and verification APIs for model runner endpoints and virtual model runners, with dashboard actions, SDK helpers, Postman examples, provider-specific outcome semantics, and Prometheus model-load metrics.
@@ -21,3 +23,5 @@
 - Updated the dashboard request history table and detail view to display TTFT.
 - Updated the Docker factory SQLite schema to include request history TTFT storage.
 - Updated Docker Compose to build server and dashboard images from local build contexts instead of pulling named images.
+- Updated Docker Compose to run PostgreSQL by default with a persisted data volume, an idempotent init container, and dashboard runtime server URL configuration from `CONDUCTOR_SERVER_URL`.
+- Replaced dashboard label/tag JSON textareas with structured row editors for `Labels` and `Tags` on all create/edit modals that expose those fields.

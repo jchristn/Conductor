@@ -29,6 +29,7 @@ namespace Conductor.Server.Routing
         protected readonly ModelDefinitionController mdController;
         protected readonly ModelConfigurationController mcController;
         protected readonly LoadBalancingPolicyController lbpController;
+        protected readonly ModelAccessPolicyController mapController;
         protected readonly VirtualModelRunnerController vmrController;
         protected readonly AuthController authController;
         protected readonly AdministratorController adminController;
@@ -50,6 +51,7 @@ namespace Conductor.Server.Routing
             mdController = context.ModelDefinitionController;
             mcController = context.ModelConfigurationController;
             lbpController = context.LoadBalancingPolicyController;
+            mapController = context.ModelAccessPolicyController;
             vmrController = context.VirtualModelRunnerController;
             authController = context.AuthController;
             adminController = context.AdministratorController;
@@ -104,6 +106,10 @@ namespace Conductor.Server.Routing
                 RequestorUserGuid = request.Query.Elements.Get("requestorUserGuid"),
                 CredentialGuid = request.Query.Elements.Get("credentialGuid"),
                 LoadBalancingPolicyGuid = request.Query.Elements.Get("loadBalancingPolicyGuid"),
+                ModelAccessPolicyGuid = request.Query.Elements.Get("modelAccessPolicyGuid"),
+                ModelAccessRuleGuid = request.Query.Elements.Get("modelAccessRuleGuid"),
+                ModelAccessDecision = request.Query.Elements.Get("modelAccessDecision"),
+                ModelAccessWouldDeny = ParseNullableBool(request.Query.Elements.Get("modelAccessWouldDeny")),
                 ModelName = request.Query.Elements.Get("modelName"),
                 MutationSummary = request.Query.Elements.Get("mutationSummary"),
                 DenialReasonCode = request.Query.Elements.Get("denialReasonCode"),
@@ -133,6 +139,10 @@ namespace Conductor.Server.Routing
                 RequestorUserGuid = request.Query.Elements.Get("requestorUserGuid"),
                 CredentialGuid = request.Query.Elements.Get("credentialGuid"),
                 LoadBalancingPolicyGuid = request.Query.Elements.Get("loadBalancingPolicyGuid"),
+                ModelAccessPolicyGuid = request.Query.Elements.Get("modelAccessPolicyGuid"),
+                ModelAccessRuleGuid = request.Query.Elements.Get("modelAccessRuleGuid"),
+                ModelAccessDecision = request.Query.Elements.Get("modelAccessDecision"),
+                ModelAccessWouldDeny = ParseNullableBool(request.Query.Elements.Get("modelAccessWouldDeny")),
                 ModelName = request.Query.Elements.Get("modelName"),
                 MutationSummary = request.Query.Elements.Get("mutationSummary"),
                 DenialReasonCode = request.Query.Elements.Get("denialReasonCode"),
@@ -162,6 +172,10 @@ namespace Conductor.Server.Routing
                 ModelEndpointGuid = request.Query.Elements.Get("endpointGuid"),
                 ProviderName = request.Query.Elements.Get("providerName"),
                 ModelName = request.Query.Elements.Get("modelName"),
+                ModelAccessPolicyGuid = request.Query.Elements.Get("modelAccessPolicyGuid"),
+                ModelAccessRuleGuid = request.Query.Elements.Get("modelAccessRuleGuid"),
+                ModelAccessDecision = request.Query.Elements.Get("modelAccessDecision"),
+                ModelAccessWouldDeny = ParseNullableBool(request.Query.Elements.Get("modelAccessWouldDeny")),
                 StageKind = request.Query.Elements.Get("stageKind"),
                 StatusClass = request.Query.Elements.Get("statusClass"),
                 Range = request.Query.Elements.Get("range") ?? "lastDay",
@@ -323,6 +337,21 @@ namespace Conductor.Server.Routing
             }
 
             if (Int32.TryParse(value, out int parsed))
+            {
+                return parsed;
+            }
+
+            return null;
+        }
+
+        private static bool? ParseNullableBool(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            if (Boolean.TryParse(value, out bool parsed))
             {
                 return parsed;
             }

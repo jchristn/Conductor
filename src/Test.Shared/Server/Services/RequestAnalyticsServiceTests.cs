@@ -156,7 +156,12 @@ namespace Test.Shared.Server.Services
                     endpoint,
                     start.AddMinutes(index * 10),
                     durations[index],
-                    index < 2).ConfigureAwait(false);
+                    index < 2,
+                    index == 0 || index == 3 ? "Permit" : "Deny",
+                    index == 0 ? "mar_allow" : (index == 2 ? "mar_deny" : null),
+                    index == 1,
+                    index == 2 ? 403 : 200,
+                    index == 2 ? "ModelAccessEvaluatorError" : null).ConfigureAwait(false);
 
                 if (index < 2)
                 {
@@ -189,9 +194,16 @@ namespace Test.Shared.Server.Services
             }).ConfigureAwait(false);
 
             overview.TotalRequests.Should().Be(4);
-            overview.SuccessCount.Should().Be(4);
+            overview.SuccessCount.Should().Be(3);
+            overview.FailureCount.Should().Be(1);
             overview.AnalyticsCapturedCount.Should().Be(2);
             overview.AnalyticsCoveragePercent.Should().Be(50m);
+            overview.ModelAccessAllowedCount.Should().Be(2);
+            overview.ModelAccessDeniedCount.Should().Be(1);
+            overview.ModelAccessWouldDenyCount.Should().Be(1);
+            overview.ModelAccessDefaultAllowedCount.Should().Be(1);
+            overview.ModelAccessDefaultDeniedCount.Should().Be(1);
+            overview.ModelAccessEvaluatorErrorCount.Should().Be(1);
             overview.P50DurationMs.Should().Be(200);
             overview.P95DurationMs.Should().Be(400);
             overview.StageBreakdown.Select(item => item.StageKind).Should().Contain(new[] { "routing", "generation" });
@@ -268,7 +280,12 @@ namespace Test.Shared.Server.Services
             ModelRunnerEndpoint endpoint,
             DateTime createdUtc,
             int durationMs,
-            bool analyticsCaptured)
+            bool analyticsCaptured,
+            string modelAccessDecision = null,
+            string modelAccessRuleGuid = null,
+            bool modelAccessWouldDeny = false,
+            int httpStatus = 200,
+            string denialReasonCode = null)
         {
             RequestHistoryDetail detail = new RequestHistoryDetail
             {
@@ -285,12 +302,17 @@ namespace Test.Shared.Server.Services
                 ObjectKey = "overview-" + Guid.NewGuid().ToString("N") + ".json",
                 CreatedUtc = createdUtc,
                 CompletedUtc = createdUtc.AddMilliseconds(durationMs),
-                HttpStatus = 200,
+                HttpStatus = httpStatus,
                 ResponseTimeMs = durationMs,
                 TotalTokens = durationMs / 10,
                 TokensPerSecondOverall = 10m,
                 TraceId = "trc_" + Guid.NewGuid().ToString("N"),
-                AnalyticsCaptured = analyticsCaptured
+                AnalyticsCaptured = analyticsCaptured,
+                DenialReasonCode = denialReasonCode,
+                ModelAccessPolicyGuid = modelAccessDecision == null ? null : "map_overview",
+                ModelAccessDecision = modelAccessDecision,
+                ModelAccessRuleGuid = modelAccessRuleGuid,
+                ModelAccessWouldDeny = modelAccessWouldDeny
             };
 
             return await Database.RequestHistory.CreateAsync(detail).ConfigureAwait(false) as RequestHistoryDetail ?? detail;

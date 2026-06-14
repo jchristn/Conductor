@@ -55,6 +55,80 @@ class ConductorClientTests(unittest.TestCase):
             "http://localhost:9000/v1.0/requesthistory/analytics/overview?range=lastWeek&providerName=Ollama",
         )
 
+    def test_model_access_policy_management_builds_requests(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"Success": True}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        policy = {
+            "TenantId": "ten_123",
+            "Name": "Production policy",
+            "DefaultDecision": "Deny",
+            "Rules": [],
+        }
+        context = {
+            "TenantId": "ten_123",
+            "CredentialId": "cred_123",
+            "VirtualModelRunnerId": "vmr_123",
+            "RequestedModel": "gpt-4o-mini",
+            "Action": "Completions",
+        }
+
+        client.list_model_access_policies({
+            "tenantId": "ten_123",
+            "maxResults": 25,
+            "continuationToken": "next page",
+            "nameFilter": "prod",
+            "activeFilter": "true",
+        })
+        client.get_model_access_policy("map_123", tenant_id="ten_123")
+        client.create_model_access_policy(policy)
+        client.update_model_access_policy("map_123", policy)
+        client.delete_model_access_policy("map_123", tenant_id="ten_123", force_detach=True)
+        client.validate_model_access_policy(policy)
+        client.evaluate_model_access_policy("map_123", context, tenant_id="ten_123")
+        client.get_effective_model_access({
+            "tenantId": "ten_123",
+            "credentialId": "cred_123",
+            "userId": "usr_123",
+            "vmrId": "vmr_123",
+            "modelDefinitionId": "mod_123",
+            "modelName": "gpt-4o-mini",
+            "action": "Completions",
+        })
+
+        calls = session.request.call_args_list
+        self.assertEqual(
+            calls[0].kwargs["url"],
+            "http://localhost:9000/v1.0/modelaccesspolicies?tenantId=ten_123&maxResults=25&continuationToken=next+page&nameFilter=prod&activeFilter=true",
+        )
+        self.assertEqual(calls[0].kwargs["method"], "GET")
+        self.assertEqual(calls[1].kwargs["url"], "http://localhost:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123")
+        self.assertEqual(calls[1].kwargs["method"], "GET")
+        self.assertEqual(calls[2].kwargs["url"], "http://localhost:9000/v1.0/modelaccesspolicies")
+        self.assertEqual(calls[2].kwargs["method"], "POST")
+        self.assertEqual(calls[2].kwargs["json"], policy)
+        self.assertEqual(calls[3].kwargs["url"], "http://localhost:9000/v1.0/modelaccesspolicies/map_123")
+        self.assertEqual(calls[3].kwargs["method"], "PUT")
+        self.assertEqual(calls[3].kwargs["json"], policy)
+        self.assertEqual(calls[4].kwargs["url"], "http://localhost:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123&forceDetach=true")
+        self.assertEqual(calls[4].kwargs["method"], "DELETE")
+        self.assertEqual(calls[5].kwargs["url"], "http://localhost:9000/v1.0/modelaccesspolicies/validate")
+        self.assertEqual(calls[5].kwargs["method"], "POST")
+        self.assertEqual(calls[5].kwargs["json"], policy)
+        self.assertEqual(calls[6].kwargs["url"], "http://localhost:9000/v1.0/modelaccesspolicies/map_123/evaluate?tenantId=ten_123")
+        self.assertEqual(calls[6].kwargs["method"], "POST")
+        self.assertEqual(calls[6].kwargs["json"], context)
+        self.assertEqual(
+            calls[7].kwargs["url"],
+            "http://localhost:9000/v1.0/modelaccesspolicies/effective?tenantId=ten_123&credentialId=cred_123&userId=usr_123&vmrId=vmr_123&modelDefinitionId=mod_123&modelName=gpt-4o-mini&action=Completions",
+        )
+        self.assertEqual(calls[7].kwargs["method"], "GET")
+
     def test_request_history_analytics_detail_uses_entry_id(self) -> None:
         session = MagicMock()
         response = MagicMock()

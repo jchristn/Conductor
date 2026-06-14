@@ -22,6 +22,7 @@ namespace Conductor.Server.Routing
             OperationalMetricsService operationalMetricsService,
             RoutingDecisionService routingDecisionService,
             ConfigurationValidationService configurationValidationService,
+            IModelAccessControlService modelAccessControlService,
             ModelLoadService modelLoadService,
             OllamaModelManagementService ollamaModelManagementService,
             RequestHistoryService requestHistoryService)
@@ -37,6 +38,7 @@ namespace Conductor.Server.Routing
             OperationalMetricsService = operationalMetricsService;
             RoutingDecisionService = routingDecisionService;
             ConfigurationValidationService = configurationValidationService;
+            ModelAccessControlService = modelAccessControlService;
             ModelLoadService = modelLoadService;
             OllamaModelManagementService = ollamaModelManagementService;
             RequestHistoryService = requestHistoryService;
@@ -48,10 +50,11 @@ namespace Conductor.Server.Routing
             ModelDefinitionController = new ModelDefinitionController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             ModelConfigurationController = new ModelConfigurationController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             LoadBalancingPolicyController = new LoadBalancingPolicyController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
+            ModelAccessPolicyController = new ModelAccessPolicyController(Database, AuthService, Serializer, Logging, ModelAccessControlService);
             VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService);
             AuthController = new AuthController(Database, AuthService, Serializer, Logging, Settings.AdminApiKeys);
             AdministratorController = new AdministratorController(Database, AuthService, Serializer, Logging);
-            BackupController = new BackupController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
+            BackupController = new BackupController(Database, AuthService, Serializer, Logging, ConfigurationValidationService, ModelAccessControlService);
             RequestHistoryController = RequestHistoryService != null
                 ? new RequestHistoryController(Database, AuthService, Serializer, Logging, RequestHistoryService)
                 : null;
@@ -81,6 +84,8 @@ namespace Conductor.Server.Routing
 
         internal ConfigurationValidationService ConfigurationValidationService { get; }
 
+        internal IModelAccessControlService ModelAccessControlService { get; }
+
         internal ModelLoadService ModelLoadService { get; }
 
         internal OllamaModelManagementService OllamaModelManagementService { get; }
@@ -100,6 +105,8 @@ namespace Conductor.Server.Routing
         internal ModelConfigurationController ModelConfigurationController { get; }
 
         internal LoadBalancingPolicyController LoadBalancingPolicyController { get; }
+
+        internal ModelAccessPolicyController ModelAccessPolicyController { get; }
 
         internal VirtualModelRunnerController VirtualModelRunnerController { get; }
 

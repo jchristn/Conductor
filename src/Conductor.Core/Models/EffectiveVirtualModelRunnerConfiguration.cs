@@ -64,6 +64,11 @@ namespace Conductor.Core.Models
         public EffectivePolicySummary Policy { get; set; } = null;
 
         /// <summary>
+        /// Attached model access policy summary, if any.
+        /// </summary>
+        public ModelAccessPolicySummary ModelAccessPolicy { get; set; } = null;
+
+        /// <summary>
         /// Resolved endpoint set.
         /// </summary>
         public List<EffectiveEndpointSummary> Endpoints { get; set; } = new List<EffectiveEndpointSummary>();

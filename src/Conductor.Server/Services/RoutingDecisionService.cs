@@ -9,6 +9,7 @@ namespace Conductor.Server.Services
     using Conductor.Core.Database;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Settings;
     using SyslogLogging;
 
     /// <summary>
@@ -16,6 +17,7 @@ namespace Conductor.Server.Services
     /// </summary>
     public class RoutingDecisionService
     {
+        private const string _Header = "[RoutingDecisionService] ";
         private static readonly object _RoundRobinLock = new object();
         private static readonly Random _Random = new Random();
         private static int _RoundRobinIndex = 0;
@@ -28,6 +30,7 @@ namespace Conductor.Server.Services
         private readonly OperationalMetricsService _Metrics;
         private readonly RoutingModelMutationService _ModelMutationService;
         private readonly RoutingEffectiveConfigurationBuilder _EffectiveConfigurationBuilder;
+        private readonly IModelAccessControlService _ModelAccessControlService;
 
         /// <summary>
         /// Instantiate the routing decision service.
@@ -37,15 +40,18 @@ namespace Conductor.Server.Services
             LoggingModule logging,
             HealthCheckService healthCheckService = null,
             SessionAffinityService sessionAffinityService = null,
-            OperationalMetricsService metrics = null)
+            OperationalMetricsService metrics = null,
+            IModelAccessControlService modelAccessControlService = null,
+            ModelAccessControlSettings modelAccessSettings = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _ModelMutationService = new RoutingModelMutationService(_Database);
-            _EffectiveConfigurationBuilder = new RoutingEffectiveConfigurationBuilder(_Database);
+            _EffectiveConfigurationBuilder = new RoutingEffectiveConfigurationBuilder(_Database, modelAccessSettings);
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _HealthCheckService = healthCheckService;
             _SessionAffinityService = sessionAffinityService;
             _Metrics = metrics;
+            _ModelAccessControlService = modelAccessControlService;
         }
 
         /// <summary>
@@ -113,6 +119,33 @@ namespace Conductor.Server.Services
             }
 
             AddTimeline(decision, "RequestTypeGate", "Request Type Gate", "Passed", "Request type is allowed.");
+
+            RoutingModelMutationResult resolution = await _ModelMutationService.ResolveAsync(vmr, urlContext, requestContext.Data, token).ConfigureAwait(false);
+            ApplyModelResolution(result, decision, resolution);
+            if (!resolution.Success)
+            {
+                decision.HttpStatusCode = resolution.HttpStatusCode;
+                decision.OutcomeCode = resolution.OutcomeCode;
+                decision.Message = resolution.Message;
+                decision.DenialReasonCode = resolution.OutcomeCode;
+                decision.DenialReason = resolution.Message;
+                AddTimeline(decision, "ModelResolution", "Model Resolution", "Denied", resolution.Message);
+                return FinalizeMetrics(result, vmr, requestContext, decisionStart);
+            }
+
+            AddTimeline(decision, "ModelResolution", "Model Resolution", "Passed", !String.IsNullOrWhiteSpace(resolution.EffectiveModel)
+                ? "Resolved effective model '" + resolution.EffectiveModel + "'."
+                : "No request model resolution was required.");
+
+            ModelAccessEvaluationResult accessResult = await EvaluateModelAccessAsync(vmr, urlContext, requestContext, resolution, decision, token).ConfigureAwait(false);
+            if (accessResult != null && !accessResult.Allowed)
+            {
+                string message = !String.IsNullOrWhiteSpace(accessResult.ReasonText)
+                    ? accessResult.ReasonText
+                    : "Model access policy denied the request.";
+                Deny(decision, 403, accessResult.ReasonCode ?? "ModelAccessDenied", message);
+                return FinalizeMetrics(result, vmr, requestContext, decisionStart);
+            }
 
             LoadBalancingPolicy policy = await ResolvePolicyAsync(vmr, decision, token).ConfigureAwait(false);
             result.Policy = policy;
@@ -307,6 +340,259 @@ namespace Conductor.Server.Services
         public async Task<EffectiveVirtualModelRunnerConfiguration> BuildEffectiveConfigurationAsync(VirtualModelRunner vmr, CancellationToken token = default)
         {
             return await _EffectiveConfigurationBuilder.BuildAsync(vmr, token).ConfigureAwait(false);
+        }
+
+        private async Task<ModelAccessEvaluationResult> EvaluateModelAccessAsync(
+            VirtualModelRunner vmr,
+            UrlContext urlContext,
+            RequestContext requestContext,
+            RoutingModelMutationResult resolution,
+            RoutingDecision decision,
+            CancellationToken token)
+        {
+            if (_ModelAccessControlService == null)
+            {
+                AddTimeline(decision, "ModelAccess", "Model Access", "Skipped", "No model access control service is configured.");
+                return null;
+            }
+
+            ModelAccessEvaluationContext context = await BuildModelAccessEvaluationContextAsync(vmr, urlContext, requestContext, resolution, token).ConfigureAwait(false);
+            ModelAccessEvaluationResult accessResult = await _ModelAccessControlService.EvaluateAsync(context, token).ConfigureAwait(false);
+            ApplyModelAccessResult(decision, context, accessResult);
+            AddModelAccessTimeline(decision, accessResult);
+            AuditModelAccessDecision(vmr, requestContext, accessResult);
+            return accessResult;
+        }
+
+        private void AuditModelAccessDecision(VirtualModelRunner vmr, RequestContext requestContext, ModelAccessEvaluationResult accessResult)
+        {
+            if (accessResult == null || (accessResult.Allowed && !accessResult.WouldDeny))
+            {
+                return;
+            }
+
+            _Logging.Warn(
+                _Header
+                + "model access " + (accessResult.WouldDeny ? "would-deny" : "denied")
+                + " tenant=" + (vmr?.TenantId ?? String.Empty)
+                + " vmr=" + (vmr?.Id ?? String.Empty)
+                + " user=" + (requestContext?.UserId ?? String.Empty)
+                + " credential=" + (requestContext?.CredentialId ?? String.Empty)
+                + " policy=" + (accessResult.PolicyId ?? String.Empty)
+                + " rule=" + (accessResult.RuleId ?? String.Empty)
+                + " mode=" + accessResult.Mode
+                + " decision=" + accessResult.Decision
+                + " reason=" + (accessResult.ReasonCode ?? String.Empty));
+        }
+
+        private async Task<ModelAccessEvaluationContext> BuildModelAccessEvaluationContextAsync(
+            VirtualModelRunner vmr,
+            UrlContext urlContext,
+            RequestContext requestContext,
+            RoutingModelMutationResult resolution,
+            CancellationToken token)
+        {
+            ModelAccessEvaluationContext context = new ModelAccessEvaluationContext
+            {
+                TenantId = vmr.TenantId,
+                UserId = requestContext.UserId,
+                IsUserAdmin = requestContext.IsUserAdmin,
+                IsUserTenantAdmin = requestContext.IsUserTenantAdmin,
+                CredentialId = requestContext.CredentialId,
+                VirtualModelRunnerId = vmr.Id,
+                ModelAccessPolicyId = vmr.ModelAccessPolicyId,
+                RequestedModel = resolution.RequestedModel,
+                EffectiveModel = resolution.EffectiveModel,
+                ModelDefinitionId = resolution.ModelDefinition?.Id,
+                ModelDefinitionName = resolution.ModelDefinition?.Name,
+                ModelLabels = resolution.ModelDefinition?.Labels,
+                Action = ModelAccessControlService.MapAction(urlContext.RequestType),
+                RequestType = urlContext.RequestType,
+                ApiType = urlContext.ApiType
+            };
+
+            if (!String.IsNullOrWhiteSpace(context.CredentialId))
+            {
+                Credential credential = await _Database.Credential.ReadAsync(vmr.TenantId, context.CredentialId, token).ConfigureAwait(false);
+                if (credential != null)
+                {
+                    context.CredentialLabels = credential.Labels;
+                    if (String.IsNullOrWhiteSpace(context.UserId))
+                    {
+                        context.UserId = credential.UserId;
+                    }
+                }
+            }
+
+            if (!String.IsNullOrWhiteSpace(context.UserId))
+            {
+                UserMaster user = await _Database.User.ReadAsync(vmr.TenantId, context.UserId, token).ConfigureAwait(false);
+                if (user != null)
+                {
+                    context.UserLabels = user.Labels;
+                    context.IsUserAdmin = user.IsAdmin;
+                    context.IsUserTenantAdmin = user.IsTenantAdmin;
+                }
+            }
+
+            return context;
+        }
+
+        private static void ApplyModelResolution(RoutingExecutionResult result, RoutingDecision decision, RoutingModelMutationResult resolution)
+        {
+            result.RequestBody = resolution.RequestBody;
+            result.ModelDefinition = resolution.ModelDefinition;
+            result.ModelConfiguration = resolution.ModelConfiguration;
+            result.EffectiveModel = resolution.EffectiveModel;
+
+            decision.RequestedModel = resolution.RequestedModel;
+            decision.EffectiveModel = resolution.EffectiveModel;
+            decision.ModelDefinitionId = resolution.ModelDefinition?.Id;
+            decision.ModelDefinitionName = resolution.ModelDefinition?.Name;
+            decision.ModelConfigurationId = resolution.ModelConfiguration?.Id;
+            decision.ModelConfigurationName = resolution.ModelConfiguration?.Name;
+        }
+
+        private static void ApplyModelAccessResult(RoutingDecision decision, ModelAccessEvaluationContext context, ModelAccessEvaluationResult accessResult)
+        {
+            if (accessResult == null) return;
+
+            decision.ModelAccessPolicyId = accessResult.PolicyId ?? context.ModelAccessPolicyId;
+            decision.ModelAccessPolicyName = accessResult.PolicyName;
+            decision.ModelAccessRuleId = accessResult.RuleId;
+            decision.ModelAccessRuleName = accessResult.RuleName;
+            decision.ModelAccessDecision = accessResult.Decision;
+            decision.ModelAccessWouldDeny = accessResult.WouldDeny;
+        }
+
+        private static void AddModelAccessTimeline(RoutingDecision decision, ModelAccessEvaluationResult accessResult)
+        {
+            if (accessResult == null) return;
+
+            AddModelAccessPolicyLoadTimeline(decision, accessResult);
+            AddModelAccessDecisionSourceTimeline(decision, accessResult);
+            AddModelAccessModeTimeline(decision, accessResult);
+            AddModelAccessEnforcementTimeline(decision, accessResult);
+
+            string outcome;
+            if (accessResult.Mode == ModelAccessEnforcementModeEnum.Disabled)
+            {
+                outcome = "Skipped";
+            }
+            else if (accessResult.WouldDeny)
+            {
+                outcome = "WouldDeny";
+            }
+            else
+            {
+                outcome = accessResult.Allowed ? "Passed" : "Denied";
+            }
+
+            Dictionary<string, string> attributes = new Dictionary<string, string>
+            {
+                { "Mode", accessResult.Mode.ToString() },
+                { "Decision", accessResult.Decision.ToString() },
+                { "PolicyId", accessResult.PolicyId ?? String.Empty },
+                { "RuleId", accessResult.RuleId ?? String.Empty },
+                { "ReasonCode", accessResult.ReasonCode ?? String.Empty },
+                { "WouldDeny", accessResult.WouldDeny ? "true" : "false" }
+            };
+
+            AddTimeline(decision, "ModelAccess", "Model Access", outcome, accessResult.ReasonText ?? accessResult.ReasonCode ?? "Model access evaluated.", attributes);
+        }
+
+        private static void AddModelAccessPolicyLoadTimeline(RoutingDecision decision, ModelAccessEvaluationResult accessResult)
+        {
+            Dictionary<string, string> attributes = new Dictionary<string, string>
+            {
+                { "PolicyId", accessResult.PolicyId ?? String.Empty },
+                { "PolicyName", accessResult.PolicyName ?? String.Empty },
+                { "ReasonCode", accessResult.ReasonCode ?? String.Empty }
+            };
+
+            if (accessResult.Mode == ModelAccessEnforcementModeEnum.Disabled)
+            {
+                AddTimeline(decision, "ModelAccessPolicyLoad", "Model Access Policy Load", "Skipped", "Model access control is disabled.", attributes);
+                return;
+            }
+
+            if (String.Equals(accessResult.ReasonCode, "AdministratorBypass", StringComparison.Ordinal))
+            {
+                AddTimeline(decision, "ModelAccessPolicyLoad", "Model Access Policy Load", "Skipped", "Administrator bypass was applied before policy loading.", attributes);
+                return;
+            }
+
+            if (String.Equals(accessResult.ReasonCode, "NoModelAccessPolicy", StringComparison.Ordinal))
+            {
+                AddTimeline(decision, "ModelAccessPolicyLoad", "Model Access Policy Load", "Skipped", "No model access policy is attached.", attributes);
+                return;
+            }
+
+            if (String.Equals(accessResult.ReasonCode, "ModelAccessPolicyMissing", StringComparison.Ordinal)
+                || String.Equals(accessResult.ReasonCode, "ModelAccessPolicyInactive", StringComparison.Ordinal))
+            {
+                AddTimeline(decision, "ModelAccessPolicyLoad", "Model Access Policy Load", "Warning", accessResult.ReasonText ?? accessResult.ReasonCode, attributes);
+                return;
+            }
+
+            string outcome = String.IsNullOrWhiteSpace(accessResult.PolicyId) ? "Skipped" : "Passed";
+            string message = String.IsNullOrWhiteSpace(accessResult.PolicyId)
+                ? "No policy was loaded."
+                : "Loaded the active model access policy.";
+            AddTimeline(decision, "ModelAccessPolicyLoad", "Model Access Policy Load", outcome, message, attributes);
+        }
+
+        private static void AddModelAccessDecisionSourceTimeline(RoutingDecision decision, ModelAccessEvaluationResult accessResult)
+        {
+            Dictionary<string, string> attributes = new Dictionary<string, string>
+            {
+                { "Decision", accessResult.Decision.ToString() },
+                { "DefaultSource", accessResult.DefaultSource ?? String.Empty },
+                { "RuleId", accessResult.RuleId ?? String.Empty },
+                { "RuleName", accessResult.RuleName ?? String.Empty },
+                { "Effect", accessResult.Effect?.ToString() ?? String.Empty },
+                { "ReasonCode", accessResult.ReasonCode ?? String.Empty }
+            };
+
+            if (!String.IsNullOrWhiteSpace(accessResult.RuleId))
+            {
+                AddTimeline(decision, "ModelAccessRuleMatch", "Model Access Rule Match", accessResult.Effect == ModelAccessRuleEffectEnum.Deny ? "Denied" : "Passed", "Matched model access rule '" + (accessResult.RuleName ?? accessResult.RuleId) + "'.", attributes);
+                return;
+            }
+
+            AddTimeline(decision, "ModelAccessDefaultDecision", "Model Access Default Decision", accessResult.Decision == ModelAccessDefaultDecisionEnum.Deny ? "Denied" : "Passed", "Applied the " + (accessResult.DefaultSource ?? "unknown") + " default model access decision.", attributes);
+        }
+
+        private static void AddModelAccessModeTimeline(RoutingDecision decision, ModelAccessEvaluationResult accessResult)
+        {
+            if (accessResult.Mode != ModelAccessEnforcementModeEnum.Monitor)
+            {
+                return;
+            }
+
+            Dictionary<string, string> attributes = new Dictionary<string, string>
+            {
+                { "Decision", accessResult.Decision.ToString() },
+                { "WouldDeny", accessResult.WouldDeny ? "true" : "false" }
+            };
+
+            AddTimeline(decision, "ModelAccessMonitorMode", "Model Access Monitor Mode", accessResult.WouldDeny ? "WouldDeny" : "Passed", accessResult.WouldDeny ? "Monitor mode observed that enforcement would deny this request." : "Monitor mode observed that enforcement would allow this request.", attributes);
+        }
+
+        private static void AddModelAccessEnforcementTimeline(RoutingDecision decision, ModelAccessEvaluationResult accessResult)
+        {
+            Dictionary<string, string> attributes = new Dictionary<string, string>
+            {
+                { "Mode", accessResult.Mode.ToString() },
+                { "Decision", accessResult.Decision.ToString() },
+                { "Allowed", accessResult.Allowed ? "true" : "false" },
+                { "WouldDeny", accessResult.WouldDeny ? "true" : "false" }
+            };
+
+            string outcome = accessResult.Mode == ModelAccessEnforcementModeEnum.Disabled
+                ? "Skipped"
+                : accessResult.Allowed ? "Passed" : "Denied";
+            AddTimeline(decision, "ModelAccessEnforcement", "Model Access Enforcement", outcome, accessResult.Allowed ? "Model access enforcement allowed the request to continue." : "Model access enforcement blocked the request.", attributes);
         }
 
         private RoutingExecutionResult FinalizeMetrics(RoutingExecutionResult result, VirtualModelRunner vmr, RequestContext requestContext, DateTime decisionStart)
@@ -736,14 +1022,15 @@ namespace Conductor.Server.Services
             }
         }
 
-        private static void AddTimeline(RoutingDecision decision, string code, string title, string outcome, string message)
+        private static void AddTimeline(RoutingDecision decision, string code, string title, string outcome, string message, Dictionary<string, string> attributes = null)
         {
             decision.Timeline.Add(new RoutingDecisionStage
             {
                 Code = code,
                 Title = title,
                 Outcome = outcome,
-                Message = message
+                Message = message,
+                Attributes = attributes ?? new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase)
             });
         }
 

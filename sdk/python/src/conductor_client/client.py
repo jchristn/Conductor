@@ -66,6 +66,44 @@ class ConductorClient:
     def validate_load_balancing_policy(self, draft: dict[str, Any], existing_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/loadbalancingpolicies/validate{self._existing_id_query(existing_id)}", draft)
 
+    def list_model_access_policies(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/modelaccesspolicies{self._query_string(filters)}")
+
+    def get_model_access_policy(self, policy_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/modelaccesspolicies/{policy_id}{self._tenant_query(tenant_id)}")
+
+    def create_model_access_policy(self, policy: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/modelaccesspolicies", policy)
+
+    def update_model_access_policy(self, policy_id: str, policy: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PUT", f"/v1.0/modelaccesspolicies/{policy_id}", policy)
+
+    def delete_model_access_policy(
+        self,
+        policy_id: str,
+        tenant_id: str | None = None,
+        force_detach: bool = False,
+    ) -> dict[str, Any] | None:
+        filters = {
+            "tenantId": tenant_id,
+            "forceDetach": "true" if force_detach else None,
+        }
+        return self._request("DELETE", f"/v1.0/modelaccesspolicies/{policy_id}{self._query_string(filters)}")
+
+    def validate_model_access_policy(self, policy: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/modelaccesspolicies/validate", policy)
+
+    def evaluate_model_access_policy(
+        self,
+        policy_id: str,
+        context: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/modelaccesspolicies/{policy_id}/evaluate{self._tenant_query(tenant_id)}", context or {})
+
+    def get_effective_model_access(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/modelaccesspolicies/effective{self._query_string(filters)}")
+
     def drain_model_runner_endpoint(self, endpoint_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/modelrunnerendpoints/{endpoint_id}/drain{self._tenant_query(tenant_id)}")
 

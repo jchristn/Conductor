@@ -2,6 +2,7 @@ namespace Test.Shared.Core.Settings
 {
     using System;
     using System.Collections.Generic;
+    using Conductor.Core.Enums;
     using Conductor.Core.Settings;
     using FluentAssertions;
     
@@ -59,6 +60,20 @@ namespace Test.Shared.Core.Settings
             settings.RequestHistory.Should().NotBeNull();
             settings.RequestHistory.Enabled.Should().BeTrue();
         }
+        public void ModelAccessControl_HasCompatibleDefaultValue()
+        {
+            ServerSettings settings = new ServerSettings();
+            settings.ModelAccessControl.Should().NotBeNull();
+            settings.ModelAccessControl.Enabled.Should().BeFalse();
+            settings.ModelAccessControl.Mode.Should().Be(ModelAccessEnforcementModeEnum.Disabled);
+            settings.ModelAccessControl.DefaultDecision.Should().Be(ModelAccessDefaultDecisionEnum.Permit);
+            settings.ModelAccessControl.RequireCredentialForProxy.Should().BeFalse();
+            settings.ModelAccessControl.UnknownModelBehavior.Should().Be(ModelAccessUnknownModelBehaviorEnum.Deny);
+            settings.ModelAccessControl.ListModelsBehavior.Should().Be(ModelAccessListModelsBehaviorEnum.Filter);
+            settings.ModelAccessControl.CacheTtlMs.Should().Be(30000);
+            settings.ModelAccessControl.AllowAdministratorBypass.Should().BeFalse();
+            settings.ModelAccessControl.AllowGlobalAdministratorBypass.Should().BeFalse();
+        }
         public void AdminApiKeys_HasDefaultValue()
         {
             ServerSettings settings = new ServerSettings();
@@ -87,6 +102,13 @@ namespace Test.Shared.Core.Settings
             ServerSettings settings = new ServerSettings();
             settings.Webserver.Cors = null;
             settings.Webserver.Cors.Should().NotBeNull();
+        }
+        public void ModelAccessControl_WhenSetToNull_BecomesNewSettings()
+        {
+            ServerSettings settings = new ServerSettings();
+            settings.ModelAccessControl = null;
+            settings.ModelAccessControl.Should().NotBeNull();
+            settings.ModelAccessControl.Mode.Should().Be(ModelAccessEnforcementModeEnum.Disabled);
         }
 
         #endregion
@@ -134,6 +156,33 @@ namespace Test.Shared.Core.Settings
             settings.Webserver.Cors = cors;
             settings.Webserver.Cors.Enabled.Should().BeTrue();
             settings.Webserver.Cors.AllowedOrigins.Should().Contain("*");
+        }
+        public void CanAssignModelAccessControlSettings()
+        {
+            ServerSettings settings = new ServerSettings();
+            ModelAccessControlSettings modelAccessControl = new ModelAccessControlSettings
+            {
+                Enabled = true,
+                Mode = ModelAccessEnforcementModeEnum.Monitor,
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Deny,
+                CacheTtlMs = 1000
+            };
+
+            settings.ModelAccessControl = modelAccessControl;
+
+            settings.ModelAccessControl.Enabled.Should().BeTrue();
+            settings.ModelAccessControl.Mode.Should().Be(ModelAccessEnforcementModeEnum.Monitor);
+            settings.ModelAccessControl.DefaultDecision.Should().Be(ModelAccessDefaultDecisionEnum.Deny);
+            settings.ModelAccessControl.CacheTtlMs.Should().Be(1000);
+        }
+        public void ModelAccessControlSettings_NegativeCacheTtl_RevertsToDefault()
+        {
+            ModelAccessControlSettings modelAccessControl = new ModelAccessControlSettings
+            {
+                CacheTtlMs = -1
+            };
+
+            modelAccessControl.CacheTtlMs.Should().Be(30000);
         }
 
         #endregion

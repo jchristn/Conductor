@@ -204,6 +204,10 @@ function RequestHistory() {
     requestorUserGuid: '',
     credentialGuid: '',
     loadBalancingPolicyGuid: '',
+    modelAccessPolicyGuid: '',
+    modelAccessRuleGuid: '',
+    modelAccessDecision: '',
+    modelAccessWouldDeny: '',
     modelName: '',
     mutationSummary: '',
     denialReasonCode: '',
@@ -437,6 +441,10 @@ function RequestHistory() {
       requestorUserGuid: '',
       credentialGuid: '',
       loadBalancingPolicyGuid: '',
+      modelAccessPolicyGuid: '',
+      modelAccessRuleGuid: '',
+      modelAccessDecision: '',
+      modelAccessWouldDeny: '',
       modelName: '',
       mutationSummary: '',
       denialReasonCode: '',
@@ -642,6 +650,20 @@ function RequestHistory() {
       render: (item) => item.ModelEndpointName || getEndpointName(item.ModelEndpointGuid) || '-'
     },
     {
+      key: 'ModelAccessDecision',
+      label: 'Access',
+      tooltip: 'Model access policy decision recorded for this request',
+      width: '110px',
+      render: (item) => item.ModelAccessDecision
+        ? (
+          <span className={`service-state-badge ${item.ModelAccessDecision === 'Deny' ? 'warning' : 'success'}`}>
+            {item.ModelAccessWouldDeny ? 'Would Deny' : item.ModelAccessDecision}
+          </span>
+        )
+        : <span className="text-muted">-</span>,
+      filterValue: (item) => item.ModelAccessWouldDeny ? 'would-deny' : item.ModelAccessDecision || 'none'
+    },
+    {
       key: 'RequestorSourceIp',
       label: 'Source IP',
       tooltip: 'IP address of the requestor',
@@ -834,6 +856,46 @@ function RequestHistory() {
               onChange={(e) => handleFilterChange('denialReasonCode', e.target.value)}
               placeholder="AllEndpointsAtCapacity"
             />
+          </div>
+          <div className="filter-group">
+            <label>Access Policy:</label>
+            <input
+              type="text"
+              value={filters.modelAccessPolicyGuid}
+              onChange={(e) => handleFilterChange('modelAccessPolicyGuid', e.target.value)}
+              placeholder="map_..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>Access Rule:</label>
+            <input
+              type="text"
+              value={filters.modelAccessRuleGuid}
+              onChange={(e) => handleFilterChange('modelAccessRuleGuid', e.target.value)}
+              placeholder="mar_..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>Access:</label>
+            <select
+              value={filters.modelAccessDecision}
+              onChange={(e) => handleFilterChange('modelAccessDecision', e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="Permit">Permit</option>
+              <option value="Deny">Deny</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Would Deny:</label>
+            <select
+              value={filters.modelAccessWouldDeny}
+              onChange={(e) => handleFilterChange('modelAccessWouldDeny', e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
           </div>
           <div className="filter-group">
             <label>Affinity:</label>
@@ -1060,6 +1122,17 @@ function RequestHistory() {
                   <DetailItem label="Policy" tooltip="Load-balancing policy used during routing, if one was attached">
                     {detailData.LoadBalancingPolicyName || detailData.LoadBalancingPolicyGuid || '-'}
                   </DetailItem>
+                  <DetailItem label="Access Policy" tooltip="Model access policy evaluated for this request, if one was attached">
+                    {detailData.ModelAccessPolicyName || detailData.ModelAccessPolicyGuid || '-'}
+                  </DetailItem>
+                  <DetailItem label="Access Rule" tooltip="Model access rule that matched the request, or Default when the policy default decided it">
+                    {detailData.ModelAccessRuleName || detailData.ModelAccessRuleGuid || (detailData.ModelAccessDecision ? 'Default' : '-')}
+                  </DetailItem>
+                  <DetailItem label="Access Decision" tooltip="Model access decision recorded by the routing engine">
+                    {detailData.ModelAccessDecision
+                      ? `${detailData.ModelAccessDecision}${detailData.ModelAccessWouldDeny ? ' (would deny)' : ''}`
+                      : '-'}
+                  </DetailItem>
                   <DetailItem label="Request Type" tooltip="Conductor request type resolved from the HTTP method and URL path">
                     {detailData.RequestType || '-'}
                   </DetailItem>
@@ -1088,6 +1161,8 @@ function RequestHistory() {
                       </span>
                       <span className="service-state-badge neutral" title="HTTP status code Conductor associated with the routing decision">HTTP {detailData.RoutingDecision.HttpStatusCode}</span>
                       {detailData.RoutingDecision.PolicyFallbackUsed && <span className="service-state-badge warning" title="The attached load-balancing policy could not select a route, so Conductor used fallback routing">Policy Fallback</span>}
+                      {detailData.RoutingDecision.ModelAccessDecision && <span className={`service-state-badge ${detailData.RoutingDecision.ModelAccessDecision === 'Deny' ? 'warning' : 'success'}`} title="Model access policy decision recorded for this routing decision">Access {detailData.RoutingDecision.ModelAccessDecision}</span>}
+                      {detailData.RoutingDecision.ModelAccessWouldDeny && <span className="service-state-badge warning" title="Monitor mode allowed the request but would deny it in enforce mode">Would Deny</span>}
                     </div>
 
                     <div className="detail-table-container">

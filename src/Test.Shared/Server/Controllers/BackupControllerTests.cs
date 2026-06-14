@@ -2,7 +2,9 @@ namespace Test.Shared.Server.Controllers
 {
     using System.Collections.Generic;
     using System.Threading.Tasks;
+    using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Settings;
     using Conductor.Server.Controllers;
     using Conductor.Server.Services;
     using FluentAssertions;
@@ -13,6 +15,7 @@ namespace Test.Shared.Server.Controllers
     public class BackupControllerTests : ControllerTestBase
     {
         private BackupController _Controller;
+        private ModelAccessControlService _ModelAccessService;
 
         /// <summary>
         /// Initialize the test.
@@ -23,7 +26,15 @@ namespace Test.Shared.Server.Controllers
             await InitializeDatabaseAsync().ConfigureAwait(false);
             RoutingDecisionService routingDecisionService = new RoutingDecisionService(Database, Logging);
             ConfigurationValidationService validationService = new ConfigurationValidationService(Database, Logging, routingDecisionService);
-            _Controller = new BackupController(Database, AuthService, Serializer, Logging, validationService);
+            _ModelAccessService = new ModelAccessControlService(Database, Logging, new ModelAccessControlSettings
+            {
+                Enabled = true,
+                Mode = ModelAccessEnforcementModeEnum.Enforce,
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Permit,
+                UnknownModelBehavior = ModelAccessUnknownModelBehaviorEnum.Permit,
+                CacheTtlMs = 600000
+            });
+            _Controller = new BackupController(Database, AuthService, Serializer, Logging, validationService, _ModelAccessService);
         }
 
         /// <summary>
@@ -56,6 +67,216 @@ namespace Test.Shared.Server.Controllers
 
             result.IsValid.Should().BeFalse();
             result.Errors.Should().ContainSingle(item => item.Contains("Strict mode requires at least one attached model definition."));
+        }
+
+        public async Task CreateBackup_IncludesModelAccessPoliciesAndRules()
+        {
+            ModelAccessPolicy policy = await Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Backup ACL",
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Deny
+            }).ConfigureAwait(false);
+
+            ModelAccessRule rule = await Database.ModelAccessPolicy.CreateRuleAsync(new ModelAccessRule
+            {
+                TenantId = TestTenantId,
+                PolicyId = policy.Id,
+                Name = "Allow completions",
+                Effect = ModelAccessRuleEffectEnum.Allow,
+                Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Completions }
+            }).ConfigureAwait(false);
+
+            await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = TestTenantId,
+                Name = "ACL VMR",
+                BasePath = "/v1.0/api/acl-backup/",
+                ModelAccessPolicyId = policy.Id
+            }).ConfigureAwait(false);
+
+            BackupPackage package = await _Controller.CreateBackup("admin@example.com").ConfigureAwait(false);
+
+            package.ModelAccessPolicies.Should().ContainSingle(item => item.Id == policy.Id);
+            package.ModelAccessRules.Should().ContainSingle(item => item.Id == rule.Id);
+            package.VirtualModelRunners.Should().ContainSingle(item => item.ModelAccessPolicyId == policy.Id);
+
+            ValidationResult validation = await _Controller.ValidateBackup(package).ConfigureAwait(false);
+            validation.Summary.ModelAccessPolicyCount.Should().Be(1);
+            validation.Summary.ModelAccessRuleCount.Should().Be(1);
+        }
+
+        public async Task ValidateBackup_WithMissingModelAccessRulePolicy_ReturnsValidationError()
+        {
+            BackupPackage package = new BackupPackage
+            {
+                SchemaVersion = "1.0",
+                ModelAccessRules = new List<ModelAccessRule>
+                {
+                    new ModelAccessRule
+                    {
+                        TenantId = TestTenantId,
+                        PolicyId = "map_missing",
+                        Name = "Broken rule",
+                        Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Completions }
+                    }
+                }
+            };
+
+            ValidationResult result = await _Controller.ValidateBackup(package).ConfigureAwait(false);
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().ContainSingle(item => item.Contains("references missing policy"));
+        }
+
+        public async Task ValidateBackup_WithCrossTenantModelAccessRuleReference_ReturnsValidationError()
+        {
+            TenantMetadata otherTenant = await Database.Tenant.CreateAsync(new TenantMetadata
+            {
+                Name = "Other Tenant",
+                Active = true
+            }).ConfigureAwait(false);
+            ModelDefinition otherTenantModel = await Database.ModelDefinition.CreateAsync(new ModelDefinition
+            {
+                TenantId = otherTenant.Id,
+                Name = "other-tenant-model",
+                Active = true
+            }).ConfigureAwait(false);
+            ModelAccessPolicy policy = new ModelAccessPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Cross Tenant Policy",
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Deny
+            };
+
+            BackupPackage package = new BackupPackage
+            {
+                SchemaVersion = "1.0",
+                ModelAccessPolicies = new List<ModelAccessPolicy> { policy },
+                ModelAccessRules = new List<ModelAccessRule>
+                {
+                    new ModelAccessRule
+                    {
+                        TenantId = TestTenantId,
+                        PolicyId = policy.Id,
+                        Name = "Cross tenant model",
+                        Effect = ModelAccessRuleEffectEnum.Allow,
+                        SubjectType = ModelAccessSubjectTypeEnum.Any,
+                        ResourceType = ModelAccessResourceTypeEnum.ModelDefinition,
+                        ResourceId = otherTenantModel.Id,
+                        Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Completions }
+                    }
+                }
+            };
+
+            ValidationResult result = await _Controller.ValidateBackup(package).ConfigureAwait(false);
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().ContainSingle(item => item.Contains("cross-tenant model definition"));
+        }
+
+        public async Task RestoreBackup_WithCrossTenantModelAccessRuleReference_Fails()
+        {
+            TenantMetadata tenant = await Database.Tenant.ReadAsync(TestTenantId).ConfigureAwait(false);
+            TenantMetadata otherTenant = await Database.Tenant.CreateAsync(new TenantMetadata
+            {
+                Name = "Restore Other Tenant",
+                Active = true
+            }).ConfigureAwait(false);
+            ModelDefinition otherTenantModel = await Database.ModelDefinition.CreateAsync(new ModelDefinition
+            {
+                TenantId = otherTenant.Id,
+                Name = "restore-other-tenant-model",
+                Active = true
+            }).ConfigureAwait(false);
+            ModelAccessPolicy policy = new ModelAccessPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Restore Cross Tenant Policy",
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Deny
+            };
+
+            BackupPackage package = new BackupPackage
+            {
+                SchemaVersion = "1.0",
+                Tenants = new List<TenantMetadata> { tenant },
+                ModelAccessPolicies = new List<ModelAccessPolicy> { policy },
+                ModelAccessRules = new List<ModelAccessRule>
+                {
+                    new ModelAccessRule
+                    {
+                        TenantId = TestTenantId,
+                        PolicyId = policy.Id,
+                        Name = "Cross tenant model",
+                        Effect = ModelAccessRuleEffectEnum.Allow,
+                        SubjectType = ModelAccessSubjectTypeEnum.Any,
+                        ResourceType = ModelAccessResourceTypeEnum.ModelDefinition,
+                        ResourceId = otherTenantModel.Id,
+                        Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Completions }
+                    }
+                }
+            };
+
+            RestoreResult result = await _Controller.RestoreBackup(new RestoreRequest
+            {
+                Package = package,
+                Options = new RestoreOptions
+                {
+                    ConflictResolution = ConflictResolutionMode.Skip
+                }
+            }).ConfigureAwait(false);
+
+            result.Success.Should().BeFalse();
+            result.ErrorMessage.Should().Contain("cross-tenant model definition");
+        }
+
+        public async Task RestoreBackup_WithOverwrittenModelAccessPolicy_InvalidatesEvaluatorCache()
+        {
+            TenantMetadata tenant = await Database.Tenant.ReadAsync(TestTenantId).ConfigureAwait(false);
+            ModelAccessPolicy policy = await Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Cached Restore Policy",
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Permit
+            }).ConfigureAwait(false);
+            ModelAccessEvaluationContext context = new ModelAccessEvaluationContext
+            {
+                TenantId = TestTenantId,
+                ModelAccessPolicyId = policy.Id,
+                RequestedModel = "llama3",
+                EffectiveModel = "llama3",
+                RequestType = RequestTypeEnum.OpenAIChatCompletions
+            };
+
+            (await _ModelAccessService.EvaluateAsync(context).ConfigureAwait(false)).Decision.Should().Be(ModelAccessDefaultDecisionEnum.Permit);
+
+            BackupPackage package = new BackupPackage
+            {
+                SchemaVersion = "1.0",
+                Tenants = new List<TenantMetadata> { tenant },
+                ModelAccessPolicies = new List<ModelAccessPolicy>
+                {
+                    new ModelAccessPolicy
+                    {
+                        Id = policy.Id,
+                        TenantId = TestTenantId,
+                        Name = "Cached Restore Policy",
+                        DefaultDecision = ModelAccessDefaultDecisionEnum.Deny
+                    }
+                }
+            };
+
+            RestoreResult result = await _Controller.RestoreBackup(new RestoreRequest
+            {
+                Package = package,
+                Options = new RestoreOptions
+                {
+                    ConflictResolution = ConflictResolutionMode.Overwrite
+                }
+            }).ConfigureAwait(false);
+
+            result.Success.Should().BeTrue();
+            (await _ModelAccessService.EvaluateAsync(context).ConfigureAwait(false)).Decision.Should().Be(ModelAccessDefaultDecisionEnum.Deny);
         }
     }
 }

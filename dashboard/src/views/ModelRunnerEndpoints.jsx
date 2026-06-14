@@ -12,6 +12,7 @@ import HealthHistogram from '../components/HealthHistogram';
 import SensitiveInput from '../components/SensitiveInput';
 import LoadModelModal from '../components/LoadModelModal';
 import OllamaModelManagerModal from '../components/OllamaModelManagerModal';
+import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
 
 function formatBytes(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return '-';
@@ -107,8 +108,8 @@ function ModelRunnerEndpoints() {
     UseSsl: false,
     TimeoutMs: 300000,
     Active: true,
-    LabelsJson: '[]',
-    TagsJson: '{}',
+    Labels: labelsFromValue([]),
+    Tags: tagsFromValue({}),
     HealthCheckUrl: '/',
     HealthCheckMethod: 'GET',
     HealthCheckIntervalMs: 5000,
@@ -400,8 +401,8 @@ function ModelRunnerEndpoints() {
       UseSsl: false,
       TimeoutMs: 300000,
       Active: true,
-      LabelsJson: '[]',
-      TagsJson: '{}',
+      Labels: labelsFromValue([]),
+      Tags: tagsFromValue({}),
       HealthCheckUrl: '/',
       HealthCheckMethod: 'GET',
       HealthCheckIntervalMs: 5000,
@@ -447,8 +448,8 @@ function ModelRunnerEndpoints() {
       UseSsl: endpoint.UseSsl || false,
       TimeoutMs: endpoint.TimeoutMs || 300000,
       Active: endpoint.Active !== false,
-      LabelsJson: JSON.stringify(endpoint.Labels || [], null, 2),
-      TagsJson: JSON.stringify(endpoint.Tags || {}, null, 2),
+      Labels: labelsFromValue(endpoint.Labels),
+      Tags: tagsFromValue(endpoint.Tags),
       HealthCheckUrl: endpoint.HealthCheckUrl || '/',
       HealthCheckMethod: endpoint.HealthCheckMethod || 'GET',
       HealthCheckIntervalMs: endpoint.HealthCheckIntervalMs || 5000,
@@ -514,21 +515,7 @@ function ModelRunnerEndpoints() {
   };
 
   const buildEndpointPayload = () => {
-    let labels = [];
-    let tags = {};
     const telemetrySelectors = parseTelemetrySelectors(formData.RigMonitorTelemetrySelectors);
-
-    try {
-      labels = JSON.parse(formData.LabelsJson || '[]');
-    } catch (err) {
-      throw new Error('Invalid JSON in Labels');
-    }
-
-    try {
-      tags = JSON.parse(formData.TagsJson || '{}');
-    } catch (err) {
-      throw new Error('Invalid JSON in Tags');
-    }
 
     return {
       TenantId: formData.TenantId || null,
@@ -540,8 +527,8 @@ function ModelRunnerEndpoints() {
       UseSsl: formData.UseSsl,
       TimeoutMs: parseInt(formData.TimeoutMs),
       Active: formData.Active,
-      Labels: labels,
-      Tags: tags,
+      Labels: labelsToPayload(formData.Labels),
+      Tags: tagsToPayload(formData.Tags),
       HealthCheckUrl: formData.HealthCheckUrl,
       HealthCheckMethod: formData.HealthCheckMethod,
       HealthCheckIntervalMs: parseInt(formData.HealthCheckIntervalMs),
@@ -1256,29 +1243,13 @@ function ModelRunnerEndpoints() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="labels" title="String array for categorization and filtering">Labels (JSON)</label>
-            <textarea
-              id="labels"
-              value={formData.LabelsJson}
-              onChange={(e) => setFormData({ ...formData, LabelsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="[]"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tags" title="Key-value pairs for custom metadata">Tags (JSON)</label>
-            <textarea
-              id="tags"
-              value={formData.TagsJson}
-              onChange={(e) => setFormData({ ...formData, TagsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="{}"
-            />
-          </div>
+          <LabelsTagsEditor
+            labels={formData.Labels}
+            tags={formData.Tags}
+            onLabelsChange={(Labels) => setFormData({ ...formData, Labels })}
+            onTagsChange={(Tags) => setFormData({ ...formData, Tags })}
+            idPrefix="model-runner-endpoint"
+          />
 
           <div className="form-group checkbox-group">
             <label title="Connect using HTTPS instead of HTTP">

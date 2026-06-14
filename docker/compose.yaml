@@ -1,4 +1,40 @@
 services:
+  conductor-postgres:
+    image: postgres:16-alpine
+    container_name: conductor-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: conductor
+      POSTGRES_USER: conductor
+      POSTGRES_PASSWORD: conductor
+    volumes:
+      - conductor-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conductor -d conductor"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  conductor-db-init:
+    image: postgres:16-alpine
+    container_name: conductor-db-init
+    depends_on:
+      conductor-postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: conductor-postgres
+      PGPORT: 5432
+      PGDATABASE: conductor
+      PGUSER: conductor
+      PGPASSWORD: conductor
+    volumes:
+      - ./postgres/init.sql:/init/init.sql:ro
+    command: ["sh", "-c", "psql -v ON_ERROR_STOP=1 -f /init/init.sql"]
+    restart: "no"
+
   conductor:
     build:
       context: ..
@@ -12,6 +48,9 @@ services:
       - ./logs:/app/logs
     environment:
       - DOTNET_RUNNING_IN_CONTAINER=true
+    depends_on:
+      conductor-db-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/"]
@@ -28,8 +67,11 @@ services:
     ports:
       - "9100:9100"
     environment:
-      - CONDUCTOR_SERVER_URL=http://conductor:9000
+      - CONDUCTOR_SERVER_URL=http://localhost:9000
     depends_on:
       conductor:
         condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  conductor-postgres-data:

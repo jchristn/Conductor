@@ -17,6 +17,7 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Health Checking**: Automatic background health monitoring of endpoints with configurable thresholds and shared probes for duplicate health URLs
 - **RigMonitor Telemetry**: Optionally enrich endpoint health with cached host CPU, memory, disk, network, GPU, and Ollama telemetry from RigMonitor sidecars
 - **Policy-Based Routing**: Create first-class load-balancing policies that filter or rank endpoints using health, capacity, and RigMonitor metrics
+- **Model Access Policies**: Attach tenant-scoped ACL policies to virtual model runners to allow, deny, monitor, and explain model usage by credential, user, label, model, action, and VMR
 - **Explainable Routing**: Simulate representative requests, inspect candidate elimination, review policy evidence, and persist routing explanations into request history
 - **Model Load Or Verification Controls**: Warm local models or verify hosted-provider availability from endpoint and virtual model runner workflows
 - **Preflight Validation**: Validate endpoints, model definitions, model configurations, load-balancing policies, and VMRs before saving them
@@ -37,7 +38,9 @@ docker compose up -d
 ```
 
 The server will be available at `http://localhost:9000` and the dashboard at `http://localhost:9100`.
-The Compose file builds the server and dashboard from the local repository Dockerfiles.
+The Compose file builds the server and dashboard from the local repository Dockerfiles, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
+
+The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` from `docker/compose.yaml`, so the login page points browsers at the host-exposed Conductor API by default.
 
 ### Building from Source
 
@@ -60,6 +63,29 @@ cd dashboard
 npm install
 npm run dev
 ```
+
+To allow the Vite dashboard dev server to accept requests from outside `localhost`, bind it to all interfaces:
+
+```bash
+npm run dev -- --host 0.0.0.0
+```
+
+The dashboard listens on port `9100`, so other machines on the network can open `http://<your-machine-ip>:9100`. On Windows, use `ipconfig` to find the machine IP. If the page is unreachable from another machine, allow inbound TCP traffic for port `9100` in Windows Firewall.
+
+For a built preview that also accepts external requests:
+
+```bash
+npm run build
+npm run preview -- --host 0.0.0.0
+```
+
+## Documentation
+
+- [REST_API.md](./REST_API.md): management API routes, resource shapes, proxy behavior, request history, analytics, and observability.
+- [ACCESS_POLICIES.md](./ACCESS_POLICIES.md): practical model access policy authoring guide with real-world examples.
+- [TESTING.md](./TESTING.md): test architecture and commands.
+- [Conductor.postman_collection.json](./Conductor.postman_collection.json): Postman collection covering management, validation, model access, routing, analytics, and observability routes.
+- [CHANGELOG.md](./CHANGELOG.md): unreleased and historical change notes.
 
 ## Testing
 
@@ -96,6 +122,7 @@ Both SDKs include helpers for:
 - explain-routing simulations
 - endpoint drain, resume, and quarantine actions
 - endpoint and virtual model runner model load or verification requests
+- model access policy CRUD, validation, evaluation, and effective-access simulation
 - request-history search, summary, detail, analytics, and bulk deletion
 - observability metrics summary and text export
 
@@ -145,6 +172,7 @@ Users have three permission levels:
 | Model Definition | `md_` | `/v1.0/modeldefinitions` |
 | Model Configuration | `mc_` | `/v1.0/modelconfigurations` |
 | Load Balancing Policy | `lbp_` | `/v1.0/loadbalancingpolicies` |
+| Model Access Policy | `map_` | `/v1.0/modelaccesspolicies` |
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
 | Request History | `req_` | `/v1.0/requesthistory` |
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
@@ -267,6 +295,40 @@ Recommended operator flow:
 
 Request-history detail responses also expose the structured routing decision when history is enabled for the VMR.
 
+### Model Access Policies
+
+Model access policies are tenant-scoped ACL resources attached to virtual model runners through `ModelAccessPolicyId`. They decide whether a credential, user, tenant, or labeled subject can use a model definition, model name, model label, VMR, or any resource for a specific action such as completions, embeddings, list-models, and model management. See [ACCESS_POLICIES.md](./ACCESS_POLICIES.md) for authoring guidance and real-world policy examples.
+
+Management routes require tenant-admin access:
+
+- `GET /v1.0/modelaccesspolicies`
+- `POST /v1.0/modelaccesspolicies`
+- `GET /v1.0/modelaccesspolicies/{id}`
+- `PUT /v1.0/modelaccesspolicies/{id}`
+- `DELETE /v1.0/modelaccesspolicies/{id}?forceDetach=true`
+- `POST /v1.0/modelaccesspolicies/validate`
+- `POST /v1.0/modelaccesspolicies/{id}/evaluate`
+- `GET /v1.0/modelaccesspolicies/effective`
+
+Runtime behavior:
+
+- `Disabled` mode allows traffic and records disabled state.
+- `Monitor` mode allows traffic but records would-deny decisions in routing evidence, request history, analytics, and audit logs.
+- `Enforce` mode blocks denied proxy requests with `403 Forbidden` before endpoint selection or provider calls.
+- Missing or invalid proxy credentials return `401 Unauthorized` when `RequireCredentialForProxy` is enabled.
+- Successful authentication followed by an ACL denial returns `403 Forbidden`.
+- List-models responses can be filtered, synthesized from allowed VMR model definitions, or passed through raw according to `ListModelsBehavior`.
+
+Production rollout path:
+
+1. Leave enforcement disabled or in monitor mode after upgrade.
+2. Create and validate policies with explicit allow and deny rules.
+3. Attach policies to a small number of VMRs.
+4. Inspect would-deny request history, analytics, and routing explanations.
+5. Enable enforce mode after expected traffic is clean.
+
+See [ADR 0001](./docs/adr/0001-model-access-policy-semantics.md) for the accepted semantics and compatibility defaults.
+
 ### Operator Notes
 
 - Keep unauthenticated RigMonitor sidecars on trusted networks only.
@@ -304,8 +366,13 @@ Virtual model runners expose an API at their configured base path. For example, 
     }
   },
   "Database": {
-    "Type": "Sqlite",
-    "Filename": "./conductor.db"
+    "Type": "PostgreSql",
+    "Hostname": "localhost",
+    "Port": 5432,
+    "DatabaseName": "conductor",
+    "Username": "conductor",
+    "Password": "conductor",
+    "RequireEncryption": false
   },
   "Logging": {
     "Servers": [],
@@ -327,16 +394,45 @@ Virtual model runners expose an API at their configured base path. For example, 
     "RedactedJsonFields": ["authorization", "api_key", "apikey", "password", "token", "bearertoken"],
     "MaxRequestBodyBytes": 65536,
     "MaxResponseBodyBytes": 65536
+  },
+  "ModelAccessControl": {
+    "Enabled": false,
+    "Mode": "Disabled",
+    "DefaultDecision": "Permit",
+    "RequireCredentialForProxy": false,
+    "UnknownModelBehavior": "Deny",
+    "ListModelsBehavior": "Filter",
+    "CacheTtlMs": 30000,
+    "AllowAdministratorBypass": false,
+    "AllowGlobalAdministratorBypass": false
   }
 }
 ```
 
 ### Supported Databases
 
-- **SQLite** (default): `"Type": "Sqlite", "Filename": "./conductor.db"`
-- **PostgreSQL**: `"Type": "PostgreSql", "ConnectionString": "Host=..."`
-- **SQL Server**: `"Type": "SqlServer", "ConnectionString": "Server=..."`
-- **MySQL**: `"Type": "MySql", "ConnectionString": "Server=..."`
+PostgreSQL is the default Docker database and is configured with:
+
+```json
+{
+  "Type": "PostgreSql",
+  "Hostname": "localhost",
+  "Port": 5432,
+  "DatabaseName": "conductor",
+  "Username": "conductor",
+  "Password": "conductor",
+  "RequireEncryption": false
+}
+```
+
+SQLite remains available for local development by setting:
+
+```json
+{
+  "Type": "Sqlite",
+  "Filename": "./conductor.db"
+}
+```
 
 ### CORS Configuration
 

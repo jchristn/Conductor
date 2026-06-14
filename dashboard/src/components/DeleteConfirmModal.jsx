@@ -40,7 +40,11 @@ function DeleteConfirmModal({
             <strong>{entityName}</strong>
           </p>
         )}
-        {warningMessage && <p className="delete-warning">{warningMessage}</p>}
+        {warningMessage && (
+          typeof warningMessage === 'string'
+            ? <p className="delete-warning">{warningMessage}</p>
+            : <div className="delete-warning">{warningMessage}</div>
+        )}
 
         <div className="delete-actions">
           <button className="btn-secondary" onClick={onClose} disabled={loading}>

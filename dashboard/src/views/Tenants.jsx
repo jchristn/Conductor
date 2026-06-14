@@ -8,6 +8,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
 
 function Tenants() {
   const { api, setError } = useApp();
@@ -23,8 +24,8 @@ function Tenants() {
   const [formData, setFormData] = useState({
     Name: '',
     Active: true,
-    LabelsJson: '[]',
-    TagsJson: '{}'
+    Labels: labelsFromValue([]),
+    Tags: tagsFromValue({})
   });
 
   const fetchTenants = useCallback(async () => {
@@ -52,7 +53,7 @@ function Tenants() {
 
   const handleCreate = () => {
     setEditMode(false);
-    setFormData({ Name: '', Active: true, LabelsJson: '[]', TagsJson: '{}' });
+    setFormData({ Name: '', Active: true, Labels: labelsFromValue([]), Tags: tagsFromValue({}) });
     setShowForm(true);
   };
 
@@ -62,8 +63,8 @@ function Tenants() {
     setFormData({
       Name: tenant.Name || '',
       Active: tenant.Active !== false,
-      LabelsJson: JSON.stringify(tenant.Labels || [], null, 2),
-      TagsJson: JSON.stringify(tenant.Tags || {}, null, 2)
+      Labels: labelsFromValue(tenant.Labels),
+      Tags: tagsFromValue(tenant.Tags)
     });
     setShowForm(true);
   };
@@ -95,28 +96,11 @@ function Tenants() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      let labels = [];
-      let tags = {};
-
-      try {
-        labels = JSON.parse(formData.LabelsJson || '[]');
-      } catch (err) {
-        setError('Invalid JSON in Labels');
-        return;
-      }
-
-      try {
-        tags = JSON.parse(formData.TagsJson || '{}');
-      } catch (err) {
-        setError('Invalid JSON in Tags');
-        return;
-      }
-
       const data = {
         Name: formData.Name,
         Active: formData.Active,
-        Labels: labels,
-        Tags: tags
+        Labels: labelsToPayload(formData.Labels),
+        Tags: tagsToPayload(formData.Tags)
       };
 
       if (editMode) {
@@ -218,29 +202,13 @@ function Tenants() {
               required
             />
           </div>
-          <div className="form-group">
-            <label htmlFor="labels" title="String array for categorization and filtering">Labels (JSON)</label>
-            <textarea
-              id="labels"
-              value={formData.LabelsJson}
-              onChange={(e) => setFormData({ ...formData, LabelsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="[]"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tags" title="Key-value pairs for custom metadata">Tags (JSON)</label>
-            <textarea
-              id="tags"
-              value={formData.TagsJson}
-              onChange={(e) => setFormData({ ...formData, TagsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="{}"
-            />
-          </div>
+          <LabelsTagsEditor
+            labels={formData.Labels}
+            tags={formData.Tags}
+            onLabelsChange={(Labels) => setFormData({ ...formData, Labels })}
+            onTagsChange={(Tags) => setFormData({ ...formData, Tags })}
+            idPrefix="tenant"
+          />
 
           <div className="form-group checkbox-group">
             <label title="Inactive tenants and their resources are disabled">

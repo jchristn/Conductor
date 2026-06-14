@@ -18,6 +18,7 @@ namespace Conductor.Server.Routing
             new ModelRunnerRouteModule(_Context).Register();
             new ModelDefinitionRouteModule(_Context).Register();
             new LoadBalancingPolicyRouteModule(_Context).Register();
+            new ModelAccessPolicyRouteModule(_Context).Register();
             new ModelConfigurationRouteModule(_Context).Register();
             new VirtualModelRunnerRouteModule(_Context).Register();
             new AdministratorRouteModule(_Context).Register();

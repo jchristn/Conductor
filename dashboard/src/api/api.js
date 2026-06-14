@@ -489,6 +489,55 @@ class ConductorApi {
     return this.request('GET', '/v1.0/loadbalancingpolicies/metrics');
   }
 
+  // Model Access Policy APIs
+  async listModelAccessPolicies(params = {}) {
+    const query = this.buildQueryString(params);
+    return this.dedupedRequest(`listModelAccessPolicies:${query}`, 'GET', `/v1.0/modelaccesspolicies${query}`);
+  }
+
+  async getModelAccessPolicy(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/modelaccesspolicies/${id}${query}`);
+  }
+
+  async createModelAccessPolicy(policy) {
+    return this.request('POST', '/v1.0/modelaccesspolicies', policy);
+  }
+
+  async validateModelAccessPolicy(policy) {
+    return this.request('POST', '/v1.0/modelaccesspolicies/validate', policy);
+  }
+
+  async updateModelAccessPolicy(id, policy) {
+    return this.request('PUT', `/v1.0/modelaccesspolicies/${id}`, policy);
+  }
+
+  async deleteModelAccessPolicy(id, tenantId = null, forceDetach = false) {
+    const query = new URLSearchParams();
+    if (tenantId) query.append('tenantId', tenantId);
+    if (forceDetach) query.append('forceDetach', 'true');
+    const queryString = query.toString() ? '?' + query.toString() : '';
+    return this.request('DELETE', `/v1.0/modelaccesspolicies/${id}${queryString}`);
+  }
+
+  async evaluateModelAccessPolicy(id, context = {}, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/modelaccesspolicies/${id}/evaluate${query}`, context);
+  }
+
+  async getEffectiveModelAccess(params = {}) {
+    const query = new URLSearchParams();
+    if (params.tenantId) query.append('tenantId', params.tenantId);
+    if (params.credentialId) query.append('credentialId', params.credentialId);
+    if (params.userId) query.append('userId', params.userId);
+    if (params.vmrId) query.append('vmrId', params.vmrId);
+    if (params.modelDefinitionId) query.append('modelDefinitionId', params.modelDefinitionId);
+    if (params.modelName) query.append('modelName', params.modelName);
+    if (params.action) query.append('action', params.action);
+    const queryString = query.toString() ? '?' + query.toString() : '';
+    return this.request('GET', `/v1.0/modelaccesspolicies/effective${queryString}`);
+  }
+
   // Virtual Model Runner APIs
   async listVirtualModelRunners(params = {}) {
     const query = this.buildQueryString(params);
@@ -663,6 +712,10 @@ class ConductorApi {
     if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
     if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
     if (params.loadBalancingPolicyGuid) query.append('loadBalancingPolicyGuid', params.loadBalancingPolicyGuid);
+    if (params.modelAccessPolicyGuid) query.append('modelAccessPolicyGuid', params.modelAccessPolicyGuid);
+    if (params.modelAccessRuleGuid) query.append('modelAccessRuleGuid', params.modelAccessRuleGuid);
+    if (params.modelAccessDecision) query.append('modelAccessDecision', params.modelAccessDecision);
+    if (params.modelAccessWouldDeny !== undefined && params.modelAccessWouldDeny !== '') query.append('modelAccessWouldDeny', params.modelAccessWouldDeny);
     if (params.modelName) query.append('modelName', params.modelName);
     if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
     if (params.sessionAffinityOutcome) query.append('sessionAffinityOutcome', params.sessionAffinityOutcome);
@@ -709,6 +762,10 @@ class ConductorApi {
     if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
     if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
     if (params.loadBalancingPolicyGuid) query.append('loadBalancingPolicyGuid', params.loadBalancingPolicyGuid);
+    if (params.modelAccessPolicyGuid) query.append('modelAccessPolicyGuid', params.modelAccessPolicyGuid);
+    if (params.modelAccessRuleGuid) query.append('modelAccessRuleGuid', params.modelAccessRuleGuid);
+    if (params.modelAccessDecision) query.append('modelAccessDecision', params.modelAccessDecision);
+    if (params.modelAccessWouldDeny !== undefined && params.modelAccessWouldDeny !== '') query.append('modelAccessWouldDeny', params.modelAccessWouldDeny);
     if (params.modelName) query.append('modelName', params.modelName);
     if (params.mutationSummary) query.append('mutationSummary', params.mutationSummary);
     if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
@@ -780,6 +837,10 @@ class ConductorApi {
     if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
     if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
     if (params.loadBalancingPolicyGuid) query.append('loadBalancingPolicyGuid', params.loadBalancingPolicyGuid);
+    if (params.modelAccessPolicyGuid) query.append('modelAccessPolicyGuid', params.modelAccessPolicyGuid);
+    if (params.modelAccessRuleGuid) query.append('modelAccessRuleGuid', params.modelAccessRuleGuid);
+    if (params.modelAccessDecision) query.append('modelAccessDecision', params.modelAccessDecision);
+    if (params.modelAccessWouldDeny !== undefined && params.modelAccessWouldDeny !== '') query.append('modelAccessWouldDeny', params.modelAccessWouldDeny);
     if (params.modelName) query.append('modelName', params.modelName);
     if (params.mutationSummary) query.append('mutationSummary', params.mutationSummary);
     if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);

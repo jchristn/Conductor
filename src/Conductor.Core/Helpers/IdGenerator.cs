@@ -49,6 +49,16 @@ namespace Conductor.Core.Helpers
         public const string LoadBalancingPolicyPrefix = "lbp_";
 
         /// <summary>
+        /// Model access policy ID prefix.
+        /// </summary>
+        public const string ModelAccessPolicyPrefix = "map_";
+
+        /// <summary>
+        /// Model access rule ID prefix.
+        /// </summary>
+        public const string ModelAccessRulePrefix = "mar_";
+
+        /// <summary>
         /// Administrator ID prefix.
         /// </summary>
         public const string AdministratorPrefix = "admin_";
@@ -145,6 +155,24 @@ namespace Conductor.Core.Helpers
         public static string NewLoadBalancingPolicyId()
         {
             return _Generator.GenerateKSortable(LoadBalancingPolicyPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new model access policy ID.
+        /// </summary>
+        /// <returns>K-sortable model access policy ID.</returns>
+        public static string NewModelAccessPolicyId()
+        {
+            return _Generator.GenerateKSortable(ModelAccessPolicyPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new model access rule ID.
+        /// </summary>
+        /// <returns>K-sortable model access rule ID.</returns>
+        public static string NewModelAccessRuleId()
+        {
+            return _Generator.GenerateKSortable(ModelAccessRulePrefix, DefaultIdLength);
         }
 
         /// <summary>

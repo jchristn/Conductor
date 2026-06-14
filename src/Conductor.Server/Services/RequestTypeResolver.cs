@@ -116,6 +116,16 @@ namespace Conductor.Server.Services
             { new RouteKey("DELETE", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.DeleteLoadBalancingPolicy },
             { new RouteKey("GET", "/v1.0/loadbalancingpolicies"), RequestTypeEnum.ListLoadBalancingPolicies },
 
+            // Model Access Policies
+            { new RouteKey("POST", "/v1.0/modelaccesspolicies"), RequestTypeEnum.CreateModelAccessPolicy },
+            { new RouteKey("POST", "/v1.0/modelaccesspolicies/validate"), RequestTypeEnum.ValidateModelAccessPolicy },
+            { new RouteKey("GET", "/v1.0/modelaccesspolicies/effective"), RequestTypeEnum.ReadEffectiveModelAccess },
+            { new RouteKey("POST", "/v1.0/modelaccesspolicies/{id}/evaluate"), RequestTypeEnum.EvaluateModelAccessPolicy },
+            { new RouteKey("GET", "/v1.0/modelaccesspolicies/{id}"), RequestTypeEnum.ReadModelAccessPolicy },
+            { new RouteKey("PUT", "/v1.0/modelaccesspolicies/{id}"), RequestTypeEnum.UpdateModelAccessPolicy },
+            { new RouteKey("DELETE", "/v1.0/modelaccesspolicies/{id}"), RequestTypeEnum.DeleteModelAccessPolicy },
+            { new RouteKey("GET", "/v1.0/modelaccesspolicies"), RequestTypeEnum.ListModelAccessPolicies },
+
             // Backup and Restore
             { new RouteKey("GET", "/v1.0/backup"), RequestTypeEnum.CreateBackup },
             { new RouteKey("POST", "/v1.0/backup/restore"), RequestTypeEnum.RestoreBackup },

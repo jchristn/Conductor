@@ -25,7 +25,14 @@ export function resolveInitialServerUrl() {
     return storedUrl;
   }
 
-  // Migrate runtime-default dashboards away from the temporary Conductor-on-9001 default.
+  // Runtime defaults come from Docker/hosting config and should follow that config
+  // until a user explicitly overrides the URL from the login form.
+  if (storedSource === RUNTIME_SOURCE && storedUrl !== DEFAULT_SERVER_URL) {
+    persistServerUrl(DEFAULT_SERVER_URL, RUNTIME_SOURCE);
+    return DEFAULT_SERVER_URL;
+  }
+
+  // Migrate old user-saved dashboards away from the temporary Conductor-on-9001 default.
   if (storedUrl === LEGACY_DEFAULT_SERVER_URL && DEFAULT_SERVER_URL !== LEGACY_DEFAULT_SERVER_URL) {
     persistServerUrl(DEFAULT_SERVER_URL, RUNTIME_SOURCE);
     return DEFAULT_SERVER_URL;

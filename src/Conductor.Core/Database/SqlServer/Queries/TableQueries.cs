@@ -237,6 +237,86 @@ namespace Conductor.Core.Database.SqlServer.Queries
         ";
 
         /// <summary>
+        /// Create model access policies table.
+        /// </summary>
+        public static readonly string CreateModelAccessPoliciesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='modelaccesspolicies' AND xtype='U')
+            CREATE TABLE modelaccesspolicies (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                defaultdecision INT NOT NULL DEFAULT 0,
+                active BIT NOT NULL DEFAULT 1,
+                labels NVARCHAR(MAX),
+                tags NVARCHAR(MAX),
+                metadata NVARCHAR(MAX),
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_map_tenantid')
+            CREATE INDEX idx_map_tenantid ON modelaccesspolicies(tenantid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_map_active')
+            CREATE INDEX idx_map_active ON modelaccesspolicies(active);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_map_name')
+            CREATE INDEX idx_map_name ON modelaccesspolicies(name);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_map_lastupdateutc')
+            CREATE INDEX idx_map_lastupdateutc ON modelaccesspolicies(lastupdateutc);
+        ";
+
+        /// <summary>
+        /// Create model access rules table.
+        /// </summary>
+        public static readonly string CreateModelAccessRulesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='modelaccessrules' AND xtype='U')
+            CREATE TABLE modelaccessrules (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                policyid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                priority INT NOT NULL DEFAULT 0,
+                effect INT NOT NULL DEFAULT 0,
+                subjecttype INT NOT NULL DEFAULT 5,
+                subjectid NVARCHAR(255),
+                subjectselector NVARCHAR(MAX),
+                resourcetype INT NOT NULL DEFAULT 4,
+                resourceid NVARCHAR(255),
+                resourceselector NVARCHAR(MAX),
+                vmrid NVARCHAR(48),
+                actions NVARCHAR(MAX),
+                active BIT NOT NULL DEFAULT 1,
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (policyid) REFERENCES modelaccesspolicies(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_tenantid')
+            CREATE INDEX idx_mar_tenantid ON modelaccessrules(tenantid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_policyid')
+            CREATE INDEX idx_mar_policyid ON modelaccessrules(policyid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_active')
+            CREATE INDEX idx_mar_active ON modelaccessrules(active);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_priority')
+            CREATE INDEX idx_mar_priority ON modelaccessrules(priority);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_effect')
+            CREATE INDEX idx_mar_effect ON modelaccessrules(effect);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_subjecttype')
+            CREATE INDEX idx_mar_subjecttype ON modelaccessrules(subjecttype);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_subjectid')
+            CREATE INDEX idx_mar_subjectid ON modelaccessrules(subjectid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_resourcetype')
+            CREATE INDEX idx_mar_resourcetype ON modelaccessrules(resourcetype);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_resourceid')
+            CREATE INDEX idx_mar_resourceid ON modelaccessrules(resourceid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_vmrid')
+            CREATE INDEX idx_mar_vmrid ON modelaccessrules(vmrid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_lastupdateutc')
+            CREATE INDEX idx_mar_lastupdateutc ON modelaccessrules(lastupdateutc);
+        ";
+
+        /// <summary>
         /// Create virtual model runners table.
         /// </summary>
         public static readonly string CreateVirtualModelRunnersTable = @"
@@ -264,6 +344,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
                 requesthistoryenabled BIT NOT NULL DEFAULT 0,
                 loadbalancingpolicyid NVARCHAR(48),
+                modelaccesspolicyid NVARCHAR(48),
                 active BIT NOT NULL DEFAULT 1,
                 createdutc DATETIME2 NOT NULL,
                 lastupdateutc DATETIME2 NOT NULL,
@@ -278,6 +359,8 @@ namespace Conductor.Core.Database.SqlServer.Queries
             CREATE INDEX idx_vmr_basepath ON virtualmodelrunners(basepath);
             IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmr_active')
             CREATE INDEX idx_vmr_active ON virtualmodelrunners(active);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmr_modelaccesspolicyid')
+            CREATE INDEX idx_vmr_modelaccesspolicyid ON virtualmodelrunners(modelaccesspolicyid);
         ";
 
         /// <summary>
@@ -317,6 +400,12 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 credentialname NVARCHAR(255),
                 loadbalancingpolicyguid NVARCHAR(48),
                 loadbalancingpolicyname NVARCHAR(255),
+                modelaccesspolicyguid NVARCHAR(48),
+                modelaccesspolicyname NVARCHAR(255),
+                modelaccessruleguid NVARCHAR(48),
+                modelaccessrulename NVARCHAR(255),
+                modelaccessdecision NVARCHAR(32),
+                modelaccesswoulddeny BIT NOT NULL DEFAULT 0,
                 modelendpointguid NVARCHAR(48),
                 modelendpointname NVARCHAR(255),
                 modelendpointurl NVARCHAR(MAX),
@@ -477,6 +566,13 @@ namespace Conductor.Core.Database.SqlServer.Queries
         /// </summary>
         public static readonly string AddLoadBalancingPolicyIdColumn = @"
             ALTER TABLE virtualmodelrunners ADD loadbalancingpolicyid NVARCHAR(48);
+        ";
+
+        /// <summary>
+        /// Add modelaccesspolicyid column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddModelAccessPolicyIdColumn = @"
+            ALTER TABLE virtualmodelrunners ADD modelaccesspolicyid NVARCHAR(48);
         ";
     }
 }

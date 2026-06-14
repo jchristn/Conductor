@@ -88,6 +88,7 @@ Guidelines:
 
 Changes in the following areas should ship with targeted shared-suite coverage:
 
+- model access policy validation, evaluation, routing enforcement, list-model filtering, and request-history recording
 - routing explanation, session affinity, and policy evidence
 - validation routes and effective-configuration preview
 - request-history search, summary, redaction, and retention behavior
@@ -105,6 +106,40 @@ cd dashboard && npm run build
 cd sdk/javascript && npm test
 cd sdk/python && set PYTHONPATH=src && python -m unittest discover -s tests
 ```
+
+## Model Access Release Gate
+
+Model access policy changes must be verified across backend policy evaluation, proxy authentication, list-model response shaping, request history, SDK helpers, docs, and the Postman collection.
+
+Run the focused product gate before marking model access complete:
+
+```powershell
+dotnet build src/Conductor.sln --no-restore
+dotnet test src/Test.Xunit/Test.Xunit.csproj --logger "console;verbosity=minimal"
+dotnet test src/Test.Nunit/Test.Nunit.csproj --logger "console;verbosity=minimal"
+Push-Location sdk/javascript; npm.cmd test; Pop-Location
+Push-Location sdk/python; $env:PYTHONPATH='src'; python -m unittest discover -s tests; Pop-Location
+Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null
+```
+
+Focused shared tests for this feature live in:
+
+- `src/Test.Shared/Server/Services/ModelAccessControlServiceTests.cs`
+- `src/Test.Shared/Server/Services/ModelAccessListModelsResponseFilterTests.cs`
+- `src/Test.Shared/Server/Services/RoutingDecisionServiceTests.cs`
+- `src/Test.Shared/Server/Controllers/ModelAccessPolicyControllerTests.cs`
+- `src/Test.Shared/Server/Services/ModelLoadAuthorizationTests.cs`
+
+Manual validation:
+
+- Create a default-deny policy, add a credential allow rule, attach it to a VMR, and confirm allowed completions route.
+- Confirm a credential without an allow rule receives `403` and no provider request is sent.
+- Enable monitor mode and confirm a would-deny request still routes while request history records `ModelAccessWouldDeny=true`.
+- Enable `RequireCredentialForProxy` and confirm missing or invalid proxy credentials return `401`.
+- Confirm OpenAI, Gemini, and Ollama list-model responses hide denied models when `ListModelsBehavior=Filter`.
+- Switch `ListModelsBehavior=Synthesize` and confirm returned model lists come from allowed active VMR model definitions.
+- Confirm denial logs do not include bearer tokens, Gemini `key` values, request bodies, provider URLs, or endpoint API keys.
+- Confirm policy deletion returns conflict while attached, then succeeds with `forceDetach=true`.
 
 ## Model Loading Release Gate
 

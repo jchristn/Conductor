@@ -279,6 +279,11 @@ namespace Test.Shared.Core.Models
             VirtualModelRunner vmr = new VirtualModelRunner();
             vmr.LoadBalancingMode.Should().Be(LoadBalancingModeEnum.RoundRobin);
         }
+        public void ModelAccessPolicyId_DefaultsToNull()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.ModelAccessPolicyId.Should().BeNull();
+        }
         public void AllowEmbeddings_DefaultsToTrue()
         {
             VirtualModelRunner vmr = new VirtualModelRunner();
@@ -445,6 +450,8 @@ namespace Test.Shared.Core.Models
             table.Columns.Add("basepath", typeof(string));
             table.Columns.Add("apitype", typeof(int));
             table.Columns.Add("loadbalancingmode", typeof(int));
+            table.Columns.Add("loadbalancingpolicyid", typeof(string));
+            table.Columns.Add("modelaccesspolicyid", typeof(string));
             table.Columns.Add("modelrunnerendpointids", typeof(string));
             table.Columns.Add("modelconfigurationids", typeof(string));
             table.Columns.Add("modeldefinitionids", typeof(string));

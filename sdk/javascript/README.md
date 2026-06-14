@@ -8,6 +8,7 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - endpoint drain, resume, and quarantine actions
 - endpoint and virtual model runner model load or verification requests
 - Ollama endpoint model list, pull, and delete requests
+- model access policy CRUD, validation, evaluation, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - observability summary and raw Prometheus metrics
 
@@ -63,6 +64,27 @@ const pullResult = await client.pullOllamaEndpointModel('mre_123', {
 const deleteResult = await client.deleteOllamaEndpointModel('mre_123', {
   Model: 'llama3.2:latest'
 }, 'tenant_123');
+
+const policy = await client.createModelAccessPolicy({
+  TenantId: 'tenant_123',
+  Name: 'Default deny',
+  DefaultDecision: 'Deny',
+  Rules: []
+});
+const evaluation = await client.evaluateModelAccessPolicy(policy.Id, {
+  TenantId: 'tenant_123',
+  CredentialId: 'cred_123',
+  VirtualModelRunnerId: 'vmr_123',
+  RequestedModel: 'gpt-4o-mini',
+  Action: 'Completions'
+}, 'tenant_123');
+const effectiveAccess = await client.getEffectiveModelAccess({
+  tenantId: 'tenant_123',
+  credentialId: 'cred_123',
+  vmrId: 'vmr_123',
+  modelName: 'gpt-4o-mini',
+  action: 'Completions'
+});
 ```
 
 For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.

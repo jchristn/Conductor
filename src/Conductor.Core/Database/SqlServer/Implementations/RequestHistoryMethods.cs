@@ -34,6 +34,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
 
             string query = "INSERT INTO requesthistory (id, tenantguid, virtualmodelrunnerguid, virtualmodelrunnername, " +
                            "requestoruserguid, requestoruseremail, credentialguid, credentialname, loadbalancingpolicyguid, loadbalancingpolicyname, " +
+                           "modelaccesspolicyguid, modelaccesspolicyname, modelaccessruleguid, modelaccessrulename, modelaccessdecision, modelaccesswoulddeny, " +
                            "modelendpointguid, modelendpointname, modelendpointurl, modeldefinitionguid, modeldefinitionname, " +
                            "modelconfigurationguid, requestedmodel, effectivemodel, requesttype, routingoutcomecode, denialreasoncode, denialreason, " +
                            "sessionaffinityoutcome, mutationsummary, explanationsummary, requestbodyretained, requestbodyredacted, requestheadersredacted, " +
@@ -51,6 +52,12 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            _Driver.FormatNullableString(entry.CredentialName) + ", " +
                            _Driver.FormatNullableString(entry.LoadBalancingPolicyGuid) + ", " +
                            _Driver.FormatNullableString(entry.LoadBalancingPolicyName) + ", " +
+                           _Driver.FormatNullableString(entry.ModelAccessPolicyGuid) + ", " +
+                           _Driver.FormatNullableString(entry.ModelAccessPolicyName) + ", " +
+                           _Driver.FormatNullableString(entry.ModelAccessRuleGuid) + ", " +
+                           _Driver.FormatNullableString(entry.ModelAccessRuleName) + ", " +
+                           _Driver.FormatNullableString(entry.ModelAccessDecision) + ", " +
+                           _Driver.FormatBoolean(entry.ModelAccessWouldDeny) + ", " +
                            _Driver.FormatNullableString(entry.ModelEndpointGuid) + ", " +
                            _Driver.FormatNullableString(entry.ModelEndpointName) + ", " +
                            _Driver.FormatNullableString(entry.ModelEndpointUrl) + ", " +
@@ -117,6 +124,12 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            "credentialname = " + _Driver.FormatNullableString(entry.CredentialName) + ", " +
                            "loadbalancingpolicyguid = " + _Driver.FormatNullableString(entry.LoadBalancingPolicyGuid) + ", " +
                            "loadbalancingpolicyname = " + _Driver.FormatNullableString(entry.LoadBalancingPolicyName) + ", " +
+                           "modelaccesspolicyguid = " + _Driver.FormatNullableString(entry.ModelAccessPolicyGuid) + ", " +
+                           "modelaccesspolicyname = " + _Driver.FormatNullableString(entry.ModelAccessPolicyName) + ", " +
+                           "modelaccessruleguid = " + _Driver.FormatNullableString(entry.ModelAccessRuleGuid) + ", " +
+                           "modelaccessrulename = " + _Driver.FormatNullableString(entry.ModelAccessRuleName) + ", " +
+                           "modelaccessdecision = " + _Driver.FormatNullableString(entry.ModelAccessDecision) + ", " +
+                           "modelaccesswoulddeny = " + _Driver.FormatBoolean(entry.ModelAccessWouldDeny) + ", " +
                            "modelendpointguid = " + _Driver.FormatNullableString(entry.ModelEndpointGuid) + ", " +
                            "modelendpointname = " + _Driver.FormatNullableString(entry.ModelEndpointName) + ", " +
                            "modelendpointurl = " + _Driver.FormatNullableString(entry.ModelEndpointUrl) + ", " +
@@ -415,6 +428,22 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             {
                 conditions.Add("loadbalancingpolicyguid = '" + _Driver.Sanitize(filter.LoadBalancingPolicyGuid) + "'");
             }
+            if (!String.IsNullOrEmpty(filter.ModelAccessPolicyGuid))
+            {
+                conditions.Add("modelaccesspolicyguid = '" + _Driver.Sanitize(filter.ModelAccessPolicyGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelAccessRuleGuid))
+            {
+                conditions.Add("modelaccessruleguid = '" + _Driver.Sanitize(filter.ModelAccessRuleGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelAccessDecision))
+            {
+                conditions.Add("modelaccessdecision = '" + _Driver.Sanitize(filter.ModelAccessDecision) + "'");
+            }
+            if (filter.ModelAccessWouldDeny.HasValue)
+            {
+                conditions.Add("modelaccesswoulddeny = " + _Driver.FormatBoolean(filter.ModelAccessWouldDeny.Value));
+            }
             if (!String.IsNullOrEmpty(filter.ModelName))
             {
                 string modelName = _Driver.Sanitize(filter.ModelName).ToLowerInvariant();
@@ -490,6 +519,22 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             if (!String.IsNullOrEmpty(filter.LoadBalancingPolicyGuid))
             {
                 conditions.Add("loadbalancingpolicyguid = '" + _Driver.Sanitize(filter.LoadBalancingPolicyGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelAccessPolicyGuid))
+            {
+                conditions.Add("modelaccesspolicyguid = '" + _Driver.Sanitize(filter.ModelAccessPolicyGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelAccessRuleGuid))
+            {
+                conditions.Add("modelaccessruleguid = '" + _Driver.Sanitize(filter.ModelAccessRuleGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ModelAccessDecision))
+            {
+                conditions.Add("modelaccessdecision = '" + _Driver.Sanitize(filter.ModelAccessDecision) + "'");
+            }
+            if (filter.ModelAccessWouldDeny.HasValue)
+            {
+                conditions.Add("modelaccesswoulddeny = " + _Driver.FormatBoolean(filter.ModelAccessWouldDeny.Value));
             }
             if (!String.IsNullOrEmpty(filter.ModelName))
             {

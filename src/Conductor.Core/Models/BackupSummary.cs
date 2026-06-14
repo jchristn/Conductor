@@ -51,6 +51,16 @@ namespace Conductor.Core.Models
         public int LoadBalancingPolicyCount { get; set; } = 0;
 
         /// <summary>
+        /// Number of model access policies in the backup.
+        /// </summary>
+        public int ModelAccessPolicyCount { get; set; } = 0;
+
+        /// <summary>
+        /// Number of model access rules in the backup.
+        /// </summary>
+        public int ModelAccessRuleCount { get; set; } = 0;
+
+        /// <summary>
         /// Instantiate the backup summary.
         /// </summary>
         public BackupSummary()

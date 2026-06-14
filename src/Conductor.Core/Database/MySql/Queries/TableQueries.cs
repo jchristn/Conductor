@@ -205,6 +205,69 @@ namespace Conductor.Core.Database.MySql.Queries
         ";
 
         /// <summary>
+        /// Create model access policies table.
+        /// </summary>
+        public static readonly string CreateModelAccessPoliciesTable = @"
+            CREATE TABLE IF NOT EXISTS modelaccesspolicies (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                defaultdecision INT NOT NULL DEFAULT 0,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                INDEX idx_map_tenantid (tenantid),
+                INDEX idx_map_active (active),
+                INDEX idx_map_name (name),
+                INDEX idx_map_lastupdateutc (lastupdateutc),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create model access rules table.
+        /// </summary>
+        public static readonly string CreateModelAccessRulesTable = @"
+            CREATE TABLE IF NOT EXISTS modelaccessrules (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                policyid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                priority INT NOT NULL DEFAULT 0,
+                effect INT NOT NULL DEFAULT 0,
+                subjecttype INT NOT NULL DEFAULT 5,
+                subjectid VARCHAR(255),
+                subjectselector TEXT,
+                resourcetype INT NOT NULL DEFAULT 4,
+                resourceid VARCHAR(255),
+                resourceselector TEXT,
+                vmrid VARCHAR(48),
+                actions TEXT,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                INDEX idx_mar_tenantid (tenantid),
+                INDEX idx_mar_policyid (policyid),
+                INDEX idx_mar_active (active),
+                INDEX idx_mar_priority (priority),
+                INDEX idx_mar_effect (effect),
+                INDEX idx_mar_subjecttype (subjecttype),
+                INDEX idx_mar_subjectid (subjectid),
+                INDEX idx_mar_resourcetype (resourcetype),
+                INDEX idx_mar_resourceid (resourceid),
+                INDEX idx_mar_vmrid (vmrid),
+                INDEX idx_mar_lastupdateutc (lastupdateutc),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (policyid) REFERENCES modelaccesspolicies(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
         /// Create virtual model runners table.
         /// </summary>
         public static readonly string CreateVirtualModelRunnersTable = @"
@@ -231,6 +294,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
                 requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 0,
                 loadbalancingpolicyid VARCHAR(48),
+                modelaccesspolicyid VARCHAR(48),
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 createdutc DATETIME(3) NOT NULL,
                 lastupdateutc DATETIME(3) NOT NULL,
@@ -240,6 +304,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 INDEX idx_vmr_tenantid (tenantid),
                 INDEX idx_vmr_basepath (basepath),
                 INDEX idx_vmr_active (active),
+                INDEX idx_vmr_modelaccesspolicyid (modelaccesspolicyid),
                 FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
@@ -277,6 +342,12 @@ namespace Conductor.Core.Database.MySql.Queries
                 credentialname VARCHAR(255),
                 loadbalancingpolicyguid VARCHAR(48),
                 loadbalancingpolicyname VARCHAR(255),
+                modelaccesspolicyguid VARCHAR(48),
+                modelaccesspolicyname VARCHAR(255),
+                modelaccessruleguid VARCHAR(48),
+                modelaccessrulename VARCHAR(255),
+                modelaccessdecision VARCHAR(32),
+                modelaccesswoulddeny BOOLEAN NOT NULL DEFAULT FALSE,
                 modelendpointguid VARCHAR(48),
                 modelendpointname VARCHAR(255),
                 modelendpointurl VARCHAR(512),
@@ -425,6 +496,13 @@ namespace Conductor.Core.Database.MySql.Queries
         /// </summary>
         public static readonly string AddLoadBalancingPolicyIdColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN loadbalancingpolicyid VARCHAR(48);
+        ";
+
+        /// <summary>
+        /// Add modelaccesspolicyid column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddModelAccessPolicyIdColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN modelaccesspolicyid VARCHAR(48);
         ";
     }
 }

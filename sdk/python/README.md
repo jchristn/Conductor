@@ -8,6 +8,7 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - endpoint drain, resume, and quarantine actions
 - endpoint and virtual model runner model load or verification requests
 - Ollama endpoint model list, pull, and delete requests
+- model access policy CRUD, validation, evaluation, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - observability summary and raw Prometheus metrics
 
@@ -80,6 +81,31 @@ delete_result = client.delete_ollama_endpoint_model(
     },
     tenant_id="tenant_123",
 )
+
+policy = client.create_model_access_policy({
+    "TenantId": "tenant_123",
+    "Name": "Default deny",
+    "DefaultDecision": "Deny",
+    "Rules": [],
+})
+evaluation = client.evaluate_model_access_policy(
+    policy["Id"],
+    {
+        "TenantId": "tenant_123",
+        "CredentialId": "cred_123",
+        "VirtualModelRunnerId": "vmr_123",
+        "RequestedModel": "gpt-4o-mini",
+        "Action": "Completions",
+    },
+    tenant_id="tenant_123",
+)
+effective_access = client.get_effective_model_access({
+    "tenantId": "tenant_123",
+    "credentialId": "cred_123",
+    "vmrId": "vmr_123",
+    "modelName": "gpt-4o-mini",
+    "action": "Completions",
+})
 ```
 
 For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.

@@ -101,6 +101,24 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// All model access policies.
+        /// </summary>
+        public List<ModelAccessPolicy> ModelAccessPolicies
+        {
+            get => _ModelAccessPolicies;
+            set => _ModelAccessPolicies = (value != null ? value : new List<ModelAccessPolicy>());
+        }
+
+        /// <summary>
+        /// All model access rules.
+        /// </summary>
+        public List<ModelAccessRule> ModelAccessRules
+        {
+            get => _ModelAccessRules;
+            set => _ModelAccessRules = (value != null ? value : new List<ModelAccessRule>());
+        }
+
+        /// <summary>
         /// All administrator records (passwords are hashed, not plaintext).
         /// Note: Only included when backup is created by an administrator.
         /// </summary>
@@ -118,6 +136,8 @@ namespace Conductor.Core.Models
         private List<ModelRunnerEndpoint> _ModelRunnerEndpoints = new List<ModelRunnerEndpoint>();
         private List<VirtualModelRunner> _VirtualModelRunners = new List<VirtualModelRunner>();
         private List<LoadBalancingPolicy> _LoadBalancingPolicies = new List<LoadBalancingPolicy>();
+        private List<ModelAccessPolicy> _ModelAccessPolicies = new List<ModelAccessPolicy>();
+        private List<ModelAccessRule> _ModelAccessRules = new List<ModelAccessRule>();
         private List<Administrator> _Administrators = new List<Administrator>();
 
         /// <summary>

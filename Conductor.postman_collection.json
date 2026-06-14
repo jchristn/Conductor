@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Conductor API",
-    "description": "Conductor API collection for managing models, model runners, configurations, virtual model runners, and request history.",
+    "description": "Conductor API collection for managing tenants, model runners, virtual model runners, load-balancing policies, model access policies, validation, request history, analytics, observability, and backup/restore workflows.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -21,7 +21,32 @@
       "type": "string"
     },
     {
+      "key": "modelAccessPolicyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "modelAccessRuleId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "vmrId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "credentialId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "modelDefinitionId",
       "value": "",
       "type": "string"
     },
@@ -605,6 +630,29 @@
           }
         },
         {
+          "name": "List Endpoint Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/health?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "health"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Check Endpoint Health",
           "request": {
             "method": "GET",
@@ -1074,6 +1122,248 @@
                 "v1.0",
                 "loadbalancingpolicies",
                 "metrics"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Model Access Policies",
+      "item": [
+        {
+          "name": "List Model Access Policies",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies?tenantId={{tenantId}}&activeFilter=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                },
+                {
+                  "key": "activeFilter",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Model Access Policy",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies/{{modelAccessPolicyId}}?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies",
+                "{{modelAccessPolicyId}}"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Model Access Policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Default deny model access\",\n  \"Description\": \"Allow one credential to use one model definition.\",\n  \"DefaultDecision\": \"Deny\",\n  \"Active\": true,\n  \"Rules\": [\n    {\n      \"Name\": \"Allow credential model use\",\n      \"Priority\": 100,\n      \"Effect\": \"Allow\",\n      \"SubjectType\": \"Credential\",\n      \"SubjectId\": \"{{credentialId}}\",\n      \"ResourceType\": \"ModelDefinition\",\n      \"ResourceId\": \"{{modelDefinitionId}}\",\n      \"Actions\": [\"Completions\", \"Embeddings\", \"ListModels\"],\n      \"Active\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Model Access Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Updated model access\",\n  \"Description\": \"Updated default-deny model access policy.\",\n  \"DefaultDecision\": \"Deny\",\n  \"Active\": true,\n  \"Rules\": [\n    {\n      \"Id\": \"{{modelAccessRuleId}}\",\n      \"Name\": \"Allow credential model use\",\n      \"Priority\": 100,\n      \"Effect\": \"Allow\",\n      \"SubjectType\": \"Credential\",\n      \"SubjectId\": \"{{credentialId}}\",\n      \"ResourceType\": \"ModelDefinition\",\n      \"ResourceId\": \"{{modelDefinitionId}}\",\n      \"Actions\": [\"Completions\", \"Embeddings\", \"ListModels\"],\n      \"Active\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies/{{modelAccessPolicyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies",
+                "{{modelAccessPolicyId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Model Access Policy",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies/{{modelAccessPolicyId}}?tenantId={{tenantId}}&forceDetach=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies",
+                "{{modelAccessPolicyId}}"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                },
+                {
+                  "key": "forceDetach",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Validate Model Access Policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Draft model access\",\n  \"DefaultDecision\": \"Deny\",\n  \"Active\": true,\n  \"Rules\": [\n    {\n      \"Name\": \"Allow credential model use\",\n      \"Priority\": 100,\n      \"Effect\": \"Allow\",\n      \"SubjectType\": \"Credential\",\n      \"SubjectId\": \"{{credentialId}}\",\n      \"ResourceType\": \"ModelDefinition\",\n      \"ResourceId\": \"{{modelDefinitionId}}\",\n      \"Actions\": [\"Completions\"],\n      \"Active\": true\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies",
+                "validate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Evaluate Model Access Policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"CredentialId\": \"{{credentialId}}\",\n  \"UserId\": \"{{userId}}\",\n  \"VirtualModelRunnerId\": \"{{vmrId}}\",\n  \"ModelAccessPolicyId\": \"{{modelAccessPolicyId}}\",\n  \"ModelDefinitionId\": \"{{modelDefinitionId}}\",\n  \"RequestedModel\": \"{{modelName}}\",\n  \"EffectiveModel\": \"{{modelName}}\",\n  \"Action\": \"Completions\",\n  \"RequestType\": \"OpenAIChatCompletions\",\n  \"ApiType\": \"OpenAI\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies/{{modelAccessPolicyId}}/evaluate?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies",
+                "{{modelAccessPolicyId}}",
+                "evaluate"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Effective Model Access",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelaccesspolicies/effective?tenantId={{tenantId}}&credentialId={{credentialId}}&userId={{userId}}&vmrId={{vmrId}}&modelDefinitionId={{modelDefinitionId}}&modelName={{modelName}}&action=Completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelaccesspolicies",
+                "effective"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                },
+                {
+                  "key": "credentialId",
+                  "value": "{{credentialId}}"
+                },
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "vmrId",
+                  "value": "{{vmrId}}"
+                },
+                {
+                  "key": "modelDefinitionId",
+                  "value": "{{modelDefinitionId}}"
+                },
+                {
+                  "key": "modelName",
+                  "value": "{{modelName}}"
+                },
+                {
+                  "key": "action",
+                  "value": "Completions"
+                }
               ]
             }
           }
@@ -1794,6 +2084,87 @@
               "path": [
                 "v1.0",
                 "modelrunnerendpoints",
+                "validate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Validate Model Definition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"preview-model\",\n  \"Family\": \"llama\",\n  \"ParameterSize\": \"8B\",\n  \"SupportsCompletions\": true,\n  \"SupportsEmbeddings\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modeldefinitions/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modeldefinitions",
+                "validate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Validate Model Configuration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Preview Configuration\",\n  \"Model\": \"{{modelName}}\",\n  \"ContextWindowSize\": 4096,\n  \"Temperature\": 0.7,\n  \"TopP\": 0.9,\n  \"TopK\": 40,\n  \"RepeatPenalty\": 1.1,\n  \"MaxTokens\": 2048\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelconfigurations/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelconfigurations",
+                "validate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Validate Load Balancing Policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Preview Load Balancing Policy\",\n  \"MaxTelemetryAgeMs\": 30000,\n  \"Filters\": [\n    { \"Metric\": \"health.isHealthy\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" }\n  ],\n  \"Ranking\": [\n    { \"Metric\": \"health.inFlightRequests\", \"Direction\": \"Ascending\", \"Weight\": 1 }\n  ],\n  \"FallbackMode\": \"UseLegacyLoadBalancingMode\",\n  \"TieBreaker\": \"RoundRobin\",\n  \"Active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "loadbalancingpolicies",
                 "validate"
               ]
             }

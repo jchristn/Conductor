@@ -205,6 +205,69 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         ";
 
         /// <summary>
+        /// Create model access policies table.
+        /// </summary>
+        public static readonly string CreateModelAccessPoliciesTable = @"
+            CREATE TABLE IF NOT EXISTS modelaccesspolicies (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                defaultdecision INTEGER NOT NULL DEFAULT 0,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                createdutc TIMESTAMP NOT NULL,
+                lastupdateutc TIMESTAMP NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_map_tenantid ON modelaccesspolicies(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_map_active ON modelaccesspolicies(active);
+            CREATE INDEX IF NOT EXISTS idx_map_name ON modelaccesspolicies(name);
+            CREATE INDEX IF NOT EXISTS idx_map_lastupdateutc ON modelaccesspolicies(lastupdateutc);
+        ";
+
+        /// <summary>
+        /// Create model access rules table.
+        /// </summary>
+        public static readonly string CreateModelAccessRulesTable = @"
+            CREATE TABLE IF NOT EXISTS modelaccessrules (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                policyid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                priority INTEGER NOT NULL DEFAULT 0,
+                effect INTEGER NOT NULL DEFAULT 0,
+                subjecttype INTEGER NOT NULL DEFAULT 5,
+                subjectid VARCHAR(255),
+                subjectselector TEXT,
+                resourcetype INTEGER NOT NULL DEFAULT 4,
+                resourceid VARCHAR(255),
+                resourceselector TEXT,
+                vmrid VARCHAR(48),
+                actions TEXT,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                createdutc TIMESTAMP NOT NULL,
+                lastupdateutc TIMESTAMP NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (policyid) REFERENCES modelaccesspolicies(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_mar_tenantid ON modelaccessrules(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_mar_policyid ON modelaccessrules(policyid);
+            CREATE INDEX IF NOT EXISTS idx_mar_active ON modelaccessrules(active);
+            CREATE INDEX IF NOT EXISTS idx_mar_priority ON modelaccessrules(priority);
+            CREATE INDEX IF NOT EXISTS idx_mar_effect ON modelaccessrules(effect);
+            CREATE INDEX IF NOT EXISTS idx_mar_subjecttype ON modelaccessrules(subjecttype);
+            CREATE INDEX IF NOT EXISTS idx_mar_subjectid ON modelaccessrules(subjectid);
+            CREATE INDEX IF NOT EXISTS idx_mar_resourcetype ON modelaccessrules(resourcetype);
+            CREATE INDEX IF NOT EXISTS idx_mar_resourceid ON modelaccessrules(resourceid);
+            CREATE INDEX IF NOT EXISTS idx_mar_vmrid ON modelaccessrules(vmrid);
+            CREATE INDEX IF NOT EXISTS idx_mar_lastupdateutc ON modelaccessrules(lastupdateutc);
+        ";
+
+        /// <summary>
         /// Create virtual model runners table.
         /// </summary>
         public static readonly string CreateVirtualModelRunnersTable = @"
@@ -231,6 +294,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
                 requesthistoryenabled BOOLEAN NOT NULL DEFAULT FALSE,
                 loadbalancingpolicyid VARCHAR(48),
+                modelaccesspolicyid VARCHAR(48),
                 active BOOLEAN NOT NULL DEFAULT TRUE,
                 createdutc TIMESTAMP NOT NULL,
                 lastupdateutc TIMESTAMP NOT NULL,
@@ -242,6 +306,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
             CREATE INDEX IF NOT EXISTS idx_vmr_tenantid ON virtualmodelrunners(tenantid);
             CREATE INDEX IF NOT EXISTS idx_vmr_basepath ON virtualmodelrunners(basepath);
             CREATE INDEX IF NOT EXISTS idx_vmr_active ON virtualmodelrunners(active);
+            CREATE INDEX IF NOT EXISTS idx_vmr_modelaccesspolicyid ON virtualmodelrunners(modelaccesspolicyid);
         ";
 
         /// <summary>
@@ -277,6 +342,12 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 credentialname VARCHAR(255),
                 loadbalancingpolicyguid VARCHAR(48),
                 loadbalancingpolicyname VARCHAR(255),
+                modelaccesspolicyguid VARCHAR(48),
+                modelaccesspolicyname VARCHAR(255),
+                modelaccessruleguid VARCHAR(48),
+                modelaccessrulename VARCHAR(255),
+                modelaccessdecision VARCHAR(32),
+                modelaccesswoulddeny BOOLEAN NOT NULL DEFAULT FALSE,
                 modelendpointguid VARCHAR(48),
                 modelendpointname VARCHAR(255),
                 modelendpointurl VARCHAR(512),
@@ -425,6 +496,13 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         /// </summary>
         public static readonly string AddLoadBalancingPolicyIdColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN loadbalancingpolicyid VARCHAR(48);
+        ";
+
+        /// <summary>
+        /// Add modelaccesspolicyid column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddModelAccessPolicyIdColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN modelaccesspolicyid VARCHAR(48);
         ";
     }
 }

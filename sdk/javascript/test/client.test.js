@@ -72,6 +72,86 @@ test('builds request analytics overview query string', async () => {
   );
 });
 
+test('builds model access policy management requests', async () => {
+  const captured = [];
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options) => {
+      captured.push({ url, options });
+      if (options.method === 'DELETE') {
+        return createJsonResponse({}, 204);
+      }
+
+      return createJsonResponse({ Success: true });
+    }
+  });
+
+  const policy = {
+    TenantId: 'ten_123',
+    Name: 'Production policy',
+    DefaultDecision: 'Deny',
+    Rules: []
+  };
+  const context = {
+    TenantId: 'ten_123',
+    CredentialId: 'cred_123',
+    VirtualModelRunnerId: 'vmr_123',
+    RequestedModel: 'gpt-4o-mini',
+    Action: 'Completions'
+  };
+
+  await client.listModelAccessPolicies({
+    tenantId: 'ten_123',
+    maxResults: 25,
+    continuationToken: 'next page',
+    nameFilter: 'prod',
+    activeFilter: true
+  });
+  await client.getModelAccessPolicy('map_123', 'ten_123');
+  await client.createModelAccessPolicy(policy);
+  await client.updateModelAccessPolicy('map_123', policy);
+  const deleteResult = await client.deleteModelAccessPolicy('map_123', { tenantId: 'ten_123', forceDetach: true });
+  await client.validateModelAccessPolicy(policy);
+  await client.evaluateModelAccessPolicy('map_123', context, 'ten_123');
+  await client.getEffectiveModelAccess({
+    tenantId: 'ten_123',
+    credentialId: 'cred_123',
+    userId: 'usr_123',
+    vmrId: 'vmr_123',
+    modelDefinitionId: 'mod_123',
+    modelName: 'gpt-4o-mini',
+    action: 'Completions'
+  });
+
+  assert.equal(deleteResult, null);
+  assert.equal(
+    captured[0].url,
+    'http://localhost:9000/v1.0/modelaccesspolicies?tenantId=ten_123&maxResults=25&continuationToken=next+page&nameFilter=prod&activeFilter=true'
+  );
+  assert.equal(captured[0].options.method, 'GET');
+  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123');
+  assert.equal(captured[1].options.method, 'GET');
+  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/modelaccesspolicies');
+  assert.equal(captured[2].options.method, 'POST');
+  assert.equal(captured[2].options.body, JSON.stringify(policy));
+  assert.equal(captured[3].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123');
+  assert.equal(captured[3].options.method, 'PUT');
+  assert.equal(captured[3].options.body, JSON.stringify(policy));
+  assert.equal(captured[4].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123&forceDetach=true');
+  assert.equal(captured[4].options.method, 'DELETE');
+  assert.equal(captured[5].url, 'http://localhost:9000/v1.0/modelaccesspolicies/validate');
+  assert.equal(captured[5].options.method, 'POST');
+  assert.equal(captured[5].options.body, JSON.stringify(policy));
+  assert.equal(captured[6].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123/evaluate?tenantId=ten_123');
+  assert.equal(captured[6].options.method, 'POST');
+  assert.equal(captured[6].options.body, JSON.stringify(context));
+  assert.equal(
+    captured[7].url,
+    'http://localhost:9000/v1.0/modelaccesspolicies/effective?tenantId=ten_123&credentialId=cred_123&userId=usr_123&vmrId=vmr_123&modelDefinitionId=mod_123&modelName=gpt-4o-mini&action=Completions'
+  );
+  assert.equal(captured[7].options.method, 'GET');
+});
+
 test('builds request history analytics detail URL', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({

@@ -566,6 +566,186 @@ namespace Test.Shared.Server.Integration
 
         #endregion
 
+        #region ModelAccessPolicy-Tests
+
+        public async Task ModelAccessPolicy_CreateReadUpdateDelete_RoundTrips()
+        {
+            ModelAccessPolicy policy = new ModelAccessPolicy
+            {
+                TenantId = _TestTenantId,
+                Name = "Production Model Access",
+                Description = "Restrict production models",
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Deny,
+                Active = true,
+                Labels = new List<string> { "prod" },
+                Tags = new Dictionary<string, string> { { "owner", "platform" } }
+            };
+
+            ModelAccessPolicy created = await _Database.ModelAccessPolicy.CreateAsync(policy);
+            ModelAccessPolicy read = await _Database.ModelAccessPolicy.ReadAsync(_TestTenantId, created.Id);
+
+            read.Should().NotBeNull();
+            read.Id.Should().Be(created.Id);
+            read.Name.Should().Be("Production Model Access");
+            read.DefaultDecision.Should().Be(ModelAccessDefaultDecisionEnum.Deny);
+            read.Labels.Should().Contain("prod");
+            read.Tags.Should().ContainKey("owner");
+
+            read.DefaultDecision = ModelAccessDefaultDecisionEnum.Permit;
+            read.Active = false;
+            ModelAccessPolicy updated = await _Database.ModelAccessPolicy.UpdateAsync(read);
+
+            updated.DefaultDecision.Should().Be(ModelAccessDefaultDecisionEnum.Permit);
+            updated.Active.Should().BeFalse();
+
+            bool exists = await _Database.ModelAccessPolicy.ExistsAsync(_TestTenantId, created.Id);
+            exists.Should().BeTrue();
+
+            await _Database.ModelAccessPolicy.DeleteAsync(_TestTenantId, created.Id);
+            ModelAccessPolicy deleted = await _Database.ModelAccessPolicy.ReadAsync(_TestTenantId, created.Id);
+            deleted.Should().BeNull();
+        }
+
+        public async Task ModelAccessPolicy_Enumerate_FiltersByTenantAndActive()
+        {
+            await _Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = _TestTenantId,
+                Name = "Active ACL",
+                Active = true
+            });
+
+            ModelAccessPolicy inactive = await _Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = _TestTenantId,
+                Name = "Inactive ACL",
+                Active = true
+            });
+            inactive.Active = false;
+            await _Database.ModelAccessPolicy.UpdateAsync(inactive);
+
+            EnumerationResult<ModelAccessPolicy> result = await _Database.ModelAccessPolicy.EnumerateAsync(
+                _TestTenantId,
+                new EnumerationRequest { ActiveFilter = true });
+
+            result.Data.Should().NotBeEmpty();
+            result.Data.Should().OnlyContain(policy => policy.TenantId == _TestTenantId && policy.Active);
+        }
+
+        public async Task ModelAccessRule_CreateReadUpdateDelete_RoundTrips()
+        {
+            ModelAccessPolicy policy = await _Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = _TestTenantId,
+                Name = "Rule Test Policy",
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Deny
+            });
+
+            ModelAccessRule rule = new ModelAccessRule
+            {
+                TenantId = _TestTenantId,
+                PolicyId = policy.Id,
+                Name = "Allow finance embeddings",
+                Priority = 100,
+                Effect = ModelAccessRuleEffectEnum.Allow,
+                SubjectType = ModelAccessSubjectTypeEnum.CredentialLabel,
+                SubjectId = "finance",
+                SubjectSelector = new Dictionary<string, string> { { "label", "finance" } },
+                ResourceType = ModelAccessResourceTypeEnum.ModelLabel,
+                ResourceId = "embeddings",
+                ResourceSelector = new Dictionary<string, string> { { "label", "embeddings" } },
+                VirtualModelRunnerId = "vmr_test",
+                Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Embeddings }
+            };
+
+            ModelAccessRule created = await _Database.ModelAccessPolicy.CreateRuleAsync(rule);
+            ModelAccessRule read = await _Database.ModelAccessPolicy.ReadRuleAsync(_TestTenantId, policy.Id, created.Id);
+
+            read.Should().NotBeNull();
+            read.Id.Should().Be(created.Id);
+            read.Priority.Should().Be(100);
+            read.Effect.Should().Be(ModelAccessRuleEffectEnum.Allow);
+            read.SubjectSelector.Should().ContainKey("label");
+            read.ResourceSelector.Should().ContainKey("label");
+            read.Actions.Should().Contain(ModelAccessActionEnum.Embeddings);
+
+            read.Priority = 200;
+            read.Effect = ModelAccessRuleEffectEnum.Deny;
+            read.Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Completions };
+            ModelAccessRule updated = await _Database.ModelAccessPolicy.UpdateRuleAsync(read);
+
+            updated.Priority.Should().Be(200);
+            updated.Effect.Should().Be(ModelAccessRuleEffectEnum.Deny);
+            updated.Actions.Should().Contain(ModelAccessActionEnum.Completions);
+
+            EnumerationResult<ModelAccessRule> rules = await _Database.ModelAccessPolicy.EnumerateRulesAsync(
+                _TestTenantId,
+                policy.Id,
+                new EnumerationRequest { ActiveFilter = true });
+
+            rules.Data.Should().ContainSingle(item => item.Id == created.Id);
+
+            bool exists = await _Database.ModelAccessPolicy.ExistsRuleAsync(_TestTenantId, policy.Id, created.Id);
+            exists.Should().BeTrue();
+
+            await _Database.ModelAccessPolicy.DeleteRuleAsync(_TestTenantId, policy.Id, created.Id);
+            ModelAccessRule deleted = await _Database.ModelAccessPolicy.ReadRuleAsync(_TestTenantId, policy.Id, created.Id);
+            deleted.Should().BeNull();
+        }
+
+        public async Task ModelAccessPolicy_Delete_RemovesRules()
+        {
+            ModelAccessPolicy policy = await _Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = _TestTenantId,
+                Name = "Cascade ACL"
+            });
+
+            ModelAccessRule rule = await _Database.ModelAccessPolicy.CreateRuleAsync(new ModelAccessRule
+            {
+                TenantId = _TestTenantId,
+                PolicyId = policy.Id,
+                Name = "Any allow",
+                Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Completions }
+            });
+
+            await _Database.ModelAccessPolicy.DeleteAsync(_TestTenantId, policy.Id);
+
+            ModelAccessRule readRule = await _Database.ModelAccessPolicy.ReadRuleByIdAsync(rule.Id);
+            readRule.Should().BeNull();
+        }
+
+        public async Task VirtualModelRunner_ModelAccessPolicyId_RoundTrip()
+        {
+            ModelAccessPolicy policy = await _Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = _TestTenantId,
+                Name = "VMR Attachment ACL"
+            });
+
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "VMR with Model Access Policy",
+                BasePath = $"/acl/{Guid.NewGuid():N}/",
+                ModelAccessPolicyId = policy.Id
+            };
+
+            VirtualModelRunner created = await _Database.VirtualModelRunner.CreateAsync(vmr);
+            VirtualModelRunner read = await _Database.VirtualModelRunner.ReadAsync(_TestTenantId, created.Id);
+
+            read.Should().NotBeNull();
+            read.ModelAccessPolicyId.Should().Be(policy.Id);
+
+            read.ModelAccessPolicyId = null;
+            await _Database.VirtualModelRunner.UpdateAsync(read);
+
+            VirtualModelRunner cleared = await _Database.VirtualModelRunner.ReadAsync(_TestTenantId, created.Id);
+            cleared.ModelAccessPolicyId.Should().BeNull();
+        }
+
+        #endregion
+
         #region RequestHistory-Tests
         public async Task RequestHistory_SummaryFilterByDenialReason_ReturnsExpectedCounts()
         {
@@ -618,6 +798,93 @@ namespace Test.Shared.Server.Integration
             result.TotalFailure.Should().Be(1);
             result.DenialReasonCounts.Should().ContainKey("AllEndpointsAtCapacity");
             result.DenialReasonCounts["AllEndpointsAtCapacity"].Should().Be(1);
+        }
+
+        public async Task RequestHistory_ModelAccessFields_RoundTripAndFilter()
+        {
+            DateTime now = DateTime.UtcNow;
+            string suffix = Guid.NewGuid().ToString("N");
+            string policyId = "map_" + suffix;
+            string ruleId = "mar_" + suffix;
+            VirtualModelRunner vmr = await _Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "ACL History VMR",
+                BasePath = $"/acl-history/{suffix}/"
+            });
+
+            RequestHistoryEntry denied = await _Database.RequestHistory.CreateAsync(new RequestHistoryDetail
+            {
+                TenantGuid = _TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "acl-history-denied-" + suffix + ".json",
+                CreatedUtc = now.AddMinutes(-10),
+                HttpStatus = 403,
+                RoutingOutcomeCode = "Denied",
+                DenialReasonCode = "ModelAccessDenied",
+                ModelAccessPolicyGuid = policyId,
+                ModelAccessPolicyName = "Tenant ACL",
+                ModelAccessRuleGuid = ruleId,
+                ModelAccessRuleName = "Deny private model",
+                ModelAccessDecision = "Deny",
+                ModelAccessWouldDeny = false
+            });
+
+            await _Database.RequestHistory.CreateAsync(new RequestHistoryDetail
+            {
+                TenantGuid = _TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "acl-history-allowed-" + suffix + ".json",
+                CreatedUtc = now.AddMinutes(-5),
+                HttpStatus = 200,
+                RoutingOutcomeCode = "Routed",
+                ModelAccessPolicyGuid = "map_other_" + suffix,
+                ModelAccessRuleGuid = "mar_other_" + suffix,
+                ModelAccessDecision = "Deny",
+                ModelAccessWouldDeny = true
+            });
+
+            RequestHistoryEntry read = await _Database.RequestHistory.ReadByIdAsync(denied.Id);
+            read.ModelAccessPolicyGuid.Should().Be(policyId);
+            read.ModelAccessPolicyName.Should().Be("Tenant ACL");
+            read.ModelAccessRuleGuid.Should().Be(ruleId);
+            read.ModelAccessRuleName.Should().Be("Deny private model");
+            read.ModelAccessDecision.Should().Be("Deny");
+            read.ModelAccessWouldDeny.Should().BeFalse();
+
+            RequestHistorySearchResult search = await _Database.RequestHistory.SearchAsync(new RequestHistorySearchFilter
+            {
+                TenantGuid = _TestTenantId,
+                ModelAccessPolicyGuid = policyId,
+                ModelAccessRuleGuid = ruleId,
+                ModelAccessDecision = "Deny",
+                ModelAccessWouldDeny = false,
+                PageSize = 10
+            });
+
+            search.TotalCount.Should().Be(1);
+            search.Data.Should().ContainSingle(item => item.Id == denied.Id);
+
+            RequestHistorySummaryResult summary = await _Database.RequestHistory.GetSummaryAsync(new RequestHistorySummaryFilter
+            {
+                TenantGuid = _TestTenantId,
+                StartUtc = now.AddHours(-1),
+                EndUtc = now.AddHours(1),
+                ModelAccessPolicyGuid = policyId,
+                ModelAccessRuleGuid = ruleId,
+                ModelAccessDecision = "Deny",
+                ModelAccessWouldDeny = false
+            });
+
+            summary.TotalFailure.Should().Be(1);
         }
 
         public async Task RequestAnalytics_CreateAndList_RoundTrips()

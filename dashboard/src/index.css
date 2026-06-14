@@ -924,6 +924,64 @@ body {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.labels-tags-editor {
+  display: grid;
+  gap: 2px;
+}
+
+.labels-tags-section {
+  margin-bottom: 18px;
+}
+
+.dynamic-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dynamic-field-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+
+.label-field-row {
+  grid-template-columns: minmax(0, 1fr) 36px 36px;
+}
+
+.tag-field-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px 36px;
+}
+
+.dynamic-field-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.dynamic-field-button:hover {
+  background: var(--bg-color);
+  color: var(--text-primary);
+}
+
+.dynamic-field-button:focus-visible {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dynamic-field-delete:hover {
+  color: var(--danger-color);
+}
+
 .sensitive-input {
   position: relative;
 }
@@ -971,6 +1029,20 @@ body {
   gap: 16px;
 }
 
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+
 .checkbox-group label {
   display: flex;
   align-items: center;
@@ -983,7 +1055,13 @@ body {
 }
 
 .checkbox-row {
+  display: flex;
   flex-wrap: wrap;
+  gap: 12px;
+}
+
+.text-muted {
+  color: var(--text-secondary);
 }
 
 .form-actions {
@@ -993,6 +1071,50 @@ body {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
+}
+
+.detail-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.detail-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 12px;
+}
+
+.detail-section-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rule-editor {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
+  background: var(--bg-color);
+}
+
+.warning-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.warning-item {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--warning-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 .form-hint {

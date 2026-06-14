@@ -53,6 +53,11 @@ namespace Conductor.Core.Database
         public ILoadBalancingPolicyMethods LoadBalancingPolicy { get; protected set; }
 
         /// <summary>
+        /// Model access policy methods.
+        /// </summary>
+        public IModelAccessPolicyMethods ModelAccessPolicy { get; protected set; }
+
+        /// <summary>
         /// Administrator methods.
         /// </summary>
         public IAdministratorMethods Administrator { get; protected set; }

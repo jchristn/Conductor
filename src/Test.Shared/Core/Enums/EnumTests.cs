@@ -204,5 +204,81 @@ namespace Test.Shared.Core.Enums
         }
 
         #endregion
+
+        #region ModelAccessEnum-Tests
+
+        public void ModelAccessEnforcementModeEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessEnforcementModeEnum.Disabled).Should().Be(0);
+            ((int)ModelAccessEnforcementModeEnum.Monitor).Should().Be(1);
+            ((int)ModelAccessEnforcementModeEnum.Enforce).Should().Be(2);
+        }
+
+        public void ModelAccessDefaultDecisionEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessDefaultDecisionEnum.Permit).Should().Be(0);
+            ((int)ModelAccessDefaultDecisionEnum.Deny).Should().Be(1);
+        }
+
+        public void ModelAccessRuleEffectEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessRuleEffectEnum.Allow).Should().Be(0);
+            ((int)ModelAccessRuleEffectEnum.Deny).Should().Be(1);
+        }
+
+        public void ModelAccessSubjectTypeEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessSubjectTypeEnum.Credential).Should().Be(0);
+            ((int)ModelAccessSubjectTypeEnum.CredentialLabel).Should().Be(1);
+            ((int)ModelAccessSubjectTypeEnum.User).Should().Be(2);
+            ((int)ModelAccessSubjectTypeEnum.UserLabel).Should().Be(3);
+            ((int)ModelAccessSubjectTypeEnum.Tenant).Should().Be(4);
+            ((int)ModelAccessSubjectTypeEnum.Any).Should().Be(5);
+        }
+
+        public void ModelAccessResourceTypeEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessResourceTypeEnum.ModelDefinition).Should().Be(0);
+            ((int)ModelAccessResourceTypeEnum.ModelName).Should().Be(1);
+            ((int)ModelAccessResourceTypeEnum.ModelLabel).Should().Be(2);
+            ((int)ModelAccessResourceTypeEnum.VirtualModelRunner).Should().Be(3);
+            ((int)ModelAccessResourceTypeEnum.Any).Should().Be(4);
+        }
+
+        public void ModelAccessActionEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessActionEnum.Completions).Should().Be(0);
+            ((int)ModelAccessActionEnum.Embeddings).Should().Be(1);
+            ((int)ModelAccessActionEnum.ListModels).Should().Be(2);
+            ((int)ModelAccessActionEnum.ShowModel).Should().Be(3);
+            ((int)ModelAccessActionEnum.LoadModel).Should().Be(4);
+            ((int)ModelAccessActionEnum.UnloadModel).Should().Be(5);
+            ((int)ModelAccessActionEnum.ModelManagement).Should().Be(6);
+        }
+
+        public void ModelAccessUnknownModelBehaviorEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessUnknownModelBehaviorEnum.Deny).Should().Be(0);
+            ((int)ModelAccessUnknownModelBehaviorEnum.Permit).Should().Be(1);
+            ((int)ModelAccessUnknownModelBehaviorEnum.RequireStrictVirtualModelRunnerResolution).Should().Be(2);
+        }
+
+        public void ModelAccessListModelsBehaviorEnum_HasExpectedValues()
+        {
+            ((int)ModelAccessListModelsBehaviorEnum.Filter).Should().Be(0);
+            ((int)ModelAccessListModelsBehaviorEnum.Synthesize).Should().Be(1);
+            ((int)ModelAccessListModelsBehaviorEnum.RawPassThrough).Should().Be(2);
+        }
+
+        public void ModelAccessEnums_CanParse()
+        {
+            Enum.TryParse<ModelAccessEnforcementModeEnum>("Monitor", out ModelAccessEnforcementModeEnum mode).Should().BeTrue();
+            mode.Should().Be(ModelAccessEnforcementModeEnum.Monitor);
+
+            Enum.TryParse<ModelAccessActionEnum>("Embeddings", out ModelAccessActionEnum action).Should().BeTrue();
+            action.Should().Be(ModelAccessActionEnum.Embeddings);
+        }
+
+        #endregion
     }
 }

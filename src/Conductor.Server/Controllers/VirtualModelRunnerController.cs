@@ -68,6 +68,7 @@ namespace Conductor.Server.Controllers
                 : NormalizeBasePath(vmr.BasePath);
             vmr.TenantId = tenantId;
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
+            await ValidateModelAccessPolicyAsync(tenantId, vmr.ModelAccessPolicyId).ConfigureAwait(false);
             await ValidateAsync(tenantId, vmr, null).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.CreateAsync(vmr);
 
@@ -121,6 +122,7 @@ namespace Conductor.Server.Controllers
             vmr.CreatedUtc = existing.CreatedUtc;
             vmr.BasePath = NormalizeBasePath(vmr.BasePath);
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
+            await ValidateModelAccessPolicyAsync(tenantId, vmr.ModelAccessPolicyId).ConfigureAwait(false);
             await ValidateAsync(tenantId, vmr, id).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.UpdateAsync(vmr);
 
@@ -330,6 +332,20 @@ namespace Conductor.Server.Controllers
             if (policy == null)
             {
                 throw new WebserverException(ApiResultEnum.BadRequest, "LoadBalancingPolicyId must reference an existing policy in the same tenant.");
+            }
+        }
+
+        private async Task ValidateModelAccessPolicyAsync(string tenantId, string policyId)
+        {
+            if (String.IsNullOrWhiteSpace(policyId)) return;
+
+            ModelAccessPolicy policy = String.IsNullOrEmpty(tenantId)
+                ? await Database.ModelAccessPolicy.ReadByIdAsync(policyId).ConfigureAwait(false)
+                : await Database.ModelAccessPolicy.ReadAsync(tenantId, policyId).ConfigureAwait(false);
+
+            if (policy == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "ModelAccessPolicyId must reference an existing model access policy in the same tenant.");
             }
         }
 

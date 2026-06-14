@@ -74,6 +74,36 @@ namespace Conductor.Core.Models
         public string LoadBalancingPolicyName { get; set; } = null;
 
         /// <summary>
+        /// Attached model access policy GUID, if evaluated. May be null.
+        /// </summary>
+        public string ModelAccessPolicyGuid { get; set; } = null;
+
+        /// <summary>
+        /// Attached model access policy name, if evaluated. May be null.
+        /// </summary>
+        public string ModelAccessPolicyName { get; set; } = null;
+
+        /// <summary>
+        /// Matched model access rule GUID, if any. May be null.
+        /// </summary>
+        public string ModelAccessRuleGuid { get; set; } = null;
+
+        /// <summary>
+        /// Matched model access rule name, if any. May be null.
+        /// </summary>
+        public string ModelAccessRuleName { get; set; } = null;
+
+        /// <summary>
+        /// Model access decision, if evaluated. May be null.
+        /// </summary>
+        public string ModelAccessDecision { get; set; } = null;
+
+        /// <summary>
+        /// Whether monitor mode observed that model access would deny the request.
+        /// </summary>
+        public bool ModelAccessWouldDeny { get; set; } = false;
+
+        /// <summary>
         /// Model Endpoint GUID, if routed. May be null.
         /// </summary>
         public string ModelEndpointGuid { get; set; } = null;
@@ -363,6 +393,12 @@ namespace Conductor.Core.Models
                 CredentialName = DataTableHelper.GetStringValue(row, "credentialname"),
                 LoadBalancingPolicyGuid = DataTableHelper.GetStringValue(row, "loadbalancingpolicyguid"),
                 LoadBalancingPolicyName = DataTableHelper.GetStringValue(row, "loadbalancingpolicyname"),
+                ModelAccessPolicyGuid = DataTableHelper.GetStringValue(row, "modelaccesspolicyguid"),
+                ModelAccessPolicyName = DataTableHelper.GetStringValue(row, "modelaccesspolicyname"),
+                ModelAccessRuleGuid = DataTableHelper.GetStringValue(row, "modelaccessruleguid"),
+                ModelAccessRuleName = DataTableHelper.GetStringValue(row, "modelaccessrulename"),
+                ModelAccessDecision = DataTableHelper.GetStringValue(row, "modelaccessdecision"),
+                ModelAccessWouldDeny = DataTableHelper.GetBooleanValue(row, "modelaccesswoulddeny"),
                 ModelEndpointGuid = DataTableHelper.GetStringValue(row, "modelendpointguid"),
                 ModelEndpointName = DataTableHelper.GetStringValue(row, "modelendpointname"),
                 ModelEndpointUrl = DataTableHelper.GetStringValue(row, "modelendpointurl"),

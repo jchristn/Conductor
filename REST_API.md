@@ -156,7 +156,9 @@ Typical response codes:
 | `204` | Delete succeeded, no body |
 | `400` | Validation failure or malformed request |
 | `401` | Authentication or authorization failure |
+| `403` | Authenticated caller is forbidden, including model access denials on proxied requests |
 | `404` | Resource not found |
+| `409` | Conflict, such as deleting an attached model access policy without `forceDetach=true` |
 | `500` | Unexpected server failure |
 
 The dashboard client expects error payloads to include `Message` or `message`, but exact error bodies may vary by route.
@@ -348,6 +350,53 @@ Minimal example:
 }
 ```
 
+### Model Access Policy
+
+Model access policies are tenant-scoped ACL resources attached to VMRs through `VirtualModelRunner.ModelAccessPolicyId`.
+
+```jsonc
+{
+  "Id": "map_xxx",
+  "TenantId": "default",
+  "Name": "Production model access",
+  "Description": "Default deny with explicit model grants.",
+  "DefaultDecision": "Deny",
+  "Active": true,
+  "Rules": [
+    {
+      "Id": "mar_xxx",
+      "TenantId": "default",
+      "PolicyId": "map_xxx",
+      "Name": "Finance credential can use chat model",
+      "Priority": 100,
+      "Effect": "Allow",
+      "SubjectType": "CredentialLabel",
+      "SubjectSelector": { "label": "finance" },
+      "ResourceType": "ModelLabel",
+      "ResourceSelector": { "label": "chat" },
+      "VirtualModelRunnerId": null,
+      "Actions": ["Completions", "ListModels"],
+      "Active": true
+    }
+  ],
+  "Labels": [],
+  "Tags": {},
+  "Metadata": null,
+  "CreatedUtc": "2026-06-13T12:00:00Z",
+  "LastUpdateUtc": "2026-06-13T12:00:00Z"
+}
+```
+
+Supported enum values:
+
+- `DefaultDecision`: `Permit`, `Deny`
+- `Effect`: `Allow`, `Deny`
+- `SubjectType`: `Credential`, `CredentialLabel`, `User`, `UserLabel`, `Tenant`, `Any`
+- `ResourceType`: `ModelDefinition`, `ModelName`, `ModelLabel`, `VirtualModelRunner`, `Any`
+- `Actions`: `Completions`, `Embeddings`, `ListModels`, `ShowModel`, `LoadModel`, `UnloadModel`, `ModelManagement`
+
+Selector objects support simple keys such as `label`, `labels`, `value`, `equals`, `prefix`, and `contains`.
+
 ### Virtual Model Runner
 
 ```jsonc
@@ -360,6 +409,7 @@ Minimal example:
   "ApiType": "OpenAI",
   "LoadBalancingMode": "RoundRobin",
   "LoadBalancingPolicyId": "lbp_xxx",
+  "ModelAccessPolicyId": "map_xxx",
   "ModelRunnerEndpointIds": ["mre_a", "mre_b"],
   "ModelConfigurationIds": ["mc_default"],
   "ModelConfigurationMappings": {
@@ -707,6 +757,139 @@ The `metrics` response shape is:
 }
 ```
 
+### Model Access Policies
+
+Auth level: `TenantAdmin`
+
+For a user-facing authoring guide with rollout advice and real-world policy examples, see [ACCESS_POLICIES.md](./ACCESS_POLICIES.md).
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/modelaccesspolicies` | List policies. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
+| `POST` | `/v1.0/modelaccesspolicies` | Create a policy with optional nested rules. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/modelaccesspolicies/validate` | Validate a policy draft and nested rules without saving it. |
+| `GET` | `/v1.0/modelaccesspolicies/{id}` | Read a policy and its rules. Optional `tenantId` query. |
+| `PUT` | `/v1.0/modelaccesspolicies/{id}` | Update a policy and replace its nested rules. Cross-tenant callers supply `TenantId` in the body. |
+| `DELETE` | `/v1.0/modelaccesspolicies/{id}` | Delete a policy. Optional `tenantId` query. Returns `409 Conflict` if attached to any VMR unless `forceDetach=true` is supplied. |
+| `POST` | `/v1.0/modelaccesspolicies/{id}/evaluate` | Evaluate a supplied `ModelAccessEvaluationContext` against a policy. Optional `tenantId` query. |
+| `GET` | `/v1.0/modelaccesspolicies/effective` | Evaluate effective access using query parameters. Query: `tenantId`, `credentialId`, `userId`, `vmrId`, `modelDefinitionId`, `modelName`, `action`. |
+
+Create and update validate references to credentials, users, model definitions, and VMRs in the same tenant. Evaluation returns a `ModelAccessEvaluationResult` with `Allowed`, `Decision`, `Mode`, `DefaultSource`, matched policy/rule metadata, `ReasonCode`, `ReasonText`, and `WouldDeny`.
+
+Example evaluation request:
+
+```json
+{
+  "TenantId": "default",
+  "CredentialId": "cred_xxx",
+  "UserId": "usr_xxx",
+  "VirtualModelRunnerId": "vmr_xxx",
+  "ModelAccessPolicyId": "map_xxx",
+  "RequestedModel": "gpt-4o-mini",
+  "EffectiveModel": "gpt-4o-mini",
+  "Action": "Completions",
+  "RequestType": "OpenAIChatCompletions",
+  "ApiType": "OpenAI"
+}
+```
+
+Example evaluation response:
+
+```json
+{
+  "Allowed": true,
+  "Decision": "Permit",
+  "Mode": "Enforce",
+  "DefaultSource": null,
+  "PolicyId": "map_xxx",
+  "PolicyName": "Production model access",
+  "RuleId": "mar_xxx",
+  "RuleName": "Finance credential can use chat model",
+  "ReasonCode": "MatchedAllowRule",
+  "ReasonText": "Matched model access rule 'Finance credential can use chat model'.",
+  "WouldDeny": false
+}
+```
+
+Proxy enforcement occurs after request/model resolution and before endpoint inventory, session affinity, load balancing, and provider calls. Authentication failures return `401`; authenticated model access denials return `403`. In monitor mode, denied decisions are recorded as `WouldDeny=true` while the request continues.
+
+List-models responses are governed by server setting `ModelAccessControl.ListModelsBehavior`: `Filter` removes denied upstream models, `Synthesize` returns a provider-shaped list from allowed active VMR model definitions, and `RawPassThrough` leaves upstream responses unchanged.
+
+Label subject/resource rules can match a literal label by `SubjectId` or `ResourceId`, or by selectors such as `{ "label": "finance" }` and `{ "labels": "finance,production" }`. `ModelName` rules can match exact names with `ResourceId`, or text selectors such as `{ "equals": "gpt-4o-mini" }`, `{ "prefix": "gpt-4" }`, and `{ "contains": "70b" }`.
+
+Example policy patterns:
+
+Default deny with a credential allow-list:
+
+```jsonc
+{
+  "TenantId": "default",
+  "Name": "Credential allow-list",
+  "DefaultDecision": "Deny",
+  "Rules": [
+    {
+      "Name": "Primary credential can use chat model",
+      "Priority": 100,
+      "Effect": "Allow",
+      "SubjectType": "Credential",
+      "SubjectId": "cred_xxx",
+      "ResourceType": "ModelDefinition",
+      "ResourceId": "md_chat",
+      "Actions": ["Completions", "ListModels"],
+      "Active": true
+    }
+  ],
+  "Active": true
+}
+```
+
+Label-based access:
+
+```jsonc
+{
+  "Name": "Finance label access",
+  "DefaultDecision": "Deny",
+  "Rules": [
+    {
+      "Name": "Finance subjects can use finance models",
+      "Priority": 100,
+      "Effect": "Allow",
+      "SubjectType": "CredentialLabel",
+      "SubjectSelector": { "label": "finance" },
+      "ResourceType": "ModelLabel",
+      "ResourceSelector": { "label": "finance" },
+      "Actions": ["Completions", "Embeddings", "ListModels"],
+      "Active": true
+    }
+  ]
+}
+```
+
+Embeddings-only access:
+
+```jsonc
+{
+  "Name": "Embeddings only",
+  "DefaultDecision": "Deny",
+  "Rules": [
+    {
+      "Name": "Allow embeddings model",
+      "Priority": 100,
+      "Effect": "Allow",
+      "SubjectType": "Any",
+      "ResourceType": "ModelName",
+      "ResourceId": "text-embedding-004",
+      "Actions": ["Embeddings", "ListModels"],
+      "Active": true
+    }
+  ]
+}
+```
+
+List-model filtering uses the same `ListModels` action. Include `ListModels` in allow rules for models that should be visible when `ModelAccessControl.ListModelsBehavior` is `Filter` or `Synthesize`.
+
+For monitor-mode rollout, configure `ModelAccessControl.Enabled=true` and `ModelAccessControl.Mode=Monitor`, attach the policy to selected VMRs, and inspect request history for `ModelAccessWouldDeny=true` before switching to `Enforce`.
+
 ### Virtual Model Runners
 
 Auth level: `Authenticated`
@@ -862,6 +1045,8 @@ Backup package shape:
   "ModelRunnerEndpoints": [],
   "VirtualModelRunners": [],
   "LoadBalancingPolicies": [],
+  "ModelAccessPolicies": [],
+  "ModelAccessRules": [],
   "Administrators": []
 }
 ```
@@ -896,7 +1081,9 @@ Validation response shape:
     "ModelRunnerEndpointCount": 0,
     "VirtualModelRunnerCount": 0,
     "AdministratorCount": 0,
-    "LoadBalancingPolicyCount": 0
+    "LoadBalancingPolicyCount": 0,
+    "ModelAccessPolicyCount": 0,
+    "ModelAccessRuleCount": 0
   }
 }
 ```
@@ -916,7 +1103,9 @@ Restore response shape:
     "ModelRunnerEndpoints": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "VirtualModelRunners": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "Administrators": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
-    "LoadBalancingPolicies": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 }
+    "LoadBalancingPolicies": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
+    "ModelAccessPolicies": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
+    "ModelAccessRules": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 }
   },
   "Warnings": []
 }
@@ -931,8 +1120,8 @@ Request history routes are registered only when request history is enabled in se
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/v1.0/requesthistory/analytics/overview` | Chart-ready aggregate analytics. Query: `tenantId`, `range`, `startUtc`, `endUtc`, `bucketSeconds`, `limit`, `vmrGuid`, `endpointGuid`, `providerName`, `modelName`, `stageKind`, `statusClass`. |
-| `GET` | `/v1.0/requesthistory/summary` | Aggregated time buckets. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `startUtc`, `endUtc`, `interval`. |
-| `GET` | `/v1.0/requesthistory` | Search entries. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`, `page`, `pageSize`. |
+| `GET` | `/v1.0/requesthistory/summary` | Aggregated time buckets. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelAccessPolicyGuid`, `modelAccessRuleGuid`, `modelAccessDecision`, `modelAccessWouldDeny`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `startUtc`, `endUtc`, `interval`. |
+| `GET` | `/v1.0/requesthistory` | Search entries. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelAccessPolicyGuid`, `modelAccessRuleGuid`, `modelAccessDecision`, `modelAccessWouldDeny`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`, `page`, `pageSize`. |
 | `GET` | `/v1.0/requesthistory/{id}` | Read entry metadata. Query: optional `tenantId` for cross-tenant callers. |
 | `GET` | `/v1.0/requesthistory/{id}/detail` | Read full request/response detail. Query: optional `tenantId`. |
 | `GET` | `/v1.0/requesthistory/{id}/analytics` | Read normalized analytics events for one request history entry. Query: optional `tenantId`. |
@@ -1040,6 +1229,12 @@ Request history entry fields include:
 - `CredentialName`
 - `LoadBalancingPolicyGuid`
 - `LoadBalancingPolicyName`
+- `ModelAccessPolicyGuid`
+- `ModelAccessPolicyName`
+- `ModelAccessRuleGuid`
+- `ModelAccessRuleName`
+- `ModelAccessDecision`
+- `ModelAccessWouldDeny`
 - `ModelEndpointGuid`
 - `ModelEndpointName`
 - `ModelEndpointUrl`

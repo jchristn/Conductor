@@ -37,6 +37,7 @@ namespace Conductor.Server
         private static HealthCheckService _HealthCheckService;
         private static SessionAffinityService _SessionAffinityService;
         private static OperationalMetricsService _OperationalMetricsService;
+        private static ModelAccessControlService _ModelAccessControlService;
         private static RoutingDecisionService _RoutingDecisionService;
         private static ConfigurationValidationService _ConfigurationValidationService;
         private static ModelLoadService _ModelLoadService;
@@ -143,12 +144,15 @@ namespace Conductor.Server
 
             // Initialize shared routing, validation, and observability services
             _OperationalMetricsService = new OperationalMetricsService();
+            _ModelAccessControlService = new ModelAccessControlService(_Database, _Logging, _Settings.ModelAccessControl);
             _RoutingDecisionService = new RoutingDecisionService(
                 _Database,
                 _Logging,
                 _HealthCheckService,
                 _SessionAffinityService,
-                _OperationalMetricsService);
+                _OperationalMetricsService,
+                _ModelAccessControlService,
+                _Settings.ModelAccessControl);
             _ConfigurationValidationService = new ConfigurationValidationService(_Database, _Logging, _RoutingDecisionService);
             _ModelLoadService = new ModelLoadService(
                 _Database,
@@ -179,7 +183,7 @@ namespace Conductor.Server
             // a default route at construction time; the default route is the proxy handler.
             _ProxyController = new Controllers.ProxyController(
                 _Database, _AuthService, _Serializer, _Logging,
-                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService);
+                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService);
 
             WatsonWebserver.Core.WebserverSettings webSettings = new WatsonWebserver.Core.WebserverSettings(
                 _Settings.Webserver.Hostname,
@@ -214,6 +218,7 @@ namespace Conductor.Server
                 openApi.Tags.Add(new OpenApiTag { Name = "Model Definitions", Description = "Model definition management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Model Configurations", Description = "Model configuration management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Load Balancing Policies", Description = "Load-balancing policy management" });
+                openApi.Tags.Add(new OpenApiTag { Name = "Model Access Policies", Description = "Model access policy management and simulation" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Virtual Model Runners", Description = "Virtual model runner management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Administrators", Description = "Administrator management endpoints" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Backup", Description = "Backup and restore endpoints" });
@@ -317,6 +322,7 @@ namespace Conductor.Server
                 _OperationalMetricsService,
                 _RoutingDecisionService,
                 _ConfigurationValidationService,
+                _ModelAccessControlService,
                 _ModelLoadService,
                 _OllamaModelManagementService,
                 _RequestHistoryService);

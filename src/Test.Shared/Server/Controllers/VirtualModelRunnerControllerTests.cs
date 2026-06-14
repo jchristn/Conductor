@@ -5,6 +5,7 @@ namespace Test.Shared.Server.Controllers
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Settings;
     using Conductor.Server.Controllers;
     using Conductor.Server.Services;
     using FluentAssertions;
@@ -177,6 +178,56 @@ namespace Test.Shared.Server.Controllers
 
             result.LoadBalancingPolicyId.Should().Be(policy.Id);
         }
+        public async Task Create_WithUnknownModelAccessPolicyId_ThrowsBadRequest()
+        {
+            Func<Task> act = async () => await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Invalid Access Policy VMR",
+                BasePath = "/v1.0/api/invalid-access-policy/",
+                ModelAccessPolicyId = "map_missing"
+            });
+
+            await act.Should().ThrowAsync<Exception>();
+        }
+        public async Task Create_WithCrossTenantModelAccessPolicyId_ThrowsBadRequest()
+        {
+            TenantMetadata otherTenant = await Database.Tenant.CreateAsync(new TenantMetadata
+            {
+                Name = "Other Tenant",
+                Active = true
+            }).ConfigureAwait(false);
+            ModelAccessPolicy otherPolicy = await Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = otherTenant.Id,
+                Name = "Other Tenant Access Policy"
+            }).ConfigureAwait(false);
+
+            Func<Task> act = async () => await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Cross Tenant Access Policy VMR",
+                BasePath = "/v1.0/api/cross-tenant-access-policy/",
+                ModelAccessPolicyId = otherPolicy.Id
+            }).ConfigureAwait(false);
+
+            await act.Should().ThrowAsync<Exception>();
+        }
+        public async Task Create_WithValidModelAccessPolicyId_PersistsAttachment()
+        {
+            ModelAccessPolicy policy = await Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "VMR Access Policy"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner result = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Access Policy VMR",
+                BasePath = "/v1.0/api/access-policy-vmr/",
+                ModelAccessPolicyId = policy.Id
+            }).ConfigureAwait(false);
+
+            result.ModelAccessPolicyId.Should().Be(policy.Id);
+        }
 
         #endregion
 
@@ -290,6 +341,46 @@ namespace Test.Shared.Server.Controllers
             }).ConfigureAwait(false);
 
             result.LoadBalancingPolicyId.Should().Be(policy.Id);
+        }
+        public async Task Update_WithUnknownModelAccessPolicyId_ThrowsBadRequest()
+        {
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Update Access Policy VMR",
+                BasePath = "/v1.0/api/update-access-policy/"
+            }).ConfigureAwait(false);
+
+            Func<Task> act = async () => await _Controller.Update(TestTenantId, created.Id, new VirtualModelRunner
+            {
+                Name = "Update Access Policy VMR",
+                BasePath = "/v1.0/api/update-access-policy/",
+                ModelAccessPolicyId = "map_missing"
+            }).ConfigureAwait(false);
+
+            await act.Should().ThrowAsync<Exception>();
+        }
+        public async Task Update_WithValidModelAccessPolicyId_PersistsAttachment()
+        {
+            ModelAccessPolicy policy = await Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Update Access Policy"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner created = await _Controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Update Access Policy VMR",
+                BasePath = "/v1.0/api/update-access-policy-valid/"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner result = await _Controller.Update(TestTenantId, created.Id, new VirtualModelRunner
+            {
+                Name = "Update Access Policy VMR",
+                BasePath = "/v1.0/api/update-access-policy-valid/",
+                ModelAccessPolicyId = policy.Id
+            }).ConfigureAwait(false);
+
+            result.ModelAccessPolicyId.Should().Be(policy.Id);
         }
         public async Task Update_WithNullBody_ThrowsBadRequest()
         {
@@ -796,7 +887,11 @@ namespace Test.Shared.Server.Controllers
         }
         public async Task GetEffectiveConfiguration_ReturnsResolvedResources()
         {
-            RoutingDecisionService routingDecisionService = new RoutingDecisionService(Database, Logging);
+            RoutingDecisionService routingDecisionService = new RoutingDecisionService(Database, Logging, modelAccessSettings: new ModelAccessControlSettings
+            {
+                Enabled = true,
+                Mode = ModelAccessEnforcementModeEnum.Enforce
+            });
             ConfigurationValidationService validationService = new ConfigurationValidationService(Database, Logging, routingDecisionService);
             VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, validationService, routingDecisionService);
 
@@ -828,11 +923,30 @@ namespace Test.Shared.Server.Controllers
                 Name = "Effective Policy"
             }).ConfigureAwait(false);
 
+            ModelAccessPolicy accessPolicy = await Database.ModelAccessPolicy.CreateAsync(new ModelAccessPolicy
+            {
+                TenantId = TestTenantId,
+                Name = "Effective Access Policy",
+                DefaultDecision = ModelAccessDefaultDecisionEnum.Deny
+            }).ConfigureAwait(false);
+
+            await Database.ModelAccessPolicy.CreateRuleAsync(new ModelAccessRule
+            {
+                TenantId = TestTenantId,
+                PolicyId = accessPolicy.Id,
+                Name = "Allow completions",
+                Effect = ModelAccessRuleEffectEnum.Allow,
+                SubjectType = ModelAccessSubjectTypeEnum.Any,
+                ResourceType = ModelAccessResourceTypeEnum.Any,
+                Actions = new List<ModelAccessActionEnum> { ModelAccessActionEnum.Completions }
+            }).ConfigureAwait(false);
+
             VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
             {
                 Name = "Effective VMR",
                 BasePath = "/v1.0/api/effective/",
                 LoadBalancingPolicyId = policy.Id,
+                ModelAccessPolicyId = accessPolicy.Id,
                 ModelRunnerEndpointIds = new List<string> { endpoint.Id },
                 ModelDefinitionIds = new List<string> { definition.Id },
                 ModelConfigurationIds = new List<string> { configuration.Id },
@@ -846,6 +960,11 @@ namespace Test.Shared.Server.Controllers
 
             effective.Policy.Should().NotBeNull();
             effective.Policy.Id.Should().Be(policy.Id);
+            effective.ModelAccessPolicy.Should().NotBeNull();
+            effective.ModelAccessPolicy.PolicyId.Should().Be(accessPolicy.Id);
+            effective.ModelAccessPolicy.Mode.Should().Be(ModelAccessEnforcementModeEnum.Enforce);
+            effective.ModelAccessPolicy.DefaultDecision.Should().Be(ModelAccessDefaultDecisionEnum.Deny);
+            effective.ModelAccessPolicy.RuleCount.Should().Be(1);
             effective.Endpoints.Should().ContainSingle(item => item.Id == endpoint.Id && item.ServiceState == EndpointServiceStateEnum.Draining);
             effective.ModelDefinitions.Should().ContainSingle(item => item.Id == definition.Id);
             effective.ModelConfigurations.Should().ContainSingle(item => item.Id == configuration.Id);

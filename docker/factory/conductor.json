@@ -14,8 +14,13 @@
     }
   },
   "Database": {
-    "Type": "Sqlite",
-    "Filename": "/app/data/conductor.db"
+    "Type": "PostgreSql",
+    "Hostname": "conductor-postgres",
+    "Port": 5432,
+    "DatabaseName": "conductor",
+    "Username": "conductor",
+    "Password": "conductor",
+    "RequireEncryption": false
   },
   "Logging": {
     "Servers": [

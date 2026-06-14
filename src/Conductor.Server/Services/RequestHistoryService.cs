@@ -340,6 +340,10 @@ namespace Conductor.Server.Services
                 VirtualModelRunnerGuid = filter.VirtualModelRunnerGuid,
                 ModelEndpointGuid = filter.ModelEndpointGuid,
                 ModelName = filter.ModelName,
+                ModelAccessPolicyGuid = filter.ModelAccessPolicyGuid,
+                ModelAccessRuleGuid = filter.ModelAccessRuleGuid,
+                ModelAccessDecision = filter.ModelAccessDecision,
+                ModelAccessWouldDeny = filter.ModelAccessWouldDeny,
                 StatusClass = filter.StatusClass,
                 CreatedAfterUtc = filter.StartUtc,
                 CreatedBeforeUtc = filter.EndUtc,
@@ -540,6 +544,12 @@ namespace Conductor.Server.Services
             detail.RoutingDecision = routingDecision;
             detail.LoadBalancingPolicyGuid = routingDecision.LoadBalancingPolicyId;
             detail.LoadBalancingPolicyName = routingDecision.LoadBalancingPolicyName;
+            detail.ModelAccessPolicyGuid = routingDecision.ModelAccessPolicyId;
+            detail.ModelAccessPolicyName = routingDecision.ModelAccessPolicyName;
+            detail.ModelAccessRuleGuid = routingDecision.ModelAccessRuleId;
+            detail.ModelAccessRuleName = routingDecision.ModelAccessRuleName;
+            detail.ModelAccessDecision = routingDecision.ModelAccessDecision?.ToString();
+            detail.ModelAccessWouldDeny = routingDecision.ModelAccessWouldDeny;
             detail.RequestedModel = routingDecision.RequestedModel;
             detail.EffectiveModel = routingDecision.EffectiveModel;
             detail.RequestType = routingDecision.RequestType.ToString();

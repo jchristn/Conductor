@@ -13,6 +13,7 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
     using Conductor.Core.Serialization;
+    using Conductor.Core.Settings;
     using Conductor.Server.Services;
     using SyslogLogging;
     using WatsonWebserver.Core;
@@ -28,6 +29,8 @@ namespace Conductor.Server.Controllers
         private readonly RequestHistoryService _RequestHistoryService;
         private readonly RoutingDecisionService _RoutingDecisionService;
         private readonly OperationalMetricsService _Metrics;
+        private readonly ModelAccessControlSettings _ModelAccessControlSettings;
+        private readonly ModelAccessListModelsResponseFilter _ModelAccessListModelsResponseFilter;
 
         /// <summary>
         /// Buffer size for streaming responses. Default is 8KB.
@@ -46,6 +49,8 @@ namespace Conductor.Server.Controllers
         /// <param name="requestHistoryService">Request history service (optional).</param>
         /// <param name="routingDecisionService">Shared routing-decision service (optional).</param>
         /// <param name="metrics">Operational metrics service (optional).</param>
+        /// <param name="modelAccessControlSettings">Model access control settings (optional).</param>
+        /// <param name="modelAccessControlService">Model access control service (optional).</param>
         public ProxyController(
             DatabaseDriverBase database,
             AuthenticationService authService,
@@ -55,13 +60,24 @@ namespace Conductor.Server.Controllers
             SessionAffinityService sessionAffinityService = null,
             RequestHistoryService requestHistoryService = null,
             RoutingDecisionService routingDecisionService = null,
-            OperationalMetricsService metrics = null)
+            OperationalMetricsService metrics = null,
+            ModelAccessControlSettings modelAccessControlSettings = null,
+            IModelAccessControlService modelAccessControlService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
             _RequestHistoryService = requestHistoryService;
             _RoutingDecisionService = routingDecisionService;
             _Metrics = metrics;
+            _ModelAccessControlSettings = modelAccessControlSettings ?? new ModelAccessControlSettings();
+            if (modelAccessControlService != null)
+            {
+                _ModelAccessListModelsResponseFilter = new ModelAccessListModelsResponseFilter(
+                    database,
+                    modelAccessControlService,
+                    _ModelAccessControlSettings,
+                    logging);
+            }
         }
 
         /// <summary>
@@ -96,6 +112,11 @@ namespace Conductor.Server.Controllers
                 if (vmr == null || !vmr.Active)
                 {
                     await SendNotFound(ctx);
+                    return;
+                }
+
+                if (!await AuthenticateProxyForModelAccessAsync(ctx, vmr, cancellationToken).ConfigureAwait(false))
+                {
                     return;
                 }
 
@@ -458,6 +479,13 @@ namespace Conductor.Server.Controllers
             {
                 // Standard response - read entire body and send
                 byte[] responseBody = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                responseBody = await ApplyModelAccessListModelsResponseFilterAsync(
+                    response,
+                    vmr,
+                    routingResult,
+                    requestContext,
+                    responseBody,
+                    cancellationToken).ConfigureAwait(false);
                 if (analyticsCapture != null)
                 {
                     analyticsCapture.IsStreaming = false;
@@ -497,6 +525,27 @@ namespace Conductor.Server.Controllers
                     stopwatch.Elapsed.TotalMilliseconds,
                     firstTokenTimeMs);
             }
+        }
+
+        private async Task<byte[]> ApplyModelAccessListModelsResponseFilterAsync(
+            HttpResponseMessage response,
+            VirtualModelRunner vmr,
+            RoutingExecutionResult routingResult,
+            RequestContext requestContext,
+            byte[] responseBody,
+            CancellationToken cancellationToken)
+        {
+            if (_ModelAccessListModelsResponseFilter == null || response == null || !response.IsSuccessStatusCode)
+            {
+                return responseBody;
+            }
+
+            return await _ModelAccessListModelsResponseFilter.ApplyAsync(
+                vmr,
+                routingResult,
+                requestContext,
+                responseBody,
+                cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -657,6 +706,76 @@ namespace Conductor.Server.Controllers
             await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Unauthorized(message));
         }
 
+        private async Task<bool> AuthenticateProxyForModelAccessAsync(HttpContextBase ctx, VirtualModelRunner vmr, CancellationToken cancellationToken)
+        {
+            if (_ModelAccessControlSettings == null
+                || !_ModelAccessControlSettings.Enabled
+                || _ModelAccessControlSettings.Mode == ModelAccessEnforcementModeEnum.Disabled)
+            {
+                return true;
+            }
+
+            bool requireCredential = _ModelAccessControlSettings.RequireCredentialForProxy;
+            bool credentialPresented = HasProxyCredential(ctx);
+            if (!requireCredential && !credentialPresented)
+            {
+                return true;
+            }
+
+            AuthenticationResult authResult = await AuthService.AuthenticateAsync(ctx, cancellationToken).ConfigureAwait(false);
+            if (!authResult.IsAuthenticated)
+            {
+                if (requireCredential)
+                {
+                    AuditModelAccessAuthenticationFailure(ctx, vmr, "AuthenticationFailed");
+                    await SendUnauthorized(ctx, authResult.ErrorMessage ?? "Proxy credential authentication failed.").ConfigureAwait(false);
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (requireCredential && authResult.Credential == null)
+            {
+                AuditModelAccessAuthenticationFailure(ctx, vmr, "CredentialMissing");
+                await SendUnauthorized(ctx, "A valid API credential is required for proxy model access.").ConfigureAwait(false);
+                return false;
+            }
+
+            if (!String.Equals(authResult.Tenant?.Id, vmr.TenantId, StringComparison.Ordinal))
+            {
+                AuditModelAccessAuthenticationFailure(ctx, vmr, "CredentialTenantMismatch");
+                await SendForbidden(ctx, "The proxy credential belongs to a different tenant.").ConfigureAwait(false);
+                return false;
+            }
+
+            ctx.Metadata = authResult;
+            return true;
+        }
+
+        private void AuditModelAccessAuthenticationFailure(HttpContextBase ctx, VirtualModelRunner vmr, string reasonCode)
+        {
+            Logging.Warn(
+                _Header
+                + "model access proxy authentication failed"
+                + " tenant=" + (vmr?.TenantId ?? String.Empty)
+                + " vmr=" + (vmr?.Id ?? String.Empty)
+                + " sourceIp=" + (ctx?.Request?.Source?.IpAddress ?? String.Empty)
+                + " reason=" + (reasonCode ?? String.Empty));
+        }
+
+        private static bool HasProxyCredential(HttpContextBase ctx)
+        {
+            string authHeader = ctx.Request.Headers.Get("Authorization");
+            if (!String.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            string geminiKey = ctx.Request.Query.Elements.Get("key");
+            return !String.IsNullOrWhiteSpace(geminiKey);
+        }
+
         private Dictionary<string, string> GetRequestHeaders(HttpContextBase ctx)
         {
             Dictionary<string, string> headers = new Dictionary<string, string>();
@@ -703,6 +822,8 @@ namespace Conductor.Server.Controllers
             {
                 requestContext.UserId = authResult.User?.Id;
                 requestContext.UserEmail = authResult.User?.Email;
+                requestContext.IsUserAdmin = authResult.IsAdmin;
+                requestContext.IsUserTenantAdmin = authResult.IsTenantAdmin;
                 requestContext.CredentialId = authResult.Credential?.Id;
                 requestContext.CredentialName = authResult.Credential?.Name;
                 requestContext.TenantId = authResult.Tenant?.Id ?? requestContext.TenantId;

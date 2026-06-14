@@ -5,7 +5,7 @@
 # Resets the Docker deployment to its default configuration by:
 # - Stopping all containers
 # - Restoring the factory conductor.json configuration
-# - Rebuilding a clean database with default records
+# - Removing the PostgreSQL data volume so the init container rebuilds a clean database
 # - Removing all log files and request history
 #
 
@@ -44,33 +44,21 @@ if [ "$CONFIRM" != "RESET" ]; then
     exit 1
 fi
 
-echo "  [1/5] Stopping Docker containers..."
+echo "  [1/5] Stopping Docker containers and removing database volume..."
 cd "$DOCKER_DIR"
-docker compose down 2>/dev/null || docker-compose down 2>/dev/null || true
+docker compose down -v 2>/dev/null || docker-compose down -v 2>/dev/null || true
 
 echo "  [2/5] Restoring factory configuration..."
 cp "$SCRIPT_DIR/conductor.json" "$DOCKER_DIR/conductor.json"
 
-echo "  [3/5] Removing database and request history..."
-rm -f "$DOCKER_DIR/data/conductor.db"
-rm -f "$DOCKER_DIR/data/conductor.db-wal"
-rm -f "$DOCKER_DIR/data/conductor.db-shm"
+echo "  [3/5] Removing request history..."
 rm -rf "$DOCKER_DIR/data/request-history"
 mkdir -p "$DOCKER_DIR/data/request-history"
 
 echo "  [4/5] Removing log files..."
 find "$DOCKER_DIR/logs" -type f ! -name '.gitkeep' -delete 2>/dev/null || true
 
-echo "  [5/5] Rebuilding factory database..."
-if command -v sqlite3 &>/dev/null; then
-    sqlite3 "$DOCKER_DIR/data/conductor.db" < "$SCRIPT_DIR/schema.sql"
-    echo "         Factory database created with default records."
-else
-    echo "         sqlite3 not found. The database will be created"
-    echo "         automatically with new default credentials on next startup."
-    echo "         Note: The auto-generated credentials will differ from the"
-    echo "         factory defaults listed above."
-fi
+echo "  [5/5] Database will be rebuilt by conductor-db-init on next startup..."
 
 echo ""
 echo "========================================================================"

@@ -37,6 +37,7 @@ namespace Conductor.Core.Database.PostgreSql
             ModelConfiguration = new ModelConfigurationMethods(this);
             VirtualModelRunner = new VirtualModelRunnerMethods(this);
             LoadBalancingPolicy = new LoadBalancingPolicyMethods(this);
+            ModelAccessPolicy = new Conductor.Core.Database.ModelAccessPolicyMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.PostgreSql);
             Administrator = new AdministratorMethods(this);
             RequestHistory = new RequestHistoryMethods(this);
             RequestAnalytics = new Conductor.Core.Database.RequestAnalyticsMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.PostgreSql);
@@ -58,6 +59,8 @@ namespace Conductor.Core.Database.PostgreSql
                 TableQueries.CreateModelDefinitionsTable,
                 TableQueries.CreateModelConfigurationsTable,
                 TableQueries.CreateLoadBalancingPoliciesTable,
+                TableQueries.CreateModelAccessPoliciesTable,
+                TableQueries.CreateModelAccessRulesTable,
                 TableQueries.CreateVirtualModelRunnersTable,
                 TableQueries.CreateAdministratorsTable,
                 TableQueries.CreateRequestHistoryTable,
@@ -211,6 +214,7 @@ namespace Conductor.Core.Database.PostgreSql
         {
             await EnsureColumnAsync("virtualmodelrunners", "requesthistoryenabled", TableQueries.AddRequestHistoryEnabledColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "loadbalancingpolicyid", TableQueries.AddLoadBalancingPolicyIdColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "modelaccesspolicyid", TableQueries.AddModelAccessPolicyIdColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "modelconfigurationmappings", "ALTER TABLE virtualmodelrunners ADD COLUMN modelconfigurationmappings TEXT;", token).ConfigureAwait(false);
 
             await EnsureColumnAsync("modelrunnerendpoints", "rigmonitor", TableQueries.AddRigMonitorColumn, token).ConfigureAwait(false);
@@ -225,6 +229,12 @@ namespace Conductor.Core.Database.PostgreSql
             await EnsureColumnAsync("requesthistory", "credentialname", "ALTER TABLE requesthistory ADD COLUMN credentialname VARCHAR(255);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "loadbalancingpolicyguid", "ALTER TABLE requesthistory ADD COLUMN loadbalancingpolicyguid VARCHAR(48);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "loadbalancingpolicyname", "ALTER TABLE requesthistory ADD COLUMN loadbalancingpolicyname VARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "modelaccesspolicyguid", "ALTER TABLE requesthistory ADD COLUMN modelaccesspolicyguid VARCHAR(48);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "modelaccesspolicyname", "ALTER TABLE requesthistory ADD COLUMN modelaccesspolicyname VARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "modelaccessruleguid", "ALTER TABLE requesthistory ADD COLUMN modelaccessruleguid VARCHAR(48);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "modelaccessrulename", "ALTER TABLE requesthistory ADD COLUMN modelaccessrulename VARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "modelaccessdecision", "ALTER TABLE requesthistory ADD COLUMN modelaccessdecision VARCHAR(32);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "modelaccesswoulddeny", "ALTER TABLE requesthistory ADD COLUMN modelaccesswoulddeny BOOLEAN NOT NULL DEFAULT FALSE;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "requestedmodel", "ALTER TABLE requesthistory ADD COLUMN requestedmodel VARCHAR(255);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "effectivemodel", "ALTER TABLE requesthistory ADD COLUMN effectivemodel VARCHAR(255);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "requesttype", "ALTER TABLE requesthistory ADD COLUMN requesttype VARCHAR(128);", token).ConfigureAwait(false);
@@ -257,6 +267,10 @@ namespace Conductor.Core.Database.PostgreSql
             await EnsureIndexAsync("idx_requesthistory_requestoruserguid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_requestoruserguid ON requesthistory(requestoruserguid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_credentialguid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_credentialguid ON requesthistory(credentialguid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_loadbalancingpolicyguid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_loadbalancingpolicyguid ON requesthistory(loadbalancingpolicyguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_modelaccesspolicyguid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_modelaccesspolicyguid ON requesthistory(modelaccesspolicyguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_modelaccessruleguid", "CREATE INDEX IF NOT EXISTS idx_requesthistory_modelaccessruleguid ON requesthistory(modelaccessruleguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_modelaccessdecision", "CREATE INDEX IF NOT EXISTS idx_requesthistory_modelaccessdecision ON requesthistory(modelaccessdecision);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_modelaccesswoulddeny", "CREATE INDEX IF NOT EXISTS idx_requesthistory_modelaccesswoulddeny ON requesthistory(modelaccesswoulddeny);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_requestedmodel", "CREATE INDEX IF NOT EXISTS idx_requesthistory_requestedmodel ON requesthistory(requestedmodel);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_effectivemodel", "CREATE INDEX IF NOT EXISTS idx_requesthistory_effectivemodel ON requesthistory(effectivemodel);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_denialreasoncode", "CREATE INDEX IF NOT EXISTS idx_requesthistory_denialreasoncode ON requesthistory(denialreasoncode);", token).ConfigureAwait(false);
@@ -273,6 +287,7 @@ namespace Conductor.Core.Database.PostgreSql
             await EnsureIndexAsync("idx_requestanalyticsevents_stagekind", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_endpoint_created", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_vmr_created", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_vmr_modelaccesspolicyid", "CREATE INDEX IF NOT EXISTS idx_vmr_modelaccesspolicyid ON virtualmodelrunners(modelaccesspolicyid);", token).ConfigureAwait(false);
         }
 
         /// <summary>

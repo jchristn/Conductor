@@ -60,6 +60,18 @@ namespace Test.Shared.Core.Helpers
             id.Should().StartWith(IdGenerator.AdministratorPrefix);
             id.Should().StartWith("admin_");
         }
+        public void NewModelAccessPolicyId_StartsWithCorrectPrefix()
+        {
+            string id = IdGenerator.NewModelAccessPolicyId();
+            id.Should().StartWith(IdGenerator.ModelAccessPolicyPrefix);
+            id.Should().StartWith("map_");
+        }
+        public void NewModelAccessRuleId_StartsWithCorrectPrefix()
+        {
+            string id = IdGenerator.NewModelAccessRuleId();
+            id.Should().StartWith(IdGenerator.ModelAccessRulePrefix);
+            id.Should().StartWith("mar_");
+        }
         public void NewRequestAnalyticsEventId_StartsWithCorrectPrefix()
         {
             string id = IdGenerator.NewRequestAnalyticsEventId();

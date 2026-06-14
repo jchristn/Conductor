@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             vmr.CreatedUtc = DateTime.UtcNow;
             vmr.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelaccesspolicyid, modelrunnerendpointids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(vmr.Id) + "', " +
                            "'" + _Driver.Sanitize(vmr.TenantId) + "', " +
                            "'" + _Driver.Sanitize(vmr.Name) + "', " +
@@ -44,6 +44,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            (int)vmr.ApiType + ", " +
                            (int)vmr.LoadBalancingMode + ", " +
                            _Driver.FormatNullableString(vmr.LoadBalancingPolicyId) + ", " +
+                           _Driver.FormatNullableString(vmr.ModelAccessPolicyId) + ", " +
                            _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.ModelConfigurationIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.ModelDefinitionIdsJson) + ", " +
@@ -133,6 +134,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            "apitype = " + (int)vmr.ApiType + ", " +
                            "loadbalancingmode = " + (int)vmr.LoadBalancingMode + ", " +
                            "loadbalancingpolicyid = " + _Driver.FormatNullableString(vmr.LoadBalancingPolicyId) + ", " +
+                           "modelaccesspolicyid = " + _Driver.FormatNullableString(vmr.ModelAccessPolicyId) + ", " +
                            "modelrunnerendpointids = " + _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            "modelconfigurationids = " + _Driver.FormatNullableString(vmr.ModelConfigurationIdsJson) + ", " +
                            "modeldefinitionids = " + _Driver.FormatNullableString(vmr.ModelDefinitionIdsJson) + ", " +

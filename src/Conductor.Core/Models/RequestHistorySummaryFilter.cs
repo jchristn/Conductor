@@ -38,6 +38,26 @@ namespace Conductor.Core.Models
         public string LoadBalancingPolicyGuid { get; set; } = null;
 
         /// <summary>
+        /// Filter by model access policy GUID. May be null.
+        /// </summary>
+        public string ModelAccessPolicyGuid { get; set; } = null;
+
+        /// <summary>
+        /// Filter by model access rule GUID. May be null.
+        /// </summary>
+        public string ModelAccessRuleGuid { get; set; } = null;
+
+        /// <summary>
+        /// Filter by model access decision, such as Permit or Deny. May be null.
+        /// </summary>
+        public string ModelAccessDecision { get; set; } = null;
+
+        /// <summary>
+        /// Filter by model access monitor-mode would-deny state. May be null.
+        /// </summary>
+        public bool? ModelAccessWouldDeny { get; set; } = null;
+
+        /// <summary>
         /// Filter by requested or effective model name. May be null.
         /// </summary>
         public string ModelName { get; set; } = null;

@@ -8,6 +8,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
 
 function Users() {
   const { api, setError } = useApp();
@@ -30,8 +31,8 @@ function Users() {
     Active: true,
     IsAdmin: false,
     IsTenantAdmin: false,
-    LabelsJson: '[]',
-    TagsJson: '{}'
+    Labels: labelsFromValue([]),
+    Tags: tagsFromValue({})
   });
 
   const fetchUsers = useCallback(async () => {
@@ -69,7 +70,7 @@ function Users() {
 
   const handleCreate = () => {
     setEditMode(false);
-    setFormData({ TenantId: '', FirstName: '', LastName: '', Email: '', Password: '', Active: true, IsAdmin: false, IsTenantAdmin: false, LabelsJson: '[]', TagsJson: '{}' });
+    setFormData({ TenantId: '', FirstName: '', LastName: '', Email: '', Password: '', Active: true, IsAdmin: false, IsTenantAdmin: false, Labels: labelsFromValue([]), Tags: tagsFromValue({}) });
     setShowForm(true);
   };
 
@@ -85,8 +86,8 @@ function Users() {
       Active: user.Active !== false,
       IsAdmin: user.IsAdmin || false,
       IsTenantAdmin: user.IsTenantAdmin || false,
-      LabelsJson: JSON.stringify(user.Labels || [], null, 2),
-      TagsJson: JSON.stringify(user.Tags || {}, null, 2)
+      Labels: labelsFromValue(user.Labels),
+      Tags: tagsFromValue(user.Tags)
     });
     setShowForm(true);
   };
@@ -118,23 +119,6 @@ function Users() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      let labels = [];
-      let tags = {};
-
-      try {
-        labels = JSON.parse(formData.LabelsJson || '[]');
-      } catch (err) {
-        setError('Invalid JSON in Labels');
-        return;
-      }
-
-      try {
-        tags = JSON.parse(formData.TagsJson || '{}');
-      } catch (err) {
-        setError('Invalid JSON in Tags');
-        return;
-      }
-
       const data = {
         TenantId: formData.TenantId || null,
         FirstName: formData.FirstName,
@@ -144,8 +128,8 @@ function Users() {
         Active: formData.Active,
         IsAdmin: formData.IsAdmin,
         IsTenantAdmin: formData.IsTenantAdmin,
-        Labels: labels,
-        Tags: tags
+        Labels: labelsToPayload(formData.Labels),
+        Tags: tagsToPayload(formData.Tags)
       };
 
       if (editMode && !data.Password) {
@@ -315,29 +299,13 @@ function Users() {
             />
           </div>
 
-          <div className="form-group">
-            <label htmlFor="labels" title="String array for categorization and filtering">Labels (JSON)</label>
-            <textarea
-              id="labels"
-              value={formData.LabelsJson}
-              onChange={(e) => setFormData({ ...formData, LabelsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="[]"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tags" title="Key-value pairs for custom metadata">Tags (JSON)</label>
-            <textarea
-              id="tags"
-              value={formData.TagsJson}
-              onChange={(e) => setFormData({ ...formData, TagsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="{}"
-            />
-          </div>
+          <LabelsTagsEditor
+            labels={formData.Labels}
+            tags={formData.Tags}
+            onLabelsChange={(Labels) => setFormData({ ...formData, Labels })}
+            onTagsChange={(Tags) => setFormData({ ...formData, Tags })}
+            idPrefix="user"
+          />
 
           <div className="form-group checkbox-group">
             <label title="Inactive users cannot authenticate">

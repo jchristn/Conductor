@@ -167,6 +167,60 @@ CREATE INDEX IF NOT EXISTS idx_mc_name ON modelconfigurations(name);
 CREATE INDEX IF NOT EXISTS idx_mc_active ON modelconfigurations(active);
 CREATE INDEX IF NOT EXISTS idx_mc_model ON modelconfigurations(model);
 
+-- Model Access Policies
+CREATE TABLE IF NOT EXISTS modelaccesspolicies (
+    id TEXT PRIMARY KEY,
+    tenantid TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    defaultdecision INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    labels TEXT,
+    tags TEXT,
+    metadata TEXT,
+    createdutc TEXT NOT NULL,
+    lastupdateutc TEXT NOT NULL,
+    FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_map_tenantid ON modelaccesspolicies(tenantid);
+CREATE INDEX IF NOT EXISTS idx_map_active ON modelaccesspolicies(active);
+CREATE INDEX IF NOT EXISTS idx_map_name ON modelaccesspolicies(name);
+CREATE INDEX IF NOT EXISTS idx_map_lastupdateutc ON modelaccesspolicies(lastupdateutc);
+
+CREATE TABLE IF NOT EXISTS modelaccessrules (
+    id TEXT PRIMARY KEY,
+    tenantid TEXT NOT NULL,
+    policyid TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    priority INTEGER NOT NULL DEFAULT 0,
+    effect INTEGER NOT NULL DEFAULT 0,
+    subjecttype INTEGER NOT NULL DEFAULT 5,
+    subjectid TEXT,
+    subjectselector TEXT,
+    resourcetype INTEGER NOT NULL DEFAULT 4,
+    resourceid TEXT,
+    resourceselector TEXT,
+    vmrid TEXT,
+    actions TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    createdutc TEXT NOT NULL,
+    lastupdateutc TEXT NOT NULL,
+    FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+    FOREIGN KEY (policyid) REFERENCES modelaccesspolicies(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_mar_tenantid ON modelaccessrules(tenantid);
+CREATE INDEX IF NOT EXISTS idx_mar_policyid ON modelaccessrules(policyid);
+CREATE INDEX IF NOT EXISTS idx_mar_active ON modelaccessrules(active);
+CREATE INDEX IF NOT EXISTS idx_mar_priority ON modelaccessrules(priority);
+CREATE INDEX IF NOT EXISTS idx_mar_effect ON modelaccessrules(effect);
+CREATE INDEX IF NOT EXISTS idx_mar_subjecttype ON modelaccessrules(subjecttype);
+CREATE INDEX IF NOT EXISTS idx_mar_subjectid ON modelaccessrules(subjectid);
+CREATE INDEX IF NOT EXISTS idx_mar_resourcetype ON modelaccessrules(resourcetype);
+CREATE INDEX IF NOT EXISTS idx_mar_resourceid ON modelaccessrules(resourceid);
+CREATE INDEX IF NOT EXISTS idx_mar_vmrid ON modelaccessrules(vmrid);
+CREATE INDEX IF NOT EXISTS idx_mar_lastupdateutc ON modelaccessrules(lastupdateutc);
+
 -- Virtual Model Runners
 CREATE TABLE IF NOT EXISTS virtualmodelrunners (
     id TEXT PRIMARY KEY,
@@ -191,6 +245,7 @@ CREATE TABLE IF NOT EXISTS virtualmodelrunners (
     sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
     requesthistoryenabled INTEGER NOT NULL DEFAULT 0,
     loadbalancingpolicyid TEXT,
+    modelaccesspolicyid TEXT,
     active INTEGER NOT NULL DEFAULT 1,
     createdutc TEXT NOT NULL,
     lastupdateutc TEXT NOT NULL,
@@ -202,6 +257,7 @@ CREATE TABLE IF NOT EXISTS virtualmodelrunners (
 CREATE INDEX IF NOT EXISTS idx_vmr_tenantid ON virtualmodelrunners(tenantid);
 CREATE INDEX IF NOT EXISTS idx_vmr_basepath ON virtualmodelrunners(basepath);
 CREATE INDEX IF NOT EXISTS idx_vmr_active ON virtualmodelrunners(active);
+CREATE INDEX IF NOT EXISTS idx_vmr_modelaccesspolicyid ON virtualmodelrunners(modelaccesspolicyid);
 
 -- Request History
 CREATE TABLE IF NOT EXISTS requesthistory (
@@ -215,6 +271,12 @@ CREATE TABLE IF NOT EXISTS requesthistory (
     credentialname TEXT,
     loadbalancingpolicyguid TEXT,
     loadbalancingpolicyname TEXT,
+    modelaccesspolicyguid TEXT,
+    modelaccesspolicyname TEXT,
+    modelaccessruleguid TEXT,
+    modelaccessrulename TEXT,
+    modelaccessdecision TEXT,
+    modelaccesswoulddeny INTEGER NOT NULL DEFAULT 0,
     modelendpointguid TEXT,
     modelendpointname TEXT,
     modelendpointurl TEXT,

@@ -91,6 +91,41 @@ export class ConductorClient {
     return this.#request('POST', `/v1.0/loadbalancingpolicies/validate${this.#existingIdQuery(existingId)}`, draft);
   }
 
+  async listModelAccessPolicies(filters = {}) {
+    return this.#request('GET', `/v1.0/modelaccesspolicies${this.#queryString(filters)}`);
+  }
+
+  async getModelAccessPolicy(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/modelaccesspolicies/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createModelAccessPolicy(policy) {
+    return this.#request('POST', '/v1.0/modelaccesspolicies', policy);
+  }
+
+  async updateModelAccessPolicy(id, policy) {
+    return this.#request('PUT', `/v1.0/modelaccesspolicies/${encodeURIComponent(id)}`, policy);
+  }
+
+  async deleteModelAccessPolicy(id, { tenantId = null, forceDetach = false } = {}) {
+    return this.#request('DELETE', `/v1.0/modelaccesspolicies/${encodeURIComponent(id)}${this.#queryString({
+      tenantId,
+      forceDetach: forceDetach ? true : null
+    })}`);
+  }
+
+  async validateModelAccessPolicy(policy) {
+    return this.#request('POST', '/v1.0/modelaccesspolicies/validate', policy);
+  }
+
+  async evaluateModelAccessPolicy(id, context = {}, tenantId = null) {
+    return this.#request('POST', `/v1.0/modelaccesspolicies/${encodeURIComponent(id)}/evaluate${this.#tenantQuery(tenantId)}`, context);
+  }
+
+  async getEffectiveModelAccess(filters = {}) {
+    return this.#request('GET', `/v1.0/modelaccesspolicies/effective${this.#queryString(filters)}`);
+  }
+
   async searchRequestHistory(filters = {}) {
     return this.#request('GET', `/v1.0/requesthistory${this.#queryString(filters)}`);
   }

@@ -80,6 +80,36 @@ namespace Conductor.Core.Models
         public decimal AnalyticsCoveragePercent { get; set; }
 
         /// <summary>
+        /// Requests with a model access permit decision.
+        /// </summary>
+        public long ModelAccessAllowedCount { get; set; }
+
+        /// <summary>
+        /// Requests denied by model access enforcement.
+        /// </summary>
+        public long ModelAccessDeniedCount { get; set; }
+
+        /// <summary>
+        /// Requests that monitor mode would have denied.
+        /// </summary>
+        public long ModelAccessWouldDenyCount { get; set; }
+
+        /// <summary>
+        /// Requests allowed by a model access default decision rather than a matched rule.
+        /// </summary>
+        public long ModelAccessDefaultAllowedCount { get; set; }
+
+        /// <summary>
+        /// Requests denied by a model access default decision rather than a matched rule.
+        /// </summary>
+        public long ModelAccessDefaultDeniedCount { get; set; }
+
+        /// <summary>
+        /// Requests where model access evaluation reported an error.
+        /// </summary>
+        public long ModelAccessEvaluatorErrorCount { get; set; }
+
+        /// <summary>
         /// Average response duration.
         /// </summary>
         public decimal? AverageDurationMs { get; set; }

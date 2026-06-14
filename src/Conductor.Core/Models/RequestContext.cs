@@ -36,6 +36,16 @@ namespace Conductor.Core.Models
         public string UserEmail { get; set; } = null;
 
         /// <summary>
+        /// Whether the authenticated user is a global administrator.
+        /// </summary>
+        public bool IsUserAdmin { get; set; } = false;
+
+        /// <summary>
+        /// Whether the authenticated user is a tenant administrator.
+        /// </summary>
+        public bool IsUserTenantAdmin { get; set; } = false;
+
+        /// <summary>
         /// Credential identifier from authentication.
         /// </summary>
         public string CredentialId { get; set; } = null;

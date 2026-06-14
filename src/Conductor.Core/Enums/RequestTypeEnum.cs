@@ -379,6 +379,48 @@ namespace Conductor.Core.Enums
         /// </summary>
         ValidateLoadBalancingPolicy,
 
+        // ==================== Model Access Policy Operations ====================
+
+        /// <summary>
+        /// Create model access policy.
+        /// </summary>
+        CreateModelAccessPolicy,
+
+        /// <summary>
+        /// Read model access policy.
+        /// </summary>
+        ReadModelAccessPolicy,
+
+        /// <summary>
+        /// Update model access policy.
+        /// </summary>
+        UpdateModelAccessPolicy,
+
+        /// <summary>
+        /// Delete model access policy.
+        /// </summary>
+        DeleteModelAccessPolicy,
+
+        /// <summary>
+        /// List model access policies.
+        /// </summary>
+        ListModelAccessPolicies,
+
+        /// <summary>
+        /// Validate a model access policy draft.
+        /// </summary>
+        ValidateModelAccessPolicy,
+
+        /// <summary>
+        /// Evaluate a model access policy.
+        /// </summary>
+        EvaluateModelAccessPolicy,
+
+        /// <summary>
+        /// Evaluate effective model access.
+        /// </summary>
+        ReadEffectiveModelAccess,
+
         // ==================== Proxied API Operations (OpenAI) ====================
 
         /// <summary>

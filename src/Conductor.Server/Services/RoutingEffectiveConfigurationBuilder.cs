@@ -5,15 +5,19 @@ namespace Conductor.Server.Services
     using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
+    using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Settings;
 
     internal sealed class RoutingEffectiveConfigurationBuilder
     {
         private readonly DatabaseDriverBase _Database;
+        private readonly ModelAccessControlSettings _ModelAccessSettings;
 
-        internal RoutingEffectiveConfigurationBuilder(DatabaseDriverBase database)
+        internal RoutingEffectiveConfigurationBuilder(DatabaseDriverBase database, ModelAccessControlSettings modelAccessSettings = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
+            _ModelAccessSettings = modelAccessSettings ?? new ModelAccessControlSettings();
         }
 
         internal async Task<EffectiveVirtualModelRunnerConfiguration> BuildAsync(VirtualModelRunner vmr, CancellationToken token)
@@ -49,6 +53,7 @@ namespace Conductor.Server.Services
             };
 
             await AppendPolicyAsync(effective, vmr, token).ConfigureAwait(false);
+            await AppendModelAccessPolicyAsync(effective, vmr, token).ConfigureAwait(false);
             await AppendEndpointsAsync(effective, vmr, token).ConfigureAwait(false);
             await AppendModelDefinitionsAsync(effective, vmr, token).ConfigureAwait(false);
             await AppendModelConfigurationsAsync(effective, vmr, token).ConfigureAwait(false);
@@ -69,6 +74,36 @@ namespace Conductor.Server.Services
                 Active = policy.Active,
                 FallbackMode = policy.FallbackMode,
                 TieBreaker = policy.TieBreaker
+            };
+        }
+
+        private async Task AppendModelAccessPolicyAsync(EffectiveVirtualModelRunnerConfiguration effective, VirtualModelRunner vmr, CancellationToken token)
+        {
+            if (String.IsNullOrWhiteSpace(vmr.ModelAccessPolicyId)) return;
+
+            ModelAccessPolicy policy = await _Database.ModelAccessPolicy.ReadAsync(vmr.TenantId, vmr.ModelAccessPolicyId, token).ConfigureAwait(false);
+            if (policy == null) return;
+
+            EnumerationResult<ModelAccessRule> rules = await _Database.ModelAccessPolicy
+                .EnumerateRulesAsync(vmr.TenantId, policy.Id, new EnumerationRequest { MaxResults = 10000 }, token)
+                .ConfigureAwait(false);
+            int ruleCount = rules?.Data?.Count ?? 0;
+            if (rules?.TotalCount != null)
+            {
+                ruleCount = (int)Math.Min(Int32.MaxValue, rules.TotalCount.Value);
+            }
+
+            effective.ModelAccessPolicy = new ModelAccessPolicySummary
+            {
+                PolicyId = policy.Id,
+                PolicyName = policy.Name,
+                Active = policy.Active,
+                Mode = _ModelAccessSettings.Enabled ? _ModelAccessSettings.Mode : ModelAccessEnforcementModeEnum.Disabled,
+                DefaultDecision = policy.DefaultDecision,
+                RuleCount = ruleCount,
+                VirtualModelRunnerId = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                EvaluatedUtc = DateTime.UtcNow
             };
         }
 

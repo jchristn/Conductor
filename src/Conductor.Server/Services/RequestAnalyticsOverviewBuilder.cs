@@ -87,6 +87,12 @@ namespace Conductor.Server.Services
                 SuccessCount = entries.Count(item => item.HttpStatus.HasValue && item.HttpStatus.Value >= 100 && item.HttpStatus.Value < 400),
                 FailureCount = entries.Count(item => !item.HttpStatus.HasValue || item.HttpStatus.Value >= 400),
                 AnalyticsCapturedCount = entries.Count(item => item.AnalyticsCaptured),
+                ModelAccessAllowedCount = entries.Count(IsModelAccessPermit),
+                ModelAccessDeniedCount = entries.Count(item => IsModelAccessDeny(item) && !item.ModelAccessWouldDeny),
+                ModelAccessWouldDenyCount = entries.Count(item => item.ModelAccessWouldDeny),
+                ModelAccessDefaultAllowedCount = entries.Count(item => IsModelAccessPermit(item) && String.IsNullOrEmpty(item.ModelAccessRuleGuid)),
+                ModelAccessDefaultDeniedCount = entries.Count(item => IsModelAccessDeny(item) && String.IsNullOrEmpty(item.ModelAccessRuleGuid)),
+                ModelAccessEvaluatorErrorCount = entries.Count(IsModelAccessEvaluatorError),
                 AverageDurationMs = durations.Count > 0 ? Decimal.Round((decimal)durations.Average(), 2) : null,
                 P50DurationMs = Percentile(durations, 0.50m),
                 P95DurationMs = Percentile(durations, 0.95m),
@@ -279,6 +285,23 @@ namespace Conductor.Server.Services
             }
 
             return Decimal.Round(materialized.Average(), 6);
+        }
+
+        private static bool IsModelAccessPermit(RequestHistoryEntry entry)
+        {
+            return String.Equals(entry?.ModelAccessDecision, "Permit", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsModelAccessDeny(RequestHistoryEntry entry)
+        {
+            return String.Equals(entry?.ModelAccessDecision, "Deny", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsModelAccessEvaluatorError(RequestHistoryEntry entry)
+        {
+            return !String.IsNullOrEmpty(entry?.DenialReasonCode)
+                && entry.DenialReasonCode.IndexOf("ModelAccess", StringComparison.OrdinalIgnoreCase) >= 0
+                && entry.DenialReasonCode.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

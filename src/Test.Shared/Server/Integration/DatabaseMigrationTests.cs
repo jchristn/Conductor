@@ -47,6 +47,10 @@ namespace Test.Shared.Server.Integration
             entry.RequestorUserGuid.Should().BeNull();
             entry.CredentialGuid.Should().BeNull();
             entry.LoadBalancingPolicyGuid.Should().BeNull();
+            entry.ModelAccessPolicyGuid.Should().BeNull();
+            entry.ModelAccessRuleGuid.Should().BeNull();
+            entry.ModelAccessDecision.Should().BeNull();
+            entry.ModelAccessWouldDeny.Should().BeFalse();
             entry.RequestedModel.Should().BeNull();
             entry.SessionAffinityOutcome.Should().BeNull();
             entry.RequestBodyRetained.Should().BeFalse();
@@ -55,6 +59,12 @@ namespace Test.Shared.Server.Integration
             await AssertColumnExistsAsync(database, "requestoruserguid").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "credentialguid").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "loadbalancingpolicyguid").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "modelaccesspolicyguid").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "modelaccesspolicyname").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "modelaccessruleguid").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "modelaccessrulename").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "modelaccessdecision").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "modelaccesswoulddeny").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "requestedmodel").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "effectivemodel").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "denialreasoncode").ConfigureAwait(false);
@@ -72,6 +82,10 @@ namespace Test.Shared.Server.Integration
             await AssertIndexExistsAsync(database, "idx_requesthistory_requestoruserguid").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_credentialguid").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_loadbalancingpolicyguid").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_modelaccesspolicyguid").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_modelaccessruleguid").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_modelaccessdecision").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_modelaccesswoulddeny").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_requestedmodel").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_effectivemodel").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_denialreasoncode").ConfigureAwait(false);

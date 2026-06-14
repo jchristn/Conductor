@@ -90,6 +90,36 @@ namespace Conductor.Core.Models
         public string LoadBalancingPolicyName { get; set; } = null;
 
         /// <summary>
+        /// Attached model access policy identifier, if any.
+        /// </summary>
+        public string ModelAccessPolicyId { get; set; } = null;
+
+        /// <summary>
+        /// Attached model access policy display name, if any.
+        /// </summary>
+        public string ModelAccessPolicyName { get; set; } = null;
+
+        /// <summary>
+        /// Matched model access rule identifier, if any.
+        /// </summary>
+        public string ModelAccessRuleId { get; set; } = null;
+
+        /// <summary>
+        /// Matched model access rule display name, if any.
+        /// </summary>
+        public string ModelAccessRuleName { get; set; } = null;
+
+        /// <summary>
+        /// Final model access decision, if evaluated.
+        /// </summary>
+        public ModelAccessDefaultDecisionEnum? ModelAccessDecision { get; set; } = null;
+
+        /// <summary>
+        /// Whether monitor mode observed that model access would deny the request.
+        /// </summary>
+        public bool ModelAccessWouldDeny { get; set; } = false;
+
+        /// <summary>
         /// Model definition identifier that influenced the result, if any.
         /// </summary>
         public string ModelDefinitionId { get; set; } = null;

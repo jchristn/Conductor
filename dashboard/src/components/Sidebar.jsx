@@ -100,6 +100,17 @@ function Sidebar() {
         </svg>
       )
     },
+    {
+      path: '/model-access-policies',
+      label: 'Model Access Policies',
+      tourId: 'nav-model-access-policies',
+      tooltip: 'Manage credential, user, and model access rules for VMR proxy traffic',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M10 1.5l6 2.25v4.5c0 4.2-2.45 7.95-6 9.5-3.55-1.55-6-5.3-6-9.5v-4.5l6-2.25zm2.8 6.2a1 1 0 00-1.4-1.4L9 8.7 8.1 7.8a1 1 0 10-1.4 1.4l1.6 1.6a1 1 0 001.4 0l3.1-3.1z" clipRule="evenodd" />
+        </svg>
+      )
+    },
     { divider: true },
     {
       path: '/vmr',

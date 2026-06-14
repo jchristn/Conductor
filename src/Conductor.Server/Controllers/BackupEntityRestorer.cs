@@ -248,5 +248,57 @@ namespace Conductor.Server.Controllers
                 counter.Created++;
             }
         }
+
+        internal async Task RestoreModelAccessPolicyAsync(ModelAccessPolicy policy, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
+        {
+            bool exists = await _Database.ModelAccessPolicy.ExistsAsync(policy.TenantId, policy.Id, token).ConfigureAwait(false);
+
+            if (exists)
+            {
+                switch (conflictResolution)
+                {
+                    case ConflictResolutionMode.Skip:
+                        counter.Skipped++;
+                        break;
+                    case ConflictResolutionMode.Overwrite:
+                        await _Database.ModelAccessPolicy.UpdateAsync(policy, token).ConfigureAwait(false);
+                        counter.Updated++;
+                        break;
+                    case ConflictResolutionMode.Fail:
+                        throw new InvalidOperationException("Model Access Policy with ID '" + policy.Id + "' already exists.");
+                }
+            }
+            else
+            {
+                await _Database.ModelAccessPolicy.CreateAsync(policy, token).ConfigureAwait(false);
+                counter.Created++;
+            }
+        }
+
+        internal async Task RestoreModelAccessRuleAsync(ModelAccessRule rule, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
+        {
+            bool exists = await _Database.ModelAccessPolicy.ExistsRuleAsync(rule.TenantId, rule.PolicyId, rule.Id, token).ConfigureAwait(false);
+
+            if (exists)
+            {
+                switch (conflictResolution)
+                {
+                    case ConflictResolutionMode.Skip:
+                        counter.Skipped++;
+                        break;
+                    case ConflictResolutionMode.Overwrite:
+                        await _Database.ModelAccessPolicy.UpdateRuleAsync(rule, token).ConfigureAwait(false);
+                        counter.Updated++;
+                        break;
+                    case ConflictResolutionMode.Fail:
+                        throw new InvalidOperationException("Model Access Rule with ID '" + rule.Id + "' already exists.");
+                }
+            }
+            else
+            {
+                await _Database.ModelAccessPolicy.CreateRuleAsync(rule, token).ConfigureAwait(false);
+                counter.Created++;
+            }
+        }
     }
 }

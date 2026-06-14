@@ -70,7 +70,15 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.ListOllamaEndpointModels,
             RequestTypeEnum.PullOllamaEndpointModel,
             RequestTypeEnum.DeleteOllamaEndpointModel,
-            RequestTypeEnum.LoadVirtualModelRunnerModel
+            RequestTypeEnum.LoadVirtualModelRunnerModel,
+            RequestTypeEnum.CreateModelAccessPolicy,
+            RequestTypeEnum.ReadModelAccessPolicy,
+            RequestTypeEnum.UpdateModelAccessPolicy,
+            RequestTypeEnum.DeleteModelAccessPolicy,
+            RequestTypeEnum.ListModelAccessPolicies,
+            RequestTypeEnum.ValidateModelAccessPolicy,
+            RequestTypeEnum.EvaluateModelAccessPolicy,
+            RequestTypeEnum.ReadEffectiveModelAccess
         };
 
         /// <summary>

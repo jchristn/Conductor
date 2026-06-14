@@ -38,6 +38,26 @@ namespace Conductor.Core.Models
         public string ModelName { get; set; } = null;
 
         /// <summary>
+        /// Model access policy GUID.
+        /// </summary>
+        public string ModelAccessPolicyGuid { get; set; } = null;
+
+        /// <summary>
+        /// Model access rule GUID.
+        /// </summary>
+        public string ModelAccessRuleGuid { get; set; } = null;
+
+        /// <summary>
+        /// Model access decision, such as Permit or Deny.
+        /// </summary>
+        public string ModelAccessDecision { get; set; } = null;
+
+        /// <summary>
+        /// Monitor-mode would-deny state.
+        /// </summary>
+        public bool? ModelAccessWouldDeny { get; set; } = null;
+
+        /// <summary>
         /// Stage kind.
         /// </summary>
         public string StageKind { get; set; } = null;

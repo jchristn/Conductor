@@ -54,6 +54,15 @@ namespace Conductor.Core.Settings
         }
 
         /// <summary>
+        /// Model access control settings.
+        /// </summary>
+        public ModelAccessControlSettings ModelAccessControl
+        {
+            get => _ModelAccessControl;
+            set => _ModelAccessControl = (value != null ? value : new ModelAccessControlSettings());
+        }
+
+        /// <summary>
         /// Administrator API keys for initial access.
         /// </summary>
         public List<string> AdminApiKeys
@@ -67,6 +76,7 @@ namespace Conductor.Core.Settings
         private LoggingSettings _Logging = new LoggingSettings();
         private DebugSettings _Debug = new DebugSettings();
         private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
+        private ModelAccessControlSettings _ModelAccessControl = new ModelAccessControlSettings();
 
         private List<string> _AdminApiKeys = new List<string> { "conductoradmin" };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
@@ -8,10 +9,12 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
 
 function ModelDefinitions() {
   const { api, setError } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
+  const navigate = useNavigate();
   const [definitions, setDefinitions] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,8 +34,8 @@ function ModelDefinitions() {
     SupportsEmbeddings: false,
     SupportsCompletions: true,
     Active: true,
-    LabelsJson: '[]',
-    TagsJson: '{}'
+    Labels: labelsFromValue([]),
+    Tags: tagsFromValue({})
   });
 
   const fetchDefinitions = useCallback(async () => {
@@ -80,8 +83,8 @@ function ModelDefinitions() {
       SupportsEmbeddings: false,
       SupportsCompletions: true,
       Active: true,
-      LabelsJson: '[]',
-      TagsJson: '{}'
+      Labels: labelsFromValue([]),
+      Tags: tagsFromValue({})
     });
     setShowForm(true);
   };
@@ -99,8 +102,8 @@ function ModelDefinitions() {
       SupportsEmbeddings: definition.SupportsEmbeddings === true,
       SupportsCompletions: definition.SupportsCompletions !== false,
       Active: definition.Active !== false,
-      LabelsJson: JSON.stringify(definition.Labels || [], null, 2),
-      TagsJson: JSON.stringify(definition.Tags || {}, null, 2)
+      Labels: labelsFromValue(definition.Labels),
+      Tags: tagsFromValue(definition.Tags)
     });
     setShowForm(true);
   };
@@ -113,6 +116,14 @@ function ModelDefinitions() {
   const handleDeleteClick = (definition) => {
     setSelectedDefinition(definition);
     setShowDeleteConfirm(true);
+  };
+
+  const handleEvaluateAccess = (definition) => {
+    const params = new URLSearchParams();
+    if (definition.TenantId) params.append('tenantId', definition.TenantId);
+    params.append('modelDefinitionId', definition.Id);
+    params.append('modelName', definition.Name);
+    navigate(`/model-access-policies?${params.toString()}`);
   };
 
   const handleDelete = async () => {
@@ -132,23 +143,6 @@ function ModelDefinitions() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      let labels = [];
-      let tags = {};
-
-      try {
-        labels = JSON.parse(formData.LabelsJson || '[]');
-      } catch (err) {
-        setError('Invalid JSON in Labels');
-        return;
-      }
-
-      try {
-        tags = JSON.parse(formData.TagsJson || '{}');
-      } catch (err) {
-        setError('Invalid JSON in Tags');
-        return;
-      }
-
       const data = {
         TenantId: formData.TenantId || null,
         Name: formData.Name,
@@ -159,8 +153,8 @@ function ModelDefinitions() {
         SupportsEmbeddings: formData.SupportsEmbeddings,
         SupportsCompletions: formData.SupportsCompletions,
         Active: formData.Active,
-        Labels: labels,
-        Tags: tags
+        Labels: labelsToPayload(formData.Labels),
+        Tags: tagsToPayload(formData.Tags)
       };
 
       if (editMode) {
@@ -250,6 +244,7 @@ function ModelDefinitions() {
         <ActionMenu
           actions={[
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
+            { label: 'Evaluate Access', onClick: () => handleEvaluateAccess(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
             { divider: true },
             { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
@@ -371,29 +366,13 @@ function ModelDefinitions() {
             </label>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="labels" title="String array for categorization and filtering">Labels (JSON)</label>
-            <textarea
-              id="labels"
-              value={formData.LabelsJson}
-              onChange={(e) => setFormData({ ...formData, LabelsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="[]"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tags" title="Key-value pairs for custom metadata">Tags (JSON)</label>
-            <textarea
-              id="tags"
-              value={formData.TagsJson}
-              onChange={(e) => setFormData({ ...formData, TagsJson: e.target.value })}
-              rows={4}
-              className="code-input"
-              placeholder="{}"
-            />
-          </div>
+          <LabelsTagsEditor
+            labels={formData.Labels}
+            tags={formData.Tags}
+            onLabelsChange={(Labels) => setFormData({ ...formData, Labels })}
+            onTagsChange={(Tags) => setFormData({ ...formData, Tags })}
+            idPrefix="model-definition"
+          />
 
           <div className="form-group checkbox-group">
             <label title="Inactive definitions are excluded from VMR model lists">

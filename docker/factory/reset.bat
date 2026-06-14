@@ -7,7 +7,7 @@ REM
 REM Resets the Docker deployment to its default configuration by:
 REM - Stopping all containers
 REM - Restoring the factory conductor.json configuration
-REM - Rebuilding a clean database with default records
+REM - Removing the PostgreSQL data volume so the init container rebuilds a clean database
 REM - Removing all log files and request history
 REM
 
@@ -44,18 +44,15 @@ if not "%CONFIRM%"=="RESET" (
     exit /b 1
 )
 
-echo   [1/5] Stopping Docker containers...
+echo   [1/5] Stopping Docker containers and removing database volume...
 pushd "%DOCKER_DIR%"
-docker compose down 2>nul || docker-compose down 2>nul
+docker compose down -v 2>nul || docker-compose down -v 2>nul
 popd
 
 echo   [2/5] Restoring factory configuration...
 copy /y "%SCRIPT_DIR%conductor.json" "%DOCKER_DIR%\conductor.json" >nul
 
-echo   [3/5] Removing database and request history...
-if exist "%DOCKER_DIR%\data\conductor.db" del /f /q "%DOCKER_DIR%\data\conductor.db"
-if exist "%DOCKER_DIR%\data\conductor.db-wal" del /f /q "%DOCKER_DIR%\data\conductor.db-wal"
-if exist "%DOCKER_DIR%\data\conductor.db-shm" del /f /q "%DOCKER_DIR%\data\conductor.db-shm"
+echo   [3/5] Removing request history...
 if exist "%DOCKER_DIR%\data\request-history" (
     rd /s /q "%DOCKER_DIR%\data\request-history"
 )
@@ -66,17 +63,7 @@ for /r "%DOCKER_DIR%\logs" %%f in (*) do (
     if not "%%~nxf"==".gitkeep" del /f /q "%%f" 2>nul
 )
 
-echo   [5/5] Rebuilding factory database...
-where sqlite3 >nul 2>&1
-if %errorlevel% equ 0 (
-    sqlite3 "%DOCKER_DIR%\data\conductor.db" < "%SCRIPT_DIR%schema.sql"
-    echo          Factory database created with default records.
-) else (
-    echo          sqlite3 not found. The database will be created
-    echo          automatically with new default credentials on next startup.
-    echo          Note: The auto-generated credentials will differ from the
-    echo          factory defaults listed above.
-)
+echo   [5/5] Database will be rebuilt by conductor-db-init on next startup...
 
 echo.
 echo ========================================================================

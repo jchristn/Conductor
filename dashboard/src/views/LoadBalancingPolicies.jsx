@@ -7,6 +7,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
 
 const POLICY_TEMPLATES = {
   LowestCpu: {
@@ -93,8 +94,8 @@ function defaultFormData() {
     Active: true,
     FiltersJson: JSON.stringify(POLICY_TEMPLATES.LowestCpu.Filters, null, 2),
     RankingJson: JSON.stringify(POLICY_TEMPLATES.LowestCpu.Ranking, null, 2),
-    LabelsJson: '[]',
-    TagsJson: '{}',
+    Labels: labelsFromValue([]),
+    Tags: tagsFromValue({}),
     MetadataJson: 'null'
   };
 }
@@ -358,8 +359,8 @@ function LoadBalancingPolicies() {
       Active: policy.Active !== false,
       FiltersJson: formatJson(policy.Filters, '[]'),
       RankingJson: formatJson(policy.Ranking, '[]'),
-      LabelsJson: formatJson(policy.Labels, '[]'),
-      TagsJson: formatJson(policy.Tags, '{}'),
+      Labels: labelsFromValue(policy.Labels),
+      Tags: tagsFromValue(policy.Tags),
       MetadataJson: formatJson(policy.Metadata, 'null')
     });
     setShowForm(true);
@@ -378,8 +379,8 @@ function LoadBalancingPolicies() {
       Active: policy.Active !== false,
       FiltersJson: formatJson(policy.Filters, '[]'),
       RankingJson: formatJson(policy.Ranking, '[]'),
-      LabelsJson: formatJson(policy.Labels, '[]'),
-      TagsJson: formatJson(policy.Tags, '{}'),
+      Labels: labelsFromValue(policy.Labels),
+      Tags: tagsFromValue(policy.Tags),
       MetadataJson: formatJson(policy.Metadata, 'null')
     });
     setShowForm(true);
@@ -433,8 +434,6 @@ function LoadBalancingPolicies() {
     try {
       let filters = [];
       let ranking = [];
-      let labels = [];
-      let tags = {};
       let metadata = null;
 
       try {
@@ -448,20 +447,6 @@ function LoadBalancingPolicies() {
         ranking = JSON.parse(formData.RankingJson || '[]');
       } catch {
         setError('Invalid JSON in Ranking');
-        return;
-      }
-
-      try {
-        labels = JSON.parse(formData.LabelsJson || '[]');
-      } catch {
-        setError('Invalid JSON in Labels');
-        return;
-      }
-
-      try {
-        tags = JSON.parse(formData.TagsJson || '{}');
-      } catch {
-        setError('Invalid JSON in Tags');
         return;
       }
 
@@ -482,8 +467,8 @@ function LoadBalancingPolicies() {
         Active: formData.Active,
         Filters: filters,
         Ranking: ranking,
-        Labels: labels,
-        Tags: tags,
+        Labels: labelsToPayload(formData.Labels),
+        Tags: tagsToPayload(formData.Tags),
         Metadata: metadata
       };
 
@@ -777,27 +762,13 @@ function LoadBalancingPolicies() {
             </div>
           )}
 
-          <div className="form-group">
-            <label htmlFor="labels" title="String array for categorization and filtering">Labels (JSON)</label>
-            <textarea
-              id="labels"
-              value={formData.LabelsJson}
-              onChange={(e) => setFormData({ ...formData, LabelsJson: e.target.value })}
-              rows={3}
-              className="code-input"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tags" title="Key-value pairs for custom metadata">Tags (JSON)</label>
-            <textarea
-              id="tags"
-              value={formData.TagsJson}
-              onChange={(e) => setFormData({ ...formData, TagsJson: e.target.value })}
-              rows={3}
-              className="code-input"
-            />
-          </div>
+          <LabelsTagsEditor
+            labels={formData.Labels}
+            tags={formData.Tags}
+            onLabelsChange={(Labels) => setFormData({ ...formData, Labels })}
+            onTagsChange={(Tags) => setFormData({ ...formData, Tags })}
+            idPrefix="load-balancing-policy"
+          />
 
           <div className="form-group">
             <label htmlFor="metadata" title="Optional free-form metadata stored with the policy">Metadata (JSON)</label>

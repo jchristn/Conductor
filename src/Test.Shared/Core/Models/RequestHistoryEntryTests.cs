@@ -82,6 +82,12 @@ namespace Test.Shared.Core.Models
                 SessionAffinityOutcome = "Hit",
                 MutationSummary = "temperature overridden",
                 ExplanationSummary = "Policy ranked 2 candidates.",
+                ModelAccessPolicyGuid = "map_test",
+                ModelAccessPolicyName = "Tenant policy",
+                ModelAccessRuleGuid = "mar_test",
+                ModelAccessRuleName = "Deny model",
+                ModelAccessDecision = "Deny",
+                ModelAccessWouldDeny = true,
                 RequestTransferType = Conductor.Core.Enums.TransferTypeEnum.Chunked,
                 ResponseTransferType = Conductor.Core.Enums.TransferTypeEnum.ServerSentEvents
             };
@@ -95,6 +101,12 @@ namespace Test.Shared.Core.Models
             detail.SessionAffinityOutcome.Should().Be("Hit");
             detail.MutationSummary.Should().Be("temperature overridden");
             detail.ExplanationSummary.Should().Be("Policy ranked 2 candidates.");
+            detail.ModelAccessPolicyGuid.Should().Be("map_test");
+            detail.ModelAccessPolicyName.Should().Be("Tenant policy");
+            detail.ModelAccessRuleGuid.Should().Be("mar_test");
+            detail.ModelAccessRuleName.Should().Be("Deny model");
+            detail.ModelAccessDecision.Should().Be("Deny");
+            detail.ModelAccessWouldDeny.Should().BeTrue();
             detail.RequestTransferType.Should().Be(Conductor.Core.Enums.TransferTypeEnum.Chunked);
             detail.ResponseTransferType.Should().Be(Conductor.Core.Enums.TransferTypeEnum.ServerSentEvents);
         }
