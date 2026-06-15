@@ -112,6 +112,7 @@ namespace Test.Shared.Server.Controllers
             result.AllowEmbeddings.Should().BeTrue();
             result.AllowCompletions.Should().BeTrue();
             result.AllowModelManagement.Should().BeFalse(); // Default is false
+            result.RequestHistoryEnabled.Should().BeTrue();
         }
         public async Task Create_OverridesTenantId()
         {

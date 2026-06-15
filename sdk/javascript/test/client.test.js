@@ -72,6 +72,105 @@ test('builds request analytics overview query string', async () => {
   );
 });
 
+test('builds analytics workspace GET query string', async () => {
+  let capturedUrl = '';
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url) => {
+      capturedUrl = url;
+      return createJsonResponse({ TotalRequests: 0 });
+    }
+  });
+
+  await client.getAnalyticsSummary({
+    range: 'lastDay',
+    groupBy: 'RequestorUserId',
+    requestorUserGuid: 'usr_1',
+    tokenUnitCost: '0.000001',
+    costCurrency: 'USD'
+  });
+
+  assert.equal(
+    capturedUrl,
+    'http://localhost:9000/v1.0/analytics/summary?range=lastDay&groupBy=RequestorUserId&requestorUserGuid=usr_1&tokenUnitCost=0.000001&costCurrency=USD'
+  );
+});
+
+test('builds analytics workspace POST query request', async () => {
+  let capturedUrl = '';
+  let capturedOptions = null;
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      return createJsonResponse({ TotalRequests: 0 });
+    }
+  });
+
+  const query = {
+    Range: 'lastDay',
+    TokenUnitCost: 0.000001,
+    CostCurrency: 'USD',
+    GroupBy: ['RequestorUserId'],
+    Filters: {
+      RequestorUserIds: ['usr_1'],
+      SuccessfulCompletionsOnly: true
+    }
+  };
+
+  await client.queryAnalytics(query);
+
+  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/analytics/query');
+  assert.equal(capturedOptions.method, 'POST');
+  assert.equal(capturedOptions.body, JSON.stringify(query));
+});
+
+test('builds analytics saved report CRUD requests', async () => {
+  const captured = [];
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options) => {
+      captured.push({ url, options });
+      if (options.method === 'DELETE') {
+        return createJsonResponse({}, 204);
+      }
+
+      return createJsonResponse({ Id: 'asr_123' });
+    }
+  });
+
+  const report = {
+    TenantId: 'ten_123',
+    Name: 'Daily user cost',
+    Query: {
+      Range: 'lastDay',
+      TokenUnitCost: 0.000001,
+      GroupBy: ['RequestorUserId']
+    }
+  };
+
+  await client.listAnalyticsSavedReports({ tenantId: 'ten_123', maxResults: 25, nameFilter: 'daily' });
+  await client.createAnalyticsSavedReport(report);
+  await client.getAnalyticsSavedReport('asr_123', 'ten_123');
+  await client.updateAnalyticsSavedReport('asr_123', report);
+  const deleteResult = await client.deleteAnalyticsSavedReport('asr_123', 'ten_123');
+
+  assert.equal(deleteResult, null);
+  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/analytics/reports?tenantId=ten_123&maxResults=25&nameFilter=daily');
+  assert.equal(captured[0].options.method, 'GET');
+  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/analytics/reports');
+  assert.equal(captured[1].options.method, 'POST');
+  assert.equal(captured[1].options.body, JSON.stringify(report));
+  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123');
+  assert.equal(captured[2].options.method, 'GET');
+  assert.equal(captured[3].url, 'http://localhost:9000/v1.0/analytics/reports/asr_123');
+  assert.equal(captured[3].options.method, 'PUT');
+  assert.equal(captured[3].options.body, JSON.stringify(report));
+  assert.equal(captured[4].url, 'http://localhost:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123');
+  assert.equal(captured[4].options.method, 'DELETE');
+});
+
 test('builds model access policy management requests', async () => {
   const captured = [];
   const client = new ConductorClient({

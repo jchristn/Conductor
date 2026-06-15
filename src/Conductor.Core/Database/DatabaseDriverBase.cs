@@ -73,6 +73,11 @@ namespace Conductor.Core.Database
         public IRequestAnalyticsMethods RequestAnalytics { get; protected set; }
 
         /// <summary>
+        /// Analytics saved report methods.
+        /// </summary>
+        public IAnalyticsSavedReportMethods AnalyticsSavedReport { get; protected set; }
+
+        /// <summary>
         /// Connection string.
         /// </summary>
         protected string ConnectionString { get; set; }

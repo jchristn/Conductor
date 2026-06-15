@@ -55,6 +55,92 @@ class ConductorClientTests(unittest.TestCase):
             "http://localhost:9000/v1.0/requesthistory/analytics/overview?range=lastWeek&providerName=Ollama",
         )
 
+    def test_analytics_summary_serializes_filters(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"TotalRequests": 0}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        client.get_analytics_summary({
+            "range": "lastDay",
+            "groupBy": "RequestorUserId",
+            "requestorUserGuid": "usr_1",
+            "tokenUnitCost": "0.000001",
+            "costCurrency": "USD",
+        })
+
+        self.assertEqual(
+            session.request.call_args.kwargs["url"],
+            "http://localhost:9000/v1.0/analytics/summary?range=lastDay&groupBy=RequestorUserId&requestorUserGuid=usr_1&tokenUnitCost=0.000001&costCurrency=USD",
+        )
+
+    def test_query_analytics_posts_body(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"TotalRequests": 0}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        query = {
+            "Range": "lastDay",
+            "TokenUnitCost": 0.000001,
+            "CostCurrency": "USD",
+            "GroupBy": ["RequestorUserId"],
+            "Filters": {
+                "RequestorUserIds": ["usr_1"],
+                "SuccessfulCompletionsOnly": True,
+            },
+        }
+        client.query_analytics(query)
+
+        self.assertEqual(session.request.call_args.kwargs["url"], "http://localhost:9000/v1.0/analytics/query")
+        self.assertEqual(session.request.call_args.kwargs["method"], "POST")
+        self.assertEqual(session.request.call_args.kwargs["json"], query)
+
+    def test_analytics_saved_report_crud_builds_requests(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"Id": "asr_123"}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        report = {
+            "TenantId": "ten_123",
+            "Name": "Daily user cost",
+            "Query": {
+                "Range": "lastDay",
+                "TokenUnitCost": 0.000001,
+                "GroupBy": ["RequestorUserId"],
+            },
+        }
+
+        client.list_analytics_saved_reports({"tenantId": "ten_123", "maxResults": 25, "nameFilter": "daily"})
+        client.create_analytics_saved_report(report)
+        client.get_analytics_saved_report("asr_123", tenant_id="ten_123")
+        client.update_analytics_saved_report("asr_123", report)
+        client.delete_analytics_saved_report("asr_123", tenant_id="ten_123")
+
+        calls = session.request.call_args_list
+        self.assertEqual(calls[0].kwargs["url"], "http://localhost:9000/v1.0/analytics/reports?tenantId=ten_123&maxResults=25&nameFilter=daily")
+        self.assertEqual(calls[0].kwargs["method"], "GET")
+        self.assertEqual(calls[1].kwargs["url"], "http://localhost:9000/v1.0/analytics/reports")
+        self.assertEqual(calls[1].kwargs["method"], "POST")
+        self.assertEqual(calls[1].kwargs["json"], report)
+        self.assertEqual(calls[2].kwargs["url"], "http://localhost:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123")
+        self.assertEqual(calls[2].kwargs["method"], "GET")
+        self.assertEqual(calls[3].kwargs["url"], "http://localhost:9000/v1.0/analytics/reports/asr_123")
+        self.assertEqual(calls[3].kwargs["method"], "PUT")
+        self.assertEqual(calls[3].kwargs["json"], report)
+        self.assertEqual(calls[4].kwargs["url"], "http://localhost:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123")
+        self.assertEqual(calls[4].kwargs["method"], "DELETE")
+
     def test_model_access_policy_management_builds_requests(self) -> None:
         session = MagicMock()
         response = MagicMock()

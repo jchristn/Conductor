@@ -4,6 +4,11 @@
 
 - Added tenant-scoped model access policies with VMR attachment, enforce/monitor/disabled modes, proxy credential attribution, denied/would-deny request history, analytics counters, audit logging, list-model filtering or synthesis, backup/restore support, SDK helpers, Postman examples, and documented rollout semantics.
 - Added `ACCESS_POLICIES.md`, a user-facing model access policy authoring guide with dashboard/API workflow and real-world policy examples.
+- Added a tenant-scoped dashboard Analytics workspace at `/analytics` for TTFT, token usage, estimate-only cost, user/credential/model/endpoint breakdowns, and denied/rate-limited request reporting over the retained 30-day request-history window.
+- Added `/v1.0/analytics` catalog, query, summary, time-series, TTFT, tokens, costs, users, and access/reliability APIs with system-admin global scope, tenant-admin forced scope, and successful-completion token/cost semantics.
+- Added dedicated tenant-scoped Analytics reader access through the `analytics.read` user label/tag convention.
+- Added Analytics saved-report persistence, CRUD APIs, dashboard load/save/update/delete/link controls, SDK helpers, and Postman examples.
+- Added JavaScript, Python, and C# SDK helpers plus Postman examples for the first Analytics workspace API slice.
 - Coalesced duplicate model runner endpoint health checks so endpoints sharing the same effective health-check URL reuse one upstream probe while retaining per-endpoint health state.
 - Added Ollama endpoint model management APIs and dashboard `Manage Models` action for listing local models, pulling a model, and deleting a model from an Ollama-type runner endpoint.
 - Added tenant-admin model load and verification APIs for model runner endpoints and virtual model runners, with dashboard actions, SDK helpers, Postman examples, provider-specific outcome semantics, and Prometheus model-load metrics.

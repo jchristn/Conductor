@@ -249,9 +249,9 @@ namespace Conductor.Core.Models
         /// <summary>
         /// Enable request history for this virtual model runner.
         /// When enabled (and global request history is enabled), requests and responses are captured.
-        /// Default is false.
+        /// Default is true so Request History and Analytics populate for newly-created VMRs unless explicitly disabled.
         /// </summary>
-        public bool RequestHistoryEnabled { get; set; } = false;
+        public bool RequestHistoryEnabled { get; set; } = true;
 
         /// <summary>
         /// Boolean indicating if the virtual model runner is active.
@@ -397,7 +397,10 @@ namespace Conductor.Core.Models
             if (obj.SessionTimeoutMs == 0) obj.SessionTimeoutMs = 600000;
             obj.SessionMaxEntries = DataTableHelper.GetIntValue(row, "sessionmaxentries");
             if (obj.SessionMaxEntries == 0) obj.SessionMaxEntries = 10000;
-            obj.RequestHistoryEnabled = DataTableHelper.GetBooleanValue(row, "requesthistoryenabled");
+            if (row.Table.Columns.Contains("requesthistoryenabled"))
+            {
+                obj.RequestHistoryEnabled = DataTableHelper.GetBooleanValue(row, "requesthistoryenabled");
+            }
 
             string endpointIdsJson = DataTableHelper.GetStringValue(row, "modelrunnerendpointids");
             if (!String.IsNullOrEmpty(endpointIdsJson))

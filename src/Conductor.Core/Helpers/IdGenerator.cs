@@ -74,6 +74,11 @@ namespace Conductor.Core.Helpers
         public const string RequestAnalyticsEventPrefix = "rae_";
 
         /// <summary>
+        /// Analytics saved report ID prefix.
+        /// </summary>
+        public const string AnalyticsSavedReportPrefix = "asr_";
+
+        /// <summary>
         /// Request trace ID prefix.
         /// </summary>
         public const string TracePrefix = "trc_";
@@ -200,6 +205,15 @@ namespace Conductor.Core.Helpers
         public static string NewRequestAnalyticsEventId()
         {
             return _Generator.GenerateKSortable(RequestAnalyticsEventPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new analytics saved report ID.
+        /// </summary>
+        /// <returns>K-sortable analytics saved report ID.</returns>
+        public static string NewAnalyticsSavedReportId()
+        {
+            return _Generator.GenerateKSortable(AnalyticsSavedReportPrefix, DefaultIdLength);
         }
 
         /// <summary>

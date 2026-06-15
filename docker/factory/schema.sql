@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS virtualmodelrunners (
     sessionaffinityheader TEXT,
     sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
     sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
-    requesthistoryenabled INTEGER NOT NULL DEFAULT 0,
+    requesthistoryenabled INTEGER NOT NULL DEFAULT 1,
     loadbalancingpolicyid TEXT,
     modelaccesspolicyid TEXT,
     active INTEGER NOT NULL DEFAULT 1,
@@ -378,6 +378,26 @@ CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalytic
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
+
+CREATE TABLE IF NOT EXISTS analyticssavedreports (
+    id TEXT PRIMARY KEY,
+    tenantid TEXT,
+    owneruserid TEXT,
+    name TEXT NOT NULL,
+    description TEXT,
+    scope TEXT NOT NULL DEFAULT 'Tenant',
+    queryjson TEXT NOT NULL,
+    displaystatejson TEXT,
+    labels TEXT,
+    tags TEXT,
+    createdutc TEXT NOT NULL,
+    lastupdateutc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_asr_tenantid ON analyticssavedreports(tenantid);
+CREATE INDEX IF NOT EXISTS idx_asr_owneruserid ON analyticssavedreports(owneruserid);
+CREATE INDEX IF NOT EXISTS idx_asr_scope ON analyticssavedreports(scope);
+CREATE INDEX IF NOT EXISTS idx_asr_name ON analyticssavedreports(name);
+CREATE INDEX IF NOT EXISTS idx_asr_lastupdateutc ON analyticssavedreports(lastupdateutc);
 
 -- Default Records (matching InitializeFirstRunAsync)
 -- Note: The application generates unique K-sortable IDs and a random bearer token

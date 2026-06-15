@@ -121,6 +121,46 @@
       "type": "string"
     },
     {
+      "key": "analyticsTimezone",
+      "value": "UTC",
+      "type": "string"
+    },
+    {
+      "key": "analyticsGroupBy",
+      "value": "RequestorUserId",
+      "type": "string"
+    },
+    {
+      "key": "analyticsRequestorUserGuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analyticsCredentialGuid",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analyticsTokenUnitCost",
+      "value": "0.000001",
+      "type": "string"
+    },
+    {
+      "key": "analyticsCostCurrency",
+      "value": "USD",
+      "type": "string"
+    },
+    {
+      "key": "analyticsReportId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analyticsExportId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "tenantId",
       "value": "default",
       "type": "string"
@@ -2028,6 +2068,475 @@
               ]
             },
             "description": "Delete all request history entries matching the filter criteria."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics Workspace",
+      "description": "Dashboard-oriented analytics for TTFT, token usage, estimate-only cost, users, and access/reliability over the retained 30-day request-history window.",
+      "item": [
+        {
+          "name": "Get Analytics Catalog",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/catalog",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "catalog"
+              ]
+            },
+            "description": "Get supported analytics metrics, dimensions, named ranges, granularities, retention, and unavailable future export formats."
+          }
+        },
+        {
+          "name": "Get Analytics Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/summary?range={{analyticsRange}}&bucketSeconds={{analyticsBucketSeconds}}&timezone={{analyticsTimezone}}&limit={{analyticsLimit}}&tokenUnitCost={{analyticsTokenUnitCost}}&costCurrency={{analyticsCostCurrency}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true,
+                  "description": "Optional tenant filter for system administrators"
+                },
+                {
+                  "key": "range",
+                  "value": "{{analyticsRange}}",
+                  "description": "lastHour, lastDay, lastWeek, lastMonth, or custom"
+                },
+                {
+                  "key": "startUtc",
+                  "value": "{{analyticsStartUtc}}",
+                  "disabled": true
+                },
+                {
+                  "key": "endUtc",
+                  "value": "{{analyticsEndUtc}}",
+                  "disabled": true
+                },
+                {
+                  "key": "bucketSeconds",
+                  "value": "{{analyticsBucketSeconds}}"
+                },
+                {
+                  "key": "timezone",
+                  "value": "{{analyticsTimezone}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{analyticsLimit}}"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "{{analyticsGroupBy}}",
+                  "disabled": true
+                },
+                {
+                  "key": "vmrGuid",
+                  "value": "{{vmrGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "endpointGuid",
+                  "value": "{{endpointGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "providerName",
+                  "value": "{{providerName}}",
+                  "disabled": true
+                },
+                {
+                  "key": "modelName",
+                  "value": "{{modelName}}",
+                  "disabled": true
+                },
+                {
+                  "key": "requestorUserGuid",
+                  "value": "{{analyticsRequestorUserGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "credentialGuid",
+                  "value": "{{analyticsCredentialGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "statusClass",
+                  "value": "4xx",
+                  "disabled": true
+                },
+                {
+                  "key": "tokenUnitCost",
+                  "value": "{{analyticsTokenUnitCost}}"
+                },
+                {
+                  "key": "costCurrency",
+                  "value": "{{analyticsCostCurrency}}"
+                }
+              ]
+            },
+            "description": "Get the dashboard summary with request counts, TTFT, token totals, unknown usage count, estimate-only cost, time series, and grouped summaries."
+          }
+        },
+        {
+          "name": "Run Analytics Query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Range\": \"{{analyticsRange}}\",\n  \"StartUtc\": null,\n  \"EndUtc\": null,\n  \"BucketSeconds\": {{analyticsBucketSeconds}},\n  \"Timezone\": \"{{analyticsTimezone}}\",\n  \"TokenUnitCost\": {{analyticsTokenUnitCost}},\n  \"CostCurrency\": \"{{analyticsCostCurrency}}\",\n  \"Metrics\": [\n    \"latency.ttft.avg\",\n    \"tokens.total\",\n    \"cost.estimated\"\n  ],\n  \"GroupBy\": [\n    \"{{analyticsGroupBy}}\"\n  ],\n  \"Filters\": {\n    \"VirtualModelRunnerIds\": [\n      \"{{vmrGuid}}\"\n    ],\n    \"ModelRunnerEndpointIds\": [\n      \"{{endpointGuid}}\"\n    ],\n    \"ModelNames\": [\n      \"{{modelName}}\"\n    ],\n    \"RequestorUserIds\": [],\n    \"CredentialIds\": [],\n    \"ProviderNames\": [],\n    \"StatusClasses\": [],\n    \"StageKinds\": [],\n    \"ModelAccessWouldDeny\": null,\n    \"SuccessfulCompletionsOnly\": true\n  },\n  \"Limit\": {{analyticsLimit}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/query",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "query"
+              ]
+            },
+            "description": "Run a general Analytics workspace query. System administrators can keep TenantId for tenant filtering or remove it for global scope; tenant admins are forced to their authenticated tenant."
+          }
+        },
+        {
+          "name": "List Analytics Saved Reports",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/reports?maxResults=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "reports"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true,
+                  "description": "Optional tenant filter for system administrators"
+                },
+                {
+                  "key": "maxResults",
+                  "value": "25"
+                },
+                {
+                  "key": "nameFilter",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "ownerUserId",
+                  "value": "{{analyticsRequestorUserGuid}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List saved Analytics workspace report definitions in global or tenant scope."
+          }
+        },
+        {
+          "name": "Create Analytics Saved Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Daily user cost\",\n  \"Description\": \"Estimate user token cost over the last day.\",\n  \"Query\": {\n    \"Range\": \"lastDay\",\n    \"BucketSeconds\": {{analyticsBucketSeconds}},\n    \"TokenUnitCost\": {{analyticsTokenUnitCost}},\n    \"CostCurrency\": \"{{analyticsCostCurrency}}\",\n    \"GroupBy\": [\n      \"RequestorUserId\"\n    ],\n    \"Filters\": {\n      \"RequestorUserIds\": [\n        \"{{analyticsRequestorUserGuid}}\"\n      ],\n      \"SuccessfulCompletionsOnly\": true\n    },\n    \"Limit\": {{analyticsLimit}}\n  },\n  \"DisplayState\": {\n    \"workspace\": \"Analytics\",\n    \"chart\": \"VolumeAndTtft\"\n  },\n  \"Labels\": [\n    \"analytics\"\n  ],\n  \"Tags\": {\n    \"range\": \"lastDay\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "reports"
+              ]
+            },
+            "description": "Create a saved Analytics workspace report. Tenant admins are forced to their tenant; system admins can omit TenantId for global scope."
+          }
+        },
+        {
+          "name": "Get Analytics Saved Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/reports/{{analyticsReportId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "reports",
+                "{{analyticsReportId}}"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Read one saved Analytics workspace report definition."
+          }
+        },
+        {
+          "name": "Update Analytics Saved Report",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Daily user cost updated\",\n  \"Description\": \"Updated report definition.\",\n  \"Query\": {\n    \"Range\": \"lastDay\",\n    \"BucketSeconds\": {{analyticsBucketSeconds}},\n    \"TokenUnitCost\": {{analyticsTokenUnitCost}},\n    \"CostCurrency\": \"{{analyticsCostCurrency}}\",\n    \"GroupBy\": [\n      \"RequestorUserId\"\n    ],\n    \"Filters\": {\n      \"RequestorUserIds\": [\n        \"{{analyticsRequestorUserGuid}}\"\n      ],\n      \"SuccessfulCompletionsOnly\": true\n    },\n    \"Limit\": {{analyticsLimit}}\n  },\n  \"DisplayState\": {\n    \"workspace\": \"Analytics\",\n    \"chart\": \"VolumeAndTtft\"\n  },\n  \"Labels\": [\n    \"analytics\"\n  ],\n  \"Tags\": {\n    \"range\": \"lastDay\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/reports/{{analyticsReportId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "reports",
+                "{{analyticsReportId}}"
+              ]
+            },
+            "description": "Update a saved Analytics workspace report definition."
+          }
+        },
+        {
+          "name": "Delete Analytics Saved Report",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/reports/{{analyticsReportId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "reports",
+                "{{analyticsReportId}}"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Delete a saved Analytics workspace report definition."
+          }
+        },
+        {
+          "name": "TTFT By User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/ttft?range={{analyticsRange}}&bucketSeconds={{analyticsBucketSeconds}}&groupBy=RequestorUserId&vmrGuid={{vmrGuid}}&endpointGuid={{endpointGuid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "ttft"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "{{analyticsRange}}"
+                },
+                {
+                  "key": "bucketSeconds",
+                  "value": "{{analyticsBucketSeconds}}"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "RequestorUserId"
+                },
+                {
+                  "key": "vmrGuid",
+                  "value": "{{vmrGuid}}"
+                },
+                {
+                  "key": "endpointGuid",
+                  "value": "{{endpointGuid}}"
+                },
+                {
+                  "key": "requestorUserGuid",
+                  "value": "{{analyticsRequestorUserGuid}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Answer: what was the average/P95 TTFT for this endpoint and VMR, optionally drilling into a specific user?"
+          }
+        },
+        {
+          "name": "Tokens By Model",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/tokens?range={{analyticsRange}}&bucketSeconds={{analyticsBucketSeconds}}&groupBy=EffectiveModel&modelName={{modelName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "tokens"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "{{analyticsRange}}"
+                },
+                {
+                  "key": "bucketSeconds",
+                  "value": "{{analyticsBucketSeconds}}"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "EffectiveModel"
+                },
+                {
+                  "key": "modelName",
+                  "value": "{{modelName}}"
+                },
+                {
+                  "key": "requestorUserGuid",
+                  "value": "{{analyticsRequestorUserGuid}}",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Answer: what is total prompt, completion, and total token usage over time for a model?"
+          }
+        },
+        {
+          "name": "Estimated User Cost Last Day",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/costs?range=lastDay&groupBy=RequestorUserId&requestorUserGuid={{analyticsRequestorUserGuid}}&tokenUnitCost={{analyticsTokenUnitCost}}&costCurrency={{analyticsCostCurrency}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "costs"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "lastDay"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "RequestorUserId"
+                },
+                {
+                  "key": "requestorUserGuid",
+                  "value": "{{analyticsRequestorUserGuid}}"
+                },
+                {
+                  "key": "tokenUnitCost",
+                  "value": "{{analyticsTokenUnitCost}}"
+                },
+                {
+                  "key": "costCurrency",
+                  "value": "{{analyticsCostCurrency}}"
+                }
+              ]
+            },
+            "description": "Answer: what is the estimate-only token cost for this user over the last day?"
+          }
+        },
+        {
+          "name": "Access And Reliability Counts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/access?range={{analyticsRange}}&bucketSeconds={{analyticsBucketSeconds}}&groupBy=RequestorUserId&statusClass=4xx",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "access"
+              ],
+              "query": [
+                {
+                  "key": "range",
+                  "value": "{{analyticsRange}}"
+                },
+                {
+                  "key": "bucketSeconds",
+                  "value": "{{analyticsBucketSeconds}}"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "RequestorUserId"
+                },
+                {
+                  "key": "statusClass",
+                  "value": "4xx"
+                },
+                {
+                  "key": "modelAccessWouldDeny",
+                  "value": "true",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Review failed request types such as denied or rate-limited requests. Rate-limited requests are counted when HTTP status is 429."
           }
         }
       ]

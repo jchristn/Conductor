@@ -321,6 +321,12 @@ namespace Conductor.Server.Routing
                 return AuthorizationResultEnum.DeniedImplicit;
             }
 
+            if (Core.Authorization.AuthorizationConfig.RequiresAnalyticsRead(requestType)
+                && !Core.Authorization.AuthorizationConfig.UserHasAnalyticsReadAccess(userAuth.User))
+            {
+                return AuthorizationResultEnum.DeniedImplicit;
+            }
+
             if (Core.Authorization.AuthorizationConfig.RequiresTenantAdmin(requestType) && !userAuth.IsAdmin && !userAuth.IsTenantAdmin)
             {
                 return AuthorizationResultEnum.DeniedImplicit;

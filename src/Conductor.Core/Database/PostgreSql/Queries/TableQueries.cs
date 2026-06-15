@@ -292,7 +292,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 sessionaffinityheader VARCHAR(255),
                 sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
                 sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
-                requesthistoryenabled BOOLEAN NOT NULL DEFAULT FALSE,
+                requesthistoryenabled BOOLEAN NOT NULL DEFAULT TRUE,
                 loadbalancingpolicyid VARCHAR(48),
                 modelaccesspolicyid VARCHAR(48),
                 active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -457,10 +457,35 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         ";
 
         /// <summary>
+        /// Create analytics saved reports table.
+        /// </summary>
+        public static readonly string CreateAnalyticsSavedReportsTable = @"
+            CREATE TABLE IF NOT EXISTS analyticssavedreports (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48),
+                owneruserid VARCHAR(48),
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                scope VARCHAR(32) NOT NULL DEFAULT 'Tenant',
+                queryjson TEXT NOT NULL,
+                displaystatejson TEXT,
+                labels TEXT,
+                tags TEXT,
+                createdutc TIMESTAMP NOT NULL,
+                lastupdateutc TIMESTAMP NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_asr_tenantid ON analyticssavedreports(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_asr_owneruserid ON analyticssavedreports(owneruserid);
+            CREATE INDEX IF NOT EXISTS idx_asr_scope ON analyticssavedreports(scope);
+            CREATE INDEX IF NOT EXISTS idx_asr_name ON analyticssavedreports(name);
+            CREATE INDEX IF NOT EXISTS idx_asr_lastupdateutc ON analyticssavedreports(lastupdateutc);
+        ";
+
+        /// <summary>
         /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
         /// </summary>
         public static readonly string AddRequestHistoryEnabledColumn = @"
-            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled BOOLEAN NOT NULL DEFAULT FALSE;
+            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled BOOLEAN NOT NULL DEFAULT TRUE;
         ";
 
         /// <summary>

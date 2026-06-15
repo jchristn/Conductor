@@ -425,7 +425,7 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
   "SessionAffinityHeader": null,
   "SessionTimeoutMs": 600000,
   "SessionMaxEntries": 10000,
-  "RequestHistoryEnabled": false,
+  "RequestHistoryEnabled": true,
   "Active": true,
   "Labels": [],
   "Tags": {},
@@ -1115,7 +1115,7 @@ Restore response shape:
 
 Auth level: `Authenticated`
 
-Request history routes are registered only when request history is enabled in server settings. When it is disabled, `/v1.0/requesthistory/summary` and `/v1.0/requesthistory/analytics/overview` remain available and return empty payloads.
+Request history routes are registered only when request history is enabled in server settings. When it is disabled, `/v1.0/requesthistory/summary`, `/v1.0/requesthistory/analytics/overview`, and `/v1.0/analytics/*` aggregate routes remain available and return empty payloads.
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -1294,6 +1294,212 @@ Detail responses extend the entry with:
 - `RoutingDecision`
 
 If request or response bodies have aged past `BodyRetentionDays`, detail records remain readable but the body content is scrubbed while the searchable routing and latency metadata stays available until `MetadataRetentionDays` expires.
+
+### Analytics workspace
+
+Auth level: `TenantAdmin` or `SystemAdmin`
+
+The Analytics workspace API is the dashboard-oriented reporting surface for TTFT, token usage, estimate-only cost, user/model/endpoint breakdowns, and failed-request-type counts. It is separate from `/v1.0/requesthistory/analytics/*`, which exposes trace-linked per-request timing stages. See [ADR 0002](./docs/adr/0002-analytics-workspace.md) for the accepted first-release design.
+
+System administrators can query globally or pass `tenantId` to restrict results to one tenant. Tenant administrators and other tenant-scoped callers are forced into their authenticated tenant scope even if they pass a different `tenantId`. First-release analytics data is bounded to the last 30 days.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/analytics/catalog` | Supported metrics, dimensions, named ranges, granularities, retention, and unavailable future export formats. |
+| `POST` | `/v1.0/analytics/query` | General analytics query. Body: `AnalyticsQueryRequest`. |
+| `GET` | `/v1.0/analytics/reports` | List saved reports. Query: `tenantId`, `maxResults`, `continuationToken`, `nameFilter`, `ownerUserId`. |
+| `POST` | `/v1.0/analytics/reports` | Create saved report. Body: `AnalyticsSavedReport`. |
+| `GET` | `/v1.0/analytics/reports/{id}` | Read saved report. Query: optional `tenantId` for system administrators. |
+| `PUT` | `/v1.0/analytics/reports/{id}` | Update saved report. Body: `AnalyticsSavedReport`. |
+| `DELETE` | `/v1.0/analytics/reports/{id}` | Delete saved report. Query: optional `tenantId` for system administrators. |
+| `GET` | `/v1.0/analytics/summary` | Convenience summary query. |
+| `GET` | `/v1.0/analytics/timeseries` | Convenience time-series query. |
+| `GET` | `/v1.0/analytics/ttft` | TTFT-focused query; defaults to grouping by user. |
+| `GET` | `/v1.0/analytics/tokens` | Token-usage query; defaults to grouping by effective model. |
+| `GET` | `/v1.0/analytics/costs` | Estimate-only cost query; defaults to grouping by user. |
+| `GET` | `/v1.0/analytics/users` | User-oriented usage query. |
+| `GET` | `/v1.0/analytics/access` | Access/reliability query for success, failure, denied, and rate-limited counts. |
+
+Analytics routes resolve to `RequestTypeEnum.ReadAnalytics`. System administrators can query global scope and may filter to a tenant with `tenantId`. Tenant administrators and tenant users granted `analytics.read` are forced into their authenticated tenant scope. Grant first-release dedicated Analytics access by adding the `analytics.read` user label, or by setting a user tag such as `analytics.read=true` or `permissions=analytics.read`.
+
+GET query parameters:
+
+| Parameter | Type | Notes |
+| --- | --- | --- |
+| `tenantId` | string | Optional tenant filter for system administrators only. |
+| `range` | string | `lastHour`, `lastDay`, `lastWeek`, `lastMonth`, or `custom`. Default `lastDay`. |
+| `startUtc` | string | Custom start timestamp, UTC ISO 8601. Used with `endUtc`; clamped to the 30-day retained window. |
+| `endUtc` | string | Custom end timestamp, UTC ISO 8601. |
+| `bucketSeconds` | integer | Bucket size. Common values: `60`, `900`, `3600`, `21600`, `86400`. |
+| `timezone` | string | Display timezone hint. Aggregation remains UTC in the first release. |
+| `limit` | integer | Maximum raw request-history rows to scan. Server caps the value. |
+| `tokenUnitCost` | decimal | Optional per-token unit cost used for estimate-only cost. GET parsing ignores invalid or negative values; POST query validation rejects negative values. |
+| `costCurrency` | string | Optional display label such as `USD`, `EUR`, or `estimate`. |
+| `groupBy` | string | One dimension: `TenantId`, `RequestedModel`, `EffectiveModel`, `ModelDefinitionId`, `ModelRunnerEndpointId`, `VirtualModelRunnerId`, `RequestorUserId`, `CredentialId`, or `ProviderName`. |
+| `vmrGuid` | string | Filter by Virtual Model Runner ID. CSV values are accepted. |
+| `endpointGuid` | string | Filter by model runner endpoint ID. CSV values are accepted. |
+| `modelName` | string | Filter by requested, effective, or model-definition name. CSV values are accepted. |
+| `requestorUserGuid` / `userId` | string | Filter by user ID. CSV values are accepted. |
+| `credentialGuid` / `credentialId` | string | Filter by credential ID. CSV values are accepted. |
+| `providerName` | string | Filter by provider family/name. CSV values are accepted. |
+| `statusClass` | string | Filter by HTTP status class such as `2xx`, `4xx`, or `5xx`. CSV values are accepted. |
+| `stageKind` | string | Filter by normalized dominant stage kind where request analytics capture is available, such as `routing`, `first_token_wait`, `generation`, `completion`, or `denial`. |
+| `modelAccessWouldDeny` | boolean | Filter model-access monitor-mode would-deny rows. |
+| `successfulCompletionsOnly` | boolean | Usage-style metrics use successful completions by default. |
+
+`AnalyticsQueryRequest` shape:
+
+```jsonc
+{
+  "TenantId": "tenant_123",
+  "Range": "lastDay",
+  "StartUtc": null,
+  "EndUtc": null,
+  "BucketSeconds": 3600,
+  "Timezone": "UTC",
+  "TokenUnitCost": 0.00001,
+  "CostCurrency": "USD",
+  "Metrics": [
+    "latency.ttft.avg",
+    "tokens.total",
+    "cost.estimated"
+  ],
+  "GroupBy": [
+    "RequestorUserId"
+  ],
+  "Filters": {
+    "VirtualModelRunnerIds": [
+      "vmr_123"
+    ],
+    "ModelRunnerEndpointIds": [],
+    "ModelNames": [],
+    "RequestorUserIds": [],
+    "CredentialIds": [],
+    "ProviderNames": [],
+    "StatusClasses": [],
+    "StageKinds": [],
+    "ModelAccessWouldDeny": null,
+    "SuccessfulCompletionsOnly": true
+  },
+  "Limit": 10000,
+  "ContinuationToken": null
+}
+```
+
+`AnalyticsQueryResult` shape:
+
+```jsonc
+{
+  "TenantId": "tenant_123",
+  "IsGlobalScope": false,
+  "StartUtc": "2026-06-13T00:00:00Z",
+  "EndUtc": "2026-06-14T00:00:00Z",
+  "BucketSeconds": 3600,
+  "RetentionDays": 30,
+  "TotalRequests": 120,
+  "SuccessfulCompletionCount": 118,
+  "FailedRequestCount": 2,
+  "DeniedRequestCount": 1,
+  "RateLimitedRequestCount": 1,
+  "AverageTimeToFirstTokenMs": 214.5,
+  "P50TimeToFirstTokenMs": 180,
+  "P95TimeToFirstTokenMs": 490,
+  "P99TimeToFirstTokenMs": 850,
+  "PromptTokens": 240000,
+  "CompletionTokens": 62000,
+  "TotalTokens": 302000,
+  "CachedTokens": null,
+  "MultimodalTokens": null,
+  "UnknownTokenUsageCount": 3,
+  "TokenUnitCost": 0.00001,
+  "CostCurrency": "USD",
+  "EstimatedCost": 3.02,
+  "TimeSeries": [
+    {
+      "TimestampUtc": "2026-06-13T12:00:00Z",
+      "RequestCount": 20,
+      "SuccessfulCompletionCount": 19,
+      "FailedRequestCount": 1,
+      "DeniedRequestCount": 0,
+      "RateLimitedRequestCount": 1,
+      "AverageTimeToFirstTokenMs": 230.0,
+      "PromptTokens": 42000,
+      "CompletionTokens": 12000,
+      "TotalTokens": 54000,
+      "CachedTokens": null,
+      "MultimodalTokens": null,
+      "UnknownTokenUsageCount": 0,
+      "EstimatedCost": 0.54
+    }
+  ],
+  "Groups": [
+    {
+      "Dimension": "RequestorUserId",
+      "Value": "usr_123",
+      "Label": "operator@example.com",
+      "RequestCount": 20,
+      "SuccessfulCompletionCount": 19,
+      "FailedRequestCount": 1,
+      "DeniedRequestCount": 0,
+      "RateLimitedRequestCount": 1,
+      "AverageTimeToFirstTokenMs": 230.0,
+      "P95TimeToFirstTokenMs": 490,
+      "TotalTokens": 54000,
+      "UnknownTokenUsageCount": 0,
+      "TimeToFirstTokenCoveragePercent": 100.0,
+      "EstimatedCost": 0.54,
+      "LastSeenUtc": "2026-06-13T12:57:00Z"
+    }
+  ]
+}
+```
+
+Cost is estimate-only: Conductor multiplies successful reported token usage by the caller-supplied `tokenUnitCost`. It does not model provider price books, cached-token discounts, multimodal pricing, account credits, taxes, currency conversion, or provider invoice rounding. Missing provider usage is reported through `UnknownTokenUsageCount`, not treated as zero. Cached and multimodal token fields are nullable until provider parsers persist those categories. Grouped summaries include failure, denial, rate-limit, unknown-token, TTFT coverage, and last-seen fields so dashboards can answer user and credential breakdown questions without separate request-history reads.
+
+`AnalyticsSavedReport` shape:
+
+```jsonc
+{
+  "Id": "asr_123",
+  "TenantId": "tenant_123",
+  "OwnerUserId": "usr_123",
+  "Name": "Daily user cost",
+  "Description": "Estimate user token cost over the last day.",
+  "Scope": "Tenant",
+  "Query": {
+    "Range": "lastDay",
+    "BucketSeconds": 3600,
+    "TokenUnitCost": 0.00001,
+    "CostCurrency": "USD",
+    "GroupBy": [
+      "RequestorUserId"
+    ],
+    "Filters": {
+      "RequestorUserIds": [
+        "usr_123"
+      ],
+      "SuccessfulCompletionsOnly": true
+    },
+    "Limit": 10000
+  },
+  "DisplayState": {
+    "workspace": "Analytics",
+    "chart": "VolumeAndTtft"
+  },
+  "Labels": [
+    "analytics"
+  ],
+  "Tags": {
+    "range": "lastDay"
+  },
+  "CreatedUtc": "2026-06-14T10:00:00Z",
+  "LastUpdateUtc": "2026-06-14T10:00:00Z"
+}
+```
+
+Saved reports can be global (`TenantId` null, system-admin scope) or tenant-scoped. Tenant administrators cannot create or load reports outside their authenticated tenant. Saved reports store query and display-state definitions only; they do not schedule execution or snapshot historical results.
+
+Export endpoints are not included in the first route slice. The catalog returns export formats as unavailable until those APIs are implemented.
 
 ### Observability
 
