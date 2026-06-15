@@ -23,6 +23,7 @@ namespace Conductor.Server.Routing
             new VirtualModelRunnerRouteModule(_Context).Register();
             new AdministratorRouteModule(_Context).Register();
             new BackupRouteModule(_Context).Register();
+            new AnalyticsRouteModule(_Context).Register();
             new RequestHistoryRouteModule(_Context).Register();
             new ObservabilityRouteModule(_Context).Register();
             new LoginRouteModule(_Context).Register();

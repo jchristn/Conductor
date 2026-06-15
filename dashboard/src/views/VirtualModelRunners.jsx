@@ -134,7 +134,7 @@ function VirtualModelRunners() {
     AllowCompletions: true,
     AllowModelManagement: false,
     StrictMode: false,
-    RequestHistoryEnabled: false,
+    RequestHistoryEnabled: true,
     SessionAffinityMode: 'None',
     SessionAffinityHeader: '',
     SessionTimeoutMs: 600000,
@@ -202,7 +202,7 @@ function VirtualModelRunners() {
       AllowCompletions: true,
       AllowModelManagement: false,
       StrictMode: false,
-      RequestHistoryEnabled: false,
+      RequestHistoryEnabled: true,
       SessionAffinityMode: 'None',
       SessionAffinityHeader: '',
       SessionTimeoutMs: 600000,
@@ -1012,13 +1012,13 @@ function VirtualModelRunners() {
           </div>
 
           <div className="form-group checkbox-group">
-            <label title="Capture request/response data for debugging and auditing">
+            <label title="Capture request/response data for Request History and Analytics. Analytics is empty for this VMR when this is off.">
               <input
                 type="checkbox"
                 checked={formData.RequestHistoryEnabled}
                 onChange={(e) => setFormData({ ...formData, RequestHistoryEnabled: e.target.checked })}
               />
-              Request History
+              Request History and Analytics
             </label>
           </div>
 

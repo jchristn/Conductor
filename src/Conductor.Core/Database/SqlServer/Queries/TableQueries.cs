@@ -342,7 +342,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 sessionaffinityheader NVARCHAR(255),
                 sessiontimeoutms INT NOT NULL DEFAULT 600000,
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
-                requesthistoryenabled BIT NOT NULL DEFAULT 0,
+                requesthistoryenabled BIT NOT NULL DEFAULT 1,
                 loadbalancingpolicyid NVARCHAR(48),
                 modelaccesspolicyid NVARCHAR(48),
                 active BIT NOT NULL DEFAULT 1,
@@ -527,10 +527,41 @@ namespace Conductor.Core.Database.SqlServer.Queries
         ";
 
         /// <summary>
+        /// Create analytics saved reports table.
+        /// </summary>
+        public static readonly string CreateAnalyticsSavedReportsTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='analyticssavedreports' AND xtype='U')
+            CREATE TABLE analyticssavedreports (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48),
+                owneruserid NVARCHAR(48),
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                scope NVARCHAR(32) NOT NULL DEFAULT 'Tenant',
+                queryjson NVARCHAR(MAX) NOT NULL,
+                displaystatejson NVARCHAR(MAX),
+                labels NVARCHAR(MAX),
+                tags NVARCHAR(MAX),
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_asr_tenantid')
+            CREATE INDEX idx_asr_tenantid ON analyticssavedreports(tenantid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_asr_owneruserid')
+            CREATE INDEX idx_asr_owneruserid ON analyticssavedreports(owneruserid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_asr_scope')
+            CREATE INDEX idx_asr_scope ON analyticssavedreports(scope);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_asr_name')
+            CREATE INDEX idx_asr_name ON analyticssavedreports(name);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_asr_lastupdateutc')
+            CREATE INDEX idx_asr_lastupdateutc ON analyticssavedreports(lastupdateutc);
+        ";
+
+        /// <summary>
         /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
         /// </summary>
         public static readonly string AddRequestHistoryEnabledColumn = @"
-            ALTER TABLE virtualmodelrunners ADD requesthistoryenabled BIT NOT NULL DEFAULT 0;
+            ALTER TABLE virtualmodelrunners ADD requesthistoryenabled BIT NOT NULL DEFAULT 1;
         ";
 
         /// <summary>

@@ -138,6 +138,62 @@ export class ConductorClient {
     return this.#request('GET', `/v1.0/requesthistory/analytics/overview${this.#queryString(filters)}`);
   }
 
+  async getAnalyticsCatalog() {
+    return this.#request('GET', '/v1.0/analytics/catalog');
+  }
+
+  async queryAnalytics(query = {}) {
+    return this.#request('POST', '/v1.0/analytics/query', query);
+  }
+
+  async listAnalyticsSavedReports(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/reports${this.#queryString(filters)}`);
+  }
+
+  async createAnalyticsSavedReport(report = {}) {
+    return this.#request('POST', '/v1.0/analytics/reports', report);
+  }
+
+  async getAnalyticsSavedReport(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/analytics/reports/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async updateAnalyticsSavedReport(id, report = {}) {
+    return this.#request('PUT', `/v1.0/analytics/reports/${encodeURIComponent(id)}`, report);
+  }
+
+  async deleteAnalyticsSavedReport(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/analytics/reports/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async getAnalyticsSummary(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/summary${this.#queryString(filters)}`);
+  }
+
+  async getAnalyticsTimeSeries(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/timeseries${this.#queryString(filters)}`);
+  }
+
+  async getAnalyticsTtft(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/ttft${this.#queryString(filters)}`);
+  }
+
+  async getAnalyticsTokens(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/tokens${this.#queryString(filters)}`);
+  }
+
+  async getAnalyticsCosts(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/costs${this.#queryString(filters)}`);
+  }
+
+  async getAnalyticsUsers(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/users${this.#queryString(filters)}`);
+  }
+
+  async getAnalyticsAccess(filters = {}) {
+    return this.#request('GET', `/v1.0/analytics/access${this.#queryString(filters)}`);
+  }
+
   async getRequestHistoryDetail(id, tenantId = null) {
     return this.#request('GET', `/v1.0/requesthistory/${encodeURIComponent(id)}/detail${this.#tenantQuery(tenantId)}`);
   }

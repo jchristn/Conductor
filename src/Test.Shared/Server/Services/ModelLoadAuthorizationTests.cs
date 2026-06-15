@@ -1,7 +1,9 @@
 namespace Test.Shared.Server.Services
 {
+    using System.Collections.Generic;
     using Conductor.Core.Authorization;
     using Conductor.Core.Enums;
+    using Conductor.Core.Models;
     using Conductor.Server.Services;
     using FluentAssertions;
 
@@ -102,6 +104,49 @@ namespace Test.Shared.Server.Services
             AuthorizationConfig.RequiresAnyAuth(RequestTypeEnum.ValidateModelAccessPolicy).Should().BeTrue();
             AuthorizationConfig.RequiresAnyAuth(RequestTypeEnum.EvaluateModelAccessPolicy).Should().BeTrue();
             AuthorizationConfig.RequiresAnyAuth(RequestTypeEnum.ReadEffectiveModelAccess).Should().BeTrue();
+        }
+
+        public void Resolve_WithAnalyticsRoutes_ReturnsReadAnalytics()
+        {
+            RequestTypeResolver.Resolve("GET", "/v1.0/analytics/catalog")
+                .Should().Be(RequestTypeEnum.ReadAnalytics);
+            RequestTypeResolver.Resolve("POST", "/v1.0/analytics/query")
+                .Should().Be(RequestTypeEnum.ReadAnalytics);
+            RequestTypeResolver.Resolve("GET", "/v1.0/analytics/summary?range=lastDay")
+                .Should().Be(RequestTypeEnum.ReadAnalytics);
+            RequestTypeResolver.Resolve("GET", "/v1.0/analytics/reports/asr_123")
+                .Should().Be(RequestTypeEnum.ReadAnalytics);
+        }
+
+        public void AuthorizationConfig_ReadAnalyticsRequiresAnalyticsReadAccess()
+        {
+            AuthorizationConfig.RequiresAnalyticsRead(RequestTypeEnum.ReadAnalytics).Should().BeTrue();
+            AuthorizationConfig.RequiresTenantAdmin(RequestTypeEnum.ReadAnalytics).Should().BeFalse();
+            AuthorizationConfig.RequiresAnyAuth(RequestTypeEnum.ReadAnalytics).Should().BeTrue();
+        }
+
+        public void AuthorizationConfig_UserHasAnalyticsReadAccess_UsesAdminsAndAnalyticsPermission()
+        {
+            AuthorizationConfig.UserHasAnalyticsReadAccess(null).Should().BeFalse();
+            AuthorizationConfig.UserHasAnalyticsReadAccess(new UserMaster()).Should().BeFalse();
+            AuthorizationConfig.UserHasAnalyticsReadAccess(new UserMaster { IsAdmin = true }).Should().BeTrue();
+            AuthorizationConfig.UserHasAnalyticsReadAccess(new UserMaster { IsTenantAdmin = true }).Should().BeTrue();
+            AuthorizationConfig.UserHasAnalyticsReadAccess(new UserMaster
+            {
+                Labels = new List<string> { AuthorizationConfig.AnalyticsReadPermission }
+            }).Should().BeTrue();
+            AuthorizationConfig.UserHasAnalyticsReadAccess(new UserMaster
+            {
+                Tags = new Dictionary<string, string> { { AuthorizationConfig.AnalyticsReadPermission, "true" } }
+            }).Should().BeTrue();
+            AuthorizationConfig.UserHasAnalyticsReadAccess(new UserMaster
+            {
+                Tags = new Dictionary<string, string> { { "permissions", "analytics.read,other.permission" } }
+            }).Should().BeTrue();
+            AuthorizationConfig.UserHasAnalyticsReadAccess(new UserMaster
+            {
+                Tags = new Dictionary<string, string> { { AuthorizationConfig.AnalyticsReadPermission, "false" } }
+            }).Should().BeFalse();
         }
     }
 }

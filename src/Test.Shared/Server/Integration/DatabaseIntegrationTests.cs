@@ -450,6 +450,7 @@ namespace Test.Shared.Server.Integration
             read.Id.Should().Be(created.Id);
             read.Name.Should().Be("Test VMR");
             read.BasePath.Should().Be("/test/vmr/");
+            read.RequestHistoryEnabled.Should().BeTrue();
         }
         public async Task VirtualModelRunner_ReadByBasePath_FindsVmr()
         {
@@ -932,6 +933,77 @@ namespace Test.Shared.Server.Integration
             events.Should().HaveCount(1);
             events[0].StageKind.Should().Be("generation");
             events[0].DurationMs.Should().Be(125);
+        }
+
+        public async Task AnalyticsSavedReport_CRUD_RoundTripsTenantAndGlobalScopes()
+        {
+            AnalyticsSavedReport tenantReport = await _Database.AnalyticsSavedReport.CreateAsync(new AnalyticsSavedReport
+            {
+                TenantId = _TestTenantId,
+                OwnerUserId = "usr_owner",
+                Name = "Daily user cost",
+                Description = "Estimate user token cost over the last day.",
+                Scope = "Tenant",
+                Query = new AnalyticsQueryRequest
+                {
+                    Range = "lastDay",
+                    TokenUnitCost = 0.000001m,
+                    CostCurrency = "USD",
+                    GroupBy = new List<string> { "RequestorUserId" }
+                },
+                DisplayState = new Dictionary<string, object>
+                {
+                    ["chart"] = "tokens"
+                },
+                Labels = new List<string> { "chargeback" },
+                Tags = new Dictionary<string, string>
+                {
+                    ["owner"] = "ops"
+                }
+            });
+
+            AnalyticsSavedReport readTenantReport = await _Database.AnalyticsSavedReport.ReadAsync(_TestTenantId, tenantReport.Id);
+            EnumerationResult<AnalyticsSavedReport> tenantReports = await _Database.AnalyticsSavedReport.EnumerateAsync(
+                _TestTenantId,
+                new EnumerationRequest { MaxResults = 10, NameFilter = "Daily" },
+                "usr_owner");
+
+            readTenantReport.Should().NotBeNull();
+            readTenantReport.Name.Should().Be("Daily user cost");
+            readTenantReport.Query.Range.Should().Be("lastDay");
+            readTenantReport.Query.TokenUnitCost.Should().Be(0.000001m);
+            readTenantReport.Query.GroupBy.Should().ContainSingle().Which.Should().Be("RequestorUserId");
+            readTenantReport.Labels.Should().Contain("chargeback");
+            readTenantReport.Tags.Should().ContainKey("owner").WhoseValue.Should().Be("ops");
+            tenantReports.Data.Should().ContainSingle(item => item.Id == tenantReport.Id);
+
+            readTenantReport.Name = "Daily user cost updated";
+            await _Database.AnalyticsSavedReport.UpdateAsync(readTenantReport);
+
+            AnalyticsSavedReport updated = await _Database.AnalyticsSavedReport.ReadAsync(_TestTenantId, tenantReport.Id);
+            updated.Name.Should().Be("Daily user cost updated");
+
+            AnalyticsSavedReport globalReport = await _Database.AnalyticsSavedReport.CreateAsync(new AnalyticsSavedReport
+            {
+                TenantId = null,
+                OwnerUserId = "usr_admin",
+                Name = "Global TTFT",
+                Scope = "Global",
+                Query = new AnalyticsQueryRequest
+                {
+                    Range = "lastHour",
+                    GroupBy = new List<string> { "VirtualModelRunnerId" }
+                }
+            });
+
+            AnalyticsSavedReport readGlobalReport = await _Database.AnalyticsSavedReport.ReadAsync(null, globalReport.Id);
+            readGlobalReport.Should().NotBeNull();
+            readGlobalReport.TenantId.Should().BeNull();
+            readGlobalReport.Scope.Should().Be("Global");
+
+            await _Database.AnalyticsSavedReport.DeleteAsync(_TestTenantId, tenantReport.Id);
+            (await _Database.AnalyticsSavedReport.ExistsAsync(_TestTenantId, tenantReport.Id)).Should().BeFalse();
+            (await _Database.AnalyticsSavedReport.ExistsAsync(null, globalReport.Id)).Should().BeTrue();
         }
 
         #endregion

@@ -292,7 +292,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 sessionaffinityheader TEXT,
                 sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
                 sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
-                requesthistoryenabled INTEGER NOT NULL DEFAULT 0,
+                requesthistoryenabled INTEGER NOT NULL DEFAULT 1,
                 loadbalancingpolicyid TEXT,
                 modelaccesspolicyid TEXT,
                 active INTEGER NOT NULL DEFAULT 1,
@@ -457,10 +457,35 @@ namespace Conductor.Core.Database.Sqlite.Queries
         ";
 
         /// <summary>
+        /// Create analytics saved reports table.
+        /// </summary>
+        public static readonly string CreateAnalyticsSavedReportsTable = @"
+            CREATE TABLE IF NOT EXISTS analyticssavedreports (
+                id TEXT PRIMARY KEY,
+                tenantid TEXT,
+                owneruserid TEXT,
+                name TEXT NOT NULL,
+                description TEXT,
+                scope TEXT NOT NULL DEFAULT 'Tenant',
+                queryjson TEXT NOT NULL,
+                displaystatejson TEXT,
+                labels TEXT,
+                tags TEXT,
+                createdutc TEXT NOT NULL,
+                lastupdateutc TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_asr_tenantid ON analyticssavedreports(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_asr_owneruserid ON analyticssavedreports(owneruserid);
+            CREATE INDEX IF NOT EXISTS idx_asr_scope ON analyticssavedreports(scope);
+            CREATE INDEX IF NOT EXISTS idx_asr_name ON analyticssavedreports(name);
+            CREATE INDEX IF NOT EXISTS idx_asr_lastupdateutc ON analyticssavedreports(lastupdateutc);
+        ";
+
+        /// <summary>
         /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
         /// </summary>
         public static readonly string AddRequestHistoryEnabledColumn = @"
-            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled INTEGER NOT NULL DEFAULT 0;
+            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled INTEGER NOT NULL DEFAULT 1;
         ";
 
         /// <summary>

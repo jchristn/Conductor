@@ -10,6 +10,7 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - Ollama endpoint model list, pull, and delete requests
 - model access policy CRUD, validation, evaluation, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
+- analytics workspace catalog, query, saved reports, summary, TTFT, token usage, estimate-only cost, user, and access/reliability helpers
 - observability summary and raw Prometheus metrics
 
 ## Install
@@ -41,6 +42,47 @@ const explanation = await client.explainVirtualModelRunnerRouting('vmr_123', {
 const analytics = await client.getRequestAnalyticsOverview({
   range: 'lastDay',
   vmrGuid: 'vmr_123'
+});
+
+const analyticsCatalog = await client.getAnalyticsCatalog();
+const ttftByUser = await client.getAnalyticsTtft({
+  range: 'lastDay',
+  vmrGuid: 'vmr_123',
+  endpointGuid: 'mre_123',
+  groupBy: 'RequestorUserId'
+});
+const tokensByModel = await client.getAnalyticsTokens({
+  range: 'lastWeek',
+  modelName: 'gpt-4o-mini',
+  groupBy: 'EffectiveModel'
+});
+const userCostEstimate = await client.getAnalyticsCosts({
+  range: 'lastDay',
+  requestorUserGuid: 'usr_123',
+  tokenUnitCost: '0.000001',
+  costCurrency: 'USD'
+});
+const savedReport = await client.createAnalyticsSavedReport({
+  Name: 'Daily user cost',
+  Query: {
+    Range: 'lastDay',
+    TokenUnitCost: 0.000001,
+    CostCurrency: 'USD',
+    GroupBy: ['RequestorUserId']
+  },
+  DisplayState: {
+    workspace: 'Analytics',
+    chart: 'VolumeAndTtft'
+  }
+});
+await client.updateAnalyticsSavedReport(savedReport.Id, savedReport);
+await client.listAnalyticsSavedReports({ maxResults: 25 });
+const deniedOrLimited = await client.queryAnalytics({
+  Range: 'lastDay',
+  GroupBy: ['RequestorUserId'],
+  Filters: {
+    StatusClasses: ['4xx']
+  }
 });
 
 const endpointLoad = await client.loadModelRunnerEndpointModel('mre_123', {
@@ -88,6 +130,8 @@ const effectiveAccess = await client.getEffectiveModelAccess({
 ```
 
 For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.
+
+Analytics cost output is estimate-only. Conductor multiplies successful reported tokens by the supplied token unit cost and reports missing provider usage as unknown, not zero.
 
 ## Test
 

@@ -249,7 +249,7 @@ CREATE TABLE IF NOT EXISTS virtualmodelrunners (
     sessionaffinityheader VARCHAR(255),
     sessiontimeoutms INTEGER NOT NULL DEFAULT 600000,
     sessionmaxentries INTEGER NOT NULL DEFAULT 10000,
-    requesthistoryenabled BOOLEAN NOT NULL DEFAULT FALSE,
+    requesthistoryenabled BOOLEAN NOT NULL DEFAULT TRUE,
     loadbalancingpolicyid VARCHAR(48),
     modelaccesspolicyid VARCHAR(48),
     active BOOLEAN NOT NULL DEFAULT TRUE,

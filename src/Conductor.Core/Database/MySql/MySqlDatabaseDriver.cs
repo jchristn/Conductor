@@ -41,6 +41,7 @@ namespace Conductor.Core.Database.MySql
             Administrator = new AdministratorMethods(this);
             RequestHistory = new RequestHistoryMethods(this);
             RequestAnalytics = new Conductor.Core.Database.RequestAnalyticsMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.MySql);
+            AnalyticsSavedReport = new Conductor.Core.Database.AnalyticsSavedReportMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.MySql);
         }
 
         /// <summary>
@@ -64,7 +65,8 @@ namespace Conductor.Core.Database.MySql
                 TableQueries.CreateVirtualModelRunnersTable,
                 TableQueries.CreateAdministratorsTable,
                 TableQueries.CreateRequestHistoryTable,
-                TableQueries.CreateRequestAnalyticsEventsTable
+                TableQueries.CreateRequestAnalyticsEventsTable,
+                TableQueries.CreateAnalyticsSavedReportsTable
             };
 
             await ExecuteQueriesAsync(queries, false, token).ConfigureAwait(false);

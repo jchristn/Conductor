@@ -41,6 +41,7 @@ namespace Conductor.Core.Database.SqlServer
             Administrator = new AdministratorMethods(this);
             RequestHistory = new RequestHistoryMethods(this);
             RequestAnalytics = new Conductor.Core.Database.RequestAnalyticsMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.SqlServer);
+            AnalyticsSavedReport = new Conductor.Core.Database.AnalyticsSavedReportMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.SqlServer);
         }
 
         /// <summary>
@@ -64,7 +65,8 @@ namespace Conductor.Core.Database.SqlServer
                 TableQueries.CreateVirtualModelRunnersTable,
                 TableQueries.CreateAdministratorsTable,
                 TableQueries.CreateRequestHistoryTable,
-                TableQueries.CreateRequestAnalyticsEventsTable
+                TableQueries.CreateRequestAnalyticsEventsTable,
+                TableQueries.CreateAnalyticsSavedReportsTable
             };
 
             await ExecuteQueriesAsync(queries, false, token).ConfigureAwait(false);

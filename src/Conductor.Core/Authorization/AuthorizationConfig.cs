@@ -1,13 +1,20 @@
 namespace Conductor.Core.Authorization
 {
+    using System;
     using System.Collections.Generic;
     using Conductor.Core.Enums;
+    using Conductor.Core.Models;
 
     /// <summary>
     /// Authorization configuration defining which request types require which permission levels.
     /// </summary>
     public static class AuthorizationConfig
     {
+        /// <summary>
+        /// Permission name used for dedicated Analytics workspace read access.
+        /// </summary>
+        public const string AnalyticsReadPermission = "analytics.read";
+
         /// <summary>
         /// Request types that require no authentication (public endpoints).
         /// </summary>
@@ -79,6 +86,15 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.ValidateModelAccessPolicy,
             RequestTypeEnum.EvaluateModelAccessPolicy,
             RequestTypeEnum.ReadEffectiveModelAccess
+        };
+
+        /// <summary>
+        /// Request types that require Analytics read access.
+        /// Analytics read access is granted to system admins, tenant admins, or users explicitly granted analytics.read.
+        /// </summary>
+        public static readonly HashSet<RequestTypeEnum> RequiresAnalyticsReadAccess = new()
+        {
+            RequestTypeEnum.ReadAnalytics
         };
 
         /// <summary>
@@ -188,14 +204,144 @@ namespace Conductor.Core.Authorization
         }
 
         /// <summary>
+        /// Check if a request type requires Analytics read access.
+        /// </summary>
+        public static bool RequiresAnalyticsRead(RequestTypeEnum requestType)
+        {
+            return RequiresAnalyticsReadAccess.Contains(requestType);
+        }
+
+        /// <summary>
+        /// Check if a user has Analytics read access.
+        /// </summary>
+        public static bool UserHasAnalyticsReadAccess(UserMaster user)
+        {
+            if (user == null)
+            {
+                return false;
+            }
+
+            if (user.IsAdmin || user.IsTenantAdmin)
+            {
+                return true;
+            }
+
+            return HasPermission(user, AnalyticsReadPermission);
+        }
+
+        /// <summary>
         /// Check if a request type requires any authentication.
         /// </summary>
         public static bool RequiresAnyAuth(RequestTypeEnum requestType)
         {
             return RequiresAuthentication.Contains(requestType)
+                || RequiresAnalyticsReadAccess.Contains(requestType)
                 || RequiresTenantAdminAccess.Contains(requestType)
                 || RequiresGlobalAdminAccess.Contains(requestType)
                 || RequiresAdminAuthentication.Contains(requestType);
+        }
+
+        private static bool HasPermission(UserMaster user, string permission)
+        {
+            if (user.Labels != null)
+            {
+                foreach (string label in user.Labels)
+                {
+                    if (PermissionValueMatches(label, permission))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            if (user.Tags != null)
+            {
+                foreach (KeyValuePair<string, string> tag in user.Tags)
+                {
+                    if (TagKeyMatchesPermission(tag.Key, permission) && IsTruthy(tag.Value))
+                    {
+                        return true;
+                    }
+
+                    if (IsPermissionListKey(tag.Key) && PermissionListContains(tag.Value, permission))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool PermissionValueMatches(string value, string permission)
+        {
+            if (String.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string trimmed = value.Trim();
+            return String.Equals(trimmed, permission, StringComparison.OrdinalIgnoreCase)
+                || String.Equals(trimmed, "permission:" + permission, StringComparison.OrdinalIgnoreCase)
+                || String.Equals(trimmed, "role:" + permission, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TagKeyMatchesPermission(string key, string permission)
+        {
+            if (String.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+
+            string trimmed = key.Trim();
+            return String.Equals(trimmed, permission, StringComparison.OrdinalIgnoreCase)
+                || String.Equals(trimmed, "permission." + permission, StringComparison.OrdinalIgnoreCase)
+                || String.Equals(trimmed, "permissions." + permission, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPermissionListKey(string key)
+        {
+            if (String.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+
+            string trimmed = key.Trim();
+            return String.Equals(trimmed, "permission", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(trimmed, "permissions", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool PermissionListContains(string value, string permission)
+        {
+            if (String.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string[] values = value.Split(new[] { ',', ';', '|', ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string item in values)
+            {
+                string normalized = item.Trim().Trim('"', '\'', '[', ']');
+                if (String.Equals(normalized, permission, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsTruthy(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string normalized = value.Trim();
+            return String.Equals(normalized, "true", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(normalized, "1", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(normalized, "yes", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

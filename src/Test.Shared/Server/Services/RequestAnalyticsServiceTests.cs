@@ -11,6 +11,7 @@ namespace Test.Shared.Server.Services
     using Conductor.Core.Settings;
     using Conductor.Server.Services;
     using FluentAssertions;
+    using WatsonWebserver.Core;
 
     /// <summary>
     /// Tests for request analytics capture and aggregation behavior.
@@ -235,6 +236,213 @@ namespace Test.Shared.Server.Services
             overview.BucketSeconds.Should().BeGreaterThan(60);
         }
 
+        /// <summary>
+        /// Verify Analytics workspace queries aggregate TTFT, tokens, and estimate-only cost for successful completions.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task QueryAnalyticsAsync_AggregatesTtftTokensAndEstimateOnlyCost()
+        {
+            VirtualModelRunner vmr = await CreateVmrAsync("Workspace Analytics VMR").ConfigureAwait(false);
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Workspace Analytics Endpoint", ApiTypeEnum.OpenAI).ConfigureAwait(false);
+            DateTime start = DateTime.UtcNow.AddHours(-2);
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(5),
+                400,
+                true,
+                httpStatus: 200,
+                firstTokenTimeMs: 100,
+                promptTokens: 10,
+                completionTokens: 5,
+                totalTokens: 15).ConfigureAwait(false);
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(15),
+                500,
+                true,
+                httpStatus: 200,
+                firstTokenTimeMs: 200,
+                promptTokens: 20,
+                completionTokens: 10,
+                totalTokens: 30).ConfigureAwait(false);
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(25),
+                600,
+                true,
+                httpStatus: 200,
+                firstTokenTimeMs: 300,
+                includeTokens: false).ConfigureAwait(false);
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(35),
+                700,
+                true,
+                httpStatus: 500,
+                firstTokenTimeMs: 400,
+                promptTokens: 999,
+                completionTokens: 999,
+                totalTokens: 1998).ConfigureAwait(false);
+
+            AnalyticsQueryService analyticsService = new AnalyticsQueryService(_Service);
+            AnalyticsQueryResult result = await analyticsService.QueryAsync(TestTenantId, new AnalyticsQueryRequest
+            {
+                StartUtc = start,
+                EndUtc = start.AddHours(1),
+                BucketSeconds = 900,
+                TokenUnitCost = 0.01m,
+                CostCurrency = "USD",
+                GroupBy = new List<string> { "RequestorUserId" },
+                Filters = new AnalyticsQueryFilters
+                {
+                    RequestorUserIds = new List<string> { TestUserId }
+                },
+                Limit = 100
+            }).ConfigureAwait(false);
+
+            result.TotalRequests.Should().Be(4);
+            result.SuccessfulCompletionCount.Should().Be(3);
+            result.FailedRequestCount.Should().Be(1);
+            result.PromptTokens.Should().Be(30);
+            result.CompletionTokens.Should().Be(15);
+            result.TotalTokens.Should().Be(45);
+            result.UnknownTokenUsageCount.Should().Be(1);
+            result.EstimatedCost.Should().Be(0.45m);
+            result.AverageTimeToFirstTokenMs.Should().Be(200m);
+            result.P95TimeToFirstTokenMs.Should().Be(300);
+            result.Groups.Should().ContainSingle();
+            result.Groups[0].Value.Should().Be(TestUserId);
+            result.Groups[0].RequestCount.Should().Be(4);
+            result.Groups[0].SuccessfulCompletionCount.Should().Be(3);
+            result.Groups[0].FailedRequestCount.Should().Be(1);
+            result.Groups[0].DeniedRequestCount.Should().Be(0);
+            result.Groups[0].RateLimitedRequestCount.Should().Be(0);
+            result.Groups[0].UnknownTokenUsageCount.Should().Be(1);
+            result.Groups[0].TimeToFirstTokenCoveragePercent.Should().Be(100m);
+            result.Groups[0].LastSeenUtc.Should().BeCloseTo(start.AddMinutes(35), TimeSpan.FromSeconds(1));
+            result.TimeSeries.Should().NotBeEmpty();
+        }
+
+        /// <summary>
+        /// Verify invalid Analytics workspace query definitions are rejected.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task QueryAnalyticsAsync_RejectsInvalidQueryDefinitions()
+        {
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { Metrics = new List<string> { "tokens.unknown" } },
+                "Unsupported analytics metric").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { GroupBy = new List<string> { "UnknownDimension" } },
+                "Unsupported analytics dimension").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { GroupBy = new List<string> { "RequestorUserId", "ProviderName" } },
+                "Only one GroupBy dimension").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest
+                {
+                    Filters = new AnalyticsQueryFilters { StatusClasses = new List<string> { "7xx" } }
+                },
+                "Unsupported analytics status class").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest
+                {
+                    Filters = new AnalyticsQueryFilters { StageKinds = new List<string> { "raw_prompt_capture" } }
+                },
+                "Unsupported analytics stage kind").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { Range = "yesterday" },
+                "Unsupported analytics range").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { Range = "custom" },
+                "Custom analytics range requires").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest
+                {
+                    StartUtc = DateTime.UtcNow,
+                    EndUtc = DateTime.UtcNow.AddMinutes(-1)
+                },
+                "StartUtc must be before EndUtc").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { BucketSeconds = 0 },
+                "BucketSeconds must be greater than zero").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { TokenUnitCost = -1m },
+                "TokenUnitCost cannot be negative").ConfigureAwait(false);
+
+            await AssertBadAnalyticsQueryAsync(
+                new AnalyticsQueryRequest { Limit = 0 },
+                "Limit must be greater than zero").ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Verify Analytics workspace queries apply dominant stage-kind filters.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task QueryAnalyticsAsync_FiltersByDominantStageKind()
+        {
+            VirtualModelRunner vmr = await CreateVmrAsync("Stage Filter VMR").ConfigureAwait(false);
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Stage Filter Endpoint", ApiTypeEnum.OpenAI).ConfigureAwait(false);
+            DateTime start = DateTime.UtcNow.AddHours(-1);
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(5),
+                200,
+                true,
+                firstTokenTimeMs: 20,
+                promptTokens: 10,
+                completionTokens: 5,
+                totalTokens: 15,
+                dominantStageKind: "routing").ConfigureAwait(false);
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(10),
+                400,
+                true,
+                firstTokenTimeMs: 100,
+                promptTokens: 20,
+                completionTokens: 10,
+                totalTokens: 30,
+                dominantStageKind: "generation").ConfigureAwait(false);
+
+            AnalyticsQueryService analyticsService = new AnalyticsQueryService(_Service);
+            AnalyticsQueryResult result = await analyticsService.QueryAsync(TestTenantId, new AnalyticsQueryRequest
+            {
+                StartUtc = start,
+                EndUtc = start.AddMinutes(30),
+                Filters = new AnalyticsQueryFilters
+                {
+                    StageKinds = new List<string> { "routing" }
+                },
+                Limit = 100
+            }).ConfigureAwait(false);
+
+            result.TotalRequests.Should().Be(1);
+            result.TotalTokens.Should().Be(15);
+            result.AverageTimeToFirstTokenMs.Should().Be(20m);
+        }
+
         private async Task<VirtualModelRunner> CreateVmrAsync(string name)
         {
             return await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
@@ -285,13 +493,21 @@ namespace Test.Shared.Server.Services
             string modelAccessRuleGuid = null,
             bool modelAccessWouldDeny = false,
             int httpStatus = 200,
-            string denialReasonCode = null)
+            string denialReasonCode = null,
+            int? firstTokenTimeMs = null,
+            int? promptTokens = null,
+            int? completionTokens = null,
+            int? totalTokens = null,
+            bool includeTokens = true,
+            string dominantStageKind = null)
         {
             RequestHistoryDetail detail = new RequestHistoryDetail
             {
                 TenantGuid = TestTenantId,
                 VirtualModelRunnerGuid = vmr.Id,
                 VirtualModelRunnerName = vmr.Name,
+                RequestorUserGuid = TestUserId,
+                RequestorUserEmail = "test@example.com",
                 ModelEndpointGuid = endpoint.Id,
                 ModelEndpointName = endpoint.Name,
                 ProviderName = endpoint.ApiType.ToString(),
@@ -303,11 +519,15 @@ namespace Test.Shared.Server.Services
                 CreatedUtc = createdUtc,
                 CompletedUtc = createdUtc.AddMilliseconds(durationMs),
                 HttpStatus = httpStatus,
+                FirstTokenTimeMs = firstTokenTimeMs ?? durationMs,
                 ResponseTimeMs = durationMs,
-                TotalTokens = durationMs / 10,
+                PromptTokens = includeTokens ? promptTokens ?? durationMs / 20 : null,
+                CompletionTokens = includeTokens ? completionTokens ?? durationMs / 20 : null,
+                TotalTokens = includeTokens ? totalTokens ?? durationMs / 10 : null,
                 TokensPerSecondOverall = 10m,
                 TraceId = "trc_" + Guid.NewGuid().ToString("N"),
                 AnalyticsCaptured = analyticsCaptured,
+                DominantStageKind = dominantStageKind,
                 DenialReasonCode = denialReasonCode,
                 ModelAccessPolicyGuid = modelAccessDecision == null ? null : "map_overview",
                 ModelAccessDecision = modelAccessDecision,
@@ -316,6 +536,17 @@ namespace Test.Shared.Server.Services
             };
 
             return await Database.RequestHistory.CreateAsync(detail).ConfigureAwait(false) as RequestHistoryDetail ?? detail;
+        }
+
+        private async Task AssertBadAnalyticsQueryAsync(AnalyticsQueryRequest request, string expectedMessage)
+        {
+            AnalyticsQueryService analyticsService = new AnalyticsQueryService(_Service);
+            Func<Task> act = async () => await analyticsService.QueryAsync(TestTenantId, request).ConfigureAwait(false);
+
+            await act.Should()
+                .ThrowAsync<WebserverException>()
+                .WithMessage("*" + expectedMessage + "*")
+                .ConfigureAwait(false);
         }
 
         private static RoutingDecision CreateRoutingDecision(VirtualModelRunner vmr, ModelRunnerEndpoint endpoint, bool success)

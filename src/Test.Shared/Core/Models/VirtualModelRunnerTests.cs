@@ -200,6 +200,7 @@ namespace Test.Shared.Core.Models
             vmr.TenantId.Should().Be("ten_test");
             vmr.Name.Should().Be("Test VMR");
             vmr.TimeoutMs.Should().Be(30000);
+            vmr.RequestHistoryEnabled.Should().BeTrue();
         }
         public void FromDataRow_WithMissingColumns_HandlesGracefully()
         {
@@ -218,6 +219,7 @@ namespace Test.Shared.Core.Models
 
             vmr.Should().NotBeNull();
             vmr.Id.Should().Be("vmr_test");
+            vmr.RequestHistoryEnabled.Should().BeTrue();
         }
 
         #endregion
@@ -303,6 +305,11 @@ namespace Test.Shared.Core.Models
         {
             VirtualModelRunner vmr = new VirtualModelRunner();
             vmr.Active.Should().BeTrue();
+        }
+        public void RequestHistoryEnabled_DefaultsToTrue()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.RequestHistoryEnabled.Should().BeTrue();
         }
         public void ApiType_DefaultsToOllama()
         {

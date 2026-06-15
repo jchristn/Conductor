@@ -561,6 +561,11 @@ namespace Conductor.Core.Enums
         /// </summary>
         ReadRequestHistoryAnalytics,
 
+        /// <summary>
+        /// Read analytics workspace data.
+        /// </summary>
+        ReadAnalytics,
+
         // ==================== Observability Operations ====================
 
         /// <summary>

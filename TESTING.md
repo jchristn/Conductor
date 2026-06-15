@@ -331,6 +331,64 @@ Before release, confirm:
 - Analytics overview queries are bounded by tenant and date range, with at most 31 days and 720 returned buckets in the initial implementation.
 - Large or over-limit analytics scans produce warning logs and stay within the server-side row limit.
 
+## Analytics Workspace Release Gate
+
+Analytics workspace changes must be verified across backend aggregation, dashboard UX, SDK helpers, Postman examples, tenant scoping, documentation, and release notes.
+
+Run the focused gate before marking `/v1.0/analytics` changes complete:
+
+```powershell
+git diff --check
+dotnet build src/Conductor.sln --no-restore
+dotnet test src/Test.Xunit/Test.Xunit.csproj --no-restore
+Push-Location dashboard; npm.cmd run build; Pop-Location
+Push-Location sdk/javascript; npm.cmd test; Pop-Location
+Push-Location sdk/python; $env:PYTHONPATH='src'; python -m pytest; Pop-Location
+dotnet build sdk/csharp/Conductor.Sdk/Conductor.Sdk.csproj
+Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null
+```
+
+Required backend checks:
+
+- `/v1.0/analytics/catalog` returns the shipped metric, dimension, range, granularity, retention, and unavailable export-format catalog.
+- `/v1.0/analytics/query` and GET convenience routes return the same result shape and honor `range`, `startUtc`, `endUtc`, `bucketSeconds`, `groupBy`, `limit`, and filter parameters.
+- System administrators can query global analytics and optionally filter by `tenantId`.
+- Tenant administrators are forced into their authenticated tenant scope.
+- Tenant users with the `analytics.read` user label or tag can read tenant-scoped Analytics without full tenant-admin rights.
+- TTFT is measured from request received by Conductor to first token or byte received from the provider.
+- Token and cost metrics include successful completions only.
+- Missing provider usage increments `UnknownTokenUsageCount` and does not become zero usage.
+- Estimate-only cost equals successful reported token usage multiplied by caller-supplied `tokenUnitCost`.
+- Failed, denied, and rate-limited request counts are still visible even though usage metrics use successful completions.
+- Custom ranges are clamped to the documented 30-day retained window and bucket count remains bounded.
+- Saved reports persist query filters, grouping, token unit cost, display state, owner, tenant/global scope, labels, and tags.
+- Tenant-scoped saved reports cannot be read, updated, or deleted outside the authenticated tenant scope.
+
+Required dashboard checks:
+
+- The sidebar exposes `Analytics` and `/request-analytics` redirects to `/analytics`.
+- The first screen shows range, granularity, VMR, endpoint, provider, model, user, credential, token-unit-cost, and refresh controls without layout overlap at 1280px, 768px, and 390px.
+- Metric cards show request count, success rate, P95 TTFT, unknown token usage, token totals, and estimate-only cost.
+- User and credential breakdown tables show requests, success rate, failures, denials, rate limits, TTFT, tokens, unknown usage, estimated cost, coverage, and last seen time.
+- Charts and tables make clear that cost is an estimate and that the retained window is 30 days.
+- Saved report controls can create, update, delete, load, and copy a dashboard link without changing unrelated filters.
+- Empty states and null token/TTFT fields render as unavailable, not as zero.
+
+Required SDK and Postman checks:
+
+- JavaScript, Python, and C# clients expose catalog, query, summary, time-series, TTFT, tokens, costs, users, and access helpers.
+- SDK tests or build output prove URL, method, query/body serialization, tenant scope, and token unit cost behavior for shipped helpers.
+- The Postman collection imports without JSON errors and contains Analytics Workspace requests for catalog, summary, query, saved-report CRUD, TTFT by user, tokens by model, user cost estimate, and access/reliability counts.
+
+Manual operator workflows to exercise:
+
+- Average TTFT for a specific endpoint and VMR, then drill into a user.
+- Total token usage over the last day, week, and custom range for a model and VMR.
+- Estimate-only cost for a user over the last day using a supplied per-token unit cost.
+- Create and reload a saved report for daily user cost, then copy its dashboard link.
+- Failed request type review for denied and rate-limited requests.
+- Tenant-admin login verifies that cross-tenant filters cannot escape the authenticated tenant.
+
 ## Packages
 
 | Project | Key Packages |

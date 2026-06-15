@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Conductor.Sdk.Tests/Conductor.Sdk.Tests.csproj" />
+  <Project Path="Conductor.Sdk/Conductor.Sdk.csproj" />
+</Solution>

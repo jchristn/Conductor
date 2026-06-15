@@ -25,7 +25,7 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Operational Metrics**: Export Prometheus-friendly latency, denial, fallback, session-affinity, saturation, and telemetry-freshness signals
 - **Drain And Quarantine Controls**: Keep endpoints visible for health diagnostics while intentionally excluding them from new routing
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
-- **Request History and Analytics**: Optional per-VMR request/response capture with trace IDs, stage timings, provider request IDs, token counts, throughput, dashboard drill-down, configurable retention, redaction, and metadata-only retention modes
+- **Request History and Analytics**: Optional per-VMR request/response capture with trace IDs, stage timings, provider request IDs, token counts, throughput, dashboard drill-down, configurable retention, redaction, metadata-only retention modes, and a tenant-scoped Analytics workspace for TTFT, token usage, user/credential breakdowns, estimated cost, and failed-request reporting
 - **React Dashboard**: Full-featured UI for managing all entities including real-time health status
 
 ## Quick Start
@@ -82,6 +82,9 @@ npm run preview -- --host 0.0.0.0
 ## Documentation
 
 - [REST_API.md](./REST_API.md): management API routes, resource shapes, proxy behavior, request history, analytics, and observability.
+- [ANALYTICS.md](./ANALYTICS.md): product plan for the Analytics workspace.
+- [ANALYTICS_PLAN.md](./ANALYTICS_PLAN.md): implementation tracker for the Analytics workspace.
+- [ADR 0002](./docs/adr/0002-analytics-workspace.md): Analytics workspace API, retention, authorization, saved-report, and export decisions.
 - [ACCESS_POLICIES.md](./ACCESS_POLICIES.md): practical model access policy authoring guide with real-world examples.
 - [TESTING.md](./TESTING.md): test architecture and commands.
 - [Conductor.postman_collection.json](./Conductor.postman_collection.json): Postman collection covering management, validation, model access, routing, analytics, and observability routes.
@@ -114,8 +117,9 @@ Conductor ships lightweight SDKs for common management-plane workflows:
 
 - `sdk/javascript/` for Node.js and browser-adjacent tooling
 - `sdk/python/` for Python automation and ops scripts
+- `sdk/csharp/` for .NET automation and ops tooling
 
-Both SDKs include helpers for:
+The SDKs include helpers for:
 
 - validation routes
 - VMR effective configuration preview
@@ -124,6 +128,7 @@ Both SDKs include helpers for:
 - endpoint and virtual model runner model load or verification requests
 - model access policy CRUD, validation, evaluation, and effective-access simulation
 - request-history search, summary, detail, analytics, and bulk deletion
+- analytics catalog, query, summary, TTFT, token usage, estimate-only cost, user, and access/reliability routes
 - observability metrics summary and text export
 
 ## API Overview
@@ -177,6 +182,7 @@ Users have three permission levels:
 | Request History | `req_` | `/v1.0/requesthistory` |
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
 | Request Analytics | `rae_` | `/v1.0/requesthistory/analytics/overview` |
+| Analytics Workspace | - | `/v1.0/analytics` |
 | Observability Metrics | - | `/v1.0/observability/metrics` |
 
 ### Model Loading
@@ -475,7 +481,7 @@ Cross-Origin Resource Sharing (CORS) can be enabled to allow browser-based appli
 
 ### Request History Configuration
 
-Request history captures request/response data for Virtual Model Runners with `RequestHistoryEnabled` set to `true`. This is useful for debugging, auditing, troubleshooting, and latency analysis. Each completed entry records total response time and time to first token/byte (`FirstTokenTimeMs`). For non-streaming responses, `FirstTokenTimeMs` is set to the same value as `ResponseTimeMs`.
+Request history captures request/response data for Virtual Model Runners with `RequestHistoryEnabled` set to `true`. New VMRs default this property to `true`, so Request History and Analytics populate unless an operator explicitly disables capture for that VMR. This is useful for debugging, auditing, troubleshooting, and latency analysis. Each completed entry records total response time and time to first token/byte (`FirstTokenTimeMs`). For non-streaming responses, `FirstTokenTimeMs` is set to the same value as `ResponseTimeMs`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -492,7 +498,7 @@ Request history captures request/response data for Virtual Model Runners with `R
 | `MaxRequestBodyBytes` | int | `65536` | Maximum request body bytes to capture (1-10485760) |
 | `MaxResponseBodyBytes` | int | `65536` | Maximum response body bytes to capture (1-10485760) |
 
-**Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property).
+**Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property). The per-VMR default is enabled for newly-created VMRs.
 
 Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, policy attachment, requested/effective model names, routing outcome, denial reason, mutation summary, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), time to first token/byte (`FirstTokenTimeMs`), trace ID, provider request ID, token counts, token throughput, analytics coverage, and dominant latency stage.
 
@@ -566,6 +572,38 @@ The overview response includes request counts, success/failure counts, latency p
 ```
 
 Success is defined as HTTP status 100-399; failure is HTTP status 400-599 or null (incomplete requests).
+
+### Analytics Workspace API
+
+The dashboard navigation includes an **Analytics** workspace at `/analytics`. This workspace builds on request-history data and answers first-release operator questions without requiring raw request-body access. See [ADR 0002](./docs/adr/0002-analytics-workspace.md) for API, retention, authorization, saved-report, and export decisions.
+
+- What was the average, P50, P95, and P99 time-to-first-token for a model endpoint, VMR, model, tenant, user, credential, or provider?
+- How many prompt, completion, and total tokens were used over time for a model, endpoint, VMR, provider, tenant, or user?
+- What is the estimate-only cost for a user, model, VMR, endpoint, or tenant when the operator supplies a per-token unit cost?
+- How many requests succeeded, failed, were denied, or were rate-limited over the selected window?
+- Which users, tenants, models, VMRs, and endpoints are driving usage and cost estimates?
+- Which saved report definitions should operators reuse for daily user cost, model usage, TTFT, or reliability review?
+
+```text
+GET  /v1.0/analytics/catalog
+GET  /v1.0/analytics/summary?range=lastDay&bucketSeconds=3600&tokenUnitCost=0.00001
+GET  /v1.0/analytics/ttft?range=lastDay&groupBy=RequestorUserId
+GET  /v1.0/analytics/tokens?range=lastWeek&modelName={model}
+GET  /v1.0/analytics/costs?range=lastDay&requestorUserGuid={user}&tokenUnitCost=0.00001
+GET  /v1.0/analytics/reports
+POST /v1.0/analytics/reports
+POST /v1.0/analytics/query
+```
+
+Analytics data is retained for 30 days in the first release. Named ranges are `lastHour`, `lastDay`, `lastWeek`, `lastMonth`, or `custom` with `startUtc` and `endUtc`; custom ranges are clamped to the retained window. Operators can choose bucket granularity with `bucketSeconds`.
+
+Analytics is populated from persisted request-history rows. Request history must be enabled globally in `conductor.json` and enabled on the Virtual Model Runner before the requests are sent; enabling it later only affects new requests. The Docker dashboard create form defaults new VMRs to Request History and Analytics enabled, and existing VMRs can be edited from the Virtual Model Runners page.
+
+Cost output is an estimate only. Conductor multiplies successful reported token usage by the caller-supplied `tokenUnitCost`; it does not model provider billing rules, cached-token discounts, multimodal pricing, currency conversion, taxes, credits, or account-specific contracts. Missing provider token usage is reported as unknown and is not treated as zero.
+
+System administrators can run global analytics and optionally filter to a tenant with `tenantId`. Tenant administrators are forced into their authenticated tenant scope. A tenant user can be granted read-only Analytics access without tenant-admin rights by adding the `analytics.read` label, or by setting a user tag such as `analytics.read=true` or `permissions=analytics.read`.
+
+Saved reports persist the Analytics query, grouping, token-unit-cost, filters, and dashboard display state. They do not schedule execution or snapshot results. The dashboard can load, update, delete, and copy a link to a saved report.
 
 ## Configuration Pinning
 

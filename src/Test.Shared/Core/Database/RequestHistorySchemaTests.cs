@@ -80,6 +80,15 @@ namespace Test.Shared.Core.Database
             "idx_requestanalyticsevents_vmr_created"
         };
 
+        private static readonly string[] _AnalyticsSavedReportIndexNames =
+        {
+            "idx_asr_tenantid",
+            "idx_asr_owneruserid",
+            "idx_asr_scope",
+            "idx_asr_name",
+            "idx_asr_lastupdateutc"
+        };
+
         public void CreateRequestHistoryTable_AllSupportedDialects_DefersMigratedIndexes()
         {
             AssertRequestHistoryCreateSchema(SqliteTableQueries.CreateRequestHistoryTable);
@@ -96,6 +105,27 @@ namespace Test.Shared.Core.Database
             AssertRequestAnalyticsCreateSchema(SqlServerTableQueries.CreateRequestAnalyticsEventsTable);
         }
 
+        public void CreateAnalyticsSavedReportsTable_AllSupportedDialects_ContainsRequiredIndexes()
+        {
+            AssertAnalyticsSavedReportCreateSchema(SqliteTableQueries.CreateAnalyticsSavedReportsTable);
+            AssertAnalyticsSavedReportCreateSchema(PostgreSqlTableQueries.CreateAnalyticsSavedReportsTable);
+            AssertAnalyticsSavedReportCreateSchema(MySqlTableQueries.CreateAnalyticsSavedReportsTable);
+            AssertAnalyticsSavedReportCreateSchema(SqlServerTableQueries.CreateAnalyticsSavedReportsTable);
+        }
+
+        public void CreateVirtualModelRunnersTable_AllSupportedDialects_DefaultsRequestHistoryEnabled()
+        {
+            SqliteTableQueries.CreateVirtualModelRunnersTable.Should().Contain("requesthistoryenabled INTEGER NOT NULL DEFAULT 1");
+            PostgreSqlTableQueries.CreateVirtualModelRunnersTable.Should().Contain("requesthistoryenabled BOOLEAN NOT NULL DEFAULT TRUE");
+            MySqlTableQueries.CreateVirtualModelRunnersTable.Should().Contain("requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 1");
+            SqlServerTableQueries.CreateVirtualModelRunnersTable.Should().Contain("requesthistoryenabled BIT NOT NULL DEFAULT 1");
+
+            SqliteTableQueries.AddRequestHistoryEnabledColumn.Should().Contain("DEFAULT 1");
+            PostgreSqlTableQueries.AddRequestHistoryEnabledColumn.Should().Contain("DEFAULT TRUE");
+            MySqlTableQueries.AddRequestHistoryEnabledColumn.Should().Contain("DEFAULT 1");
+            SqlServerTableQueries.AddRequestHistoryEnabledColumn.Should().Contain("DEFAULT 1");
+        }
+
         public void FactorySchema_DefersMigratedIndexes()
         {
             string schemaPath = FindRepositoryPath("docker", "factory", "schema.sql");
@@ -103,6 +133,16 @@ namespace Test.Shared.Core.Database
 
             AssertRequestHistoryCreateSchema(schemaSql);
             AssertRequestAnalyticsCreateSchema(schemaSql);
+            AssertAnalyticsSavedReportCreateSchema(schemaSql);
+            schemaSql.Should().Contain("requesthistoryenabled INTEGER NOT NULL DEFAULT 1");
+        }
+
+        public void DockerPostgresSchema_DefaultsRequestHistoryEnabled()
+        {
+            string schemaPath = FindRepositoryPath("docker", "postgres", "init.sql");
+            string schemaSql = File.ReadAllText(schemaPath);
+
+            schemaSql.Should().Contain("requesthistoryenabled BOOLEAN NOT NULL DEFAULT TRUE");
         }
 
         private static void AssertRequestHistoryCreateSchema(string schema)
@@ -135,6 +175,21 @@ namespace Test.Shared.Core.Database
             schema.Should().Contain("tokenspersecond");
 
             foreach (string indexName in _AnalyticsIndexNames)
+            {
+                schema.Should().Contain(indexName);
+            }
+        }
+
+        private static void AssertAnalyticsSavedReportCreateSchema(string schema)
+        {
+            schema.Should().NotBeNullOrWhiteSpace();
+            schema.Should().Contain("analyticssavedreports");
+            schema.Should().Contain("tenantid");
+            schema.Should().Contain("owneruserid");
+            schema.Should().Contain("queryjson");
+            schema.Should().Contain("displaystatejson");
+
+            foreach (string indexName in _AnalyticsSavedReportIndexNames)
             {
                 schema.Should().Contain(indexName);
             }

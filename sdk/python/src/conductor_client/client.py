@@ -149,6 +149,48 @@ class ConductorClient:
     def get_request_analytics_overview(self, filters: dict[str, Any]) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/requesthistory/analytics/overview{self._query_string(filters)}")
 
+    def get_analytics_catalog(self) -> dict[str, Any]:
+        return self._request("GET", "/v1.0/analytics/catalog")
+
+    def query_analytics(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/analytics/query", query or {})
+
+    def list_analytics_saved_reports(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/reports{self._query_string(filters)}")
+
+    def create_analytics_saved_report(self, report: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/analytics/reports", report or {})
+
+    def get_analytics_saved_report(self, report_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/reports/{report_id}{self._tenant_query(tenant_id)}")
+
+    def update_analytics_saved_report(self, report_id: str, report: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("PUT", f"/v1.0/analytics/reports/{report_id}", report or {})
+
+    def delete_analytics_saved_report(self, report_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+        return self._request("DELETE", f"/v1.0/analytics/reports/{report_id}{self._tenant_query(tenant_id)}")
+
+    def get_analytics_summary(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/summary{self._query_string(filters)}")
+
+    def get_analytics_time_series(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/timeseries{self._query_string(filters)}")
+
+    def get_analytics_ttft(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/ttft{self._query_string(filters)}")
+
+    def get_analytics_tokens(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/tokens{self._query_string(filters)}")
+
+    def get_analytics_costs(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/costs{self._query_string(filters)}")
+
+    def get_analytics_users(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/users{self._query_string(filters)}")
+
+    def get_analytics_access(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/analytics/access{self._query_string(filters)}")
+
     def get_request_history_detail(self, entry_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/requesthistory/{entry_id}/detail{self._tenant_query(tenant_id)}")
 

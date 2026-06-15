@@ -136,10 +136,10 @@ function Sidebar() {
       )
     },
     {
-      path: '/request-analytics',
-      label: 'Request Analytics',
+      path: '/analytics',
+      label: 'Analytics',
       tourId: 'nav-request-analytics',
-      tooltip: 'Analyze request volume, latency, stage timing, endpoints, and token throughput',
+      tooltip: 'Analyze TTFT, token usage, estimated cost, users, endpoints, and request outcomes',
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
           <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v6H2v-6zM7 7a1 1 0 011-1h2a1 1 0 011 1v10H7V7zM12 3a1 1 0 011-1h2a1 1 0 011 1v14h-4V3z" />

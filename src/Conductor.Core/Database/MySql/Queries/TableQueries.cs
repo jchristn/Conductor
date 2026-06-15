@@ -292,7 +292,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 sessionaffinityheader VARCHAR(255),
                 sessiontimeoutms INT NOT NULL DEFAULT 600000,
                 sessionmaxentries INT NOT NULL DEFAULT 10000,
-                requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 0,
+                requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 1,
                 loadbalancingpolicyid VARCHAR(48),
                 modelaccesspolicyid VARCHAR(48),
                 active TINYINT(1) NOT NULL DEFAULT 1,
@@ -457,10 +457,35 @@ namespace Conductor.Core.Database.MySql.Queries
         ";
 
         /// <summary>
+        /// Create analytics saved reports table.
+        /// </summary>
+        public static readonly string CreateAnalyticsSavedReportsTable = @"
+            CREATE TABLE IF NOT EXISTS analyticssavedreports (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48),
+                owneruserid VARCHAR(48),
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                scope VARCHAR(32) NOT NULL DEFAULT 'Tenant',
+                queryjson TEXT NOT NULL,
+                displaystatejson TEXT,
+                labels TEXT,
+                tags TEXT,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                INDEX idx_asr_tenantid (tenantid),
+                INDEX idx_asr_owneruserid (owneruserid),
+                INDEX idx_asr_scope (scope),
+                INDEX idx_asr_name (name),
+                INDEX idx_asr_lastupdateutc (lastupdateutc)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
         /// Add requesthistoryenabled column to virtualmodelrunners table (migration).
         /// </summary>
         public static readonly string AddRequestHistoryEnabledColumn = @"
-            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 0;
+            ALTER TABLE virtualmodelrunners ADD COLUMN requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 1;
         ";
 
         /// <summary>

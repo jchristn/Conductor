@@ -53,7 +53,8 @@ function App() {
             <Route path="/model-access-policies" element={<ModelAccessPolicies />} />
             <Route path="/vmr" element={<VirtualModelRunners />} />
             <Route path="/request-history" element={<RequestHistory />} />
-            <Route path="/request-analytics" element={<RequestAnalytics />} />
+            <Route path="/analytics" element={<RequestAnalytics />} />
+            <Route path="/request-analytics" element={<Navigate to="/analytics" replace />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             {isAdmin && <Route path="/administrators" element={<Administrators />} />}
             {hasAdminAccess && <Route path="/backup" element={<BackupRestore />} />}

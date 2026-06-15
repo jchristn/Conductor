@@ -126,7 +126,7 @@ class ConductorApi {
     return Boolean(this.bearerToken && user && tenant);
   }
 
-  async request(method, endpoint, body = null) {
+  async request(method, endpoint, body = null, options = {}) {
     const headers = { 'Content-Type': 'application/json' };
 
     // Use admin auth OR bearer token, not both
@@ -142,6 +142,7 @@ class ConductorApi {
       method,
       headers,
       body: body ? JSON.stringify(body) : null,
+      signal: options.signal,
     });
 
     if (!response.ok) {
@@ -741,6 +742,61 @@ class ConductorApi {
     if (params.statusClass) query.append('statusClass', params.statusClass);
     const queryString = query.toString() ? '?' + query.toString() : '';
     return this.request('GET', `/v1.0/requesthistory/analytics/overview${queryString}`);
+  }
+
+  async getAnalyticsSummary(params = {}, options = {}) {
+    const query = new URLSearchParams();
+    if (params.tenantId) query.append('tenantId', params.tenantId);
+    if (params.range) query.append('range', params.range);
+    if (params.startUtc) query.append('startUtc', params.startUtc);
+    if (params.endUtc) query.append('endUtc', params.endUtc);
+    if (params.bucketSeconds) query.append('bucketSeconds', params.bucketSeconds);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.groupBy) query.append('groupBy', params.groupBy);
+    if (params.vmrGuid) query.append('vmrGuid', params.vmrGuid);
+    if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
+    if (params.providerName) query.append('providerName', params.providerName);
+    if (params.modelName) query.append('modelName', params.modelName);
+    if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
+    if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
+    if (params.statusClass) query.append('statusClass', params.statusClass);
+    if (params.tokenUnitCost !== undefined && params.tokenUnitCost !== '') query.append('tokenUnitCost', params.tokenUnitCost);
+    if (params.costCurrency) query.append('costCurrency', params.costCurrency);
+    const queryString = query.toString() ? '?' + query.toString() : '';
+    return this.request('GET', `/v1.0/analytics/summary${queryString}`, null, options);
+  }
+
+  async queryAnalytics(body = {}) {
+    return this.request('POST', '/v1.0/analytics/query', body);
+  }
+
+  async listAnalyticsSavedReports(params = {}) {
+    const query = new URLSearchParams();
+    if (params.tenantId) query.append('tenantId', params.tenantId);
+    if (params.maxResults) query.append('maxResults', params.maxResults);
+    if (params.continuationToken) query.append('continuationToken', params.continuationToken);
+    if (params.nameFilter) query.append('nameFilter', params.nameFilter);
+    if (params.ownerUserId) query.append('ownerUserId', params.ownerUserId);
+    const queryString = query.toString() ? '?' + query.toString() : '';
+    return this.request('GET', `/v1.0/analytics/reports${queryString}`);
+  }
+
+  async createAnalyticsSavedReport(report = {}) {
+    return this.request('POST', '/v1.0/analytics/reports', report);
+  }
+
+  async getAnalyticsSavedReport(id, tenantId = null) {
+    const queryString = tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : '';
+    return this.request('GET', `/v1.0/analytics/reports/${encodeURIComponent(id)}${queryString}`);
+  }
+
+  async updateAnalyticsSavedReport(id, report = {}) {
+    return this.request('PUT', `/v1.0/analytics/reports/${encodeURIComponent(id)}`, report);
+  }
+
+  async deleteAnalyticsSavedReport(id, tenantId = null) {
+    const queryString = tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : '';
+    return this.request('DELETE', `/v1.0/analytics/reports/${encodeURIComponent(id)}${queryString}`);
   }
 
   // Request History APIs

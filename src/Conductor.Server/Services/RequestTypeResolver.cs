@@ -142,6 +142,22 @@ namespace Conductor.Server.Services
             { new RouteKey("POST", "/v1.0/requesthistory/delete"), RequestTypeEnum.DeleteRequestHistoryBulk },
             { new RouteKey("GET", "/v1.0/requesthistory"), RequestTypeEnum.ListRequestHistory },
 
+            // Analytics workspace
+            { new RouteKey("GET", "/v1.0/analytics/catalog"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("POST", "/v1.0/analytics/query"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/reports"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("POST", "/v1.0/analytics/reports"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/reports/{id}"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("PUT", "/v1.0/analytics/reports/{id}"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("DELETE", "/v1.0/analytics/reports/{id}"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/summary"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/timeseries"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/ttft"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/tokens"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/costs"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/users"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("GET", "/v1.0/analytics/access"), RequestTypeEnum.ReadAnalytics },
+
             // Observability
             { new RouteKey("GET", "/v1.0/observability/metrics"), RequestTypeEnum.ReadObservabilityMetrics },
             { new RouteKey("GET", "/v1.0/observability/metrics/summary"), RequestTypeEnum.ReadObservabilityMetricsSummary }
