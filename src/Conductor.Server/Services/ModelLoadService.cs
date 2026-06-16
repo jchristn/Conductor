@@ -27,6 +27,7 @@ namespace Conductor.Server.Services
         private readonly HealthCheckService _HealthCheckService;
         private readonly OperationalMetricsService _Metrics;
         private readonly IModelLoadTransport _Transport;
+        private readonly VirtualModelRunnerReservationService _ReservationService;
         private readonly bool _OwnsTransport;
         private readonly ModelLoadProbeBuilder _ProbeBuilder;
         private readonly ModelLoadVerificationService _VerificationService;
@@ -56,6 +57,7 @@ namespace Conductor.Server.Services
             _HealthCheckService = healthCheckService;
             _Metrics = metrics;
             _Transport = transport ?? new DefaultModelLoadTransport();
+            _ReservationService = new VirtualModelRunnerReservationService(_Database, _Logging);
             _OwnsTransport = transport == null;
             _ProbeBuilder = new ModelLoadProbeBuilder();
             _VerificationService = new ModelLoadVerificationService(_Transport, _ProbeBuilder);
@@ -104,9 +106,27 @@ namespace Conductor.Server.Services
             ModelLoadRequest request,
             CancellationToken token = default)
         {
+            return await LoadVirtualModelRunnerAsync(vmr, request, null, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Load or verify a model through a virtual model runner.
+        /// </summary>
+        /// <param name="vmr">Virtual model runner.</param>
+        /// <param name="request">Model load request.</param>
+        /// <param name="requestContext">Authenticated request context.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Model load response.</returns>
+        public async Task<ModelLoadResponse> LoadVirtualModelRunnerAsync(
+            VirtualModelRunner vmr,
+            ModelLoadRequest request,
+            RequestContext requestContext,
+            CancellationToken token = default)
+        {
             if (vmr == null) throw new ArgumentNullException(nameof(vmr));
 
             ModelLoadRequest normalizedRequest = NormalizeRequest(request);
+            await EnforceReservationGateAsync(vmr, requestContext, token).ConfigureAwait(false);
             string model = await ResolveModelAsync(vmr, normalizedRequest, token).ConfigureAwait(false);
             Stopwatch stopwatch = Stopwatch.StartNew();
             ModelLoadResponse response = CreateResponse("VirtualModelRunner", vmr.Id, vmr.TenantId, model, normalizedRequest.ProbeKind);
@@ -147,6 +167,57 @@ namespace Conductor.Server.Services
             CompleteResponse(response, stopwatch);
             RecordMetrics(response);
             return response;
+        }
+
+        private async Task EnforceReservationGateAsync(VirtualModelRunner vmr, RequestContext requestContext, CancellationToken token)
+        {
+            string credentialOwnerUserId = await ResolveCredentialOwnerUserIdAsync(vmr.TenantId, requestContext, token).ConfigureAwait(false);
+            ReservationEvaluationResult reservationResult = await _ReservationService.EvaluateAsync(new ReservationEvaluationContext
+            {
+                TenantId = vmr.TenantId,
+                VirtualModelRunnerId = vmr.Id,
+                UserId = requestContext?.UserId,
+                CredentialId = requestContext?.CredentialId,
+                CredentialOwnerUserId = credentialOwnerUserId,
+                RequestType = RequestTypeEnum.LoadVirtualModelRunnerModel,
+                AtUtc = DateTime.UtcNow
+            }, token).ConfigureAwait(false);
+
+            if (reservationResult == null || reservationResult.Allowed)
+            {
+                return;
+            }
+
+            _Logging.Warn(
+                "[ModelLoadService] reservation denied tenant=" + vmr.TenantId
+                + " vmr=" + vmr.Id
+                + " reservation=" + (reservationResult.ReservationId ?? String.Empty)
+                + " user=" + (requestContext?.UserId ?? String.Empty)
+                + " credential=" + (requestContext?.CredentialId ?? String.Empty)
+                + " reason=" + (reservationResult.ReasonCode ?? String.Empty));
+
+            throw new WebserverException(ApiResultEnum.BadRequest, reservationResult.ReasonText ?? "The virtual model runner is reserved.");
+        }
+
+        private async Task<string> ResolveCredentialOwnerUserIdAsync(string tenantId, RequestContext requestContext, CancellationToken token)
+        {
+            if (requestContext == null)
+            {
+                return null;
+            }
+
+            if (!String.IsNullOrWhiteSpace(requestContext.UserId))
+            {
+                return requestContext.UserId;
+            }
+
+            if (String.IsNullOrWhiteSpace(tenantId) || String.IsNullOrWhiteSpace(requestContext.CredentialId))
+            {
+                return null;
+            }
+
+            Credential credential = await _Database.Credential.ReadAsync(tenantId, requestContext.CredentialId, token).ConfigureAwait(false);
+            return credential?.UserId;
         }
 
         /// <summary>

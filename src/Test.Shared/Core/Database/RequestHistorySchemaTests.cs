@@ -28,6 +28,8 @@ namespace Test.Shared.Core.Database
             "idx_requesthistory_requestedmodel",
             "idx_requesthistory_effectivemodel",
             "idx_requesthistory_denialreasoncode",
+            "idx_requesthistory_reservationguid",
+            "idx_requesthistory_reservationreasoncode",
             "idx_requesthistory_sessionaffinityoutcome",
             "idx_requesthistory_traceid",
             "idx_requesthistory_providerrequestid",
@@ -51,6 +53,10 @@ namespace Test.Shared.Core.Database
             "requestedmodel",
             "effectivemodel",
             "denialreasoncode",
+            "reservationguid",
+            "reservationreasoncode",
+            "reservationwindowstartutc",
+            "reservationwindowendutc",
             "sessionaffinityoutcome",
             "traceid",
             "providerrequestid",
@@ -77,7 +83,8 @@ namespace Test.Shared.Core.Database
             "idx_requestanalyticsevents_traceid",
             "idx_requestanalyticsevents_stagekind",
             "idx_requestanalyticsevents_endpoint_created",
-            "idx_requestanalyticsevents_vmr_created"
+            "idx_requestanalyticsevents_vmr_created",
+            "idx_requestanalyticsevents_reservation_created"
         };
 
         private static readonly string[] _AnalyticsSavedReportIndexNames =
@@ -173,6 +180,8 @@ namespace Test.Shared.Core.Database
             schema.Should().Contain("stagekind");
             schema.Should().Contain("durationms");
             schema.Should().Contain("tokenspersecond");
+            schema.Should().Contain("reservationguid");
+            schema.Should().Contain("reservationreasoncode");
 
             foreach (string indexName in _AnalyticsIndexNames)
             {

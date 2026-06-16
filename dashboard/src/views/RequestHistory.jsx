@@ -7,6 +7,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ViewMetadataModal from '../components/ViewMetadataModal';
 import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
+import RefreshButton from '../components/RefreshButton';
 import { copyToClipboard } from '../utils/clipboard';
 
 function CollapsibleSection({ title, meta, content, defaultExpanded = false, showFormatJson = false, tooltip }) {
@@ -211,6 +212,9 @@ function RequestHistory() {
     modelName: '',
     mutationSummary: '',
     denialReasonCode: '',
+    reservationGuid: '',
+    reservationDecision: '',
+    reservationReasonCode: '',
     sessionAffinityOutcome: '',
     statusClass: '',
     createdAfterUtc: '',
@@ -448,6 +452,9 @@ function RequestHistory() {
       modelName: '',
       mutationSummary: '',
       denialReasonCode: '',
+      reservationGuid: '',
+      reservationDecision: '',
+      reservationReasonCode: '',
       sessionAffinityOutcome: '',
       statusClass: '',
       createdAfterUtc: '',
@@ -650,6 +657,23 @@ function RequestHistory() {
       render: (item) => item.ModelEndpointName || getEndpointName(item.ModelEndpointGuid) || '-'
     },
     {
+      key: 'ReservationName',
+      label: 'Reservation',
+      tooltip: 'VMR reservation gate that applied to this request, when one was active or in drain.',
+      width: '180px',
+      render: (item) => item.ReservationGuid
+        ? (
+          <div className="stacked-cell">
+            <span>{item.ReservationName || item.ReservationGuid}</span>
+            <span className={`service-state-badge ${item.ReservationDecision === 'Denied' ? 'danger' : 'neutral'}`}>
+              {item.ReservationReasonCode || item.ReservationDecision || 'Applied'}
+            </span>
+          </div>
+        )
+        : <span className="text-muted">-</span>,
+      filterValue: (item) => item.ReservationReasonCode || item.ReservationDecision || 'none'
+    },
+    {
       key: 'ModelAccessDecision',
       label: 'Access',
       tooltip: 'Model access policy decision recorded for this request',
@@ -699,11 +723,7 @@ function RequestHistory() {
           <p className="view-subtitle">View and filter recent API requests including routing decisions, response details, and token usage.</p>
         </div>
         <div className="view-actions">
-            <button className="btn-icon" onClick={fetchEntries} title="Refresh">
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-            </svg>
-          </button>
+          <RefreshButton onClick={fetchEntries} title="Refresh request history" disabled={loading} />
           {hasFilters && (
             <button
               className="btn-secondary btn-danger"
@@ -719,11 +739,7 @@ function RequestHistory() {
         <div className="dashboard-section compact">
           <div className="request-history-chart-header">
             <h2>Ledger Summary</h2>
-            <button className="btn-icon" onClick={fetchSummary} title="Refresh summary" disabled={summaryLoading}>
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-              </svg>
-            </button>
+            <RefreshButton onClick={fetchSummary} title="Refresh summary" disabled={summaryLoading} />
           </div>
           {summary && (
             <div className="facet-grid">
@@ -855,6 +871,37 @@ function RequestHistory() {
               value={filters.denialReasonCode}
               onChange={(e) => handleFilterChange('denialReasonCode', e.target.value)}
               placeholder="AllEndpointsAtCapacity"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Reservation:</label>
+            <input
+              type="text"
+              value={filters.reservationGuid}
+              onChange={(e) => handleFilterChange('reservationGuid', e.target.value)}
+              placeholder="vmrrsv_..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>Res Decision:</label>
+            <select
+              value={filters.reservationDecision}
+              onChange={(e) => handleFilterChange('reservationDecision', e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="Allowed">Allowed</option>
+              <option value="Denied">Denied</option>
+              <option value="NoReservation">No Reservation</option>
+              <option value="Conflict">Conflict</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Res Reason:</label>
+            <input
+              type="text"
+              value={filters.reservationReasonCode}
+              onChange={(e) => handleFilterChange('reservationReasonCode', e.target.value)}
+              placeholder="ReservationDenied"
             />
           </div>
           <div className="filter-group">
@@ -1141,6 +1188,26 @@ function RequestHistory() {
                   </DetailItem>
                   <DetailItem label="Denied Because" tooltip="Routing denial reason when Conductor could not select an endpoint">
                     {detailData.DenialReasonCode || detailData.DenialReason || '-'}
+                  </DetailItem>
+                  <DetailItem label="Reservation" tooltip="VMR reservation gate that applied to this request, when active or in drain">
+                    {detailData.ReservationGuid
+                      ? (
+                        <>
+                          {detailData.ReservationName || 'Reservation'} <CopyableId value={detailData.ReservationGuid} />
+                        </>
+                      )
+                      : '-'}
+                  </DetailItem>
+                  <DetailItem label="Reservation Decision" tooltip="Reservation gate decision captured before model access and endpoint selection">
+                    {detailData.ReservationDecision || '-'}
+                  </DetailItem>
+                  <DetailItem label="Reservation Reason" tooltip="Stable reservation reason code, such as ReservationDenied or ReservationDrainDenied">
+                    {detailData.ReservationReasonCode || '-'}
+                  </DetailItem>
+                  <DetailItem label="Reservation Window" tooltip="UTC reservation window that was evaluated for this request">
+                    {detailData.ReservationWindowStartUtc || detailData.ReservationWindowEndUtc
+                      ? `${formatDate(detailData.ReservationWindowStartUtc)} to ${formatDate(detailData.ReservationWindowEndUtc)}`
+                      : '-'}
                   </DetailItem>
                   <DetailItem label="Session Affinity" tooltip="Session affinity outcome such as hit, miss, created, expired, or disabled">
                     {detailData.SessionAffinityOutcome || '-'}

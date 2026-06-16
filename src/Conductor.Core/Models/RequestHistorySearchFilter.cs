@@ -71,6 +71,21 @@ namespace Conductor.Core.Models
         public string DenialReasonCode { get; set; } = null;
 
         /// <summary>
+        /// Filter by reservation GUID. May be null.
+        /// </summary>
+        public string ReservationGuid { get; set; } = null;
+
+        /// <summary>
+        /// Filter by reservation decision. May be null.
+        /// </summary>
+        public string ReservationDecision { get; set; } = null;
+
+        /// <summary>
+        /// Filter by reservation reason code. May be null.
+        /// </summary>
+        public string ReservationReasonCode { get; set; } = null;
+
+        /// <summary>
         /// Filter by session-affinity outcome. May be null.
         /// </summary>
         public string SessionAffinityOutcome { get; set; } = null;

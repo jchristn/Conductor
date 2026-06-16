@@ -58,6 +58,99 @@ namespace Conductor.Sdk
         }
 
         /// <summary>
+        /// List virtual model runner reservations.
+        /// </summary>
+        /// <param name="filters">Query-string filters.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ListVirtualModelRunnerReservationsAsync(IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/vmrreservations" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get a virtual model runner reservation.
+        /// </summary>
+        /// <param name="id">Reservation ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetVirtualModelRunnerReservationAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/vmrreservations/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Create a virtual model runner reservation.
+        /// </summary>
+        /// <param name="reservation">Reservation object.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> CreateVirtualModelRunnerReservationAsync(object reservation, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/vmrreservations", reservation ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Update a virtual model runner reservation.
+        /// </summary>
+        /// <param name="id">Reservation ID.</param>
+        /// <param name="reservation">Reservation object.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> UpdateVirtualModelRunnerReservationAsync(string id, object reservation, CancellationToken token = default)
+        {
+            return await PutJsonAsync("/v1.0/vmrreservations/" + Uri.EscapeDataString(id), reservation ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Deactivate a virtual model runner reservation.
+        /// </summary>
+        /// <param name="id">Reservation ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        public async Task DeleteVirtualModelRunnerReservationAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            await DeleteAsync("/v1.0/vmrreservations/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Validate a virtual model runner reservation draft.
+        /// </summary>
+        /// <param name="reservation">Reservation object.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ValidateVirtualModelRunnerReservationAsync(object reservation, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/vmrreservations/validate", reservation ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// List reservations for a virtual model runner.
+        /// </summary>
+        /// <param name="virtualModelRunnerId">Virtual model runner ID.</param>
+        /// <param name="filters">Query-string filters.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ListReservationsForVirtualModelRunnerAsync(string virtualModelRunnerId, IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(virtualModelRunnerId) + "/reservations" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Evaluate effective reservation access for a virtual model runner.
+        /// </summary>
+        /// <param name="virtualModelRunnerId">Virtual model runner ID.</param>
+        /// <param name="filters">Query-string filters.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetVirtualModelRunnerReservationEffectiveAsync(string virtualModelRunnerId, IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(virtualModelRunnerId) + "/reservation-effective" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Get the analytics catalog.
         /// </summary>
         /// <param name="token">Cancellation token.</param>

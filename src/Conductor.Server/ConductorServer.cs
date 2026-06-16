@@ -43,6 +43,7 @@ namespace Conductor.Server
         private static ModelLoadService _ModelLoadService;
         private static OllamaModelManagementService _OllamaModelManagementService;
         private static RequestHistoryService _RequestHistoryService;
+        private static VirtualModelRunnerReservationService _VirtualModelRunnerReservationService;
         private static RequestHistoryCleanupService _RequestHistoryCleanupService;
         private static Serializer _Serializer;
         private static Webserver _App;
@@ -154,6 +155,7 @@ namespace Conductor.Server
                 _ModelAccessControlService,
                 _Settings.ModelAccessControl);
             _ConfigurationValidationService = new ConfigurationValidationService(_Database, _Logging, _RoutingDecisionService);
+            _VirtualModelRunnerReservationService = new VirtualModelRunnerReservationService(_Database, _Logging);
             _ModelLoadService = new ModelLoadService(
                 _Database,
                 _Logging,
@@ -220,6 +222,7 @@ namespace Conductor.Server
                 openApi.Tags.Add(new OpenApiTag { Name = "Load Balancing Policies", Description = "Load-balancing policy management" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Model Access Policies", Description = "Model access policy management and simulation" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Virtual Model Runners", Description = "Virtual model runner management" });
+                openApi.Tags.Add(new OpenApiTag { Name = "VMR Reservations", Description = "Virtual model runner reservation scheduling and access control" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Administrators", Description = "Administrator management endpoints" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Backup", Description = "Backup and restore endpoints" });
                 openApi.Tags.Add(new OpenApiTag { Name = "Request History", Description = "Request history endpoints" });
@@ -325,7 +328,8 @@ namespace Conductor.Server
                 _ModelAccessControlService,
                 _ModelLoadService,
                 _OllamaModelManagementService,
-                _RequestHistoryService);
+                _RequestHistoryService,
+                _VirtualModelRunnerReservationService);
             Routing.ConductorRouteRegistry routeRegistry = new Routing.ConductorRouteRegistry(routeContext);
             routeRegistry.RegisterRoutes();
         }

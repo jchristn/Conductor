@@ -212,6 +212,7 @@ function BackupRestore() {
                     <span>{validationResult.Summary.ModelConfigurationCount} model configurations</span>
                     <span>{validationResult.Summary.ModelRunnerEndpointCount} endpoints</span>
                     <span>{validationResult.Summary.VirtualModelRunnerCount} virtual runners</span>
+                    <span>{validationResult.Summary.VirtualModelRunnerReservationCount || 0} reservations</span>
                     <span>{validationResult.Summary.AdministratorCount} administrators</span>
                   </div>
                 )}
@@ -306,6 +307,7 @@ function BackupRestore() {
                         ['Model Configurations', restoreResult.Summary.ModelConfigurations],
                         ['Endpoints', restoreResult.Summary.ModelRunnerEndpoints],
                         ['Virtual Runners', restoreResult.Summary.VirtualModelRunners],
+                        ['VMR Reservations', restoreResult.Summary.VirtualModelRunnerReservations],
                         ['Administrators', restoreResult.Summary.Administrators]
                       ].map(([name, counts]) => (
                         <tr key={name}>

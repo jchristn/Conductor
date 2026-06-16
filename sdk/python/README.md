@@ -9,6 +9,7 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - endpoint and virtual model runner model load or verification requests
 - Ollama endpoint model list, pull, and delete requests
 - model access policy CRUD, validation, evaluation, and effective-access queries
+- VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - analytics workspace catalog, query, saved reports, summary, TTFT, token usage, estimate-only cost, user, and access/reliability helpers
 - observability summary and raw Prometheus metrics
@@ -85,6 +86,29 @@ denied_or_limited = client.query_analytics({
         "StatusClasses": ["4xx"],
     },
 })
+
+reservation = client.create_virtual_model_runner_reservation({
+    "TenantId": "tenant_123",
+    "VirtualModelRunnerId": "vmr_123",
+    "Name": "Customer demo reservation",
+    "StartUtc": "2026-06-16T17:00:00Z",
+    "EndUtc": "2026-06-16T19:00:00Z",
+    "Subjects": [
+        {"SubjectType": "User", "SubjectId": "usr_123"},
+        {"SubjectType": "Credential", "SubjectId": "cred_123"},
+    ],
+})
+client.validate_virtual_model_runner_reservation(reservation)
+client.list_virtual_model_runner_reservations({"tenantId": "tenant_123", "vmrId": "vmr_123"})
+client.get_virtual_model_runner_reservation_effective(
+    "vmr_123",
+    {
+        "tenantId": "tenant_123",
+        "userId": "usr_123",
+        "credentialId": "cred_123",
+        "atUtc": "2026-06-16T17:30:00Z",
+    },
+)
 
 endpoint_load = client.load_model_runner_endpoint_model(
     "mre_123",

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from './Modal';
+import RefreshButton from './RefreshButton';
 
 function TrashIcon() {
   return (
@@ -185,9 +186,7 @@ function OllamaModelManagerModal({ isOpen, onClose, endpoint, api, onChanged }) 
             <span className="load-model-label">Endpoint</span>
             <strong>{endpoint.Name || endpoint.Id}</strong>
           </div>
-          <button type="button" className="btn-secondary btn-small" onClick={fetchModels} disabled={loading || Boolean(operationLoading)}>
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
+          <RefreshButton onClick={fetchModels} title="Refresh Ollama models" disabled={loading || Boolean(operationLoading)} />
         </div>
 
         <form className="ollama-model-pull-form" onSubmit={handlePull} noValidate>

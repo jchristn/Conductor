@@ -125,6 +125,17 @@ function Sidebar() {
       )
     },
     {
+      path: '/reservations',
+      label: 'Reservations',
+      tourId: 'nav-reservations',
+      tooltip: 'Schedule exclusive access windows for Virtual Model Runners',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M6 2a1 1 0 011 1v1h6V3a1 1 0 112 0v1h1a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h1V3a1 1 0 011-1zm10 7H4v7h12V9zM4 7h12V6H4v1zm3 4a1 1 0 000 2h3a1 1 0 100-2H7z" clipRule="evenodd" />
+        </svg>
+      )
+    },
+    {
       path: '/request-history',
       label: 'Request History',
       tourId: 'nav-request-history',

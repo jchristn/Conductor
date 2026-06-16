@@ -310,6 +310,54 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         ";
 
         /// <summary>
+        /// Create virtual model runner reservations table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationsTable = @"
+            CREATE TABLE IF NOT EXISTS virtualmodelrunnerreservations (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                vmrid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                startutc TIMESTAMP NOT NULL,
+                endutc TIMESTAMP NOT NULL,
+                admissiondrainleadms INTEGER NOT NULL DEFAULT 0,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                createdbyuserid VARCHAR(48),
+                createdbycredentialid VARCHAR(48),
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                createdutc TIMESTAMP NOT NULL,
+                lastupdateutc TIMESTAMP NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (vmrid) REFERENCES virtualmodelrunners(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_vmrr_tenant_vmr_window ON virtualmodelrunnerreservations(tenantid, vmrid, active, startutc, endutc);
+            CREATE INDEX IF NOT EXISTS idx_vmrr_tenant_created ON virtualmodelrunnerreservations(tenantid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_vmrr_tenant_name ON virtualmodelrunnerreservations(tenantid, name);
+        ";
+
+        /// <summary>
+        /// Create virtual model runner reservation subjects table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationSubjectsTable = @"
+            CREATE TABLE IF NOT EXISTS virtualmodelrunnerreservationsubjects (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                reservationid VARCHAR(48) NOT NULL,
+                subjecttype INTEGER NOT NULL,
+                subjectid VARCHAR(48) NOT NULL,
+                createdutc TIMESTAMP NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (reservationid) REFERENCES virtualmodelrunnerreservations(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_vmrrs_tenant_reservation ON virtualmodelrunnerreservationsubjects(tenantid, reservationid);
+            CREATE INDEX IF NOT EXISTS idx_vmrrs_tenant_subject ON virtualmodelrunnerreservationsubjects(tenantid, subjecttype, subjectid);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vmrrs_unique_subject ON virtualmodelrunnerreservationsubjects(reservationid, subjecttype, subjectid);
+        ";
+
+        /// <summary>
         /// Create administrators table.
         /// </summary>
         public static readonly string CreateAdministratorsTable = @"
@@ -360,6 +408,12 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 routingoutcomecode VARCHAR(128),
                 denialreasoncode VARCHAR(128),
                 denialreason TEXT,
+                reservationguid VARCHAR(48),
+                reservationname VARCHAR(255),
+                reservationdecision VARCHAR(32),
+                reservationreasoncode VARCHAR(128),
+                reservationwindowstartutc TIMESTAMP,
+                reservationwindowendutc TIMESTAMP,
                 sessionaffinityoutcome VARCHAR(128),
                 mutationsummary TEXT,
                 explanationsummary TEXT,
@@ -433,6 +487,12 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 httpstatus INTEGER,
                 errortype VARCHAR(128),
                 errormessage TEXT,
+                reservationguid VARCHAR(48),
+                reservationname VARCHAR(255),
+                reservationdecision VARCHAR(32),
+                reservationreasoncode VARCHAR(128),
+                reservationwindowstartutc TIMESTAMP,
+                reservationwindowendutc TIMESTAMP,
                 endpointlimiterwaitms INTEGER,
                 requesttoheadersms INTEGER,
                 headerstofirsttokenms INTEGER,
@@ -454,6 +514,7 @@ namespace Conductor.Core.Database.PostgreSql.Queries
             CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
             CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
             CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_reservation_created ON requestanalyticsevents(reservationguid, createdutc);
         ";
 
         /// <summary>

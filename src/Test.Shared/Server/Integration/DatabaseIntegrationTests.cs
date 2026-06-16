@@ -888,6 +888,107 @@ namespace Test.Shared.Server.Integration
             summary.TotalFailure.Should().Be(1);
         }
 
+        public async Task RequestHistory_ReservationFields_RoundTripFilterAndAnalytics()
+        {
+            DateTime now = DateTime.UtcNow;
+            string suffix = Guid.NewGuid().ToString("N");
+            string reservationId = "vmrr_" + suffix;
+            VirtualModelRunner vmr = await _Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = _TestTenantId,
+                Name = "Reservation History VMR",
+                BasePath = $"/reservation-history/{suffix}/"
+            });
+
+            RequestHistoryEntry denied = await _Database.RequestHistory.CreateAsync(new RequestHistoryDetail
+            {
+                TenantGuid = _TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "reservation-history-denied-" + suffix + ".json",
+                CreatedUtc = now.AddMinutes(-10),
+                HttpStatus = 403,
+                RoutingOutcomeCode = "Denied",
+                DenialReasonCode = "ReservationDenied",
+                DenialReason = "The virtual model runner is reserved.",
+                ReservationGuid = reservationId,
+                ReservationName = "Benchmark window",
+                ReservationDecision = ReservationDecisionEnum.Denied.ToString(),
+                ReservationReasonCode = "ReservationDenied",
+                ReservationWindowStartUtc = now.AddMinutes(-20),
+                ReservationWindowEndUtc = now.AddMinutes(40)
+            });
+
+            RequestHistoryEntry read = await _Database.RequestHistory.ReadByIdAsync(denied.Id);
+            read.ReservationGuid.Should().Be(reservationId);
+            read.ReservationName.Should().Be("Benchmark window");
+            read.ReservationDecision.Should().Be(ReservationDecisionEnum.Denied.ToString());
+            read.ReservationReasonCode.Should().Be("ReservationDenied");
+            read.ReservationWindowStartUtc.Should().NotBeNull();
+            read.ReservationWindowEndUtc.Should().NotBeNull();
+
+            RequestHistorySearchResult search = await _Database.RequestHistory.SearchAsync(new RequestHistorySearchFilter
+            {
+                TenantGuid = _TestTenantId,
+                ReservationGuid = reservationId,
+                ReservationDecision = ReservationDecisionEnum.Denied.ToString(),
+                ReservationReasonCode = "ReservationDenied",
+                PageSize = 10
+            });
+
+            search.TotalCount.Should().Be(1);
+            search.Data.Should().ContainSingle(item => item.Id == denied.Id);
+
+            RequestHistorySummaryResult summary = await _Database.RequestHistory.GetSummaryAsync(new RequestHistorySummaryFilter
+            {
+                TenantGuid = _TestTenantId,
+                StartUtc = now.AddHours(-1),
+                EndUtc = now.AddHours(1),
+                ReservationGuid = reservationId,
+                ReservationReasonCode = "ReservationDenied"
+            });
+
+            summary.TotalFailure.Should().Be(1);
+
+            await _Database.RequestAnalytics.CreateAsync(new RequestAnalyticsEvent
+            {
+                TenantGuid = _TestTenantId,
+                RequestHistoryId = denied.Id,
+                TraceId = "trc_reservation",
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                StageKind = "denial",
+                StageName = "Reservation Gate",
+                StartedUtc = now,
+                CompletedUtc = now.AddMilliseconds(7),
+                DurationMs = 7,
+                Success = false,
+                HttpStatus = 403,
+                ErrorType = "ReservationDenied",
+                ReservationGuid = reservationId,
+                ReservationName = "Benchmark window",
+                ReservationDecision = ReservationDecisionEnum.Denied.ToString(),
+                ReservationReasonCode = "ReservationDenied",
+                ReservationWindowStartUtc = now.AddMinutes(-20),
+                ReservationWindowEndUtc = now.AddMinutes(40),
+                CreatedUtc = now
+            });
+
+            List<RequestAnalyticsEvent> events = await _Database.RequestAnalytics.SearchAsync(new RequestAnalyticsFilter
+            {
+                TenantGuid = _TestTenantId,
+                ReservationGuid = reservationId,
+                ReservationReasonCode = "ReservationDenied",
+                StartUtc = now.AddHours(-1),
+                EndUtc = now.AddHours(1)
+            });
+
+            events.Should().ContainSingle(item => item.RequestHistoryId == denied.Id && item.ReservationGuid == reservationId);
+        }
+
         public async Task RequestAnalytics_CreateAndList_RoundTrips()
         {
             DateTime now = DateTime.UtcNow;

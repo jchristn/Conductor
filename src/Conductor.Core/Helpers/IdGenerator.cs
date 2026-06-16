@@ -44,6 +44,16 @@ namespace Conductor.Core.Helpers
         public const string VirtualModelRunnerPrefix = "vmr_";
 
         /// <summary>
+        /// Virtual model runner reservation ID prefix.
+        /// </summary>
+        public const string VirtualModelRunnerReservationPrefix = "vmrr_";
+
+        /// <summary>
+        /// Virtual model runner reservation subject ID prefix.
+        /// </summary>
+        public const string VirtualModelRunnerReservationSubjectPrefix = "vmrrs_";
+
+        /// <summary>
         /// Load-balancing policy ID prefix.
         /// </summary>
         public const string LoadBalancingPolicyPrefix = "lbp_";
@@ -151,6 +161,24 @@ namespace Conductor.Core.Helpers
         public static string NewVirtualModelRunnerId()
         {
             return _Generator.GenerateKSortable(VirtualModelRunnerPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new virtual model runner reservation ID.
+        /// </summary>
+        /// <returns>K-sortable virtual model runner reservation ID.</returns>
+        public static string NewVirtualModelRunnerReservationId()
+        {
+            return _Generator.GenerateKSortable(VirtualModelRunnerReservationPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new virtual model runner reservation subject ID.
+        /// </summary>
+        /// <returns>K-sortable virtual model runner reservation subject ID.</returns>
+        public static string NewVirtualModelRunnerReservationSubjectId()
+        {
+            return _Generator.GenerateKSortable(VirtualModelRunnerReservationSubjectPrefix, DefaultIdLength);
         }
 
         /// <summary>

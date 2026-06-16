@@ -164,6 +164,26 @@
       "key": "tenantId",
       "value": "default",
       "type": "string"
+    },
+    {
+      "key": "reservationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "outsiderUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "outsiderCredentialId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "reservationAtUtc",
+      "value": "2026-06-16T17:30:00Z",
+      "type": "string"
     }
   ],
   "auth": {
@@ -1537,6 +1557,331 @@
       ]
     },
     {
+      "name": "VMR Reservations",
+      "item": [
+        {
+          "name": "List VMR Reservations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations?tenantId={{tenantId}}&vmrId={{vmrId}}&state=upcoming&maxResults=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                },
+                {
+                  "key": "vmrId",
+                  "value": "{{vmrId}}"
+                },
+                {
+                  "key": "state",
+                  "value": "upcoming"
+                },
+                {
+                  "key": "maxResults",
+                  "value": "25"
+                }
+              ]
+            },
+            "description": "List reservations by tenant, VMR, state, subject, and time-window filters."
+          }
+        },
+        {
+          "name": "List All VMR Reservations (System Admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations?maxResults=1000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations"
+              ],
+              "query": [
+                {
+                  "key": "maxResults",
+                  "value": "1000"
+                }
+              ]
+            },
+            "description": "List reservations across all tenants. This is intended for system administrators; tenant-authenticated callers are automatically scoped to their tenant."
+          }
+        },
+        {
+          "name": "Create VMR Reservation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"VirtualModelRunnerId\": \"{{vmrId}}\",\n  \"Name\": \"Customer demo reservation\",\n  \"Description\": \"Exclusive VMR access window for a selected identity.\",\n  \"StartUtc\": \"2026-06-16T17:00:00Z\",\n  \"EndUtc\": \"2026-06-16T19:00:00Z\",\n  \"AdmissionDrainLeadMs\": 300000,\n  \"Active\": true,\n  \"Subjects\": [\n    {\n      \"SubjectType\": \"User\",\n      \"SubjectId\": \"{{userId}}\"\n    },\n    {\n      \"SubjectType\": \"Credential\",\n      \"SubjectId\": \"{{credentialId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations"
+              ]
+            },
+            "description": "Create a tenant-scoped VMR reservation. Tenant admins manage reservation windows and participants."
+          }
+        },
+        {
+          "name": "Validate VMR Reservation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"VirtualModelRunnerId\": \"{{vmrId}}\",\n  \"Name\": \"Customer demo reservation\",\n  \"Description\": \"Exclusive VMR access window for a selected identity.\",\n  \"StartUtc\": \"2026-06-16T17:00:00Z\",\n  \"EndUtc\": \"2026-06-16T19:00:00Z\",\n  \"AdmissionDrainLeadMs\": 300000,\n  \"Active\": true,\n  \"Subjects\": [\n    {\n      \"SubjectType\": \"User\",\n      \"SubjectId\": \"{{userId}}\"\n    },\n    {\n      \"SubjectType\": \"Credential\",\n      \"SubjectId\": \"{{credentialId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations",
+                "validate"
+              ]
+            },
+            "description": "Validate the reservation window, VMR reference, participant references, duplicate subjects, and overlap rules without saving."
+          }
+        },
+        {
+          "name": "Validate Overlapping VMR Reservation (Negative)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"VirtualModelRunnerId\": \"{{vmrId}}\",\n  \"Name\": \"Overlapping reservation should fail\",\n  \"Description\": \"Negative example: run after creating a reservation for the same VMR and overlapping UTC window.\",\n  \"StartUtc\": \"2026-06-16T17:30:00Z\",\n  \"EndUtc\": \"2026-06-16T18:30:00Z\",\n  \"AdmissionDrainLeadMs\": 0,\n  \"Active\": true,\n  \"Subjects\": [\n    {\n      \"SubjectType\": \"User\",\n      \"SubjectId\": \"{{userId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations",
+                "validate"
+              ]
+            },
+            "description": "Negative validation example. When an active reservation already exists for the same tenant, VMR, and overlapping UTC window, this should return validation errors or an overlap conflict without saving."
+          }
+        },
+        {
+          "name": "Get VMR Reservation",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations/{{reservationId}}?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations",
+                "{{reservationId}}"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            },
+            "description": "Read one reservation and its nested participants."
+          }
+        },
+        {
+          "name": "Update VMR Reservation",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"VirtualModelRunnerId\": \"{{vmrId}}\",\n  \"Name\": \"Customer demo reservation\",\n  \"Description\": \"Exclusive VMR access window for a selected identity.\",\n  \"StartUtc\": \"2026-06-16T17:00:00Z\",\n  \"EndUtc\": \"2026-06-16T19:00:00Z\",\n  \"AdmissionDrainLeadMs\": 300000,\n  \"Active\": true,\n  \"Subjects\": [\n    {\n      \"SubjectType\": \"User\",\n      \"SubjectId\": \"{{userId}}\"\n    },\n    {\n      \"SubjectType\": \"Credential\",\n      \"SubjectId\": \"{{credentialId}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations/{{reservationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations",
+                "{{reservationId}}"
+              ]
+            },
+            "description": "Update a reservation and replace the participant list."
+          }
+        },
+        {
+          "name": "Deactivate VMR Reservation",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/vmrreservations/{{reservationId}}?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "vmrreservations",
+                "{{reservationId}}"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            },
+            "description": "Soft deactivate a reservation while retaining audit history."
+          }
+        },
+        {
+          "name": "List Reservations For VMR",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/reservations?tenantId={{tenantId}}&state=active",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "reservations"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                },
+                {
+                  "key": "state",
+                  "value": "active"
+                }
+              ]
+            },
+            "description": "List reservation windows scoped to one VMR."
+          }
+        },
+        {
+          "name": "Evaluate Effective Reservation Access",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/reservation-effective?tenantId={{tenantId}}&userId={{userId}}&credentialId={{credentialId}}&atUtc={{reservationAtUtc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "reservation-effective"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                },
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "credentialId",
+                  "value": "{{credentialId}}"
+                },
+                {
+                  "key": "atUtc",
+                  "value": "{{reservationAtUtc}}"
+                }
+              ]
+            },
+            "description": "Explain whether a candidate user or credential would pass the reservation gate at the selected UTC time."
+          }
+        },
+        {
+          "name": "Evaluate Effective Reservation Access (Outsider Negative)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/reservation-effective?tenantId={{tenantId}}&userId={{outsiderUserId}}&credentialId={{outsiderCredentialId}}&atUtc={{reservationAtUtc}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "reservation-effective"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                },
+                {
+                  "key": "userId",
+                  "value": "{{outsiderUserId}}"
+                },
+                {
+                  "key": "credentialId",
+                  "value": "{{outsiderCredentialId}}"
+                },
+                {
+                  "key": "atUtc",
+                  "value": "{{reservationAtUtc}}"
+                }
+              ]
+            },
+            "description": "Negative effective-access example. During an active reservation, a user or credential not listed as a reservation subject should return a denied decision with a reservation reason code."
+          }
+        }
+      ]
+    },
+    {
       "name": "Model Loading",
       "item": [
         {
@@ -2178,6 +2523,21 @@
                   "disabled": true
                 },
                 {
+                  "key": "reservationGuid",
+                  "value": "{{reservationId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "reservationDecision",
+                  "value": "Denied",
+                  "disabled": true
+                },
+                {
+                  "key": "reservationReasonCode",
+                  "value": "ReservationDenied",
+                  "disabled": true
+                },
+                {
                   "key": "statusClass",
                   "value": "4xx",
                   "disabled": true
@@ -2207,7 +2567,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Range\": \"{{analyticsRange}}\",\n  \"StartUtc\": null,\n  \"EndUtc\": null,\n  \"BucketSeconds\": {{analyticsBucketSeconds}},\n  \"Timezone\": \"{{analyticsTimezone}}\",\n  \"TokenUnitCost\": {{analyticsTokenUnitCost}},\n  \"CostCurrency\": \"{{analyticsCostCurrency}}\",\n  \"Metrics\": [\n    \"latency.ttft.avg\",\n    \"tokens.total\",\n    \"cost.estimated\"\n  ],\n  \"GroupBy\": [\n    \"{{analyticsGroupBy}}\"\n  ],\n  \"Filters\": {\n    \"VirtualModelRunnerIds\": [\n      \"{{vmrGuid}}\"\n    ],\n    \"ModelRunnerEndpointIds\": [\n      \"{{endpointGuid}}\"\n    ],\n    \"ModelNames\": [\n      \"{{modelName}}\"\n    ],\n    \"RequestorUserIds\": [],\n    \"CredentialIds\": [],\n    \"ProviderNames\": [],\n    \"StatusClasses\": [],\n    \"StageKinds\": [],\n    \"ModelAccessWouldDeny\": null,\n    \"SuccessfulCompletionsOnly\": true\n  },\n  \"Limit\": {{analyticsLimit}}\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Range\": \"{{analyticsRange}}\",\n  \"StartUtc\": null,\n  \"EndUtc\": null,\n  \"BucketSeconds\": {{analyticsBucketSeconds}},\n  \"Timezone\": \"{{analyticsTimezone}}\",\n  \"TokenUnitCost\": {{analyticsTokenUnitCost}},\n  \"CostCurrency\": \"{{analyticsCostCurrency}}\",\n  \"Metrics\": [\n    \"latency.ttft.avg\",\n    \"tokens.total\",\n    \"cost.estimated\",\n    \"request.reservation_denied\"\n  ],\n  \"GroupBy\": [\n    \"{{analyticsGroupBy}}\"\n  ],\n  \"Filters\": {\n    \"VirtualModelRunnerIds\": [\n      \"{{vmrGuid}}\"\n    ],\n    \"ModelRunnerEndpointIds\": [\n      \"{{endpointGuid}}\"\n    ],\n    \"ModelNames\": [\n      \"{{modelName}}\"\n    ],\n    \"RequestorUserIds\": [],\n    \"CredentialIds\": [],\n    \"ProviderNames\": [],\n    \"ReservationIds\": [\n      \"{{reservationId}}\"\n    ],\n    \"ReservationDecisions\": [\n      \"Denied\"\n    ],\n    \"ReservationReasonCodes\": [\n      \"ReservationDenied\"\n    ],\n    \"StatusClasses\": [],\n    \"StageKinds\": [],\n    \"ModelAccessWouldDeny\": null,\n    \"SuccessfulCompletionsOnly\": true\n  },\n  \"Limit\": {{analyticsLimit}}\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/analytics/query",

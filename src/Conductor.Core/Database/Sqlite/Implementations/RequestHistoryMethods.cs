@@ -37,6 +37,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "modelaccesspolicyguid, modelaccesspolicyname, modelaccessruleguid, modelaccessrulename, modelaccessdecision, modelaccesswoulddeny, " +
                            "modelendpointguid, modelendpointname, modelendpointurl, modeldefinitionguid, modeldefinitionname, " +
                            "modelconfigurationguid, requestedmodel, effectivemodel, requesttype, routingoutcomecode, denialreasoncode, denialreason, " +
+                           "reservationguid, reservationname, reservationdecision, reservationreasoncode, reservationwindowstartutc, reservationwindowendutc, " +
                            "sessionaffinityoutcome, mutationsummary, explanationsummary, requestbodyretained, requestbodyredacted, requestheadersredacted, " +
                            "responsebodyretained, responsebodyredacted, responseheadersredacted, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
                            "httpstatus, firsttokentimems, responsetimems, traceid, providerrequestid, providername, prompttokens, completiontokens, totaltokens, " +
@@ -70,6 +71,12 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            _Driver.FormatNullableString(entry.RoutingOutcomeCode) + ", " +
                            _Driver.FormatNullableString(entry.DenialReasonCode) + ", " +
                            _Driver.FormatNullableString(entry.DenialReason) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationGuid) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationName) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationDecision) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationReasonCode) + ", " +
+                           (entry.ReservationWindowStartUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.ReservationWindowStartUtc.Value) + "'" : "NULL") + ", " +
+                           (entry.ReservationWindowEndUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.ReservationWindowEndUtc.Value) + "'" : "NULL") + ", " +
                            _Driver.FormatNullableString(entry.SessionAffinityOutcome) + ", " +
                            _Driver.FormatNullableString(entry.MutationSummary) + ", " +
                            _Driver.FormatNullableString(entry.ExplanationSummary) + ", " +
@@ -142,6 +149,12 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "routingoutcomecode = " + _Driver.FormatNullableString(entry.RoutingOutcomeCode) + ", " +
                            "denialreasoncode = " + _Driver.FormatNullableString(entry.DenialReasonCode) + ", " +
                            "denialreason = " + _Driver.FormatNullableString(entry.DenialReason) + ", " +
+                           "reservationguid = " + _Driver.FormatNullableString(entry.ReservationGuid) + ", " +
+                           "reservationname = " + _Driver.FormatNullableString(entry.ReservationName) + ", " +
+                           "reservationdecision = " + _Driver.FormatNullableString(entry.ReservationDecision) + ", " +
+                           "reservationreasoncode = " + _Driver.FormatNullableString(entry.ReservationReasonCode) + ", " +
+                           "reservationwindowstartutc = " + (entry.ReservationWindowStartUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.ReservationWindowStartUtc.Value) + "'" : "NULL") + ", " +
+                           "reservationwindowendutc = " + (entry.ReservationWindowEndUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.ReservationWindowEndUtc.Value) + "'" : "NULL") + ", " +
                            "sessionaffinityoutcome = " + _Driver.FormatNullableString(entry.SessionAffinityOutcome) + ", " +
                            "mutationsummary = " + _Driver.FormatNullableString(entry.MutationSummary) + ", " +
                            "explanationsummary = " + _Driver.FormatNullableString(entry.ExplanationSummary) + ", " +
@@ -458,6 +471,18 @@ namespace Conductor.Core.Database.Sqlite.Implementations
             {
                 conditions.Add("denialreasoncode = '" + _Driver.Sanitize(filter.DenialReasonCode) + "'");
             }
+            if (!String.IsNullOrEmpty(filter.ReservationGuid))
+            {
+                conditions.Add("reservationguid = '" + _Driver.Sanitize(filter.ReservationGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationDecision))
+            {
+                conditions.Add("reservationdecision = '" + _Driver.Sanitize(filter.ReservationDecision) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationReasonCode))
+            {
+                conditions.Add("reservationreasoncode = '" + _Driver.Sanitize(filter.ReservationReasonCode) + "'");
+            }
             if (!String.IsNullOrEmpty(filter.SessionAffinityOutcome))
             {
                 conditions.Add("sessionaffinityoutcome = '" + _Driver.Sanitize(filter.SessionAffinityOutcome) + "'");
@@ -549,6 +574,18 @@ namespace Conductor.Core.Database.Sqlite.Implementations
             if (!String.IsNullOrEmpty(filter.DenialReasonCode))
             {
                 conditions.Add("denialreasoncode = '" + _Driver.Sanitize(filter.DenialReasonCode) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationGuid))
+            {
+                conditions.Add("reservationguid = '" + _Driver.Sanitize(filter.ReservationGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationDecision))
+            {
+                conditions.Add("reservationdecision = '" + _Driver.Sanitize(filter.ReservationDecision) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationReasonCode))
+            {
+                conditions.Add("reservationreasoncode = '" + _Driver.Sanitize(filter.ReservationReasonCode) + "'");
             }
             if (!String.IsNullOrEmpty(filter.SessionAffinityOutcome))
             {

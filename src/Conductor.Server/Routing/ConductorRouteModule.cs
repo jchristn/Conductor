@@ -31,6 +31,7 @@ namespace Conductor.Server.Routing
         protected readonly LoadBalancingPolicyController lbpController;
         protected readonly ModelAccessPolicyController mapController;
         protected readonly VirtualModelRunnerController vmrController;
+        protected readonly VirtualModelRunnerReservationController vmrReservationController;
         protected readonly AuthController authController;
         protected readonly AdministratorController adminController;
         protected readonly BackupController backupController;
@@ -53,6 +54,7 @@ namespace Conductor.Server.Routing
             lbpController = context.LoadBalancingPolicyController;
             mapController = context.ModelAccessPolicyController;
             vmrController = context.VirtualModelRunnerController;
+            vmrReservationController = context.VirtualModelRunnerReservationController;
             authController = context.AuthController;
             adminController = context.AdministratorController;
             backupController = context.BackupController;
@@ -113,6 +115,9 @@ namespace Conductor.Server.Routing
                 ModelName = request.Query.Elements.Get("modelName"),
                 MutationSummary = request.Query.Elements.Get("mutationSummary"),
                 DenialReasonCode = request.Query.Elements.Get("denialReasonCode"),
+                ReservationGuid = request.Query.Elements.Get("reservationGuid"),
+                ReservationDecision = request.Query.Elements.Get("reservationDecision"),
+                ReservationReasonCode = request.Query.Elements.Get("reservationReasonCode"),
                 SessionAffinityOutcome = request.Query.Elements.Get("sessionAffinityOutcome"),
                 StatusClass = request.Query.Elements.Get("statusClass"),
                 CreatedAfterUtc = ParseUtcQueryValue(request.Query.Elements.Get("createdAfterUtc")),
@@ -146,6 +151,9 @@ namespace Conductor.Server.Routing
                 ModelName = request.Query.Elements.Get("modelName"),
                 MutationSummary = request.Query.Elements.Get("mutationSummary"),
                 DenialReasonCode = request.Query.Elements.Get("denialReasonCode"),
+                ReservationGuid = request.Query.Elements.Get("reservationGuid"),
+                ReservationDecision = request.Query.Elements.Get("reservationDecision"),
+                ReservationReasonCode = request.Query.Elements.Get("reservationReasonCode"),
                 SessionAffinityOutcome = request.Query.Elements.Get("sessionAffinityOutcome"),
                 StatusClass = request.Query.Elements.Get("statusClass"),
                 RequestorSourceIp = request.Query.Elements.Get("sourceIp"),
@@ -176,6 +184,9 @@ namespace Conductor.Server.Routing
                 ModelAccessRuleGuid = request.Query.Elements.Get("modelAccessRuleGuid"),
                 ModelAccessDecision = request.Query.Elements.Get("modelAccessDecision"),
                 ModelAccessWouldDeny = ParseNullableBool(request.Query.Elements.Get("modelAccessWouldDeny")),
+                ReservationGuid = request.Query.Elements.Get("reservationGuid"),
+                ReservationDecision = request.Query.Elements.Get("reservationDecision"),
+                ReservationReasonCode = request.Query.Elements.Get("reservationReasonCode"),
                 StageKind = request.Query.Elements.Get("stageKind"),
                 StatusClass = request.Query.Elements.Get("statusClass"),
                 Range = request.Query.Elements.Get("range") ?? "lastDay",

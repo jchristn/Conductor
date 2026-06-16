@@ -223,6 +223,33 @@ namespace Conductor.Server.Controllers
             }
         }
 
+        internal async Task RestoreVirtualModelRunnerReservationAsync(VirtualModelRunnerReservation reservation, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
+        {
+            VirtualModelRunnerReservation existing = await _Database.VirtualModelRunnerReservation.ReadAsync(reservation.TenantId, reservation.Id, token).ConfigureAwait(false);
+            bool exists = existing != null;
+
+            if (exists)
+            {
+                switch (conflictResolution)
+                {
+                    case ConflictResolutionMode.Skip:
+                        counter.Skipped++;
+                        break;
+                    case ConflictResolutionMode.Overwrite:
+                        await _Database.VirtualModelRunnerReservation.UpdateAsync(reservation, token).ConfigureAwait(false);
+                        counter.Updated++;
+                        break;
+                    case ConflictResolutionMode.Fail:
+                        throw new InvalidOperationException("Virtual Model Runner Reservation with ID '" + reservation.Id + "' already exists.");
+                }
+            }
+            else
+            {
+                await _Database.VirtualModelRunnerReservation.CreateAsync(reservation, token).ConfigureAwait(false);
+                counter.Created++;
+            }
+        }
+
         internal async Task RestoreLoadBalancingPolicyAsync(LoadBalancingPolicy policy, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
         {
             bool exists = await _Database.LoadBalancingPolicy.ExistsAsync(policy.TenantId, policy.Id, token).ConfigureAwait(false);

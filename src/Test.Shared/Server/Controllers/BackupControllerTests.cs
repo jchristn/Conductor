@@ -1,5 +1,6 @@
 namespace Test.Shared.Server.Controllers
 {
+    using System;
     using System.Collections.Generic;
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
@@ -104,6 +105,106 @@ namespace Test.Shared.Server.Controllers
             ValidationResult validation = await _Controller.ValidateBackup(package).ConfigureAwait(false);
             validation.Summary.ModelAccessPolicyCount.Should().Be(1);
             validation.Summary.ModelAccessRuleCount.Should().Be(1);
+        }
+
+        public async Task CreateBackup_IncludesVirtualModelRunnerReservations()
+        {
+            VirtualModelRunner vmr = await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = TestTenantId,
+                Name = "Reservation Backup VMR",
+                BasePath = "/v1.0/api/reservation-backup/"
+            }).ConfigureAwait(false);
+            UserMaster user = await Database.User.ReadAsync(TestTenantId, TestUserId).ConfigureAwait(false);
+            VirtualModelRunnerReservation reservation = await Database.VirtualModelRunnerReservation.CreateAsync(new VirtualModelRunnerReservation
+            {
+                TenantId = TestTenantId,
+                VirtualModelRunnerId = vmr.Id,
+                Name = "Reservation Backup",
+                StartUtc = DateTime.UtcNow.AddHours(1),
+                EndUtc = DateTime.UtcNow.AddHours(2),
+                Subjects = new List<VirtualModelRunnerReservationSubject>
+                {
+                    new VirtualModelRunnerReservationSubject
+                    {
+                        SubjectType = ReservationSubjectTypeEnum.User,
+                        SubjectId = user.Id
+                    }
+                }
+            }).ConfigureAwait(false);
+
+            BackupPackage package = await _Controller.CreateBackup("admin@example.com").ConfigureAwait(false);
+
+            package.VirtualModelRunnerReservations.Should().ContainSingle(item => item.Id == reservation.Id);
+            package.VirtualModelRunnerReservations[0].Subjects.Should().ContainSingle(item => item.SubjectId == user.Id);
+
+            ValidationResult validation = await _Controller.ValidateBackup(package).ConfigureAwait(false);
+            validation.Summary.VirtualModelRunnerReservationCount.Should().Be(1);
+        }
+
+        public async Task RestoreBackup_WithVirtualModelRunnerReservation_RestoresSubjects()
+        {
+            TenantMetadata tenant = new TenantMetadata
+            {
+                Name = "Restored Reservation Tenant",
+                Active = true
+            };
+            UserMaster user = new UserMaster
+            {
+                TenantId = tenant.Id,
+                FirstName = "Restored",
+                LastName = "Reservation",
+                Email = "restored-reservation-" + Guid.NewGuid().ToString("N") + "@example.com",
+                Password = "password",
+                Active = true
+            };
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                TenantId = tenant.Id,
+                Name = "Restored Reservation VMR",
+                BasePath = "/v1.0/api/restored-reservation/"
+            };
+            VirtualModelRunnerReservation reservation = new VirtualModelRunnerReservation
+            {
+                TenantId = tenant.Id,
+                VirtualModelRunnerId = vmr.Id,
+                Name = "Restored Reservation",
+                StartUtc = DateTime.UtcNow.AddHours(4),
+                EndUtc = DateTime.UtcNow.AddHours(5),
+                Subjects = new List<VirtualModelRunnerReservationSubject>
+                {
+                    new VirtualModelRunnerReservationSubject
+                    {
+                        TenantId = tenant.Id,
+                        SubjectType = ReservationSubjectTypeEnum.User,
+                        SubjectId = user.Id
+                    }
+                }
+            };
+
+            BackupPackage package = new BackupPackage
+            {
+                SchemaVersion = "1.3",
+                Tenants = new List<TenantMetadata> { tenant },
+                Users = new List<UserMaster> { user },
+                VirtualModelRunners = new List<VirtualModelRunner> { vmr },
+                VirtualModelRunnerReservations = new List<VirtualModelRunnerReservation> { reservation }
+            };
+
+            RestoreResult result = await _Controller.RestoreBackup(new RestoreRequest
+            {
+                Package = package,
+                Options = new RestoreOptions
+                {
+                    ConflictResolution = ConflictResolutionMode.Fail
+                }
+            }).ConfigureAwait(false);
+
+            result.Success.Should().BeTrue();
+            result.Summary.VirtualModelRunnerReservations.Created.Should().Be(1);
+            VirtualModelRunnerReservation restored = await Database.VirtualModelRunnerReservation.ReadAsync(tenant.Id, reservation.Id).ConfigureAwait(false);
+            restored.Should().NotBeNull();
+            restored.Subjects.Should().ContainSingle(item => item.SubjectId == user.Id);
         }
 
         public async Task ValidateBackup_WithMissingModelAccessRulePolicy_ReturnsValidationError()

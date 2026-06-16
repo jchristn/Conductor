@@ -23,12 +23,14 @@ namespace Conductor.Sdk.Tests
             {
                 ["range"] = "lastDay",
                 ["tenantId"] = "ten_1",
+                ["reservationGuid"] = "vmrr_1",
+                ["reservationReasonCode"] = "ReservationDenied",
                 ["empty"] = ""
             });
 
             RecordedRequest request = Assert.Single(handler.Requests);
             Assert.Equal(HttpMethod.Get, request.Method);
-            Assert.Equal("https://conductor.local/v1.0/analytics/summary?range=lastDay&tenantId=ten_1", request.Uri.ToString());
+            Assert.Equal("https://conductor.local/v1.0/analytics/summary?range=lastDay&tenantId=ten_1&reservationGuid=vmrr_1&reservationReasonCode=ReservationDenied", request.Uri.ToString());
             Assert.Equal("Bearer", request.AuthorizationScheme);
             Assert.Equal("token-123", request.AuthorizationParameter);
         }
@@ -46,7 +48,8 @@ namespace Conductor.Sdk.Tests
                 TokenUnitCost = 0.01m,
                 Filters = new
                 {
-                    RequestorUserIds = new[] { "usr_1" }
+                    RequestorUserIds = new[] { "usr_1" },
+                    ReservationReasonCodes = new[] { "ReservationDenied" }
                 }
             });
 
@@ -55,6 +58,7 @@ namespace Conductor.Sdk.Tests
             Assert.Equal("https://conductor.local/v1.0/analytics/query", request.Uri.ToString());
             Assert.Contains("\"TokenUnitCost\":0.01", request.Body);
             Assert.Contains("\"RequestorUserIds\":[\"usr_1\"]", request.Body);
+            Assert.Contains("\"ReservationReasonCodes\":[\"ReservationDenied\"]", request.Body);
         }
 
         [Fact]
@@ -102,6 +106,87 @@ namespace Conductor.Sdk.Tests
                 {
                     Assert.Equal(HttpMethod.Delete, request.Method);
                     Assert.Equal("https://conductor.local/v1.0/analytics/reports/asr_1?tenantId=ten_1", request.Uri.ToString());
+                });
+        }
+
+        [Fact]
+        public async Task ReservationMethods_UseExpectedRoutesAndTenantScope()
+        {
+            RecordingHandler handler = new RecordingHandler(request =>
+            {
+                if (request.Method == HttpMethod.Delete) return new HttpResponseMessage(HttpStatusCode.NoContent);
+                return JsonResponse("{}");
+            });
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            object reservation = new
+            {
+                TenantId = "ten_1",
+                VirtualModelRunnerId = "vmr_1",
+                Name = "Benchmark window"
+            };
+
+            using JsonDocument list = await client.ListVirtualModelRunnerReservationsAsync(new Dictionary<string, string>
+            {
+                ["tenantId"] = "ten_1",
+                ["vmrId"] = "vmr_1",
+                ["state"] = "upcoming"
+            });
+            using JsonDocument get = await client.GetVirtualModelRunnerReservationAsync("vmrr_1", "ten_1");
+            using JsonDocument create = await client.CreateVirtualModelRunnerReservationAsync(reservation);
+            using JsonDocument update = await client.UpdateVirtualModelRunnerReservationAsync("vmrr_1", reservation);
+            await client.DeleteVirtualModelRunnerReservationAsync("vmrr_1", "ten_1");
+            using JsonDocument validate = await client.ValidateVirtualModelRunnerReservationAsync(reservation);
+            using JsonDocument scoped = await client.ListReservationsForVirtualModelRunnerAsync("vmr_1", new Dictionary<string, string> { ["tenantId"] = "ten_1" });
+            using JsonDocument effective = await client.GetVirtualModelRunnerReservationEffectiveAsync("vmr_1", new Dictionary<string, string>
+            {
+                ["tenantId"] = "ten_1",
+                ["credentialId"] = "cred_1"
+            });
+
+            Assert.Collection(
+                handler.Requests,
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Get, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/vmrreservations?tenantId=ten_1&vmrId=vmr_1&state=upcoming", request.Uri.ToString());
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Get, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/vmrr_1?tenantId=ten_1", request.Uri.ToString());
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Post, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/vmrreservations", request.Uri.ToString());
+                    Assert.Contains("\"VirtualModelRunnerId\":\"vmr_1\"", request.Body);
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Put, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/vmrr_1", request.Uri.ToString());
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Delete, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/vmrr_1?tenantId=ten_1", request.Uri.ToString());
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Post, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/validate", request.Uri.ToString());
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Get, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/reservations?tenantId=ten_1", request.Uri.ToString());
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Get, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/reservation-effective?tenantId=ten_1&credentialId=cred_1", request.Uri.ToString());
                 });
         }
 

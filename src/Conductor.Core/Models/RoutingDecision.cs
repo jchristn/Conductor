@@ -110,6 +110,36 @@ namespace Conductor.Core.Models
         public string ModelAccessRuleName { get; set; } = null;
 
         /// <summary>
+        /// Reservation identifier when a reservation gate applied.
+        /// </summary>
+        public string ReservationId { get; set; } = null;
+
+        /// <summary>
+        /// Reservation display name when a reservation gate applied.
+        /// </summary>
+        public string ReservationName { get; set; } = null;
+
+        /// <summary>
+        /// Reservation gate decision.
+        /// </summary>
+        public ReservationDecisionEnum? ReservationDecision { get; set; } = null;
+
+        /// <summary>
+        /// Reservation reason code.
+        /// </summary>
+        public string ReservationReasonCode { get; set; } = null;
+
+        /// <summary>
+        /// Reservation window start timestamp.
+        /// </summary>
+        public DateTime? ReservationWindowStartUtc { get; set; } = null;
+
+        /// <summary>
+        /// Reservation window end timestamp.
+        /// </summary>
+        public DateTime? ReservationWindowEndUtc { get; set; } = null;
+
+        /// <summary>
         /// Final model access decision, if evaluated.
         /// </summary>
         public ModelAccessDefaultDecisionEnum? ModelAccessDecision { get; set; } = null;

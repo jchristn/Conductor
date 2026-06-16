@@ -364,6 +364,62 @@ namespace Conductor.Core.Database.SqlServer.Queries
         ";
 
         /// <summary>
+        /// Create virtual model runner reservations table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationsTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='virtualmodelrunnerreservations' AND xtype='U')
+            CREATE TABLE virtualmodelrunnerreservations (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                vmrid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                startutc DATETIME2 NOT NULL,
+                endutc DATETIME2 NOT NULL,
+                admissiondrainleadms INT NOT NULL DEFAULT 0,
+                active BIT NOT NULL DEFAULT 1,
+                createdbyuserid NVARCHAR(48),
+                createdbycredentialid NVARCHAR(48),
+                labels NVARCHAR(MAX),
+                tags NVARCHAR(MAX),
+                metadata NVARCHAR(MAX),
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id),
+                FOREIGN KEY (vmrid) REFERENCES virtualmodelrunners(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmrr_tenant_vmr_window')
+            CREATE INDEX idx_vmrr_tenant_vmr_window ON virtualmodelrunnerreservations(tenantid, vmrid, active, startutc, endutc);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmrr_tenant_created')
+            CREATE INDEX idx_vmrr_tenant_created ON virtualmodelrunnerreservations(tenantid, createdutc);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmrr_tenant_name')
+            CREATE INDEX idx_vmrr_tenant_name ON virtualmodelrunnerreservations(tenantid, name);
+        ";
+
+        /// <summary>
+        /// Create virtual model runner reservation subjects table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationSubjectsTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='virtualmodelrunnerreservationsubjects' AND xtype='U')
+            CREATE TABLE virtualmodelrunnerreservationsubjects (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                reservationid NVARCHAR(48) NOT NULL,
+                subjecttype INT NOT NULL,
+                subjectid NVARCHAR(48) NOT NULL,
+                createdutc DATETIME2 NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id),
+                FOREIGN KEY (reservationid) REFERENCES virtualmodelrunnerreservations(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmrrs_tenant_reservation')
+            CREATE INDEX idx_vmrrs_tenant_reservation ON virtualmodelrunnerreservationsubjects(tenantid, reservationid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmrrs_tenant_subject')
+            CREATE INDEX idx_vmrrs_tenant_subject ON virtualmodelrunnerreservationsubjects(tenantid, subjecttype, subjectid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_vmrrs_unique_subject')
+            CREATE UNIQUE INDEX idx_vmrrs_unique_subject ON virtualmodelrunnerreservationsubjects(reservationid, subjecttype, subjectid);
+        ";
+
+        /// <summary>
         /// Create administrators table.
         /// </summary>
         public static readonly string CreateAdministratorsTable = @"
@@ -418,6 +474,12 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 routingoutcomecode NVARCHAR(128),
                 denialreasoncode NVARCHAR(128),
                 denialreason NVARCHAR(MAX),
+                reservationguid NVARCHAR(48),
+                reservationname NVARCHAR(255),
+                reservationdecision NVARCHAR(32),
+                reservationreasoncode NVARCHAR(128),
+                reservationwindowstartutc DATETIME2,
+                reservationwindowendutc DATETIME2,
                 sessionaffinityoutcome NVARCHAR(128),
                 mutationsummary NVARCHAR(MAX),
                 explanationsummary NVARCHAR(MAX),
@@ -497,6 +559,12 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 httpstatus INT,
                 errortype NVARCHAR(128),
                 errormessage NVARCHAR(MAX),
+                reservationguid NVARCHAR(48),
+                reservationname NVARCHAR(255),
+                reservationdecision NVARCHAR(32),
+                reservationreasoncode NVARCHAR(128),
+                reservationwindowstartutc DATETIME2,
+                reservationwindowendutc DATETIME2,
                 endpointlimiterwaitms INT,
                 requesttoheadersms INT,
                 headerstofirsttokenms INT,
@@ -524,6 +592,8 @@ namespace Conductor.Core.Database.SqlServer.Queries
             CREATE INDEX idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
             IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_vmr_created')
             CREATE INDEX idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_requestanalyticsevents_reservation_created')
+            CREATE INDEX idx_requestanalyticsevents_reservation_created ON requestanalyticsevents(reservationguid, createdutc);
         ";
 
         /// <summary>

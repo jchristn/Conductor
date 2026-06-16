@@ -351,6 +351,11 @@ body {
   border-color: var(--text-secondary);
 }
 
+.btn-icon:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-icon-small {
   background: transparent;
   border: none;
@@ -469,6 +474,21 @@ body {
   gap: 6px;
   min-width: 0;
   max-width: 100%;
+}
+
+.stacked-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.stacked-cell > span:first-child {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .copy-btn {
@@ -1024,6 +1044,10 @@ body {
   color: var(--text-secondary);
 }
 
+.form-help-placeholder {
+  visibility: hidden;
+}
+
 .form-row {
   display: flex;
   gap: 16px;
@@ -1034,6 +1058,28 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
   align-items: end;
+}
+
+.reservation-window-grid,
+.reservation-effective-grid {
+  align-items: start;
+}
+
+.reservation-participants-grid .detail-section-header {
+  margin: 0 0 12px;
+}
+
+.reservation-window-grid .checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  margin-bottom: 0;
+}
+
+.reservation-window-grid .checkbox-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
 }
 
 .checkbox-label {

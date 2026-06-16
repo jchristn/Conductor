@@ -310,6 +310,54 @@ namespace Conductor.Core.Database.Sqlite.Queries
         ";
 
         /// <summary>
+        /// Create virtual model runner reservations table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationsTable = @"
+            CREATE TABLE IF NOT EXISTS virtualmodelrunnerreservations (
+                id TEXT PRIMARY KEY,
+                tenantid TEXT NOT NULL,
+                vmrid TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                startutc TEXT NOT NULL,
+                endutc TEXT NOT NULL,
+                admissiondrainleadms INTEGER NOT NULL DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1,
+                createdbyuserid TEXT,
+                createdbycredentialid TEXT,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                createdutc TEXT NOT NULL,
+                lastupdateutc TEXT NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (vmrid) REFERENCES virtualmodelrunners(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_vmrr_tenant_vmr_window ON virtualmodelrunnerreservations(tenantid, vmrid, active, startutc, endutc);
+            CREATE INDEX IF NOT EXISTS idx_vmrr_tenant_created ON virtualmodelrunnerreservations(tenantid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_vmrr_tenant_name ON virtualmodelrunnerreservations(tenantid, name);
+        ";
+
+        /// <summary>
+        /// Create virtual model runner reservation subjects table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationSubjectsTable = @"
+            CREATE TABLE IF NOT EXISTS virtualmodelrunnerreservationsubjects (
+                id TEXT PRIMARY KEY,
+                tenantid TEXT NOT NULL,
+                reservationid TEXT NOT NULL,
+                subjecttype INTEGER NOT NULL,
+                subjectid TEXT NOT NULL,
+                createdutc TEXT NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (reservationid) REFERENCES virtualmodelrunnerreservations(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_vmrrs_tenant_reservation ON virtualmodelrunnerreservationsubjects(tenantid, reservationid);
+            CREATE INDEX IF NOT EXISTS idx_vmrrs_tenant_subject ON virtualmodelrunnerreservationsubjects(tenantid, subjecttype, subjectid);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_vmrrs_unique_subject ON virtualmodelrunnerreservationsubjects(reservationid, subjecttype, subjectid);
+        ";
+
+        /// <summary>
         /// Create administrators table.
         /// </summary>
         public static readonly string CreateAdministratorsTable = @"
@@ -360,6 +408,12 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 routingoutcomecode TEXT,
                 denialreasoncode TEXT,
                 denialreason TEXT,
+                reservationguid TEXT,
+                reservationname TEXT,
+                reservationdecision TEXT,
+                reservationreasoncode TEXT,
+                reservationwindowstartutc TEXT,
+                reservationwindowendutc TEXT,
                 sessionaffinityoutcome TEXT,
                 mutationsummary TEXT,
                 explanationsummary TEXT,
@@ -433,6 +487,12 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 httpstatus INTEGER,
                 errortype TEXT,
                 errormessage TEXT,
+                reservationguid TEXT,
+                reservationname TEXT,
+                reservationdecision TEXT,
+                reservationreasoncode TEXT,
+                reservationwindowstartutc TEXT,
+                reservationwindowendutc TEXT,
                 endpointlimiterwaitms INTEGER,
                 requesttoheadersms INTEGER,
                 headerstofirsttokenms INTEGER,
@@ -454,6 +514,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
             CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
             CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
             CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
+            CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_reservation_created ON requestanalyticsevents(reservationguid, createdutc);
         ";
 
         /// <summary>

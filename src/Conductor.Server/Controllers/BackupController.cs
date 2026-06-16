@@ -23,6 +23,7 @@ namespace Conductor.Server.Controllers
         private readonly ConfigurationValidationService _ValidationService;
         private readonly BackupEntityRestorer _EntityRestorer;
         private readonly IModelAccessControlService _ModelAccessControlService;
+        private readonly VirtualModelRunnerReservationService _ReservationService;
 
         /// <summary>
         /// Instantiate the backup controller.
@@ -45,6 +46,7 @@ namespace Conductor.Server.Controllers
             _ValidationService = validationService;
             _EntityRestorer = new BackupEntityRestorer(database);
             _ModelAccessControlService = modelAccessControlService;
+            _ReservationService = new VirtualModelRunnerReservationService(database, logging);
         }
 
         /// <summary>
@@ -108,6 +110,15 @@ namespace Conductor.Server.Controllers
                     .EnumerateAsync(tenant.Id, request, token).ConfigureAwait(false);
                 package.VirtualModelRunners.AddRange(vmrs.Data);
 
+                // Virtual Model Runner Reservations
+                EnumerationResult<VirtualModelRunnerReservation> reservations = await Database.VirtualModelRunnerReservation
+                    .EnumerateAsync(new VirtualModelRunnerReservationFilter
+                    {
+                        TenantId = tenant.Id,
+                        MaxResults = request.MaxResults
+                    }, token).ConfigureAwait(false);
+                package.VirtualModelRunnerReservations.AddRange(reservations.Data);
+
                 // Load Balancing Policies
                 EnumerationResult<LoadBalancingPolicy> policies = await Database.LoadBalancingPolicy
                     .EnumerateAsync(tenant.Id, request, token).ConfigureAwait(false);
@@ -140,6 +151,7 @@ namespace Conductor.Server.Controllers
                 package.ModelConfigurations.Count + " model configurations, " +
                 package.ModelRunnerEndpoints.Count + " model runner endpoints, " +
                 package.VirtualModelRunners.Count + " virtual model runners, " +
+                package.VirtualModelRunnerReservations.Count + " virtual model runner reservations, " +
                 package.LoadBalancingPolicies.Count + " load-balancing policies, " +
                 package.ModelAccessPolicies.Count + " model access policies, " +
                 package.ModelAccessRules.Count + " model access rules, " +
@@ -285,6 +297,15 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored virtual model runners: " + result.Summary.VirtualModelRunners.Created + " created, " + result.Summary.VirtualModelRunners.Updated + " updated, " + result.Summary.VirtualModelRunners.Skipped + " skipped");
 
+                // 12. VMR reservations (depends on Tenant + VMR + Users/Credentials)
+                foreach (VirtualModelRunnerReservation reservation in package.VirtualModelRunnerReservations.Where(r => tenantIdsToRestore.Contains(r.TenantId)))
+                {
+                    token.ThrowIfCancellationRequested();
+                    await ValidateBackupReservationAsync(reservation, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreVirtualModelRunnerReservationAsync(reservation, options.ConflictResolution, result.Summary.VirtualModelRunnerReservations, token).ConfigureAwait(false);
+                }
+                Logging.Debug(_Header + "restored virtual model runner reservations: " + result.Summary.VirtualModelRunnerReservations.Created + " created, " + result.Summary.VirtualModelRunnerReservations.Updated + " updated, " + result.Summary.VirtualModelRunnerReservations.Skipped + " skipped");
+
                 Logging.Info(_Header + "restore operation completed successfully");
             }
             catch (OperationCanceledException)
@@ -330,6 +351,7 @@ namespace Conductor.Server.Controllers
                 ModelConfigurationCount = package.ModelConfigurations?.Count ?? 0,
                 ModelRunnerEndpointCount = package.ModelRunnerEndpoints?.Count ?? 0,
                 VirtualModelRunnerCount = package.VirtualModelRunners?.Count ?? 0,
+                VirtualModelRunnerReservationCount = package.VirtualModelRunnerReservations?.Count ?? 0,
                 AdministratorCount = package.Administrators?.Count ?? 0,
                 LoadBalancingPolicyCount = package.LoadBalancingPolicies?.Count ?? 0,
                 ModelAccessPolicyCount = package.ModelAccessPolicies?.Count ?? 0,
@@ -485,6 +507,21 @@ namespace Conductor.Server.Controllers
                 }
             }
 
+            // Check for virtual model runner reservation ID conflicts and references
+            if (package.VirtualModelRunnerReservations != null)
+            {
+                foreach (VirtualModelRunnerReservation reservation in package.VirtualModelRunnerReservations)
+                {
+                    token.ThrowIfCancellationRequested();
+                    await ValidateBackupReservationReferenceAsync(result, package, reservation, token).ConfigureAwait(false);
+
+                    if (await Database.VirtualModelRunnerReservation.ReadAsync(reservation.TenantId, reservation.Id, token).ConfigureAwait(false) != null)
+                    {
+                        result.Conflicts.Add("Virtual Model Runner Reservation '" + reservation.Name + "' (ID: " + reservation.Id + ") already exists.");
+                    }
+                }
+            }
+
             // Check for load-balancing policy ID conflicts
             if (package.LoadBalancingPolicies != null)
             {
@@ -554,6 +591,7 @@ namespace Conductor.Server.Controllers
             package.ModelConfigurations = package.ModelConfigurations;
             package.ModelRunnerEndpoints = package.ModelRunnerEndpoints;
             package.VirtualModelRunners = package.VirtualModelRunners;
+            package.VirtualModelRunnerReservations = package.VirtualModelRunnerReservations;
             package.LoadBalancingPolicies = package.LoadBalancingPolicies;
             package.ModelAccessPolicies = package.ModelAccessPolicies;
             package.ModelAccessRules = package.ModelAccessRules;
@@ -597,6 +635,13 @@ namespace Conductor.Server.Controllers
                 rule.SubjectSelector = rule.SubjectSelector;
                 rule.ResourceSelector = rule.ResourceSelector;
                 rule.Actions = rule.Actions;
+            }
+
+            foreach (VirtualModelRunnerReservation reservation in package.VirtualModelRunnerReservations)
+            {
+                reservation.Subjects = reservation.Subjects;
+                reservation.Labels = reservation.Labels;
+                reservation.Tags = reservation.Tags;
             }
         }
 
@@ -652,6 +697,14 @@ namespace Conductor.Server.Controllers
             }
         }
 
+        private async Task ValidateBackupReservationAsync(VirtualModelRunnerReservation reservation, CancellationToken token)
+        {
+            if (reservation == null) return;
+
+            ResourceValidationResult validation = await _ReservationService.ValidateAsync(reservation.TenantId, reservation, reservation.Id, token).ConfigureAwait(false);
+            ThrowIfInvalid(validation, "virtual model runner reservation");
+        }
+
         private async Task ValidateBackupModelAccessRuleAsync(BackupPackage package, ModelAccessRule rule, CancellationToken token)
         {
             if (rule == null) return;
@@ -700,6 +753,72 @@ namespace Conductor.Server.Controllers
             {
                 result.Errors.Add("Backup model access rule '" + rule.Name + "' (ID: " + rule.Id + ") " + error);
                 result.IsValid = false;
+            }
+        }
+
+        private async Task ValidateBackupReservationReferenceAsync(ValidationResult result, BackupPackage package, VirtualModelRunnerReservation reservation, CancellationToken token)
+        {
+            if (result == null || reservation == null) return;
+
+            if (String.IsNullOrWhiteSpace(reservation.TenantId))
+            {
+                result.Errors.Add("Backup reservation '" + reservation.Name + "' (ID: " + reservation.Id + ") is missing TenantId.");
+                result.IsValid = false;
+                return;
+            }
+
+            if (String.IsNullOrWhiteSpace(reservation.VirtualModelRunnerId))
+            {
+                result.Errors.Add("Backup reservation '" + reservation.Name + "' (ID: " + reservation.Id + ") is missing VirtualModelRunnerId.");
+                result.IsValid = false;
+            }
+            else
+            {
+                string vmrError = await ValidateVirtualModelRunnerReferenceAsync(package, reservation.TenantId, reservation.VirtualModelRunnerId, token).ConfigureAwait(false);
+                if (!String.IsNullOrWhiteSpace(vmrError))
+                {
+                    result.Errors.Add("Backup reservation '" + reservation.Name + "' (ID: " + reservation.Id + ") " + vmrError);
+                    result.IsValid = false;
+                }
+            }
+
+            if (reservation.Subjects == null || reservation.Subjects.Count < 1)
+            {
+                result.Errors.Add("Backup reservation '" + reservation.Name + "' (ID: " + reservation.Id + ") must include at least one subject.");
+                result.IsValid = false;
+                return;
+            }
+
+            foreach (VirtualModelRunnerReservationSubject subject in reservation.Subjects)
+            {
+                if (subject == null) continue;
+                string subjectTenantId = !String.IsNullOrWhiteSpace(subject.TenantId) ? subject.TenantId : reservation.TenantId;
+                if (!String.Equals(subjectTenantId, reservation.TenantId, StringComparison.Ordinal))
+                {
+                    result.Errors.Add("Backup reservation '" + reservation.Name + "' (ID: " + reservation.Id + ") references cross-tenant subject '" + subject.SubjectId + "'.");
+                    result.IsValid = false;
+                    continue;
+                }
+
+                string subjectError = null;
+                if (subject.SubjectType == ReservationSubjectTypeEnum.User)
+                {
+                    subjectError = await ValidateUserReferenceAsync(package, reservation.TenantId, subject.SubjectId, token).ConfigureAwait(false);
+                }
+                else if (subject.SubjectType == ReservationSubjectTypeEnum.Credential)
+                {
+                    subjectError = await ValidateCredentialReferenceAsync(package, reservation.TenantId, subject.SubjectId, token).ConfigureAwait(false);
+                }
+                else
+                {
+                    subjectError = "references unsupported subject type '" + subject.SubjectType + "'.";
+                }
+
+                if (!String.IsNullOrWhiteSpace(subjectError))
+                {
+                    result.Errors.Add("Backup reservation '" + reservation.Name + "' (ID: " + reservation.Id + ") " + subjectError);
+                    result.IsValid = false;
+                }
             }
         }
 

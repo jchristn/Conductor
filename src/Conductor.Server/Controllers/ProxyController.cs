@@ -712,6 +712,7 @@ namespace Conductor.Server.Controllers
                 || !_ModelAccessControlSettings.Enabled
                 || _ModelAccessControlSettings.Mode == ModelAccessEnforcementModeEnum.Disabled)
             {
+                await TryPopulateProxyIdentityAsync(ctx, vmr, cancellationToken).ConfigureAwait(false);
                 return true;
             }
 
@@ -753,6 +754,28 @@ namespace Conductor.Server.Controllers
             return true;
         }
 
+        private async Task TryPopulateProxyIdentityAsync(HttpContextBase ctx, VirtualModelRunner vmr, CancellationToken cancellationToken)
+        {
+            if (!HasProxyCredential(ctx))
+            {
+                return;
+            }
+
+            AuthenticationResult authResult = await AuthService.AuthenticateAsync(ctx, cancellationToken).ConfigureAwait(false);
+            if (!authResult.IsAuthenticated)
+            {
+                return;
+            }
+
+            if (!String.Equals(authResult.Tenant?.Id, vmr.TenantId, StringComparison.Ordinal))
+            {
+                AuditModelAccessAuthenticationFailure(ctx, vmr, "CredentialTenantMismatch");
+                return;
+            }
+
+            ctx.Metadata = authResult;
+        }
+
         private void AuditModelAccessAuthenticationFailure(HttpContextBase ctx, VirtualModelRunner vmr, string reasonCode)
         {
             Logging.Warn(
@@ -773,7 +796,14 @@ namespace Conductor.Server.Controllers
             }
 
             string geminiKey = ctx.Request.Query.Elements.Get("key");
-            return !String.IsNullOrWhiteSpace(geminiKey);
+            if (!String.IsNullOrWhiteSpace(geminiKey))
+            {
+                return true;
+            }
+
+            return !String.IsNullOrWhiteSpace(ctx.Request.Headers.Get("x-tenant-id"))
+                && !String.IsNullOrWhiteSpace(ctx.Request.Headers.Get("x-email"))
+                && !String.IsNullOrWhiteSpace(ctx.Request.Headers.Get("x-password"));
         }
 
         private Dictionary<string, string> GetRequestHeaders(HttpContextBase ctx)

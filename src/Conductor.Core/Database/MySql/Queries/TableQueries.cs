@@ -310,6 +310,54 @@ namespace Conductor.Core.Database.MySql.Queries
         ";
 
         /// <summary>
+        /// Create virtual model runner reservations table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationsTable = @"
+            CREATE TABLE IF NOT EXISTS virtualmodelrunnerreservations (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                vmrid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                startutc DATETIME(3) NOT NULL,
+                endutc DATETIME(3) NOT NULL,
+                admissiondrainleadms INT NOT NULL DEFAULT 0,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                createdbyuserid VARCHAR(48),
+                createdbycredentialid VARCHAR(48),
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                INDEX idx_vmrr_tenant_vmr_window (tenantid, vmrid, active, startutc, endutc),
+                INDEX idx_vmrr_tenant_created (tenantid, createdutc),
+                INDEX idx_vmrr_tenant_name (tenantid, name),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (vmrid) REFERENCES virtualmodelrunners(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create virtual model runner reservation subjects table.
+        /// </summary>
+        public static readonly string CreateVirtualModelRunnerReservationSubjectsTable = @"
+            CREATE TABLE IF NOT EXISTS virtualmodelrunnerreservationsubjects (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                reservationid VARCHAR(48) NOT NULL,
+                subjecttype INT NOT NULL,
+                subjectid VARCHAR(48) NOT NULL,
+                createdutc DATETIME(3) NOT NULL,
+                INDEX idx_vmrrs_tenant_reservation (tenantid, reservationid),
+                INDEX idx_vmrrs_tenant_subject (tenantid, subjecttype, subjectid),
+                UNIQUE KEY idx_vmrrs_unique_subject (reservationid, subjecttype, subjectid),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (reservationid) REFERENCES virtualmodelrunnerreservations(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
         /// Create administrators table.
         /// </summary>
         public static readonly string CreateAdministratorsTable = @"
@@ -360,6 +408,12 @@ namespace Conductor.Core.Database.MySql.Queries
                 routingoutcomecode VARCHAR(128),
                 denialreasoncode VARCHAR(128),
                 denialreason TEXT,
+                reservationguid VARCHAR(48),
+                reservationname VARCHAR(255),
+                reservationdecision VARCHAR(32),
+                reservationreasoncode VARCHAR(128),
+                reservationwindowstartutc DATETIME,
+                reservationwindowendutc DATETIME,
                 sessionaffinityoutcome VARCHAR(128),
                 mutationsummary TEXT,
                 explanationsummary TEXT,
@@ -433,6 +487,12 @@ namespace Conductor.Core.Database.MySql.Queries
                 httpstatus INT,
                 errortype VARCHAR(128),
                 errormessage TEXT,
+                reservationguid VARCHAR(48),
+                reservationname VARCHAR(255),
+                reservationdecision VARCHAR(32),
+                reservationreasoncode VARCHAR(128),
+                reservationwindowstartutc DATETIME,
+                reservationwindowendutc DATETIME,
                 endpointlimiterwaitms INT,
                 requesttoheadersms INT,
                 headerstofirsttokenms INT,
@@ -452,6 +512,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 INDEX idx_requestanalyticsevents_stagekind (stagekind),
                 INDEX idx_requestanalyticsevents_endpoint_created (modelendpointguid, createdutc),
                 INDEX idx_requestanalyticsevents_vmr_created (virtualmodelrunnerguid, createdutc),
+                INDEX idx_requestanalyticsevents_reservation_created (reservationguid, createdutc),
                 FOREIGN KEY (requesthistoryid) REFERENCES requesthistory(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";

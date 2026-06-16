@@ -54,6 +54,18 @@ namespace Test.Shared.Core.Helpers
             id.Should().StartWith(IdGenerator.VirtualModelRunnerPrefix);
             id.Should().StartWith("vmr_");
         }
+        public void NewVirtualModelRunnerReservationId_StartsWithCorrectPrefix()
+        {
+            string id = IdGenerator.NewVirtualModelRunnerReservationId();
+            id.Should().StartWith(IdGenerator.VirtualModelRunnerReservationPrefix);
+            id.Should().StartWith("vmrr_");
+        }
+        public void NewVirtualModelRunnerReservationSubjectId_StartsWithCorrectPrefix()
+        {
+            string id = IdGenerator.NewVirtualModelRunnerReservationSubjectId();
+            id.Should().StartWith(IdGenerator.VirtualModelRunnerReservationSubjectPrefix);
+            id.Should().StartWith("vmrrs_");
+        }
         public void NewAdministratorId_StartsWithCorrectPrefix()
         {
             string id = IdGenerator.NewAdministratorId();

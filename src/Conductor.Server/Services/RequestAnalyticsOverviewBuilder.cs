@@ -93,6 +93,8 @@ namespace Conductor.Server.Services
                 ModelAccessDefaultAllowedCount = entries.Count(item => IsModelAccessPermit(item) && String.IsNullOrEmpty(item.ModelAccessRuleGuid)),
                 ModelAccessDefaultDeniedCount = entries.Count(item => IsModelAccessDeny(item) && String.IsNullOrEmpty(item.ModelAccessRuleGuid)),
                 ModelAccessEvaluatorErrorCount = entries.Count(IsModelAccessEvaluatorError),
+                ReservationDeniedCount = entries.Count(IsReservationDenied),
+                ReservationDenialCounts = BuildReservationDenialCounts(entries),
                 AverageDurationMs = durations.Count > 0 ? Decimal.Round((decimal)durations.Average(), 2) : null,
                 P50DurationMs = Percentile(durations, 0.50m),
                 P95DurationMs = Percentile(durations, 0.95m),
@@ -302,6 +304,22 @@ namespace Conductor.Server.Services
             return !String.IsNullOrEmpty(entry?.DenialReasonCode)
                 && entry.DenialReasonCode.IndexOf("ModelAccess", StringComparison.OrdinalIgnoreCase) >= 0
                 && entry.DenialReasonCode.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsReservationDenied(RequestHistoryEntry entry)
+        {
+            return String.Equals(entry?.ReservationReasonCode, "ReservationDenied", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(entry?.ReservationReasonCode, "ReservationDrainDenied", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(entry?.ReservationReasonCode, "ReservationAuthenticationRequired", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(entry?.ReservationReasonCode, "ReservationConflict", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static Dictionary<string, long> BuildReservationDenialCounts(List<RequestHistoryEntry> entries)
+        {
+            return entries
+                .Where(IsReservationDenied)
+                .GroupBy(item => String.IsNullOrEmpty(item.ReservationGuid) ? "Unknown" : item.ReservationGuid)
+                .ToDictionary(group => group.Key, group => (long)group.Count(), StringComparer.InvariantCultureIgnoreCase);
         }
     }
 }

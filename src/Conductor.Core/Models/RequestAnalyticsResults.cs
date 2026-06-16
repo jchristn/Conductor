@@ -110,6 +110,16 @@ namespace Conductor.Core.Models
         public long ModelAccessEvaluatorErrorCount { get; set; }
 
         /// <summary>
+        /// Requests denied by an active reservation gate.
+        /// </summary>
+        public long ReservationDeniedCount { get; set; }
+
+        /// <summary>
+        /// Reservation-denial counts keyed by reservation GUID or "Unknown".
+        /// </summary>
+        public Dictionary<string, long> ReservationDenialCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
         /// Average response duration.
         /// </summary>
         public decimal? AverageDurationMs { get; set; }

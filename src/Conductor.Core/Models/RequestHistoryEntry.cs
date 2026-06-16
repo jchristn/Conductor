@@ -164,6 +164,36 @@ namespace Conductor.Core.Models
         public string DenialReason { get; set; } = null;
 
         /// <summary>
+        /// Reservation GUID when a reservation gate applied. May be null.
+        /// </summary>
+        public string ReservationGuid { get; set; } = null;
+
+        /// <summary>
+        /// Reservation name when a reservation gate applied. May be null.
+        /// </summary>
+        public string ReservationName { get; set; } = null;
+
+        /// <summary>
+        /// Reservation decision captured during routing. May be null.
+        /// </summary>
+        public string ReservationDecision { get; set; } = null;
+
+        /// <summary>
+        /// Reservation reason code captured during routing. May be null.
+        /// </summary>
+        public string ReservationReasonCode { get; set; } = null;
+
+        /// <summary>
+        /// Reservation window start timestamp. May be null.
+        /// </summary>
+        public DateTime? ReservationWindowStartUtc { get; set; } = null;
+
+        /// <summary>
+        /// Reservation window end timestamp. May be null.
+        /// </summary>
+        public DateTime? ReservationWindowEndUtc { get; set; } = null;
+
+        /// <summary>
         /// Session-affinity outcome for this request. May be null.
         /// </summary>
         public string SessionAffinityOutcome { get; set; } = null;
@@ -411,6 +441,12 @@ namespace Conductor.Core.Models
                 RoutingOutcomeCode = DataTableHelper.GetStringValue(row, "routingoutcomecode"),
                 DenialReasonCode = DataTableHelper.GetStringValue(row, "denialreasoncode"),
                 DenialReason = DataTableHelper.GetStringValue(row, "denialreason"),
+                ReservationGuid = DataTableHelper.GetStringValue(row, "reservationguid"),
+                ReservationName = DataTableHelper.GetStringValue(row, "reservationname"),
+                ReservationDecision = DataTableHelper.GetStringValue(row, "reservationdecision"),
+                ReservationReasonCode = DataTableHelper.GetStringValue(row, "reservationreasoncode"),
+                ReservationWindowStartUtc = DataTableHelper.GetNullableDateTimeValue(row, "reservationwindowstartutc"),
+                ReservationWindowEndUtc = DataTableHelper.GetNullableDateTimeValue(row, "reservationwindowendutc"),
                 SessionAffinityOutcome = DataTableHelper.GetStringValue(row, "sessionaffinityoutcome"),
                 MutationSummary = DataTableHelper.GetStringValue(row, "mutationsummary"),
                 ExplanationSummary = DataTableHelper.GetStringValue(row, "explanationsummary"),

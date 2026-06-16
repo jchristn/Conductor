@@ -196,6 +196,9 @@ namespace Conductor.Server.Routing
                 .WithParameter(OpenApiParameterMetadata.Query("requestorUserGuid", "Filter by requestor user GUID", false))
                 .WithParameter(OpenApiParameterMetadata.Query("credentialGuid", "Filter by credential GUID", false))
                 .WithParameter(OpenApiParameterMetadata.Query("providerName", "Filter by provider name", false))
+                .WithParameter(OpenApiParameterMetadata.Query("reservationGuid", "Filter by VMR reservation GUID", false))
+                .WithParameter(OpenApiParameterMetadata.Query("reservationDecision", "Filter by reservation decision such as Allowed or Denied", false))
+                .WithParameter(OpenApiParameterMetadata.Query("reservationReasonCode", "Filter by reservation reason code", false))
                 .WithParameter(OpenApiParameterMetadata.Query("statusClass", "Filter by HTTP status class", false))
                 .WithParameter(OpenApiParameterMetadata.Query("stageKind", "Filter by normalized stage kind when available", false))
                 .WithParameter(OpenApiParameterMetadata.Query("modelAccessWouldDeny", "Filter would-deny model access monitor results", false, OpenApiSchemaMetadata.Boolean()))
@@ -261,6 +264,9 @@ namespace Conductor.Server.Routing
             query.Filters.RequestorUserIds = ParseCsv(request.Query.Elements.Get("requestorUserGuid") ?? request.Query.Elements.Get("userId"));
             query.Filters.CredentialIds = ParseCsv(request.Query.Elements.Get("credentialGuid") ?? request.Query.Elements.Get("credentialId"));
             query.Filters.ProviderNames = ParseCsv(request.Query.Elements.Get("providerName"));
+            query.Filters.ReservationIds = ParseCsv(request.Query.Elements.Get("reservationGuid") ?? request.Query.Elements.Get("reservationId"));
+            query.Filters.ReservationDecisions = ParseCsv(request.Query.Elements.Get("reservationDecision"));
+            query.Filters.ReservationReasonCodes = ParseCsv(request.Query.Elements.Get("reservationReasonCode"));
             query.Filters.StatusClasses = ParseCsv(request.Query.Elements.Get("statusClass"));
             query.Filters.StageKinds = ParseCsv(request.Query.Elements.Get("stageKind"));
             query.Filters.ModelAccessWouldDeny = ParseNullableBool(request.Query.Elements.Get("modelAccessWouldDeny"));

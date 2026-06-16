@@ -289,6 +289,12 @@ CREATE TABLE IF NOT EXISTS requesthistory (
     routingoutcomecode TEXT,
     denialreasoncode TEXT,
     denialreason TEXT,
+    reservationguid TEXT,
+    reservationname TEXT,
+    reservationdecision TEXT,
+    reservationreasoncode TEXT,
+    reservationwindowstartutc TEXT,
+    reservationwindowendutc TEXT,
     sessionaffinityoutcome TEXT,
     mutationsummary TEXT,
     explanationsummary TEXT,
@@ -357,6 +363,12 @@ CREATE TABLE IF NOT EXISTS requestanalyticsevents (
     httpstatus INTEGER,
     errortype TEXT,
     errormessage TEXT,
+    reservationguid TEXT,
+    reservationname TEXT,
+    reservationdecision TEXT,
+    reservationreasoncode TEXT,
+    reservationwindowstartutc TEXT,
+    reservationwindowendutc TEXT,
     endpointlimiterwaitms INTEGER,
     requesttoheadersms INTEGER,
     headerstofirsttokenms INTEGER,
@@ -378,6 +390,7 @@ CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalytic
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
+CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_reservation_created ON requestanalyticsevents(reservationguid, createdutc);
 
 CREATE TABLE IF NOT EXISTS analyticssavedreports (
     id TEXT PRIMARY KEY,

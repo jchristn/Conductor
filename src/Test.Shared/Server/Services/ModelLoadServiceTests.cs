@@ -1,5 +1,6 @@
 namespace Test.Shared.Server.Services
 {
+    using System;
     using System.Collections.Generic;
     using System.Threading;
     using System.Threading.Tasks;
@@ -9,6 +10,7 @@ namespace Test.Shared.Server.Services
     using Conductor.Core.Responses;
     using Conductor.Server.Services;
     using FluentAssertions;
+    using WatsonWebserver.Core;
 
     /// <summary>
     /// Unit tests for model load orchestration.
@@ -141,6 +143,54 @@ namespace Test.Shared.Server.Services
             response.Success.Should().BeTrue();
             response.Model.Should().Be("gemma3:4b");
             response.EndpointResults.Should().ContainSingle(item => item.OutcomeCode == ModelLoadOutcomeEnum.DryRun);
+        }
+
+        public async Task LoadVirtualModelRunnerAsync_WithActiveReservation_RequiresParticipantIdentity()
+        {
+            ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.CreateAsync(
+                CreateEndpoint("Reservation Load Endpoint", ApiTypeEnum.Ollama, true)).ConfigureAwait(false);
+            VirtualModelRunner vmr = await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = TestTenantId,
+                Name = "Reservation Load VMR",
+                BasePath = "/v1.0/api/reservation-load-vmr/",
+                ApiType = ApiTypeEnum.Ollama,
+                ModelRunnerEndpointIds = new List<string> { endpoint.Id }
+            }).ConfigureAwait(false);
+            await Database.VirtualModelRunnerReservation.CreateAsync(new VirtualModelRunnerReservation
+            {
+                TenantId = TestTenantId,
+                VirtualModelRunnerId = vmr.Id,
+                Name = "Load Reservation",
+                StartUtc = DateTime.UtcNow.AddMinutes(-5),
+                EndUtc = DateTime.UtcNow.AddHours(1),
+                Subjects = new List<VirtualModelRunnerReservationSubject>
+                {
+                    new VirtualModelRunnerReservationSubject
+                    {
+                        SubjectType = ReservationSubjectTypeEnum.User,
+                        SubjectId = TestUserId
+                    }
+                }
+            }).ConfigureAwait(false);
+            ModelLoadRequest request = new ModelLoadRequest
+            {
+                Model = "gemma3:4b",
+                TargetMode = ModelLoadTargetModeEnum.AllConfiguredEndpoints,
+                DryRun = true
+            };
+
+            Func<Task> anonymousLoad = async () => await _Service.LoadVirtualModelRunnerAsync(vmr, request).ConfigureAwait(false);
+            await anonymousLoad.Should().ThrowAsync<WebserverException>().WithMessage("*reserved*").ConfigureAwait(false);
+
+            ModelLoadResponse participantResponse = await _Service.LoadVirtualModelRunnerAsync(vmr, request, new RequestContext
+            {
+                TenantId = TestTenantId,
+                UserId = TestUserId
+            }).ConfigureAwait(false);
+
+            participantResponse.Success.Should().BeTrue();
+            participantResponse.EndpointResults.Should().ContainSingle(item => item.OutcomeCode == ModelLoadOutcomeEnum.DryRun);
         }
 
         private ModelRunnerEndpoint CreateEndpoint(string name, ApiTypeEnum apiType, bool active)

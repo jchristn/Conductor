@@ -36,6 +36,7 @@ namespace Conductor.Core.Database.SqlServer
             ModelDefinition = new ModelDefinitionMethods(this);
             ModelConfiguration = new ModelConfigurationMethods(this);
             VirtualModelRunner = new VirtualModelRunnerMethods(this);
+            VirtualModelRunnerReservation = new Conductor.Core.Database.VirtualModelRunnerReservationMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.SqlServer);
             LoadBalancingPolicy = new LoadBalancingPolicyMethods(this);
             ModelAccessPolicy = new Conductor.Core.Database.ModelAccessPolicyMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.SqlServer);
             Administrator = new AdministratorMethods(this);
@@ -63,6 +64,8 @@ namespace Conductor.Core.Database.SqlServer
                 TableQueries.CreateModelAccessPoliciesTable,
                 TableQueries.CreateModelAccessRulesTable,
                 TableQueries.CreateVirtualModelRunnersTable,
+                TableQueries.CreateVirtualModelRunnerReservationsTable,
+                TableQueries.CreateVirtualModelRunnerReservationSubjectsTable,
                 TableQueries.CreateAdministratorsTable,
                 TableQueries.CreateRequestHistoryTable,
                 TableQueries.CreateRequestAnalyticsEventsTable,
@@ -111,6 +114,12 @@ namespace Conductor.Core.Database.SqlServer
             await EnsureColumnAsync("requesthistory", "routingoutcomecode", "ALTER TABLE requesthistory ADD routingoutcomecode NVARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "denialreasoncode", "ALTER TABLE requesthistory ADD denialreasoncode NVARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "denialreason", "ALTER TABLE requesthistory ADD denialreason NVARCHAR(MAX);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "reservationguid", "ALTER TABLE requesthistory ADD reservationguid NVARCHAR(48);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "reservationname", "ALTER TABLE requesthistory ADD reservationname NVARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "reservationdecision", "ALTER TABLE requesthistory ADD reservationdecision NVARCHAR(32);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "reservationreasoncode", "ALTER TABLE requesthistory ADD reservationreasoncode NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "reservationwindowstartutc", "ALTER TABLE requesthistory ADD reservationwindowstartutc DATETIME2;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "reservationwindowendutc", "ALTER TABLE requesthistory ADD reservationwindowendutc DATETIME2;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "sessionaffinityoutcome", "ALTER TABLE requesthistory ADD sessionaffinityoutcome NVARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "mutationsummary", "ALTER TABLE requesthistory ADD mutationsummary NVARCHAR(MAX);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "explanationsummary", "ALTER TABLE requesthistory ADD explanationsummary NVARCHAR(MAX);", token).ConfigureAwait(false);
@@ -133,6 +142,12 @@ namespace Conductor.Core.Database.SqlServer
             await EnsureColumnAsync("requesthistory", "dominantstagekind", "ALTER TABLE requesthistory ADD dominantstagekind NVARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "dominantstagedurationms", "ALTER TABLE requesthistory ADD dominantstagedurationms INT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "analyticsfailurecode", "ALTER TABLE requesthistory ADD analyticsfailurecode NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requestanalyticsevents", "reservationguid", "ALTER TABLE requestanalyticsevents ADD reservationguid NVARCHAR(48);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requestanalyticsevents", "reservationname", "ALTER TABLE requestanalyticsevents ADD reservationname NVARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requestanalyticsevents", "reservationdecision", "ALTER TABLE requestanalyticsevents ADD reservationdecision NVARCHAR(32);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requestanalyticsevents", "reservationreasoncode", "ALTER TABLE requestanalyticsevents ADD reservationreasoncode NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requestanalyticsevents", "reservationwindowstartutc", "ALTER TABLE requestanalyticsevents ADD reservationwindowstartutc DATETIME2;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requestanalyticsevents", "reservationwindowendutc", "ALTER TABLE requestanalyticsevents ADD reservationwindowendutc DATETIME2;", token).ConfigureAwait(false);
 
             await EnsureIndexAsync("idx_requesthistory_requestoruserguid", "CREATE INDEX idx_requesthistory_requestoruserguid ON requesthistory(requestoruserguid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_credentialguid", "CREATE INDEX idx_requesthistory_credentialguid ON requesthistory(credentialguid);", token).ConfigureAwait(false);
@@ -144,6 +159,8 @@ namespace Conductor.Core.Database.SqlServer
             await EnsureIndexAsync("idx_requesthistory_requestedmodel", "CREATE INDEX idx_requesthistory_requestedmodel ON requesthistory(requestedmodel);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_effectivemodel", "CREATE INDEX idx_requesthistory_effectivemodel ON requesthistory(effectivemodel);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_denialreasoncode", "CREATE INDEX idx_requesthistory_denialreasoncode ON requesthistory(denialreasoncode);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_reservationguid", "CREATE INDEX idx_requesthistory_reservationguid ON requesthistory(reservationguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_reservationreasoncode", "CREATE INDEX idx_requesthistory_reservationreasoncode ON requesthistory(reservationreasoncode);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_sessionaffinityoutcome", "CREATE INDEX idx_requesthistory_sessionaffinityoutcome ON requesthistory(sessionaffinityoutcome);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_traceid", "CREATE INDEX idx_requesthistory_traceid ON requesthistory(traceid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_providerrequestid", "CREATE INDEX idx_requesthistory_providerrequestid ON requesthistory(providerrequestid);", token).ConfigureAwait(false);
@@ -157,6 +174,7 @@ namespace Conductor.Core.Database.SqlServer
             await EnsureIndexAsync("idx_requestanalyticsevents_stagekind", "CREATE INDEX idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_endpoint_created", "CREATE INDEX idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_vmr_created", "CREATE INDEX idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requestanalyticsevents_reservation_created", "CREATE INDEX idx_requestanalyticsevents_reservation_created ON requestanalyticsevents(reservationguid, createdutc);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_vmr_modelaccesspolicyid", "CREATE INDEX idx_vmr_modelaccesspolicyid ON virtualmodelrunners(modelaccesspolicyid);", token).ConfigureAwait(false);
         }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import DataTable from '../components/DataTable';
@@ -57,6 +58,43 @@ function getServiceStatePresentation(value) {
   }
 }
 
+function getReservationStateForVmr(vmr, reservations) {
+  const vmrReservations = (reservations || []).filter((reservation) =>
+    reservation.VirtualModelRunnerId === vmr.Id && reservation.Active !== false
+  );
+  const now = Date.now();
+  const active = vmrReservations.filter((reservation) => {
+    const start = new Date(reservation.StartUtc).getTime();
+    const end = new Date(reservation.EndUtc).getTime();
+    return !Number.isNaN(start) && !Number.isNaN(end) && start <= now && now < end;
+  });
+
+  if (active.length > 1) {
+    return { label: 'Conflict', tone: 'danger', title: `${active.length} active reservations overlap this VMR.` };
+  }
+  if (active.length === 1) {
+    return { label: 'Reserved', tone: 'warning', title: `${active[0].Name || active[0].Id} is active until ${new Date(active[0].EndUtc).toISOString()}.` };
+  }
+
+  const drain = vmrReservations.find((reservation) => {
+    const start = new Date(reservation.StartUtc).getTime();
+    const lead = Number(reservation.AdmissionDrainLeadMs || 0);
+    return lead > 0 && !Number.isNaN(start) && now >= start - lead && now < start;
+  });
+  if (drain) {
+    return { label: 'Drain Soon', tone: 'warning', title: `${drain.Name || drain.Id} starts at ${new Date(drain.StartUtc).toISOString()}.` };
+  }
+
+  const upcoming = vmrReservations
+    .filter((reservation) => new Date(reservation.StartUtc).getTime() > now)
+    .sort((a, b) => new Date(a.StartUtc).getTime() - new Date(b.StartUtc).getTime())[0];
+  if (upcoming) {
+    return { label: 'Upcoming', tone: 'neutral', title: `${upcoming.Name || upcoming.Id} starts at ${new Date(upcoming.StartUtc).toISOString()}.` };
+  }
+
+  return { label: 'Open', tone: 'success', title: 'No active or upcoming reservation applies to this VMR.' };
+}
+
 function getDefaultExplainRequest(apiType) {
   switch (apiType) {
     case 'Gemini':
@@ -89,7 +127,9 @@ function getDefaultExplainRequest(apiType) {
 function VirtualModelRunners() {
   const { api, setError, serverUrl } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
+  const navigate = useNavigate();
   const [vmrs, setVmrs] = useState([]);
+  const [reservations, setReservations] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [endpoints, setEndpoints] = useState([]);
   const [configurations, setConfigurations] = useState([]);
@@ -147,8 +187,9 @@ function VirtualModelRunners() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [vmrResult, tenantsResult, endpointsResult, configurationsResult, definitionsResult, policiesResult, modelAccessPolicyResult] = await Promise.all([
+      const [vmrResult, reservationResult, tenantsResult, endpointsResult, configurationsResult, definitionsResult, policiesResult, modelAccessPolicyResult] = await Promise.all([
         api.listVirtualModelRunners({ maxResults: 1000 }),
+        api.listVirtualModelRunnerReservations({ maxResults: 1000 }),
         api.listTenants({ maxResults: 1000 }),
         api.listModelRunnerEndpoints({ maxResults: 1000 }),
         api.listModelConfigurations({ maxResults: 1000 }),
@@ -157,6 +198,7 @@ function VirtualModelRunners() {
         api.listModelAccessPolicies({ maxResults: 1000 })
       ]);
       setVmrs(vmrResult.Data || []);
+      setReservations(reservationResult.Data || []);
       setTenants(tenantsResult.Data || []);
       setEndpoints(endpointsResult.Data || []);
       setConfigurations(configurationsResult.Data || []);
@@ -261,6 +303,10 @@ function VirtualModelRunners() {
   const handleOpenLoadModel = (vmr) => {
     setSelectedVmr(vmr);
     setShowLoadModel(true);
+  };
+
+  const handleViewReservations = (vmr) => {
+    navigate(`/reservations?vmrId=${encodeURIComponent(vmr.Id)}`);
   };
 
   const handleDelete = async () => {
@@ -572,6 +618,17 @@ function VirtualModelRunners() {
         ? (modelAccessPolicies.find((policy) => policy.Id === item.ModelAccessPolicyId)?.Name || item.ModelAccessPolicyId)
         : 'none'
     },
+    {
+      key: 'ReservationState',
+      label: 'Reservation',
+      tooltip: 'Current reservation state for this VMR',
+      width: '130px',
+      render: (item) => {
+        const state = getReservationStateForVmr(item, reservations);
+        return <span className={`service-state-badge ${state.tone}`} title={state.title}>{state.label}</span>;
+      },
+      filterValue: (item) => getReservationStateForVmr(item, reservations).label
+    },
       {
         key: 'Endpoints',
         label: 'Endpoints',
@@ -618,6 +675,7 @@ function VirtualModelRunners() {
               { label: 'Health Data', onClick: () => handleViewHealth(item) },
               { label: 'Effective Config', onClick: () => handleViewEffectiveConfiguration(item) },
               { label: 'Explain Routing', onClick: () => handleOpenExplainRouting(item) },
+              { label: 'Reservations', onClick: () => handleViewReservations(item) },
               { label: 'Load Model', onClick: () => handleOpenLoadModel(item) },
               { label: 'Edit', onClick: () => handleEdit(item) },
               { divider: true },
@@ -627,6 +685,12 @@ function VirtualModelRunners() {
       )
     }
   ];
+
+  const selectedVmrReservations = selectedVmr
+    ? reservations
+      .filter((reservation) => reservation.VirtualModelRunnerId === selectedVmr.Id)
+      .sort((a, b) => new Date(a.StartUtc).getTime() - new Date(b.StartUtc).getTime())
+    : [];
 
   return (
     <div className="view-container">
@@ -1213,6 +1277,24 @@ function VirtualModelRunners() {
                   <div className="detail-item"><label>Request History</label><span>{effectiveConfig.RequestHistoryEnabled ? 'Enabled' : 'Disabled'}</span></div>
                   <div className="detail-item"><label>Session Affinity</label><span>{effectiveConfig.SessionAffinity?.Mode || 'None'}</span></div>
                 </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Reservations</h3>
+                {selectedVmrReservations.length < 1 ? (
+                  <p className="no-items">No reservations are scheduled for this VMR.</p>
+                ) : (
+                  <div className="summary-badge-row">
+                    {selectedVmrReservations.slice(0, 6).map((reservation) => {
+                      const state = getReservationStateForVmr(selectedVmr, [reservation]);
+                      return (
+                        <span className={`service-state-badge ${state.tone}`} key={reservation.Id} title={`${reservation.Name || reservation.Id}: ${new Date(reservation.StartUtc).toISOString()} to ${new Date(reservation.EndUtc).toISOString()}`}>
+                          {reservation.Name || reservation.Id}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="detail-section">

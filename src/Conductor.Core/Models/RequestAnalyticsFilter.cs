@@ -58,6 +58,21 @@ namespace Conductor.Core.Models
         public bool? ModelAccessWouldDeny { get; set; } = null;
 
         /// <summary>
+        /// Reservation GUID.
+        /// </summary>
+        public string ReservationGuid { get; set; } = null;
+
+        /// <summary>
+        /// Reservation decision.
+        /// </summary>
+        public string ReservationDecision { get; set; } = null;
+
+        /// <summary>
+        /// Reservation reason code.
+        /// </summary>
+        public string ReservationReasonCode { get; set; } = null;
+
+        /// <summary>
         /// Stage kind.
         /// </summary>
         public string StageKind { get; set; } = null;

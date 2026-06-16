@@ -24,6 +24,7 @@ namespace Conductor.Server.Services
             "request.successful_completions",
             "request.failed",
             "request.denied",
+            "request.reservation_denied",
             "request.rate_limited",
             "latency.ttft.avg",
             "latency.ttft.p50",
@@ -55,7 +56,12 @@ namespace Conductor.Server.Services
             "UserId",
             "CredentialId",
             "ProviderName",
-            "Provider"
+            "Provider",
+            "ReservationId",
+            "ReservationGuid",
+            "ReservationName",
+            "ReservationDecision",
+            "ReservationReasonCode"
         };
 
         private static readonly HashSet<string> SupportedRangeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -123,6 +129,7 @@ namespace Conductor.Server.Services
             result.Metrics.Add(CreateCatalogItem("request.successful_completions", "Successful completions", "Requests with a successful completion outcome.", "count", true));
             result.Metrics.Add(CreateCatalogItem("request.failed", "Failed requests", "Requests with failed outcomes.", "count", true));
             result.Metrics.Add(CreateCatalogItem("request.denied", "Denied requests", "Requests denied by policy or routing.", "count", true));
+            result.Metrics.Add(CreateCatalogItem("request.reservation_denied", "Reservation denials", "Requests explicitly denied by an active VMR reservation gate.", "count", true));
             result.Metrics.Add(CreateCatalogItem("request.rate_limited", "Rate-limited requests", "Requests that returned HTTP 429.", "count", true));
             result.Metrics.Add(CreateCatalogItem("latency.ttft.avg", "Average TTFT", "Average time from Conductor request received to first token received.", "milliseconds", true));
             result.Metrics.Add(CreateCatalogItem("latency.ttft.p50", "P50 TTFT", "P50 time from Conductor request received to first token received.", "milliseconds", true));
@@ -145,6 +152,10 @@ namespace Conductor.Server.Services
             result.Dimensions.Add(CreateCatalogItem("RequestorUserId", "User", "Requestor user ID.", null, true));
             result.Dimensions.Add(CreateCatalogItem("CredentialId", "Credential", "Credential ID.", null, true));
             result.Dimensions.Add(CreateCatalogItem("ProviderName", "Provider", "Provider family.", null, true));
+            result.Dimensions.Add(CreateCatalogItem("ReservationGuid", "Reservation", "VMR reservation ID.", null, true));
+            result.Dimensions.Add(CreateCatalogItem("ReservationName", "Reservation name", "VMR reservation display name.", null, true));
+            result.Dimensions.Add(CreateCatalogItem("ReservationDecision", "Reservation decision", "Reservation gate decision.", null, true));
+            result.Dimensions.Add(CreateCatalogItem("ReservationReasonCode", "Reservation reason", "Reservation gate reason code.", null, true));
 
             result.Ranges.Add(CreateCatalogItem("lastHour", "Last hour", "Last one hour.", null, true));
             result.Ranges.Add(CreateCatalogItem("lastDay", "Last day", "Last 24 hours.", null, true));
@@ -306,6 +317,9 @@ namespace Conductor.Server.Services
             normalized.Filters.RequestorUserIds = NormalizeStringList(normalized.Filters.RequestorUserIds);
             normalized.Filters.CredentialIds = NormalizeStringList(normalized.Filters.CredentialIds);
             normalized.Filters.ProviderNames = NormalizeStringList(normalized.Filters.ProviderNames);
+            normalized.Filters.ReservationIds = NormalizeStringList(normalized.Filters.ReservationIds);
+            normalized.Filters.ReservationDecisions = NormalizeStringList(normalized.Filters.ReservationDecisions);
+            normalized.Filters.ReservationReasonCodes = NormalizeStringList(normalized.Filters.ReservationReasonCodes);
             normalized.Filters.StatusClasses = NormalizeStringList(normalized.Filters.StatusClasses);
             normalized.Filters.StageKinds = NormalizeStringList(normalized.Filters.StageKinds);
 
@@ -330,6 +344,9 @@ namespace Conductor.Server.Services
                 RequestorUserGuid = GetSingleFilterValue(request.Filters.RequestorUserIds),
                 CredentialGuid = GetSingleFilterValue(request.Filters.CredentialIds),
                 ModelName = GetSingleFilterValue(request.Filters.ModelNames),
+                ReservationGuid = GetSingleFilterValue(request.Filters.ReservationIds),
+                ReservationDecision = GetSingleFilterValue(request.Filters.ReservationDecisions),
+                ReservationReasonCode = GetSingleFilterValue(request.Filters.ReservationReasonCodes),
                 StatusClass = GetSingleFilterValue(request.Filters.StatusClasses),
                 ModelAccessWouldDeny = request.Filters.ModelAccessWouldDeny,
                 CreatedAfterUtc = startUtc,
@@ -365,6 +382,9 @@ namespace Conductor.Server.Services
                 .Where(item => MatchesList(item.CredentialGuid, request.Filters.CredentialIds))
                 .Where(item => MatchesModelName(item, request.Filters.ModelNames))
                 .Where(item => MatchesList(item.ProviderName, request.Filters.ProviderNames))
+                .Where(item => MatchesList(item.ReservationGuid, request.Filters.ReservationIds))
+                .Where(item => MatchesList(item.ReservationDecision, request.Filters.ReservationDecisions))
+                .Where(item => MatchesList(item.ReservationReasonCode, request.Filters.ReservationReasonCodes))
                 .Where(item => MatchesStatusClassList(item, request.Filters.StatusClasses))
                 .Where(item => MatchesList(item.DominantStageKind, request.Filters.StageKinds))
                 .ToList();
@@ -434,6 +454,8 @@ namespace Conductor.Server.Services
                 SuccessfulCompletionCount = successfulEntries.Count,
                 FailedRequestCount = entries.Count(item => !IsSuccessfulCompletion(item)),
                 DeniedRequestCount = entries.Count(IsDenied),
+                ReservationDeniedCount = entries.Count(IsReservationDenied),
+                ReservationDenialCounts = BuildReservationDenialCounts(entries),
                 RateLimitedRequestCount = entries.Count(IsRateLimited),
                 AverageTimeToFirstTokenMs = AverageInt(ttftValues),
                 P50TimeToFirstTokenMs = Percentile(ttftValues, 0.50m),
@@ -679,6 +701,22 @@ namespace Conductor.Server.Services
                 || !String.IsNullOrEmpty(entry.DenialReasonCode);
         }
 
+        private static bool IsReservationDenied(RequestHistoryEntry entry)
+        {
+            return String.Equals(entry?.ReservationReasonCode, "ReservationDenied", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(entry?.ReservationReasonCode, "ReservationDrainDenied", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(entry?.ReservationReasonCode, "ReservationAuthenticationRequired", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(entry?.ReservationReasonCode, "ReservationConflict", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static Dictionary<string, long> BuildReservationDenialCounts(List<RequestHistoryEntry> entries)
+        {
+            return entries
+                .Where(IsReservationDenied)
+                .GroupBy(item => String.IsNullOrEmpty(item.ReservationGuid) ? "Unknown" : item.ReservationGuid)
+                .ToDictionary(group => group.Key, group => (long)group.Count(), StringComparer.InvariantCultureIgnoreCase);
+        }
+
         private static bool IsRateLimited(RequestHistoryEntry entry)
         {
             return entry != null && entry.HttpStatus.HasValue && entry.HttpStatus.Value == 429;
@@ -771,6 +809,15 @@ namespace Conductor.Server.Services
                 case "providername":
                 case "provider":
                     return entry.ProviderName ?? "(unknown)";
+                case "reservationid":
+                case "reservationguid":
+                    return entry.ReservationGuid ?? "(none)";
+                case "reservationname":
+                    return entry.ReservationName ?? "(none)";
+                case "reservationdecision":
+                    return entry.ReservationDecision ?? "(none)";
+                case "reservationreasoncode":
+                    return entry.ReservationReasonCode ?? "(none)";
                 default:
                     return entry.RequestorUserGuid ?? "(anonymous)";
             }
@@ -806,6 +853,15 @@ namespace Conductor.Server.Services
                 case "providername":
                 case "provider":
                     return entry.ProviderName ?? "(unknown)";
+                case "reservationid":
+                case "reservationguid":
+                    return entry.ReservationName ?? entry.ReservationGuid ?? "(none)";
+                case "reservationname":
+                    return entry.ReservationName ?? "(none)";
+                case "reservationdecision":
+                    return entry.ReservationDecision ?? "(none)";
+                case "reservationreasoncode":
+                    return entry.ReservationReasonCode ?? "(none)";
                 case "tenantid":
                 default:
                     return GetDimensionValue(entry, dimension);

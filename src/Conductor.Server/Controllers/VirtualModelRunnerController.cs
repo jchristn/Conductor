@@ -6,6 +6,7 @@ namespace Conductor.Server.Controllers
     using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
+    using Conductor.Core.Enums;
     using Conductor.Core.Helpers;
     using Conductor.Core.Models;
     using Conductor.Core.Requests;
@@ -291,6 +292,19 @@ namespace Conductor.Server.Controllers
             ModelLoadRequest request,
             CancellationToken token = default)
         {
+            return await LoadModel(tenantId, id, request, null, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Load or verify a model through a virtual model runner.
+        /// </summary>
+        public async Task<ModelLoadResponse> LoadModel(
+            string tenantId,
+            string id,
+            ModelLoadRequest request,
+            AuthenticationResult auth,
+            CancellationToken token = default)
+        {
             if (String.IsNullOrEmpty(id))
                 throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
@@ -304,7 +318,11 @@ namespace Conductor.Server.Controllers
             if (vmr == null)
                 throw new WebserverException(ApiResultEnum.NotFound);
 
-            return await _ModelLoadService.LoadVirtualModelRunnerAsync(vmr, request, token).ConfigureAwait(false);
+            return await _ModelLoadService.LoadVirtualModelRunnerAsync(
+                vmr,
+                request,
+                BuildRequestContext(auth),
+                token).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -333,6 +351,26 @@ namespace Conductor.Server.Controllers
             {
                 throw new WebserverException(ApiResultEnum.BadRequest, "LoadBalancingPolicyId must reference an existing policy in the same tenant.");
             }
+        }
+
+        private static RequestContext BuildRequestContext(AuthenticationResult auth)
+        {
+            if (auth == null)
+            {
+                return null;
+            }
+
+            return new RequestContext
+            {
+                TenantId = auth.Tenant?.Id,
+                UserId = auth.User?.Id,
+                UserEmail = auth.User?.Email,
+                IsUserAdmin = auth.IsAdmin,
+                IsUserTenantAdmin = auth.IsTenantAdmin,
+                CredentialId = auth.Credential?.Id,
+                CredentialName = auth.Credential?.Name,
+                RequestType = RequestTypeEnum.LoadVirtualModelRunnerModel
+            };
         }
 
         private async Task ValidateModelAccessPolicyAsync(string tenantId, string policyId)
