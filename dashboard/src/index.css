@@ -2297,6 +2297,8 @@ body {
   display: flex;
   flex-direction: column;
   height: calc(100vh - 140px);
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .api-explorer-config {
@@ -2305,6 +2307,7 @@ body {
   border-radius: 8px;
   padding: 16px 20px;
   margin-bottom: 16px;
+  min-width: 0;
 }
 
 .api-explorer-config.collapsed {
@@ -2316,6 +2319,7 @@ body {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .config-item {
@@ -2324,6 +2328,8 @@ body {
   gap: 6px;
   font-size: 13px;
   color: var(--text-secondary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .config-item strong {
@@ -2339,6 +2345,7 @@ body {
   gap: 16px;
   align-items: flex-end;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .config-row.secondary {
@@ -2351,6 +2358,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .config-group label {
@@ -2370,6 +2378,7 @@ body {
   background: var(--input-bg);
   color: var(--input-text);
   min-width: 140px;
+  max-width: 100%;
 }
 
 .config-group.vmr-select {
@@ -2483,10 +2492,11 @@ body {
 /* API Explorer Main */
 .api-explorer-main {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 @media (max-width: 1024px) {
@@ -2503,6 +2513,7 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -2513,6 +2524,8 @@ body {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-color);
+  gap: 12px;
+  min-width: 0;
 }
 
 .request-header h3 {
@@ -2523,6 +2536,9 @@ body {
 .request-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .btn-small {
@@ -2576,16 +2592,23 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 4px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .history-vmr {
   font-weight: 500;
   font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .history-time {
   font-size: 11px;
   color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .history-item-detail {
@@ -2593,6 +2616,8 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .history-operation {
@@ -2644,10 +2669,12 @@ body {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-color);
+  min-width: 0;
 }
 
 .endpoint-url {
   flex: 1;
+  min-width: 0;
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
   color: var(--text-secondary);
@@ -2670,6 +2697,7 @@ body {
   flex-direction: column;
   padding: 12px 16px;
   min-height: 200px;
+  min-width: 0;
 }
 
 .request-body label {
@@ -2694,6 +2722,7 @@ body {
 
 .request-body textarea {
   flex: 1;
+  min-width: 0;
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -2733,6 +2762,9 @@ body {
   padding: 12px 16px;
   border-top: 1px solid var(--border-color);
   background: var(--bg-color);
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .send-actions {
@@ -2761,6 +2793,7 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -2771,14 +2804,19 @@ body {
   padding: 0 16px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-color);
+  gap: 12px;
+  min-width: 0;
 }
 
 .response-tabs {
   display: flex;
   gap: 0;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .tab-button {
+  flex-shrink: 0;
   padding: 12px 16px;
   border: none;
   background: transparent;
@@ -2803,6 +2841,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 /* Response Status Badges */
@@ -2834,12 +2873,14 @@ body {
 /* Response Content */
 .response-content {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
 }
 
 .tab-content {
   height: 100%;
-  overflow-y: auto;
+  min-width: 0;
+  overflow: auto;
   padding: 16px;
 }
 
@@ -2895,6 +2936,8 @@ body {
 .markdown-content {
   font-size: 14px;
   line-height: 1.7;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .markdown-content h1,
@@ -2945,11 +2988,13 @@ body {
 .response-body-code,
 .response-headers-code,
 .generated-code {
+  max-width: 100%;
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow-wrap: anywhere;
   margin: 0;
   background: var(--bg-color);
   border: 1px solid var(--border-color);
@@ -3059,7 +3104,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 32px;
+  width: 100%;
   max-width: 800px;
+  min-width: 0;
 }
 
 .backup-section {
@@ -3067,6 +3114,8 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 24px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .backup-section h2 {
@@ -3116,6 +3165,11 @@ body {
   margin-top: 2px;
 }
 
+.info-banner > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .info-banner .btn-icon {
   margin-left: auto;
   color: inherit;
@@ -3124,6 +3178,7 @@ body {
 .validation-content,
 .restore-result-content {
   flex: 1;
+  min-width: 0;
 }
 
 .validation-content strong,
@@ -3154,6 +3209,7 @@ body {
   margin: 8px 0 0 20px;
   font-size: 13px;
   list-style: disc;
+  overflow-wrap: anywhere;
 }
 
 .button-row {
@@ -3175,6 +3231,14 @@ body {
   border-collapse: collapse;
   font-size: 13px;
   margin-top: 8px;
+}
+
+.restore-result-content {
+  overflow-x: auto;
+}
+
+.restore-result-content .restore-table {
+  min-width: 520px;
 }
 
 .restore-table th,
@@ -3201,6 +3265,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .file-input-hidden {
@@ -3217,6 +3283,8 @@ body {
 .file-input-name {
   font-size: 14px;
   color: var(--text-secondary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Request History */
