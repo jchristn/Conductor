@@ -9,6 +9,7 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - endpoint and virtual model runner model load or verification requests
 - Ollama endpoint model list, pull, and delete requests
 - model access policy CRUD, validation, evaluation, and effective-access queries
+- VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - analytics workspace catalog, query, saved reports, summary, TTFT, token usage, estimate-only cost, user, and access/reliability helpers
 - observability summary and raw Prometheus metrics
@@ -83,6 +84,26 @@ const deniedOrLimited = await client.queryAnalytics({
   Filters: {
     StatusClasses: ['4xx']
   }
+});
+
+const reservation = await client.createVirtualModelRunnerReservation({
+  TenantId: 'tenant_123',
+  VirtualModelRunnerId: 'vmr_123',
+  Name: 'Customer demo reservation',
+  StartUtc: '2026-06-16T17:00:00Z',
+  EndUtc: '2026-06-16T19:00:00Z',
+  Subjects: [
+    { SubjectType: 'User', SubjectId: 'usr_123' },
+    { SubjectType: 'Credential', SubjectId: 'cred_123' }
+  ]
+});
+await client.validateVirtualModelRunnerReservation(reservation);
+await client.listVirtualModelRunnerReservations({ tenantId: 'tenant_123', vmrId: 'vmr_123' });
+await client.getVirtualModelRunnerReservationEffective('vmr_123', {
+  tenantId: 'tenant_123',
+  userId: 'usr_123',
+  credentialId: 'cred_123',
+  atUtc: '2026-06-16T17:30:00Z'
 });
 
 const endpointLoad = await client.loadModelRunnerEndpointModel('mre_123', {

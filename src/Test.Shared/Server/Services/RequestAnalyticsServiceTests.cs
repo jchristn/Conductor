@@ -214,6 +214,82 @@ namespace Test.Shared.Server.Services
         }
 
         /// <summary>
+        /// Verify aggregate overview results include reservation-denial counts and filters.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task GetAnalyticsOverviewAsync_GroupsReservationDenials()
+        {
+            VirtualModelRunner vmr = await CreateVmrAsync("Reservation Overview VMR").ConfigureAwait(false);
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Reservation Overview Endpoint", ApiTypeEnum.Ollama).ConfigureAwait(false);
+            DateTime start = DateTime.UtcNow.AddMinutes(-30);
+            string reservationId = "vmrr_" + Guid.NewGuid().ToString("N");
+
+            RequestHistoryEntry entry = await Database.RequestHistory.CreateAsync(new RequestHistoryDetail
+            {
+                TenantGuid = TestTenantId,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                ModelEndpointGuid = endpoint.Id,
+                ModelEndpointName = endpoint.Name,
+                RequestorSourceIp = "127.0.0.1",
+                HttpMethod = "POST",
+                HttpUrl = "/api/chat",
+                ObjectKey = "reservation-overview-" + Guid.NewGuid().ToString("N") + ".json",
+                CreatedUtc = start,
+                CompletedUtc = start.AddMilliseconds(9),
+                HttpStatus = 403,
+                ResponseTimeMs = 9,
+                RoutingOutcomeCode = "Denied",
+                DenialReasonCode = "ReservationDenied",
+                ReservationGuid = reservationId,
+                ReservationName = "Reservation Overview",
+                ReservationDecision = ReservationDecisionEnum.Denied.ToString(),
+                ReservationReasonCode = "ReservationDenied",
+                ReservationWindowStartUtc = start.AddMinutes(-5),
+                ReservationWindowEndUtc = start.AddHours(1),
+                AnalyticsCaptured = true
+            }).ConfigureAwait(false);
+
+            await Database.RequestAnalytics.CreateAsync(new RequestAnalyticsEvent
+            {
+                TenantGuid = TestTenantId,
+                RequestHistoryId = entry.Id,
+                VirtualModelRunnerGuid = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                StageKind = "denial",
+                StageName = "Reservation Gate",
+                StartedUtc = start,
+                CompletedUtc = start.AddMilliseconds(9),
+                DurationMs = 9,
+                Success = false,
+                HttpStatus = 403,
+                ErrorType = "ReservationDenied",
+                ReservationGuid = reservationId,
+                ReservationName = "Reservation Overview",
+                ReservationDecision = ReservationDecisionEnum.Denied.ToString(),
+                ReservationReasonCode = "ReservationDenied",
+                ReservationWindowStartUtc = start.AddMinutes(-5),
+                ReservationWindowEndUtc = start.AddHours(1),
+                CreatedUtc = start
+            }).ConfigureAwait(false);
+
+            RequestAnalyticsOverviewResult overview = await _Service.GetAnalyticsOverviewAsync(new RequestAnalyticsFilter
+            {
+                TenantGuid = TestTenantId,
+                ReservationGuid = reservationId,
+                ReservationReasonCode = "ReservationDenied",
+                StartUtc = start.AddMinutes(-5),
+                EndUtc = start.AddHours(1),
+                Limit = 100
+            }).ConfigureAwait(false);
+
+            overview.TotalRequests.Should().Be(1);
+            overview.ReservationDeniedCount.Should().Be(1);
+            overview.ReservationDenialCounts.Should().ContainKey(reservationId).WhoseValue.Should().Be(1);
+            overview.StageBreakdown.Should().ContainSingle(item => item.StageKind == "denial");
+        }
+
+        /// <summary>
         /// Verify long explicit ranges are capped to a bounded bucket count.
         /// </summary>
         /// <returns>Task.</returns>
@@ -329,6 +405,67 @@ namespace Test.Shared.Server.Services
             result.Groups[0].TimeToFirstTokenCoveragePercent.Should().Be(100m);
             result.Groups[0].LastSeenUtc.Should().BeCloseTo(start.AddMinutes(35), TimeSpan.FromSeconds(1));
             result.TimeSeries.Should().NotBeEmpty();
+        }
+
+        /// <summary>
+        /// Verify Analytics workspace queries expose reservation filters, grouping, and denial counts.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task QueryAnalyticsAsync_FiltersAndGroupsReservationDenials()
+        {
+            VirtualModelRunner vmr = await CreateVmrAsync("Reservation Workspace VMR").ConfigureAwait(false);
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Reservation Workspace Endpoint", ApiTypeEnum.OpenAI).ConfigureAwait(false);
+            DateTime start = DateTime.UtcNow.AddHours(-1);
+            string reservationId = "vmrr_" + Guid.NewGuid().ToString("N");
+            string otherReservationId = "vmrr_" + Guid.NewGuid().ToString("N");
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(5),
+                25,
+                true,
+                httpStatus: 403,
+                denialReasonCode: "ReservationDenied",
+                reservationGuid: reservationId,
+                reservationName: "Reservation Workspace",
+                reservationDecision: ReservationDecisionEnum.Denied.ToString(),
+                reservationReasonCode: "ReservationDenied").ConfigureAwait(false);
+
+            await CreateStoredHistoryAsync(
+                vmr,
+                endpoint,
+                start.AddMinutes(10),
+                30,
+                true,
+                httpStatus: 403,
+                denialReasonCode: "ReservationDrainDenied",
+                reservationGuid: otherReservationId,
+                reservationName: "Other Reservation",
+                reservationDecision: ReservationDecisionEnum.Denied.ToString(),
+                reservationReasonCode: "ReservationDrainDenied").ConfigureAwait(false);
+
+            AnalyticsQueryService analyticsService = new AnalyticsQueryService(_Service);
+            AnalyticsQueryResult result = await analyticsService.QueryAsync(TestTenantId, new AnalyticsQueryRequest
+            {
+                StartUtc = start,
+                EndUtc = start.AddHours(1),
+                GroupBy = new List<string> { "ReservationGuid" },
+                Filters = new AnalyticsQueryFilters
+                {
+                    ReservationIds = new List<string> { reservationId },
+                    ReservationDecisions = new List<string> { ReservationDecisionEnum.Denied.ToString() },
+                    ReservationReasonCodes = new List<string> { "ReservationDenied" }
+                },
+                Limit = 100
+            }).ConfigureAwait(false);
+
+            result.TotalRequests.Should().Be(1);
+            result.ReservationDeniedCount.Should().Be(1);
+            result.ReservationDenialCounts.Should().ContainKey(reservationId).WhoseValue.Should().Be(1);
+            result.Groups.Should().ContainSingle();
+            result.Groups[0].Value.Should().Be(reservationId);
+            result.Groups[0].Label.Should().Be("Reservation Workspace");
         }
 
         /// <summary>
@@ -499,7 +636,11 @@ namespace Test.Shared.Server.Services
             int? completionTokens = null,
             int? totalTokens = null,
             bool includeTokens = true,
-            string dominantStageKind = null)
+            string dominantStageKind = null,
+            string reservationGuid = null,
+            string reservationName = null,
+            string reservationDecision = null,
+            string reservationReasonCode = null)
         {
             RequestHistoryDetail detail = new RequestHistoryDetail
             {
@@ -532,7 +673,13 @@ namespace Test.Shared.Server.Services
                 ModelAccessPolicyGuid = modelAccessDecision == null ? null : "map_overview",
                 ModelAccessDecision = modelAccessDecision,
                 ModelAccessRuleGuid = modelAccessRuleGuid,
-                ModelAccessWouldDeny = modelAccessWouldDeny
+                ModelAccessWouldDeny = modelAccessWouldDeny,
+                ReservationGuid = reservationGuid,
+                ReservationName = reservationName,
+                ReservationDecision = reservationDecision,
+                ReservationReasonCode = reservationReasonCode,
+                ReservationWindowStartUtc = reservationGuid == null ? null : createdUtc.AddMinutes(-5),
+                ReservationWindowEndUtc = reservationGuid == null ? null : createdUtc.AddHours(1)
             };
 
             return await Database.RequestHistory.CreateAsync(detail).ConfigureAwait(false) as RequestHistoryDetail ?? detail;

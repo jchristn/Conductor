@@ -344,6 +344,9 @@ namespace Conductor.Server.Services
                 ModelAccessRuleGuid = filter.ModelAccessRuleGuid,
                 ModelAccessDecision = filter.ModelAccessDecision,
                 ModelAccessWouldDeny = filter.ModelAccessWouldDeny,
+                ReservationGuid = filter.ReservationGuid,
+                ReservationDecision = filter.ReservationDecision,
+                ReservationReasonCode = filter.ReservationReasonCode,
                 StatusClass = filter.StatusClass,
                 CreatedAfterUtc = filter.StartUtc,
                 CreatedBeforeUtc = filter.EndUtc,
@@ -556,6 +559,12 @@ namespace Conductor.Server.Services
             detail.RoutingOutcomeCode = routingDecision.OutcomeCode;
             detail.DenialReasonCode = routingDecision.DenialReasonCode;
             detail.DenialReason = routingDecision.DenialReason;
+            detail.ReservationGuid = routingDecision.ReservationId;
+            detail.ReservationName = routingDecision.ReservationName;
+            detail.ReservationDecision = routingDecision.ReservationDecision?.ToString();
+            detail.ReservationReasonCode = routingDecision.ReservationReasonCode;
+            detail.ReservationWindowStartUtc = routingDecision.ReservationWindowStartUtc;
+            detail.ReservationWindowEndUtc = routingDecision.ReservationWindowEndUtc;
             detail.SessionAffinityOutcome = routingDecision.SessionAffinityOutcome;
             detail.ExplanationSummary = routingDecision.Message;
             detail.MutationSummary = BuildMutationSummary(routingDecision.MutationSummary);

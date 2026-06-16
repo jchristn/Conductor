@@ -309,6 +309,12 @@ CREATE TABLE IF NOT EXISTS requesthistory (
     routingoutcomecode VARCHAR(128),
     denialreasoncode VARCHAR(128),
     denialreason TEXT,
+    reservationguid VARCHAR(48),
+    reservationname VARCHAR(255),
+    reservationdecision VARCHAR(32),
+    reservationreasoncode VARCHAR(128),
+    reservationwindowstartutc TIMESTAMP,
+    reservationwindowendutc TIMESTAMP,
     sessionaffinityoutcome VARCHAR(128),
     mutationsummary TEXT,
     explanationsummary TEXT,
@@ -362,6 +368,8 @@ CREATE INDEX IF NOT EXISTS idx_requesthistory_modelaccesswoulddeny ON requesthis
 CREATE INDEX IF NOT EXISTS idx_requesthistory_requestedmodel ON requesthistory(requestedmodel);
 CREATE INDEX IF NOT EXISTS idx_requesthistory_effectivemodel ON requesthistory(effectivemodel);
 CREATE INDEX IF NOT EXISTS idx_requesthistory_denialreasoncode ON requesthistory(denialreasoncode);
+CREATE INDEX IF NOT EXISTS idx_requesthistory_reservationguid ON requesthistory(reservationguid);
+CREATE INDEX IF NOT EXISTS idx_requesthistory_reservationreasoncode ON requesthistory(reservationreasoncode);
 CREATE INDEX IF NOT EXISTS idx_requesthistory_sessionaffinityoutcome ON requesthistory(sessionaffinityoutcome);
 CREATE INDEX IF NOT EXISTS idx_requesthistory_traceid ON requesthistory(traceid);
 CREATE INDEX IF NOT EXISTS idx_requesthistory_providerrequestid ON requesthistory(providerrequestid);
@@ -395,6 +403,12 @@ CREATE TABLE IF NOT EXISTS requestanalyticsevents (
     httpstatus INTEGER,
     errortype VARCHAR(128),
     errormessage TEXT,
+    reservationguid VARCHAR(48),
+    reservationname VARCHAR(255),
+    reservationdecision VARCHAR(32),
+    reservationreasoncode VARCHAR(128),
+    reservationwindowstartutc TIMESTAMP,
+    reservationwindowendutc TIMESTAMP,
     endpointlimiterwaitms INTEGER,
     requesttoheadersms INTEGER,
     headerstofirsttokenms INTEGER,
@@ -416,6 +430,7 @@ CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalytic
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_stagekind ON requestanalyticsevents(stagekind);
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_endpoint_created ON requestanalyticsevents(modelendpointguid, createdutc);
 CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_vmr_created ON requestanalyticsevents(virtualmodelrunnerguid, createdutc);
+CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_reservation_created ON requestanalyticsevents(reservationguid, createdutc);
 
 -- Factory default records.
 -- SHA256 of 'password' = 5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8

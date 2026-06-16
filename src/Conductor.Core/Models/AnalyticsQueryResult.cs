@@ -64,6 +64,16 @@ namespace Conductor.Core.Models
         public long RateLimitedRequestCount { get; set; }
 
         /// <summary>
+        /// Reservation gate denial count.
+        /// </summary>
+        public long ReservationDeniedCount { get; set; }
+
+        /// <summary>
+        /// Reservation-denial counts keyed by reservation GUID or "Unknown".
+        /// </summary>
+        public Dictionary<string, long> ReservationDenialCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
         /// Average time to first token.
         /// </summary>
         public decimal? AverageTimeToFirstTokenMs { get; set; }

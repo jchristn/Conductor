@@ -165,6 +165,118 @@ namespace Test.Shared.Server.Services
             decision.Timeline.Should().ContainSingle(item => item.Code == "ModelAccessEnforcement" && item.Outcome == "Passed");
         }
 
+        public async Task Evaluate_WithActiveReservationAndNonParticipant_DeniesBeforeEndpointInventory()
+        {
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Reserved Endpoint", "reserved.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string> { endpoint.Id }, SessionAffinityModeEnum.None).ConfigureAwait(false);
+            Credential reservedCredential = await CreateCredentialAsync("reserved").ConfigureAwait(false);
+            Credential outsider = await CreateCredentialAsync("outsider").ConfigureAwait(false);
+            await CreateReservationAsync(vmr.Id, ReservationSubjectTypeEnum.User, reservedCredential.UserId, DateTime.UtcNow.AddMinutes(-5)).ConfigureAwait(false);
+
+            RoutingDecision decision = await EvaluateDecisionAsync(vmr, "203.0.113.50", outsider.Id).ConfigureAwait(false);
+
+            decision.Success.Should().BeFalse();
+            decision.HttpStatusCode.Should().Be(403);
+            decision.DenialReasonCode.Should().Be("ReservationDenied");
+            decision.ReservationDecision.Should().Be(ReservationDecisionEnum.Denied);
+            decision.ReservationId.Should().NotBeNullOrWhiteSpace();
+            decision.Timeline.Should().ContainSingle(item => item.Code == "ReservationGate" && item.Outcome == "Denied");
+            decision.Timeline.Should().NotContain(item => item.Code == "EndpointInventory");
+        }
+
+        public async Task Evaluate_WithCredentialReservationParticipant_Routes()
+        {
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Credential Reserved Endpoint", "credential-reserved.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string> { endpoint.Id }, SessionAffinityModeEnum.None).ConfigureAwait(false);
+            Credential credential = await CreateCredentialAsync("credential-participant").ConfigureAwait(false);
+            await CreateReservationAsync(vmr.Id, ReservationSubjectTypeEnum.Credential, credential.Id, DateTime.UtcNow.AddMinutes(-5)).ConfigureAwait(false);
+
+            RoutingDecision decision = await EvaluateDecisionAsync(vmr, "203.0.113.51", credential.Id).ConfigureAwait(false);
+
+            decision.Success.Should().BeTrue();
+            decision.SelectedEndpointId.Should().Be(endpoint.Id);
+            decision.ReservationDecision.Should().Be(ReservationDecisionEnum.Allowed);
+            decision.ReservationReasonCode.Should().Be("ReservationParticipant");
+            decision.Timeline.Should().ContainSingle(item => item.Code == "ReservationGate" && item.Outcome == "Passed");
+        }
+
+        public async Task Evaluate_WithUserReservationAndOwnedCredential_Routes()
+        {
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("User Reserved Endpoint", "user-reserved.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string> { endpoint.Id }, SessionAffinityModeEnum.None).ConfigureAwait(false);
+            Credential credential = await CreateCredentialAsync("user-participant").ConfigureAwait(false);
+            await CreateReservationAsync(vmr.Id, ReservationSubjectTypeEnum.User, credential.UserId, DateTime.UtcNow.AddMinutes(-5)).ConfigureAwait(false);
+
+            RoutingDecision decision = await EvaluateDecisionAsync(vmr, "203.0.113.52", credential.Id).ConfigureAwait(false);
+
+            decision.Success.Should().BeTrue();
+            decision.SelectedEndpointId.Should().Be(endpoint.Id);
+            decision.ReservationDecision.Should().Be(ReservationDecisionEnum.Allowed);
+            decision.ReservationReasonCode.Should().Be("ReservationParticipant");
+        }
+
+        public async Task Evaluate_WithReservationDrainWindowAndNonParticipant_DeniesWithDrainReason()
+        {
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Drain Reserved Endpoint", "drain-reserved.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string> { endpoint.Id }, SessionAffinityModeEnum.None).ConfigureAwait(false);
+            Credential reservedCredential = await CreateCredentialAsync("drain-reserved").ConfigureAwait(false);
+            Credential outsider = await CreateCredentialAsync("drain-outsider").ConfigureAwait(false);
+            DateTime start = DateTime.UtcNow.AddMinutes(10);
+            await CreateReservationAsync(vmr.Id, ReservationSubjectTypeEnum.User, reservedCredential.UserId, start, 900000).ConfigureAwait(false);
+
+            RoutingDecision decision = await EvaluateDecisionAsync(vmr, "203.0.113.53", outsider.Id).ConfigureAwait(false);
+
+            decision.Success.Should().BeFalse();
+            decision.HttpStatusCode.Should().Be(403);
+            decision.DenialReasonCode.Should().Be("ReservationDrainDenied");
+            decision.ReservationDecision.Should().Be(ReservationDecisionEnum.Denied);
+            decision.Timeline.Should().ContainSingle(item => item.Code == "ReservationGate" && item.Outcome == "Denied");
+        }
+
+        public async Task Evaluate_WithActiveReservationAndNonParticipant_DeniesEmbeddingsListModelsAndShowBeforeEndpointInventory()
+        {
+            ModelRunnerEndpoint endpoint = await CreateEndpointAsync("Reserved Multipath Endpoint", "reserved-multipath.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string> { endpoint.Id }, SessionAffinityModeEnum.None).ConfigureAwait(false);
+            Credential reservedCredential = await CreateCredentialAsync("reserved-multipath").ConfigureAwait(false);
+            Credential outsider = await CreateCredentialAsync("outsider-multipath").ConfigureAwait(false);
+            await CreateReservationAsync(vmr.Id, ReservationSubjectTypeEnum.User, reservedCredential.UserId, DateTime.UtcNow.AddMinutes(-5)).ConfigureAwait(false);
+
+            RoutingDecision embeddings = await EvaluateDecisionAsync(
+                vmr,
+                "203.0.113.54",
+                outsider.Id,
+                "embed-model",
+                "/v1/embeddings",
+                "POST",
+                "{\"model\":\"embed-model\",\"input\":\"hello\"}").ConfigureAwait(false);
+            RoutingDecision listModels = await EvaluateDecisionAsync(
+                vmr,
+                "203.0.113.55",
+                outsider.Id,
+                "llama3.2:latest",
+                "/v1/models",
+                "GET",
+                null).ConfigureAwait(false);
+            RoutingDecision showModel = await EvaluateDecisionAsync(
+                vmr,
+                "203.0.113.56",
+                outsider.Id,
+                "llama3.2:latest",
+                "/api/show",
+                "POST",
+                "{\"model\":\"llama3.2:latest\"}").ConfigureAwait(false);
+
+            foreach (RoutingDecision decision in new[] { embeddings, listModels, showModel })
+            {
+                decision.Success.Should().BeFalse();
+                decision.HttpStatusCode.Should().Be(403);
+                decision.DenialReasonCode.Should().Be("ReservationDenied");
+                decision.ReservationDecision.Should().Be(ReservationDecisionEnum.Denied);
+                decision.Timeline.Should().ContainSingle(item => item.Code == "ReservationGate" && item.Outcome == "Denied");
+                decision.Timeline.Should().NotContain(item => item.Code == "EndpointInventory");
+            }
+        }
+
         private async Task<ModelRunnerEndpoint> CreateEndpointAsync(string name, string hostname, EndpointServiceStateEnum serviceState)
         {
             return await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
@@ -257,19 +369,52 @@ namespace Test.Shared.Server.Services
             return new RoutingDecisionService(Database, Logging, null, _SessionAffinityService, null, modelAccessService);
         }
 
-        private async Task<RoutingDecision> EvaluateDecisionAsync(VirtualModelRunner vmr, string sourceIp, string credentialId = null, string modelName = "llama3.2:latest")
+        private async Task<VirtualModelRunnerReservation> CreateReservationAsync(
+            string vmrId,
+            ReservationSubjectTypeEnum subjectType,
+            string subjectId,
+            DateTime startUtc,
+            int admissionDrainLeadMs = 0)
         {
-            string fullPath = vmr.BasePath.TrimEnd('/') + "/api/chat";
-            UrlContext urlContext = UrlContext.Parse(fullPath, "POST");
+            return await Database.VirtualModelRunnerReservation.CreateAsync(new VirtualModelRunnerReservation
+            {
+                TenantId = TestTenantId,
+                VirtualModelRunnerId = vmrId,
+                Name = "Routing Reservation " + Guid.NewGuid().ToString("N"),
+                StartUtc = startUtc,
+                EndUtc = startUtc.AddHours(1),
+                AdmissionDrainLeadMs = admissionDrainLeadMs,
+                Subjects = new List<VirtualModelRunnerReservationSubject>
+                {
+                    new VirtualModelRunnerReservationSubject
+                    {
+                        SubjectType = subjectType,
+                        SubjectId = subjectId
+                    }
+                }
+            }).ConfigureAwait(false);
+        }
+
+        private async Task<RoutingDecision> EvaluateDecisionAsync(
+            VirtualModelRunner vmr,
+            string sourceIp,
+            string credentialId = null,
+            string modelName = "llama3.2:latest",
+            string routeSuffix = "/api/chat",
+            string method = "POST",
+            string body = null)
+        {
+            string fullPath = vmr.BasePath.TrimEnd('/') + routeSuffix;
+            UrlContext urlContext = UrlContext.Parse(fullPath, method);
             RequestContext requestContext = new RequestContext
             {
                 ClientIpAddress = sourceIp,
-                HttpMethod = "POST",
+                HttpMethod = method,
                 Path = fullPath,
                 OriginalUrl = fullPath,
                 Headers = new Dictionary<string, string>(),
                 CredentialId = credentialId,
-                Data = Encoding.UTF8.GetBytes("{\"model\":\"" + modelName + "\"}")
+                Data = body != null ? Encoding.UTF8.GetBytes(body) : Encoding.UTF8.GetBytes("{\"model\":\"" + modelName + "\"}")
             };
 
             RoutingExecutionResult result = await _Service.EvaluateAsync(vmr, urlContext, requestContext, false).ConfigureAwait(false);

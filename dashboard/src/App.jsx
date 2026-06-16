@@ -5,6 +5,7 @@ import { OnboardingProvider } from './context/OnboardingContext';
 import Sidebar from './components/Sidebar';
 import PageHeader from './components/PageHeader';
 import ErrorBanner from './components/ErrorBanner';
+import ControlTooltipHydrator from './components/ControlTooltipHydrator';
 import Tour from './components/Tour';
 import SetupWizard from './components/SetupWizard';
 import Dashboard from './views/Dashboard';
@@ -17,6 +18,7 @@ import ModelConfigurations from './views/ModelConfigurations';
 import LoadBalancingPolicies from './views/LoadBalancingPolicies';
 import ModelAccessPolicies from './views/ModelAccessPolicies';
 import VirtualModelRunners from './views/VirtualModelRunners';
+import Reservations from './views/Reservations';
 import RequestHistory from './views/RequestHistory';
 import RequestAnalytics from './views/RequestAnalytics';
 import ApiExplorer from './views/ApiExplorer';
@@ -36,6 +38,7 @@ function App() {
 
   return (
     <OnboardingProvider>
+      <ControlTooltipHydrator />
       <div className="app">
         <Sidebar />
         <main className="main-content">
@@ -52,6 +55,7 @@ function App() {
             <Route path="/policies" element={<LoadBalancingPolicies />} />
             <Route path="/model-access-policies" element={<ModelAccessPolicies />} />
             <Route path="/vmr" element={<VirtualModelRunners />} />
+            <Route path="/reservations" element={<Reservations />} />
             <Route path="/request-history" element={<RequestHistory />} />
             <Route path="/analytics" element={<RequestAnalytics />} />
             <Route path="/request-analytics" element={<Navigate to="/analytics" replace />} />

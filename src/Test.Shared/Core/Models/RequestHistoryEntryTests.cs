@@ -88,6 +88,12 @@ namespace Test.Shared.Core.Models
                 ModelAccessRuleName = "Deny model",
                 ModelAccessDecision = "Deny",
                 ModelAccessWouldDeny = true,
+                ReservationGuid = "vmrr_test",
+                ReservationName = "Reserved benchmark",
+                ReservationDecision = "Denied",
+                ReservationReasonCode = "ReservationDenied",
+                ReservationWindowStartUtc = DateTime.UtcNow.AddMinutes(-5),
+                ReservationWindowEndUtc = DateTime.UtcNow.AddMinutes(55),
                 RequestTransferType = Conductor.Core.Enums.TransferTypeEnum.Chunked,
                 ResponseTransferType = Conductor.Core.Enums.TransferTypeEnum.ServerSentEvents
             };
@@ -107,6 +113,12 @@ namespace Test.Shared.Core.Models
             detail.ModelAccessRuleName.Should().Be("Deny model");
             detail.ModelAccessDecision.Should().Be("Deny");
             detail.ModelAccessWouldDeny.Should().BeTrue();
+            detail.ReservationGuid.Should().Be("vmrr_test");
+            detail.ReservationName.Should().Be("Reserved benchmark");
+            detail.ReservationDecision.Should().Be("Denied");
+            detail.ReservationReasonCode.Should().Be("ReservationDenied");
+            detail.ReservationWindowStartUtc.Should().NotBeNull();
+            detail.ReservationWindowEndUtc.Should().NotBeNull();
             detail.RequestTransferType.Should().Be(Conductor.Core.Enums.TransferTypeEnum.Chunked);
             detail.ResponseTransferType.Should().Be(Conductor.Core.Enums.TransferTypeEnum.ServerSentEvents);
         }

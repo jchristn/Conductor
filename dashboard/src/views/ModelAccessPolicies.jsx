@@ -8,6 +8,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import RefreshButton from '../components/RefreshButton';
 import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
 
 const ACTIONS = ['Completions', 'Embeddings', 'ListModels', 'ShowModel', 'LoadModel', 'UnloadModel', 'ModelManagement'];
@@ -419,7 +420,10 @@ function ModelAccessPolicies() {
           <h1>Model Access Policies</h1>
           <p className="view-subtitle">Tenant-scoped ACLs for proxy model usage.</p>
         </div>
-        <button className="btn-primary" onClick={handleCreate}>Create Policy</button>
+        <div className="view-actions">
+          <RefreshButton onClick={fetchData} title="Refresh model access policies" disabled={loading} />
+          <button className="btn-primary" onClick={handleCreate}>Create Policy</button>
+        </div>
       </div>
 
       <div className="stats-grid">

@@ -41,6 +41,11 @@ namespace Conductor.Core.Models
         public int VirtualModelRunnerCount { get; set; } = 0;
 
         /// <summary>
+        /// Number of virtual model runner reservations in the backup.
+        /// </summary>
+        public int VirtualModelRunnerReservationCount { get; set; } = 0;
+
+        /// <summary>
         /// Number of administrators in the backup.
         /// </summary>
         public int AdministratorCount { get; set; } = 0;

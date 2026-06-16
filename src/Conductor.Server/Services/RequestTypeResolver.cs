@@ -101,11 +101,21 @@ namespace Conductor.Server.Services
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.ReadVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/health"), RequestTypeEnum.ReadVirtualModelRunnerHealth },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/effective"), RequestTypeEnum.ReadVirtualModelRunnerEffective },
+            { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/reservations"), RequestTypeEnum.ListVirtualModelRunnerReservations },
+            { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/reservation-effective"), RequestTypeEnum.ReadVirtualModelRunnerReservationEffective },
             { new RouteKey("POST", "/v1.0/virtualmodelrunners/{id}/explain-routing"), RequestTypeEnum.ExplainVirtualModelRunnerRouting },
             { new RouteKey("POST", "/v1.0/virtualmodelrunners/{id}/load-model"), RequestTypeEnum.LoadVirtualModelRunnerModel },
             { new RouteKey("PUT", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.UpdateVirtualModelRunner },
             { new RouteKey("DELETE", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.DeleteVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners"), RequestTypeEnum.ListVirtualModelRunners },
+
+            // Virtual Model Runner Reservations
+            { new RouteKey("POST", "/v1.0/vmrreservations"), RequestTypeEnum.CreateVirtualModelRunnerReservation },
+            { new RouteKey("POST", "/v1.0/vmrreservations/validate"), RequestTypeEnum.ValidateVirtualModelRunnerReservation },
+            { new RouteKey("GET", "/v1.0/vmrreservations/{id}"), RequestTypeEnum.ReadVirtualModelRunnerReservation },
+            { new RouteKey("PUT", "/v1.0/vmrreservations/{id}"), RequestTypeEnum.UpdateVirtualModelRunnerReservation },
+            { new RouteKey("DELETE", "/v1.0/vmrreservations/{id}"), RequestTypeEnum.DeleteVirtualModelRunnerReservation },
+            { new RouteKey("GET", "/v1.0/vmrreservations"), RequestTypeEnum.ListVirtualModelRunnerReservations },
 
             // Load Balancing Policies
             { new RouteKey("POST", "/v1.0/loadbalancingpolicies"), RequestTypeEnum.CreateLoadBalancingPolicy },

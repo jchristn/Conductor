@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import CopyableId from '../components/CopyableId';
+import RefreshButton from '../components/RefreshButton';
 
 const RANGE_OPTIONS = [
   { label: 'Last Hour', value: 'lastHour', tooltip: 'Filter every analytics panel to requests created during the last hour.' },
@@ -401,7 +402,10 @@ function ExportStatusPanel({ filters, overview, selectedReportId }) {
     filters.providerName ? `provider ${filters.providerName}` : null,
     filters.modelName ? `model ${filters.modelName}` : null,
     filters.requestorUserGuid ? `user ${filters.requestorUserGuid}` : null,
-    filters.credentialGuid ? `credential ${filters.credentialGuid}` : null
+    filters.credentialGuid ? `credential ${filters.credentialGuid}` : null,
+    filters.reservationGuid ? `reservation ${filters.reservationGuid}` : null,
+    filters.reservationDecision ? `reservation decision ${filters.reservationDecision}` : null,
+    filters.reservationReasonCode ? `reservation reason ${filters.reservationReasonCode}` : null
   ].filter(Boolean);
 
   return (
@@ -578,6 +582,9 @@ function RequestAnalytics() {
   const [modelName, setModelName] = useState(() => getInitialQueryParam('modelName'));
   const [requestorUserGuid, setRequestorUserGuid] = useState(() => getInitialQueryParam('requestorUserGuid') || getInitialQueryParam('userId'));
   const [credentialGuid, setCredentialGuid] = useState(() => getInitialQueryParam('credentialGuid') || getInitialQueryParam('credentialId'));
+  const [reservationGuid, setReservationGuid] = useState(() => getInitialQueryParam('reservationGuid') || getInitialQueryParam('reservationId'));
+  const [reservationDecision, setReservationDecision] = useState(() => getInitialQueryParam('reservationDecision'));
+  const [reservationReasonCode, setReservationReasonCode] = useState(() => getInitialQueryParam('reservationReasonCode'));
   const [tokenUnitCost, setTokenUnitCost] = useState(() => getInitialQueryParam('tokenUnitCost'));
   const [savedReports, setSavedReports] = useState([]);
   const [selectedSavedReportId, setSelectedSavedReportId] = useState(() => getInitialQueryParam('analyticsReport'));
@@ -608,11 +615,14 @@ function RequestAnalytics() {
     modelName,
     requestorUserGuid,
     credentialGuid,
+    reservationGuid,
+    reservationDecision,
+    reservationReasonCode,
     tokenUnitCost,
     costCurrency: tokenUnitCost ? 'estimate' : '',
     groupBy: 'ModelRunnerEndpointId',
     limit: 10000
-  }), [hasGlobalAnalyticsScope, tenantId, range, customStartIso, customEndIso, bucketSeconds, vmrGuid, endpointGuid, providerName, modelName, requestorUserGuid, credentialGuid, tokenUnitCost]);
+  }), [hasGlobalAnalyticsScope, tenantId, range, customStartIso, customEndIso, bucketSeconds, vmrGuid, endpointGuid, providerName, modelName, requestorUserGuid, credentialGuid, reservationGuid, reservationDecision, reservationReasonCode, tokenUnitCost]);
 
   const fetchOverview = useCallback(async () => {
     if (overviewAbortRef.current) {
@@ -730,6 +740,9 @@ function RequestAnalytics() {
     setOrDelete('modelName', modelName);
     setOrDelete('requestorUserGuid', requestorUserGuid);
     setOrDelete('credentialGuid', credentialGuid);
+    setOrDelete('reservationGuid', reservationGuid);
+    setOrDelete('reservationDecision', reservationDecision);
+    setOrDelete('reservationReasonCode', reservationReasonCode);
     setOrDelete('tokenUnitCost', tokenUnitCost);
 
     const queryString = params.toString();
@@ -738,7 +751,7 @@ function RequestAnalytics() {
     if (nextUrl !== currentUrl) {
       window.history.replaceState(null, '', nextUrl);
     }
-  }, [hasGlobalAnalyticsScope, tenantId, range, filters.startUtc, filters.endUtc, bucketSeconds, vmrGuid, endpointGuid, providerName, modelName, requestorUserGuid, credentialGuid, tokenUnitCost, selectedSavedReportId, activeTab]);
+  }, [hasGlobalAnalyticsScope, tenantId, range, filters.startUtc, filters.endUtc, bucketSeconds, vmrGuid, endpointGuid, providerName, modelName, requestorUserGuid, credentialGuid, reservationGuid, reservationDecision, reservationReasonCode, tokenUnitCost, selectedSavedReportId, activeTab]);
 
   useEffect(() => {
     api.listVirtualModelRunners({ maxResults: 1000 }).then(result => setVmrs(result.Data || [])).catch(() => {});
@@ -792,6 +805,9 @@ function RequestAnalytics() {
     setModelName((reportFilters.ModelNames || [])[0] || '');
     setRequestorUserGuid((reportFilters.RequestorUserIds || [])[0] || '');
     setCredentialGuid((reportFilters.CredentialIds || [])[0] || '');
+    setReservationGuid((reportFilters.ReservationIds || [])[0] || '');
+    setReservationDecision((reportFilters.ReservationDecisions || [])[0] || '');
+    setReservationReasonCode((reportFilters.ReservationReasonCodes || [])[0] || '');
     setSelectedSavedReportId(report.Id || '');
     setSavedReportName(report.Name || '');
     setSavedReportStatus(report.Name ? `Loaded ${report.Name}` : 'Loaded saved report');
@@ -832,6 +848,9 @@ function RequestAnalytics() {
         ModelNames: modelName ? [modelName] : [],
         RequestorUserIds: requestorUserGuid ? [requestorUserGuid] : [],
         CredentialIds: credentialGuid ? [credentialGuid] : [],
+        ReservationIds: reservationGuid ? [reservationGuid] : [],
+        ReservationDecisions: reservationDecision ? [reservationDecision] : [],
+        ReservationReasonCodes: reservationReasonCode ? [reservationReasonCode] : [],
         SuccessfulCompletionsOnly: true
       },
       Limit: 10000
@@ -844,7 +863,7 @@ function RequestAnalytics() {
     Tags: {
       range
     }
-  }), [hasGlobalAnalyticsScope, tenantId, range, customStartIso, customEndIso, bucketSeconds, tokenUnitCost, vmrGuid, endpointGuid, providerName, modelName, requestorUserGuid, credentialGuid]);
+  }), [hasGlobalAnalyticsScope, tenantId, range, customStartIso, customEndIso, bucketSeconds, tokenUnitCost, vmrGuid, endpointGuid, providerName, modelName, requestorUserGuid, credentialGuid, reservationGuid, reservationDecision, reservationReasonCode]);
 
   const handleSavedReportSelect = async (reportId) => {
     setSelectedSavedReportId(reportId);
@@ -941,6 +960,9 @@ function RequestAnalytics() {
   const deniedRate = overview?.TotalRequests > 0
     ? ((overview.DeniedRequestCount || 0) * 100) / overview.TotalRequests
     : 0;
+  const reservationDeniedRate = overview?.TotalRequests > 0
+    ? ((overview.ReservationDeniedCount || 0) * 100) / overview.TotalRequests
+    : 0;
   const rateLimitedRate = overview?.TotalRequests > 0
     ? ((overview.RateLimitedRequestCount || 0) * 100) / overview.TotalRequests
     : 0;
@@ -975,12 +997,7 @@ function RequestAnalytics() {
           <p className="view-subtitle" title="This page uses 30 days of retained analytics data and estimates cost only from the token unit cost you supply.">Answer TTFT, token usage, and estimate-only cost questions across users, models, VMRs, and endpoints.</p>
         </div>
         <div className="view-actions">
-          <button className="btn-icon" onClick={handleRefreshOverview} title="Refresh analytics using the active range and filters." disabled={loading}>
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-              <title>Refresh request analytics data.</title>
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-            </svg>
-          </button>
+          <RefreshButton onClick={handleRefreshOverview} title="Refresh analytics using the active range and filters." disabled={loading} />
         </div>
       </div>
 
@@ -1072,6 +1089,24 @@ function RequestAnalytics() {
             <label title="Credential filter applied to all analytics panels.">Credential:</label>
             <input value={credentialGuid} onChange={(e) => setCredentialGuid(e.target.value)} placeholder="cred_..." title="Filter by credential ID to answer per-credential TTFT, token usage, and cost estimate questions." />
           </div>
+          <div className="filter-group" title="Limit analytics to requests where this VMR reservation gate applied.">
+            <label title="Reservation filter applied to all analytics panels.">Reservation:</label>
+            <input value={reservationGuid} onChange={(e) => setReservationGuid(e.target.value)} placeholder="vmrrsv_..." title="Filter by VMR reservation ID." />
+          </div>
+          <div className="filter-group" title="Limit analytics to a reservation gate decision.">
+            <label title="Reservation decision filter applied to all analytics panels.">Res Decision:</label>
+            <select value={reservationDecision} onChange={(e) => setReservationDecision(e.target.value)} title="Filter by reservation gate decision.">
+              <option value="">All</option>
+              <option value="Allowed">Allowed</option>
+              <option value="Denied">Denied</option>
+              <option value="NoReservation">No Reservation</option>
+              <option value="Conflict">Conflict</option>
+            </select>
+          </div>
+          <div className="filter-group" title="Limit analytics to a reservation gate reason code.">
+            <label title="Reservation reason-code filter applied to all analytics panels.">Res Reason:</label>
+            <input value={reservationReasonCode} onChange={(e) => setReservationReasonCode(e.target.value)} placeholder="ReservationDenied" title="Filter by stable reservation reason code." />
+          </div>
           <div className="filter-group" title="Optional estimate-only token unit cost.">
             <label title="Per-token unit cost used only for estimate-only cost output.">Unit Cost:</label>
             <input type="number" min="0" step="0.00000001" value={tokenUnitCost} onChange={(e) => setTokenUnitCost(e.target.value)} placeholder="0.000001" title="Optional per-token unit cost. Cost output is an estimate, not billing reconciliation." />
@@ -1148,6 +1183,14 @@ function RequestAnalytics() {
           tooltip="Successful completions with missing provider token usage. Missing token usage is unknown, not zero."
           valueTooltip="Successful completions where Conductor did not receive usable provider token metrics."
           sublabelTooltip="Analytics keeps missing usage separate from real zero-token values."
+        />
+        <MetricCard
+          label="Reservation Denials"
+          value={formatNumber(overview?.ReservationDeniedCount || 0)}
+          sublabel={formatPercent(reservationDeniedRate)}
+          tooltip="Requests explicitly denied because an active or draining VMR reservation did not include the incoming identity."
+          valueTooltip="Reservation-gate denials in the active analytics result set."
+          sublabelTooltip="Reservation denials divided by total filtered requests."
         />
         <MetricCard
           label="Tokens"
@@ -1393,8 +1436,24 @@ function RequestAnalytics() {
           <div className="analytics-metric-grid" title="Reliability and access outcome metrics.">
             <MetricCard label="Failed Requests" value={formatNumber(overview?.FailureCount || 0)} sublabel={formatPercent(failedRate)} tooltip="Requests with missing status or HTTP 4xx/5xx outcomes." />
             <MetricCard label="Denied Requests" value={formatNumber(overview?.DeniedRequestCount || 0)} sublabel={formatPercent(deniedRate)} tooltip="Requests denied by model access or routing decisions." />
+            <MetricCard label="Reservation Denials" value={formatNumber(overview?.ReservationDeniedCount || 0)} sublabel={formatPercent(reservationDeniedRate)} tooltip="Requests explicitly denied by an active or draining VMR reservation gate." />
             <MetricCard label="Rate Limited" value={formatNumber(overview?.RateLimitedRequestCount || 0)} sublabel={formatPercent(rateLimitedRate)} tooltip="Requests that returned HTTP 429." />
             <MetricCard label="Successful" value={formatNumber(overview?.SuccessCount || 0)} sublabel={formatPercent(successRate)} tooltip="Requests with successful completion status in the active filters." />
+          </div>
+          <div className="facet-grid" title="Reservation-denial counts by reservation ID for the active analytics filters.">
+            <div className="facet-card">
+              <strong>Reservation Denials</strong>
+              {Object.entries(overview?.ReservationDenialCounts || {}).length < 1 ? (
+                <div className="facet-row"><span>None</span><span>0</span></div>
+              ) : (
+                Object.entries(overview?.ReservationDenialCounts || {})
+                  .sort((left, right) => right[1] - left[1])
+                  .slice(0, 8)
+                  .map(([key, value]) => (
+                    <div className="facet-row" key={`reservation-denial-${key}`}><span>{key}</span><span>{value}</span></div>
+                  ))
+              )}
+            </div>
           </div>
           <div className="analytics-breakdown-grid" title="Reliability and access breakdowns by user and credential.">
             <AnalyticsBreakdownTable title="User Access Breakdown" tooltip={USER_BREAKDOWN_TOOLTIP} rows={userBreakdown} loading={loading} emptyMessage="No user access analytics in this range." identityFallback="(anonymous)" costCurrency={overview?.CostCurrency} />

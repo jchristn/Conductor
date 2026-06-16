@@ -200,10 +200,11 @@ class ConductorApi {
 
   buildQueryString(params) {
     const query = new URLSearchParams();
-    if (params.maxResults) query.append('maxResults', params.maxResults);
-    if (params.continuationToken) query.append('continuationToken', params.continuationToken);
-    if (params.nameFilter) query.append('nameFilter', params.nameFilter);
-    if (params.activeFilter !== undefined) query.append('activeFilter', params.activeFilter);
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        query.append(key, value);
+      }
+    });
     return query.toString() ? '?' + query.toString() : '';
   }
 
@@ -588,6 +589,43 @@ class ConductorApi {
     return this.request('POST', `/v1.0/virtualmodelrunners/${id}/load-model${query}`, payload);
   }
 
+  async listVirtualModelRunnerReservations(params = {}) {
+    const query = this.buildQueryString(params);
+    return this.dedupedRequest(`listVirtualModelRunnerReservations:${query}`, 'GET', `/v1.0/vmrreservations${query}`);
+  }
+
+  async listReservationsForVirtualModelRunner(id, params = {}) {
+    const query = this.buildQueryString(params);
+    return this.request('GET', `/v1.0/virtualmodelrunners/${id}/reservations${query}`);
+  }
+
+  async getVirtualModelRunnerReservation(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/vmrreservations/${id}${query}`);
+  }
+
+  async createVirtualModelRunnerReservation(reservation) {
+    return this.request('POST', '/v1.0/vmrreservations', reservation);
+  }
+
+  async updateVirtualModelRunnerReservation(id, reservation) {
+    return this.request('PUT', `/v1.0/vmrreservations/${id}`, reservation);
+  }
+
+  async deleteVirtualModelRunnerReservation(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('DELETE', `/v1.0/vmrreservations/${id}${query}`);
+  }
+
+  async validateVirtualModelRunnerReservation(reservation) {
+    return this.request('POST', '/v1.0/vmrreservations/validate', reservation);
+  }
+
+  async getVirtualModelRunnerReservationEffective(id, params = {}) {
+    const query = this.buildQueryString(params);
+    return this.request('GET', `/v1.0/virtualmodelrunners/${id}/reservation-effective${query}`);
+  }
+
   async getObservabilityMetricsSummary() {
     return this.request('GET', '/v1.0/observability/metrics/summary');
   }
@@ -719,6 +757,9 @@ class ConductorApi {
     if (params.modelAccessWouldDeny !== undefined && params.modelAccessWouldDeny !== '') query.append('modelAccessWouldDeny', params.modelAccessWouldDeny);
     if (params.modelName) query.append('modelName', params.modelName);
     if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
+    if (params.reservationGuid) query.append('reservationGuid', params.reservationGuid);
+    if (params.reservationDecision) query.append('reservationDecision', params.reservationDecision);
+    if (params.reservationReasonCode) query.append('reservationReasonCode', params.reservationReasonCode);
     if (params.sessionAffinityOutcome) query.append('sessionAffinityOutcome', params.sessionAffinityOutcome);
     if (params.statusClass) query.append('statusClass', params.statusClass);
     if (params.sourceIp) query.append('sourceIp', params.sourceIp);
@@ -738,6 +779,9 @@ class ConductorApi {
     if (params.endpointGuid) query.append('endpointGuid', params.endpointGuid);
     if (params.providerName) query.append('providerName', params.providerName);
     if (params.modelName) query.append('modelName', params.modelName);
+    if (params.reservationGuid) query.append('reservationGuid', params.reservationGuid);
+    if (params.reservationDecision) query.append('reservationDecision', params.reservationDecision);
+    if (params.reservationReasonCode) query.append('reservationReasonCode', params.reservationReasonCode);
     if (params.stageKind) query.append('stageKind', params.stageKind);
     if (params.statusClass) query.append('statusClass', params.statusClass);
     const queryString = query.toString() ? '?' + query.toString() : '';
@@ -759,6 +803,9 @@ class ConductorApi {
     if (params.modelName) query.append('modelName', params.modelName);
     if (params.requestorUserGuid) query.append('requestorUserGuid', params.requestorUserGuid);
     if (params.credentialGuid) query.append('credentialGuid', params.credentialGuid);
+    if (params.reservationGuid) query.append('reservationGuid', params.reservationGuid);
+    if (params.reservationDecision) query.append('reservationDecision', params.reservationDecision);
+    if (params.reservationReasonCode) query.append('reservationReasonCode', params.reservationReasonCode);
     if (params.statusClass) query.append('statusClass', params.statusClass);
     if (params.tokenUnitCost !== undefined && params.tokenUnitCost !== '') query.append('tokenUnitCost', params.tokenUnitCost);
     if (params.costCurrency) query.append('costCurrency', params.costCurrency);
@@ -825,6 +872,9 @@ class ConductorApi {
     if (params.modelName) query.append('modelName', params.modelName);
     if (params.mutationSummary) query.append('mutationSummary', params.mutationSummary);
     if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
+    if (params.reservationGuid) query.append('reservationGuid', params.reservationGuid);
+    if (params.reservationDecision) query.append('reservationDecision', params.reservationDecision);
+    if (params.reservationReasonCode) query.append('reservationReasonCode', params.reservationReasonCode);
     if (params.sessionAffinityOutcome) query.append('sessionAffinityOutcome', params.sessionAffinityOutcome);
     if (params.statusClass) query.append('statusClass', params.statusClass);
     if (params.createdAfterUtc) query.append('createdAfterUtc', params.createdAfterUtc);
@@ -900,6 +950,9 @@ class ConductorApi {
     if (params.modelName) query.append('modelName', params.modelName);
     if (params.mutationSummary) query.append('mutationSummary', params.mutationSummary);
     if (params.denialReasonCode) query.append('denialReasonCode', params.denialReasonCode);
+    if (params.reservationGuid) query.append('reservationGuid', params.reservationGuid);
+    if (params.reservationDecision) query.append('reservationDecision', params.reservationDecision);
+    if (params.reservationReasonCode) query.append('reservationReasonCode', params.reservationReasonCode);
     if (params.sessionAffinityOutcome) query.append('sessionAffinityOutcome', params.sessionAffinityOutcome);
     if (params.statusClass) query.append('statusClass', params.statusClass);
     if (params.createdAfterUtc) query.append('createdAfterUtc', params.createdAfterUtc);

@@ -59,7 +59,11 @@ namespace Conductor.Server.Routing
             _App.Post<ModelLoadRequest>("/v1.0/virtualmodelrunners/{id}/load-model", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
-                return await vmrController.LoadModel(tenantId, req.Parameters["id"], req.Data as ModelLoadRequest);
+                return await vmrController.LoadModel(
+                    tenantId,
+                    req.Parameters["id"],
+                    req.Data as ModelLoadRequest,
+                    req.Http.Metadata as Services.AuthenticationResult);
             },
             api => api
                 .WithTag("Virtual Model Runners")

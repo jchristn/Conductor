@@ -389,6 +389,34 @@ Manual operator workflows to exercise:
 - Failed request type review for denied and rate-limited requests.
 - Tenant-admin login verifies that cross-tenant filters cannot escape the authenticated tenant.
 
+## VMR Reservations Release Gate
+
+Reservation changes must prove exclusive admission without weakening normal ACL/model-access behavior.
+
+Required backend checks:
+
+- Reservation CRUD validates tenant, VMR, UTC window, active subject existence, duplicate subjects, and overlapping active windows.
+- Active reservation participant users, participant credentials, and credentials owned by participant users are admitted through the reservation gate.
+- Anonymous callers, unrelated users, unrelated credentials, and unlisted admins are denied with `ReservationAuthenticationRequired`, `ReservationDenied`, or `ReservationDrainDenied` before endpoint inventory or provider calls.
+- List-model, show-model, embeddings, chat/completions, routing simulation, explain, and VMR model-load paths evaluate reservation state where they exercise VMR access.
+- Reservation allow decisions still run normal ACL, request-type, model access, endpoint health, load balancing, and provider checks.
+- Request history search/summary, analytics overview, and Analytics workspace queries filter by `reservationGuid`, `reservationDecision`, and `reservationReasonCode`.
+- Backup/restore exports, validates, restores, skips, overwrites, and fails reservation records and nested subjects according to conflict mode.
+
+Required dashboard checks:
+
+- Every table page has an icon refresh control; the VMR Reservations table refresh reloads tenant-scoped reservation data.
+- `/reservations?vmrId=...` filters to that VMR, and create defaults to the selected VMR and tenant.
+- VMR rows show reservation state badges for open, upcoming, drain, active/reserved, and conflict states.
+- Request History shows reservation columns, filters, and detail fields for reservation id/name, decision, reason, and UTC window.
+- Analytics shows reservation-denial cards, per-reservation denial counts, and reservation filters that persist in saved reports and dashboard links.
+
+Required docs and tooling checks:
+
+- `REST_API.md`, `README.md`, `MANAGING_RESERVATIONS.md`, SDK examples, and Postman examples match actual route names and request/response shapes.
+- The Postman collection imports without JSON errors and includes positive create/list/effective-access flows plus negative outsider/overlap examples.
+- Logs, request history, analytics, and dashboard views expose reservation denial reason codes without bearer tokens, credential secrets, provider keys, or raw secret-bearing request bodies.
+
 ## Packages
 
 | Project | Key Packages |

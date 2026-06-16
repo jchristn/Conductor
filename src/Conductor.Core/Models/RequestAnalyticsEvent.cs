@@ -126,6 +126,36 @@ namespace Conductor.Core.Models
         public string ErrorMessage { get; set; } = null;
 
         /// <summary>
+        /// Reservation GUID when a reservation gate applied. May be null.
+        /// </summary>
+        public string ReservationGuid { get; set; } = null;
+
+        /// <summary>
+        /// Reservation name when a reservation gate applied. May be null.
+        /// </summary>
+        public string ReservationName { get; set; } = null;
+
+        /// <summary>
+        /// Reservation decision captured during routing. May be null.
+        /// </summary>
+        public string ReservationDecision { get; set; } = null;
+
+        /// <summary>
+        /// Reservation reason code captured during routing. May be null.
+        /// </summary>
+        public string ReservationReasonCode { get; set; } = null;
+
+        /// <summary>
+        /// Reservation window start timestamp. May be null.
+        /// </summary>
+        public DateTime? ReservationWindowStartUtc { get; set; } = null;
+
+        /// <summary>
+        /// Reservation window end timestamp. May be null.
+        /// </summary>
+        public DateTime? ReservationWindowEndUtc { get; set; } = null;
+
+        /// <summary>
         /// Endpoint limiter wait in milliseconds.
         /// </summary>
         public int? EndpointLimiterWaitMs { get; set; } = null;
@@ -224,6 +254,12 @@ namespace Conductor.Core.Models
                 HttpStatus = DataTableHelper.GetNullableIntValue(row, "httpstatus"),
                 ErrorType = DataTableHelper.GetStringValue(row, "errortype"),
                 ErrorMessage = DataTableHelper.GetStringValue(row, "errormessage"),
+                ReservationGuid = DataTableHelper.GetStringValue(row, "reservationguid"),
+                ReservationName = DataTableHelper.GetStringValue(row, "reservationname"),
+                ReservationDecision = DataTableHelper.GetStringValue(row, "reservationdecision"),
+                ReservationReasonCode = DataTableHelper.GetStringValue(row, "reservationreasoncode"),
+                ReservationWindowStartUtc = DataTableHelper.GetNullableDateTimeValue(row, "reservationwindowstartutc"),
+                ReservationWindowEndUtc = DataTableHelper.GetNullableDateTimeValue(row, "reservationwindowendutc"),
                 EndpointLimiterWaitMs = DataTableHelper.GetNullableIntValue(row, "endpointlimiterwaitms"),
                 RequestToHeadersMs = DataTableHelper.GetNullableIntValue(row, "requesttoheadersms"),
                 HeadersToFirstTokenMs = DataTableHelper.GetNullableIntValue(row, "headerstofirsttokenms"),

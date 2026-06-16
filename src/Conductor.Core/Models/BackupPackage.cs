@@ -11,7 +11,7 @@ namespace Conductor.Core.Models
         /// <summary>
         /// Schema version for forward/backward compatibility.
         /// </summary>
-        public string SchemaVersion { get; set; } = "1.2";
+        public string SchemaVersion { get; set; } = "1.3";
 
         /// <summary>
         /// UTC timestamp when the backup was created.
@@ -92,6 +92,15 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// All virtual model runner reservation records.
+        /// </summary>
+        public List<VirtualModelRunnerReservation> VirtualModelRunnerReservations
+        {
+            get => _VirtualModelRunnerReservations;
+            set => _VirtualModelRunnerReservations = (value != null ? value : new List<VirtualModelRunnerReservation>());
+        }
+
+        /// <summary>
         /// All load-balancing policies.
         /// </summary>
         public List<LoadBalancingPolicy> LoadBalancingPolicies
@@ -135,6 +144,7 @@ namespace Conductor.Core.Models
         private List<ModelConfiguration> _ModelConfigurations = new List<ModelConfiguration>();
         private List<ModelRunnerEndpoint> _ModelRunnerEndpoints = new List<ModelRunnerEndpoint>();
         private List<VirtualModelRunner> _VirtualModelRunners = new List<VirtualModelRunner>();
+        private List<VirtualModelRunnerReservation> _VirtualModelRunnerReservations = new List<VirtualModelRunnerReservation>();
         private List<LoadBalancingPolicy> _LoadBalancingPolicies = new List<LoadBalancingPolicy>();
         private List<ModelAccessPolicy> _ModelAccessPolicies = new List<ModelAccessPolicy>();
         private List<ModelAccessRule> _ModelAccessRules = new List<ModelAccessRule>();

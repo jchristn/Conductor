@@ -38,6 +38,21 @@ namespace Conductor.Core.Models
         public List<string> ProviderNames { get; set; } = new List<string>();
 
         /// <summary>
+        /// Reservation IDs.
+        /// </summary>
+        public List<string> ReservationIds { get; set; } = new List<string>();
+
+        /// <summary>
+        /// Reservation decisions.
+        /// </summary>
+        public List<string> ReservationDecisions { get; set; } = new List<string>();
+
+        /// <summary>
+        /// Reservation reason codes.
+        /// </summary>
+        public List<string> ReservationReasonCodes { get; set; } = new List<string>();
+
+        /// <summary>
         /// HTTP status classes.
         /// </summary>
         public List<string> StatusClasses { get; set; } = new List<string>();

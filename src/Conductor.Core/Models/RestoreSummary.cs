@@ -41,6 +41,11 @@ namespace Conductor.Core.Models
         public EntityRestoreCount VirtualModelRunners { get; set; } = new EntityRestoreCount();
 
         /// <summary>
+        /// Count of virtual model runner reservation restore operations.
+        /// </summary>
+        public EntityRestoreCount VirtualModelRunnerReservations { get; set; } = new EntityRestoreCount();
+
+        /// <summary>
         /// Count of administrator restore operations.
         /// </summary>
         public EntityRestoreCount Administrators { get; set; } = new EntityRestoreCount();

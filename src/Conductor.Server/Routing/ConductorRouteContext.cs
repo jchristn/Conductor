@@ -25,7 +25,8 @@ namespace Conductor.Server.Routing
             IModelAccessControlService modelAccessControlService,
             ModelLoadService modelLoadService,
             OllamaModelManagementService ollamaModelManagementService,
-            RequestHistoryService requestHistoryService)
+            RequestHistoryService requestHistoryService,
+            VirtualModelRunnerReservationService virtualModelRunnerReservationService)
         {
             App = app;
             Settings = settings;
@@ -42,6 +43,7 @@ namespace Conductor.Server.Routing
             ModelLoadService = modelLoadService;
             OllamaModelManagementService = ollamaModelManagementService;
             RequestHistoryService = requestHistoryService;
+            VirtualModelRunnerReservationService = virtualModelRunnerReservationService;
 
             TenantController = new TenantController(Database, AuthService, Serializer, Logging);
             UserController = new UserController(Database, AuthService, Serializer, Logging);
@@ -52,6 +54,7 @@ namespace Conductor.Server.Routing
             LoadBalancingPolicyController = new LoadBalancingPolicyController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             ModelAccessPolicyController = new ModelAccessPolicyController(Database, AuthService, Serializer, Logging, ModelAccessControlService);
             VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService);
+            VirtualModelRunnerReservationController = new VirtualModelRunnerReservationController(Database, AuthService, Serializer, Logging, VirtualModelRunnerReservationService);
             AuthController = new AuthController(Database, AuthService, Serializer, Logging, Settings.AdminApiKeys);
             AdministratorController = new AdministratorController(Database, AuthService, Serializer, Logging);
             BackupController = new BackupController(Database, AuthService, Serializer, Logging, ConfigurationValidationService, ModelAccessControlService);
@@ -92,6 +95,8 @@ namespace Conductor.Server.Routing
 
         internal RequestHistoryService RequestHistoryService { get; }
 
+        internal VirtualModelRunnerReservationService VirtualModelRunnerReservationService { get; }
+
         internal TenantController TenantController { get; }
 
         internal UserController UserController { get; }
@@ -109,6 +114,8 @@ namespace Conductor.Server.Routing
         internal ModelAccessPolicyController ModelAccessPolicyController { get; }
 
         internal VirtualModelRunnerController VirtualModelRunnerController { get; }
+
+        internal VirtualModelRunnerReservationController VirtualModelRunnerReservationController { get; }
 
         internal AuthController AuthController { get; }
 

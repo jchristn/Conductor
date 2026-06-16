@@ -11,6 +11,7 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Model Definitions**: Catalog your models with metadata like family, parameter size, and quantization
 - **Model Configurations**: Create reusable configurations with pinned properties for embeddings and completions
 - **Virtual Model Runners**: Combine endpoints and configurations into virtual endpoints with load balancing
+- **VMR Reservations**: Schedule exclusive access windows for selected users or credentials while preserving normal on-demand access outside the window
 - **Configuration Pinning**: Automatically inject model parameters into requests (like OllamaFlow)
 - **Session Affinity**: Pin clients to specific backend endpoints based on IP address, API key, or custom headers to minimize context drops and model swapping
 - **Load Balancing**: Round-robin, random, or first-available endpoint selection with weighted distribution and optional session affinity
@@ -85,6 +86,8 @@ npm run preview -- --host 0.0.0.0
 - [ANALYTICS.md](./ANALYTICS.md): product plan for the Analytics workspace.
 - [ANALYTICS_PLAN.md](./ANALYTICS_PLAN.md): implementation tracker for the Analytics workspace.
 - [ADR 0002](./docs/adr/0002-analytics-workspace.md): Analytics workspace API, retention, authorization, saved-report, and export decisions.
+- [ADR 0003](./docs/adr/0003-virtual-model-runner-reservations.md): VMR reservation admission, observability, API, and backup/restore decisions.
+- [MANAGING_RESERVATIONS.md](./MANAGING_RESERVATIONS.md): VMR reservation operations, enforcement order, troubleshooting, and internals.
 - [ACCESS_POLICIES.md](./ACCESS_POLICIES.md): practical model access policy authoring guide with real-world examples.
 - [TESTING.md](./TESTING.md): test architecture and commands.
 - [Conductor.postman_collection.json](./Conductor.postman_collection.json): Postman collection covering management, validation, model access, routing, analytics, and observability routes.
@@ -127,6 +130,7 @@ The SDKs include helpers for:
 - endpoint drain, resume, and quarantine actions
 - endpoint and virtual model runner model load or verification requests
 - model access policy CRUD, validation, evaluation, and effective-access simulation
+- VMR reservation CRUD, validation, scoped listing, and effective-access simulation
 - request-history search, summary, detail, analytics, and bulk deletion
 - analytics catalog, query, summary, TTFT, token usage, estimate-only cost, user, and access/reliability routes
 - observability metrics summary and text export
@@ -179,6 +183,8 @@ Users have three permission levels:
 | Load Balancing Policy | `lbp_` | `/v1.0/loadbalancingpolicies` |
 | Model Access Policy | `map_` | `/v1.0/modelaccesspolicies` |
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
+| VMR Reservation | `vmrr_` | `/v1.0/vmrreservations` |
+| VMR Reservation Subject | `vmrrs_` | nested in VMR reservation responses |
 | Request History | `req_` | `/v1.0/requesthistory` |
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
 | Request Analytics | `rae_` | `/v1.0/requesthistory/analytics/overview` |
@@ -195,6 +201,14 @@ Tenant admins can ask Conductor to load or verify a model before user traffic re
 For Ollama, `ProbeKind=Auto` uses a minimal native generation probe and can keep the model resident with `KeepAlive`. For vLLM, OpenAI, and Gemini, `Auto` defaults to metadata verification because those providers generally do not expose a host-local load primitive through their public APIs. Explicit generation or embedding probes for hosted providers may be billable.
 
 See [REST_API.md](./REST_API.md#model-loading) for request fields, outcome codes, dashboard behavior, SDK examples, and provider caveats.
+
+### VMR Reservations
+
+VMR reservations schedule exclusive access windows for a Virtual Model Runner. During the active window, and during any configured admission drain lead time, Conductor admits only the users and credentials listed on the reservation. Outside the window, normal on-demand VMR access continues and existing ACL/model-access checks still apply after a reservation participant is allowed.
+
+Operators can manage reservations from the dashboard **Reservations** workspace, from VMR row actions, or through `/v1.0/vmrreservations`. The dashboard supports listing, refreshing, VMR-scoped creation, validating, row-click editing, deactivating, row-level JSON inspection, VMR reservation badges, request-history reservation filters/detail fields, analytics reservation-denial cards, and evaluating effective reservation access for a candidate user or credential. Reservation denials are recorded in logs, request history, and request analytics with machine-readable reasons such as `ReservationDenied`, `ReservationDrainDenied`, `ReservationAuthenticationRequired`, and `ReservationConflict`. Backup/restore includes reservation records and subjects.
+
+See [MANAGING_RESERVATIONS.md](./MANAGING_RESERVATIONS.md) for operational guidance, API examples, enforcement order, troubleshooting, and implementation details.
 
 ### Ollama Model Management
 
@@ -500,7 +514,7 @@ Request history captures request/response data for Virtual Model Runners with `R
 
 **Note:** Request history must be enabled both globally (in `conductor.json`) and per-VMR (via the `RequestHistoryEnabled` property). The per-VMR default is enabled for newly-created VMRs.
 
-Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, policy attachment, requested/effective model names, routing outcome, denial reason, mutation summary, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), time to first token/byte (`FirstTokenTimeMs`), trace ID, provider request ID, token counts, token throughput, analytics coverage, and dominant latency stage.
+Captured request history entries include the VMR, routed model runner endpoint, matched model definition, matched model configuration, policy attachment, reservation gate dimensions when applicable, requested/effective model names, routing outcome, denial reason, mutation summary, HTTP status, body lengths, transfer type, total response time (`ResponseTimeMs`), time to first token/byte (`FirstTokenTimeMs`), trace ID, provider request ID, token counts, token throughput, analytics coverage, and dominant latency stage. Reservation denials persist `ReservationGuid`, `ReservationName`, `ReservationDecision`, `ReservationReasonCode`, and the UTC reservation window, and request-history search/summary plus request-analytics overview can filter by reservation id and reason.
 
 When `BodyRetentionDays` is shorter than `MetadataRetentionDays`, Conductor scrubs request and response bodies from detail files while preserving the searchable routing and latency ledger.
 
@@ -519,7 +533,7 @@ GET /v1.0/requesthistory/analytics/overview?range=lastDay&vmrGuid={guid}&endpoin
 GET /v1.0/requesthistory/{id}/analytics
 ```
 
-The overview response includes request counts, success/failure counts, latency percentiles, analytics coverage, token totals, token throughput, time-series buckets, stage breakdowns, endpoint summaries, and slowest-request links.
+The overview response includes request counts, success/failure counts, reservation-denial counts, latency percentiles, analytics coverage, token totals, token throughput, time-series buckets, stage breakdowns, endpoint summaries, and slowest-request links.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -534,6 +548,9 @@ The overview response includes request counts, success/failure counts, latency p
 | `modelName` | string | No | Filter by requested or effective model |
 | `mutationSummary` | string | No | Filter by mutation-summary substring |
 | `denialReasonCode` | string | No | Filter by denial reason |
+| `reservationGuid` | string | No | Filter by VMR reservation id |
+| `reservationDecision` | string | No | Filter by reservation gate decision such as `Allowed` or `Denied` |
+| `reservationReasonCode` | string | No | Filter by reservation reason such as `ReservationDenied` |
 | `sessionAffinityOutcome` | string | No | Filter by session-affinity outcome |
 | `statusClass` | string | No | Filter by status class such as `2xx`, `4xx`, or `5xx` |
 | `sourceIp` | string | No | Filter by requestor source IP |
@@ -603,7 +620,7 @@ Cost output is an estimate only. Conductor multiplies successful reported token 
 
 System administrators can run global analytics and optionally filter to a tenant with `tenantId`. Tenant administrators are forced into their authenticated tenant scope. A tenant user can be granted read-only Analytics access without tenant-admin rights by adding the `analytics.read` label, or by setting a user tag such as `analytics.read=true` or `permissions=analytics.read`.
 
-Saved reports persist the Analytics query, grouping, token-unit-cost, filters, and dashboard display state. They do not schedule execution or snapshot results. The dashboard can load, update, delete, and copy a link to a saved report.
+Saved reports persist the Analytics query, grouping, token-unit-cost, reservation filters, and dashboard display state. They do not schedule execution or snapshot results. The dashboard can load, update, delete, and copy a link to a saved report.
 
 ## Configuration Pinning
 

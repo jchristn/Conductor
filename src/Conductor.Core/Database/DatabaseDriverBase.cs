@@ -48,6 +48,11 @@ namespace Conductor.Core.Database
         public IVirtualModelRunnerMethods VirtualModelRunner { get; protected set; }
 
         /// <summary>
+        /// Virtual model runner reservation methods.
+        /// </summary>
+        public IVirtualModelRunnerReservationMethods VirtualModelRunnerReservation { get; protected set; }
+
+        /// <summary>
         /// Load-balancing policy methods.
         /// </summary>
         public ILoadBalancingPolicyMethods LoadBalancingPolicy { get; protected set; }

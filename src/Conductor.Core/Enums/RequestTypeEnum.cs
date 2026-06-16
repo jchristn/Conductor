@@ -342,6 +342,43 @@ namespace Conductor.Core.Enums
         /// </summary>
         LoadVirtualModelRunnerModel,
 
+        // ==================== Virtual Model Runner Reservation Operations ====================
+
+        /// <summary>
+        /// Create virtual model runner reservation.
+        /// </summary>
+        CreateVirtualModelRunnerReservation,
+
+        /// <summary>
+        /// Read virtual model runner reservation.
+        /// </summary>
+        ReadVirtualModelRunnerReservation,
+
+        /// <summary>
+        /// Update virtual model runner reservation.
+        /// </summary>
+        UpdateVirtualModelRunnerReservation,
+
+        /// <summary>
+        /// Delete virtual model runner reservation.
+        /// </summary>
+        DeleteVirtualModelRunnerReservation,
+
+        /// <summary>
+        /// List virtual model runner reservations.
+        /// </summary>
+        ListVirtualModelRunnerReservations,
+
+        /// <summary>
+        /// Validate virtual model runner reservation draft.
+        /// </summary>
+        ValidateVirtualModelRunnerReservation,
+
+        /// <summary>
+        /// Read effective reservation access for a virtual model runner.
+        /// </summary>
+        ReadVirtualModelRunnerReservationEffective,
+
         // ==================== Load-Balancing Policy Operations ====================
 
         /// <summary>

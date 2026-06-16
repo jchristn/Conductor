@@ -47,6 +47,38 @@ export class ConductorClient {
     return this.#request('POST', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/explain-routing${this.#tenantQuery(tenantId)}`, payload);
   }
 
+  async listVirtualModelRunnerReservations(filters = {}) {
+    return this.#request('GET', `/v1.0/vmrreservations${this.#queryString(filters)}`);
+  }
+
+  async getVirtualModelRunnerReservation(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/vmrreservations/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createVirtualModelRunnerReservation(reservation) {
+    return this.#request('POST', '/v1.0/vmrreservations', reservation);
+  }
+
+  async updateVirtualModelRunnerReservation(id, reservation) {
+    return this.#request('PUT', `/v1.0/vmrreservations/${encodeURIComponent(id)}`, reservation);
+  }
+
+  async deleteVirtualModelRunnerReservation(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/vmrreservations/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async validateVirtualModelRunnerReservation(reservation) {
+    return this.#request('POST', '/v1.0/vmrreservations/validate', reservation);
+  }
+
+  async listReservationsForVirtualModelRunner(id, filters = {}) {
+    return this.#request('GET', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/reservations${this.#queryString(filters)}`);
+  }
+
+  async getVirtualModelRunnerReservationEffective(id, filters = {}) {
+    return this.#request('GET', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/reservation-effective${this.#queryString(filters)}`);
+  }
+
   async validateModelRunnerEndpoint(draft, existingId = null) {
     return this.#request('POST', `/v1.0/modelrunnerendpoints/validate${this.#existingIdQuery(existingId)}`, draft);
   }

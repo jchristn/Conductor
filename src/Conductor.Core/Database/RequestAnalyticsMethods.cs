@@ -35,7 +35,8 @@ namespace Conductor.Core.Database
 
             string query = "INSERT INTO requestanalyticsevents (id, tenantguid, requesthistoryid, traceid, virtualmodelrunnerguid, virtualmodelrunnername, " +
                            "modelendpointguid, modelendpointname, modelendpointurl, providername, apiformat, modelname, sequence, stagekind, phase, stagename, " +
-                           "startedutc, completedutc, durationms, success, httpstatus, errortype, errormessage, endpointlimiterwaitms, requesttoheadersms, " +
+                           "startedutc, completedutc, durationms, success, httpstatus, errortype, errormessage, reservationguid, reservationname, reservationdecision, " +
+                           "reservationreasoncode, reservationwindowstartutc, reservationwindowendutc, endpointlimiterwaitms, requesttoheadersms, " +
                            "headerstofirsttokenms, firsttokentolasttokenms, clienttotalms, prompttokens, completiontokens, totaltokens, requestbytes, responsebytes, " +
                            "tokenspersecond, rawprovidermetrics, createdutc) VALUES (" +
                            "'" + _Driver.Sanitize(entry.Id) + "', " +
@@ -61,6 +62,12 @@ namespace Conductor.Core.Database
                            _Driver.FormatNullable(entry.HttpStatus) + ", " +
                            _Driver.FormatNullableString(entry.ErrorType) + ", " +
                            _Driver.FormatNullableString(entry.ErrorMessage) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationGuid) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationName) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationDecision) + ", " +
+                           _Driver.FormatNullableString(entry.ReservationReasonCode) + ", " +
+                           (entry.ReservationWindowStartUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.ReservationWindowStartUtc.Value) + "'" : "NULL") + ", " +
+                           (entry.ReservationWindowEndUtc.HasValue ? "'" + _Driver.FormatDateTime(entry.ReservationWindowEndUtc.Value) + "'" : "NULL") + ", " +
                            _Driver.FormatNullable(entry.EndpointLimiterWaitMs) + ", " +
                            _Driver.FormatNullable(entry.RequestToHeadersMs) + ", " +
                            _Driver.FormatNullable(entry.HeadersToFirstTokenMs) + ", " +
@@ -178,6 +185,18 @@ namespace Conductor.Core.Database
             {
                 string modelName = _Driver.Sanitize(filter.ModelName).ToLowerInvariant();
                 conditions.Add("LOWER(COALESCE(modelname, '')) LIKE '%" + modelName + "%'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationGuid))
+            {
+                conditions.Add("reservationguid = '" + _Driver.Sanitize(filter.ReservationGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationDecision))
+            {
+                conditions.Add("reservationdecision = '" + _Driver.Sanitize(filter.ReservationDecision) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.ReservationReasonCode))
+            {
+                conditions.Add("reservationreasoncode = '" + _Driver.Sanitize(filter.ReservationReasonCode) + "'");
             }
             if (!String.IsNullOrEmpty(filter.StageKind))
             {

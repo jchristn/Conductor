@@ -890,6 +890,59 @@ List-model filtering uses the same `ListModels` action. Include `ListModels` in 
 
 For monitor-mode rollout, configure `ModelAccessControl.Enabled=true` and `ModelAccessControl.Mode=Monitor`, attach the policy to selected VMRs, and inspect request history for `ModelAccessWouldDeny=true` before switching to `Enforce`.
 
+### VMR Reservations
+
+Auth level: `TenantAdmin` for create, update, deactivate, and validate. Auth level: `Authenticated` for read, list, and effective-access evaluation.
+
+VMR reservations are tenant-scoped time windows that block VMR admission for every identity except explicitly listed users and credentials. Outside an active reservation or admission drain window, VMR access is unchanged and continues through normal tenant, VMR, request-type, ACL, model access, routing, and endpoint checks.
+
+For an operator and implementation guide, see [MANAGING_RESERVATIONS.md](./MANAGING_RESERVATIONS.md).
+
+The dashboard exposes these routes through the **Reservations** workspace. The table supports refresh, filtering, row-click editing, row-level JSON inspection, create/edit/deactivate workflows, validation, and effective-access evaluation for a candidate user or credential.
+
+Tenant-scoped authenticated callers are resolved to their tenant automatically. System-admin or cross-tenant callers should include `tenantId` in query strings or request bodies when operating on a specific tenant; omitting `tenantId` on list-style routes returns cross-tenant results only for callers authorized to see them.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/vmrreservations` | List reservations. Query: `tenantId`, `vmrId`, `state`, `subjectType`, `subjectId`, `startsBeforeUtc`, `endsAfterUtc`, `nameFilter`, `activeFilter`, `maxResults`, `continuationToken`. Tenant callers may omit `tenantId`; system admins may omit `tenantId` to list all tenants. |
+| `POST` | `/v1.0/vmrreservations` | Create a reservation with nested `Subjects`. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/vmrreservations/validate` | Validate a reservation draft and participant list without saving it. |
+| `GET` | `/v1.0/vmrreservations/{id}` | Read a reservation and its participants. Tenant callers may omit `tenantId`; system admins should pass `tenantId`. |
+| `PUT` | `/v1.0/vmrreservations/{id}` | Update a reservation and replace its participant list. |
+| `DELETE` | `/v1.0/vmrreservations/{id}` | Soft deactivate a reservation. Tenant callers may omit `tenantId`; system admins should pass `tenantId`. |
+| `GET` | `/v1.0/virtualmodelrunners/{id}/reservations` | List reservations scoped to one VMR. Tenant callers may omit `tenantId`; system admins may omit `tenantId` to search all tenants by globally unique VMR id. |
+| `GET` | `/v1.0/virtualmodelrunners/{id}/reservation-effective` | Evaluate whether a user or credential would pass the reservation gate. Query: `tenantId`, `userId`, `credentialId`, `atUtc`. System admins should pass `tenantId`; tenant callers may omit it. |
+
+Reservation request shape:
+
+```json
+{
+  "TenantId": "ten_xxx",
+  "VirtualModelRunnerId": "vmr_xxx",
+  "Name": "Customer demo window",
+  "Description": "Reserved capacity for evaluation team",
+  "StartUtc": "2026-06-16T17:00:00Z",
+  "EndUtc": "2026-06-16T19:00:00Z",
+  "AdmissionDrainLeadMs": 300000,
+  "Active": true,
+  "Subjects": [
+    { "SubjectType": "User", "SubjectId": "usr_xxx" },
+    { "SubjectType": "Credential", "SubjectId": "cred_xxx" }
+  ]
+}
+```
+
+During an active reservation, a credential subject admits only that credential. A user subject admits that user and credentials owned by that user when the credential owner can be resolved. Reservation allow decisions do not bypass model access policies or ACLs.
+
+Nonparticipant requests are denied before endpoint inventory, session affinity, load balancing, and upstream provider calls. Denials return:
+
+- `401 ReservationAuthenticationRequired` when a reserved VMR receives an unauthenticated request.
+- `403 ReservationDenied` when a nonparticipant calls during the active window.
+- `403 ReservationDrainDenied` when a nonparticipant calls during the configured admission drain window.
+- `503 ReservationConflict` if multiple active reservations somehow overlap at runtime.
+
+The server writes reservation-denial log messages with tenant, VMR, reservation id, request user, request credential, UTC window, and reason code. Request history and request analytics also persist nullable reservation dimensions: `ReservationGuid`, `ReservationName`, `ReservationDecision`, `ReservationReasonCode`, `ReservationWindowStartUtc`, and `ReservationWindowEndUtc`. Search, summary, and analytics overview routes accept `reservationGuid`, `reservationDecision`, and `reservationReasonCode` filters for reservation-denial investigations.
+
 ### Virtual Model Runners
 
 Auth level: `Authenticated`
@@ -1033,7 +1086,7 @@ Backup package shape:
 
 ```jsonc
 {
-  "SchemaVersion": "1.1",
+  "SchemaVersion": "1.3",
   "CreatedUtc": "2026-05-18T12:00:00Z",
   "SourceInstance": "host-name",
   "CreatedBy": "admin@example.com",
@@ -1044,12 +1097,15 @@ Backup package shape:
   "ModelConfigurations": [],
   "ModelRunnerEndpoints": [],
   "VirtualModelRunners": [],
+  "VirtualModelRunnerReservations": [],
   "LoadBalancingPolicies": [],
   "ModelAccessPolicies": [],
   "ModelAccessRules": [],
   "Administrators": []
 }
 ```
+
+Backups include VMR reservations and nested reservation subjects. Validation checks reservation tenant, VMR, user, credential, subject, and overlap rules before restore; restore uses the same `Skip`, `Overwrite`, or `Fail` conflict mode as the other configuration entities.
 
 Restore request shape:
 
@@ -1080,6 +1136,7 @@ Validation response shape:
     "ModelConfigurationCount": 0,
     "ModelRunnerEndpointCount": 0,
     "VirtualModelRunnerCount": 0,
+    "VirtualModelRunnerReservationCount": 0,
     "AdministratorCount": 0,
     "LoadBalancingPolicyCount": 0,
     "ModelAccessPolicyCount": 0,
@@ -1102,6 +1159,7 @@ Restore response shape:
     "ModelConfigurations": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "ModelRunnerEndpoints": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "VirtualModelRunners": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
+    "VirtualModelRunnerReservations": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "Administrators": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "LoadBalancingPolicies": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "ModelAccessPolicies": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
@@ -1119,15 +1177,15 @@ Request history routes are registered only when request history is enabled in se
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/v1.0/requesthistory/analytics/overview` | Chart-ready aggregate analytics. Query: `tenantId`, `range`, `startUtc`, `endUtc`, `bucketSeconds`, `limit`, `vmrGuid`, `endpointGuid`, `providerName`, `modelName`, `stageKind`, `statusClass`. |
-| `GET` | `/v1.0/requesthistory/summary` | Aggregated time buckets. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelAccessPolicyGuid`, `modelAccessRuleGuid`, `modelAccessDecision`, `modelAccessWouldDeny`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `startUtc`, `endUtc`, `interval`. |
-| `GET` | `/v1.0/requesthistory` | Search entries. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelAccessPolicyGuid`, `modelAccessRuleGuid`, `modelAccessDecision`, `modelAccessWouldDeny`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`, `page`, `pageSize`. |
+| `GET` | `/v1.0/requesthistory/analytics/overview` | Chart-ready aggregate analytics. Query: `tenantId`, `range`, `startUtc`, `endUtc`, `bucketSeconds`, `limit`, `vmrGuid`, `endpointGuid`, `providerName`, `modelName`, `modelAccessPolicyGuid`, `modelAccessRuleGuid`, `modelAccessDecision`, `modelAccessWouldDeny`, `reservationGuid`, `reservationDecision`, `reservationReasonCode`, `stageKind`, `statusClass`. |
+| `GET` | `/v1.0/requesthistory/summary` | Aggregated time buckets. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelAccessPolicyGuid`, `modelAccessRuleGuid`, `modelAccessDecision`, `modelAccessWouldDeny`, `modelName`, `mutationSummary`, `denialReasonCode`, `reservationGuid`, `reservationDecision`, `reservationReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `startUtc`, `endUtc`, `interval`. |
+| `GET` | `/v1.0/requesthistory` | Search entries. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelAccessPolicyGuid`, `modelAccessRuleGuid`, `modelAccessDecision`, `modelAccessWouldDeny`, `modelName`, `mutationSummary`, `denialReasonCode`, `reservationGuid`, `reservationDecision`, `reservationReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`, `page`, `pageSize`. |
 | `GET` | `/v1.0/requesthistory/{id}` | Read entry metadata. Query: optional `tenantId` for cross-tenant callers. |
 | `GET` | `/v1.0/requesthistory/{id}/detail` | Read full request/response detail. Query: optional `tenantId`. |
 | `GET` | `/v1.0/requesthistory/{id}/analytics` | Read normalized analytics events for one request history entry. Query: optional `tenantId`. |
 | `DELETE` | `/v1.0/requesthistory/{id}` | Delete one entry. Query: optional `tenantId`. |
 | `POST` | `/v1.0/requesthistory/delete` | Delete selected entries by ID. Body: `{ "Ids": ["req_..."] }`. Query: optional `tenantId`. |
-| `DELETE` | `/v1.0/requesthistory/bulk` | Bulk delete by filter. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`. |
+| `DELETE` | `/v1.0/requesthistory/bulk` | Bulk delete by filter. Query: `tenantId`, `vmrGuid`, `endpointGuid`, `requestorUserGuid`, `credentialGuid`, `loadBalancingPolicyGuid`, `modelName`, `mutationSummary`, `denialReasonCode`, `reservationGuid`, `reservationDecision`, `reservationReasonCode`, `sessionAffinityOutcome`, `statusClass`, `sourceIp`, `httpStatus`, `createdAfterUtc`, `createdBeforeUtc`. |
 
 Summary interval values:
 
@@ -1202,6 +1260,10 @@ Analytics overview response shape:
   "FailureCount": 3,
   "AnalyticsCapturedCount": 118,
   "AnalyticsCoveragePercent": 95.93,
+  "ReservationDeniedCount": 2,
+  "ReservationDenialCounts": {
+    "vmrr_xxx": 2
+  },
   "AverageDurationMs": 842.4,
   "P50DurationMs": 600,
   "P95DurationMs": 1900,
@@ -1247,6 +1309,12 @@ Request history entry fields include:
 - `RoutingOutcomeCode`
 - `DenialReasonCode`
 - `DenialReason`
+- `ReservationGuid`
+- `ReservationName`
+- `ReservationDecision`
+- `ReservationReasonCode`
+- `ReservationWindowStartUtc`
+- `ReservationWindowEndUtc`
 - `SessionAffinityOutcome`
 - `MutationSummary`
 - `ExplanationSummary`
@@ -1335,13 +1403,16 @@ GET query parameters:
 | `limit` | integer | Maximum raw request-history rows to scan. Server caps the value. |
 | `tokenUnitCost` | decimal | Optional per-token unit cost used for estimate-only cost. GET parsing ignores invalid or negative values; POST query validation rejects negative values. |
 | `costCurrency` | string | Optional display label such as `USD`, `EUR`, or `estimate`. |
-| `groupBy` | string | One dimension: `TenantId`, `RequestedModel`, `EffectiveModel`, `ModelDefinitionId`, `ModelRunnerEndpointId`, `VirtualModelRunnerId`, `RequestorUserId`, `CredentialId`, or `ProviderName`. |
+| `groupBy` | string | One dimension: `TenantId`, `RequestedModel`, `EffectiveModel`, `ModelDefinitionId`, `ModelRunnerEndpointId`, `VirtualModelRunnerId`, `RequestorUserId`, `CredentialId`, `ProviderName`, `ReservationGuid`, `ReservationName`, `ReservationDecision`, or `ReservationReasonCode`. |
 | `vmrGuid` | string | Filter by Virtual Model Runner ID. CSV values are accepted. |
 | `endpointGuid` | string | Filter by model runner endpoint ID. CSV values are accepted. |
 | `modelName` | string | Filter by requested, effective, or model-definition name. CSV values are accepted. |
 | `requestorUserGuid` / `userId` | string | Filter by user ID. CSV values are accepted. |
 | `credentialGuid` / `credentialId` | string | Filter by credential ID. CSV values are accepted. |
 | `providerName` | string | Filter by provider family/name. CSV values are accepted. |
+| `reservationGuid` / `reservationId` | string | Filter by VMR reservation ID. CSV values are accepted. |
+| `reservationDecision` | string | Filter by reservation gate decision, such as `Allowed`, `Denied`, `NoReservation`, or `Conflict`. CSV values are accepted. |
+| `reservationReasonCode` | string | Filter by reservation reason, such as `ReservationDenied`, `ReservationDrainDenied`, `ReservationAuthenticationRequired`, or `ReservationConflict`. CSV values are accepted. |
 | `statusClass` | string | Filter by HTTP status class such as `2xx`, `4xx`, or `5xx`. CSV values are accepted. |
 | `stageKind` | string | Filter by normalized dominant stage kind where request analytics capture is available, such as `routing`, `first_token_wait`, `generation`, `completion`, or `denial`. |
 | `modelAccessWouldDeny` | boolean | Filter model-access monitor-mode would-deny rows. |
@@ -1376,6 +1447,9 @@ GET query parameters:
     "RequestorUserIds": [],
     "CredentialIds": [],
     "ProviderNames": [],
+    "ReservationIds": [],
+    "ReservationDecisions": [],
+    "ReservationReasonCodes": [],
     "StatusClasses": [],
     "StageKinds": [],
     "ModelAccessWouldDeny": null,
@@ -1400,6 +1474,10 @@ GET query parameters:
   "SuccessfulCompletionCount": 118,
   "FailedRequestCount": 2,
   "DeniedRequestCount": 1,
+  "ReservationDeniedCount": 1,
+  "ReservationDenialCounts": {
+    "vmrr_123": 1
+  },
   "RateLimitedRequestCount": 1,
   "AverageTimeToFirstTokenMs": 214.5,
   "P50TimeToFirstTokenMs": 180,

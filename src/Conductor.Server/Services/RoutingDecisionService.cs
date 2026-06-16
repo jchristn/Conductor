@@ -31,6 +31,7 @@ namespace Conductor.Server.Services
         private readonly RoutingModelMutationService _ModelMutationService;
         private readonly RoutingEffectiveConfigurationBuilder _EffectiveConfigurationBuilder;
         private readonly IModelAccessControlService _ModelAccessControlService;
+        private readonly VirtualModelRunnerReservationService _ReservationService;
 
         /// <summary>
         /// Instantiate the routing decision service.
@@ -52,6 +53,7 @@ namespace Conductor.Server.Services
             _SessionAffinityService = sessionAffinityService;
             _Metrics = metrics;
             _ModelAccessControlService = modelAccessControlService;
+            _ReservationService = new VirtualModelRunnerReservationService(_Database, _Logging);
         }
 
         /// <summary>
@@ -96,6 +98,41 @@ namespace Conductor.Server.Services
             requestContext.VirtualModelRunnerId = vmr.Id;
             requestContext.ApiType = urlContext.ApiType;
             requestContext.RequestType = urlContext.RequestType;
+
+            string reservationCredentialOwnerUserId = await ResolveReservationCredentialOwnerUserIdAsync(vmr.TenantId, requestContext, token).ConfigureAwait(false);
+            ReservationEvaluationResult reservationResult = await _ReservationService.EvaluateAsync(new ReservationEvaluationContext
+            {
+                TenantId = vmr.TenantId,
+                VirtualModelRunnerId = vmr.Id,
+                UserId = requestContext.UserId,
+                CredentialId = requestContext.CredentialId,
+                CredentialOwnerUserId = reservationCredentialOwnerUserId,
+                RequestType = urlContext.RequestType,
+                AtUtc = DateTime.UtcNow
+            }, token).ConfigureAwait(false);
+            ApplyReservationResult(decision, reservationResult);
+            if (reservationResult != null && !reservationResult.Allowed)
+            {
+                int statusCode = String.Equals(reservationResult.ReasonCode, "ReservationAuthenticationRequired", StringComparison.Ordinal)
+                    ? 401
+                    : 403;
+                if (String.Equals(reservationResult.ReasonCode, "ReservationConflict", StringComparison.Ordinal))
+                {
+                    statusCode = 503;
+                }
+                Deny(decision, statusCode, reservationResult.ReasonCode, reservationResult.ReasonText);
+                AddTimeline(decision, "ReservationGate", "Reservation Gate", "Denied", reservationResult.ReasonText, BuildReservationAttributes(reservationResult));
+                return FinalizeMetrics(result, vmr, requestContext, decisionStart);
+            }
+
+            if (reservationResult != null && reservationResult.HasReservation)
+            {
+                AddTimeline(decision, "ReservationGate", "Reservation Gate", "Passed", reservationResult.ReasonText, BuildReservationAttributes(reservationResult));
+            }
+            else
+            {
+                AddTimeline(decision, "ReservationGate", "Reservation Gate", "Skipped", "No active reservation applies.");
+            }
 
             if (urlContext.IsEmbeddingsRequest && !vmr.AllowEmbeddings)
             {
@@ -340,6 +377,63 @@ namespace Conductor.Server.Services
         public async Task<EffectiveVirtualModelRunnerConfiguration> BuildEffectiveConfigurationAsync(VirtualModelRunner vmr, CancellationToken token = default)
         {
             return await _EffectiveConfigurationBuilder.BuildAsync(vmr, token).ConfigureAwait(false);
+        }
+
+        private static void ApplyReservationResult(RoutingDecision decision, ReservationEvaluationResult reservationResult)
+        {
+            if (decision == null || reservationResult == null)
+            {
+                return;
+            }
+
+            decision.ReservationId = reservationResult.ReservationId;
+            decision.ReservationName = reservationResult.ReservationName;
+            decision.ReservationDecision = reservationResult.Decision;
+            decision.ReservationReasonCode = reservationResult.ReasonCode;
+            decision.ReservationWindowStartUtc = reservationResult.StartUtc;
+            decision.ReservationWindowEndUtc = reservationResult.EndUtc;
+        }
+
+        private static Dictionary<string, string> BuildReservationAttributes(ReservationEvaluationResult reservationResult)
+        {
+            Dictionary<string, string> attributes = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+            if (reservationResult == null)
+            {
+                return attributes;
+            }
+
+            attributes["ReservationId"] = reservationResult.ReservationId ?? String.Empty;
+            attributes["ReservationName"] = reservationResult.ReservationName ?? String.Empty;
+            attributes["Decision"] = reservationResult.Decision.ToString();
+            attributes["ReasonCode"] = reservationResult.ReasonCode ?? String.Empty;
+            attributes["StartUtc"] = reservationResult.StartUtc.HasValue ? reservationResult.StartUtc.Value.ToString("O") : String.Empty;
+            attributes["EndUtc"] = reservationResult.EndUtc.HasValue ? reservationResult.EndUtc.Value.ToString("O") : String.Empty;
+            attributes["InActiveWindow"] = reservationResult.InActiveWindow ? "true" : "false";
+            attributes["InDrainWindow"] = reservationResult.InDrainWindow ? "true" : "false";
+            attributes["MatchedSubjectType"] = reservationResult.MatchedSubjectType.HasValue ? reservationResult.MatchedSubjectType.Value.ToString() : String.Empty;
+            attributes["MatchedSubjectId"] = reservationResult.MatchedSubjectId ?? String.Empty;
+            return attributes;
+        }
+
+        private async Task<string> ResolveReservationCredentialOwnerUserIdAsync(string tenantId, RequestContext requestContext, CancellationToken token)
+        {
+            if (requestContext == null)
+            {
+                return null;
+            }
+
+            if (!String.IsNullOrWhiteSpace(requestContext.UserId))
+            {
+                return requestContext.UserId;
+            }
+
+            if (String.IsNullOrWhiteSpace(tenantId) || String.IsNullOrWhiteSpace(requestContext.CredentialId))
+            {
+                return null;
+            }
+
+            Credential credential = await _Database.Credential.ReadAsync(tenantId, requestContext.CredentialId, token).ConfigureAwait(false);
+            return credential?.UserId;
         }
 
         private async Task<ModelAccessEvaluationResult> EvaluateModelAccessAsync(

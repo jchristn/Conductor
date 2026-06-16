@@ -68,6 +68,10 @@ namespace Test.Shared.Server.Integration
             await AssertColumnExistsAsync(database, "requestedmodel").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "effectivemodel").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "denialreasoncode").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "reservationguid").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "reservationreasoncode").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "reservationwindowstartutc").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "reservationwindowendutc").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "sessionaffinityoutcome").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "requestbodyretained").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "responsebodyretained").ConfigureAwait(false);
@@ -89,6 +93,8 @@ namespace Test.Shared.Server.Integration
             await AssertIndexExistsAsync(database, "idx_requesthistory_requestedmodel").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_effectivemodel").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_denialreasoncode").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_reservationguid").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_reservationreasoncode").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_sessionaffinityoutcome").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_traceid").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_providerrequestid").ConfigureAwait(false);
@@ -97,9 +103,12 @@ namespace Test.Shared.Server.Integration
             await AssertIndexExistsAsync(database, "idx_requesthistory_dominantstagekind").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_analyticsfailurecode").ConfigureAwait(false);
             await AssertTableExistsAsync(database, "requestanalyticsevents").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "requestanalyticsevents", "reservationguid").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "requestanalyticsevents", "reservationreasoncode").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requestanalyticsevents_tenant_created").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requestanalyticsevents_requesthistoryid").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requestanalyticsevents_traceid").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requestanalyticsevents_reservation_created").ConfigureAwait(false);
         }
 
         /// <summary>
@@ -226,7 +235,12 @@ namespace Test.Shared.Server.Integration
 
         private static async Task AssertColumnExistsAsync(SqliteDatabaseDriver database, string columnName)
         {
-            string query = "SELECT COUNT(*) AS cnt FROM pragma_table_info('requesthistory') WHERE name = '" + columnName + "';";
+            await AssertColumnExistsAsync(database, "requesthistory", columnName).ConfigureAwait(false);
+        }
+
+        private static async Task AssertColumnExistsAsync(SqliteDatabaseDriver database, string tableName, string columnName)
+        {
+            string query = "SELECT COUNT(*) AS cnt FROM pragma_table_info('" + tableName + "') WHERE name = '" + columnName + "';";
             long count = await ReadCountAsync(database, query).ConfigureAwait(false);
             count.Should().Be(1);
         }
