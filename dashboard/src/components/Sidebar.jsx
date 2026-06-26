@@ -209,6 +209,28 @@ function Sidebar() {
             <path fillRule="evenodd" d="M2 9v7a2 2 0 002 2h12a2 2 0 002-2V9H2zm6 2a1 1 0 012 0v3a1 1 0 11-2 0v-3zm5-1a1 1 0 00-1 1v3a1 1 0 102 0v-3a1 1 0 00-1-1z" clipRule="evenodd" />
           </svg>
         )
+      },
+      {
+        action: startTour,
+        label: 'Replay Tour',
+        tourId: 'nav-replay-tour',
+        tooltip: 'Take a guided tour of the interface',
+        icon: (
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+          </svg>
+        )
+      },
+      {
+        action: startWizard,
+        label: 'Setup Wizard',
+        tourId: 'nav-setup-wizard',
+        tooltip: 'Walk through setup step by step',
+        icon: (
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
+          </svg>
+        )
       }
     ] : [])
   ];
@@ -223,6 +245,19 @@ function Sidebar() {
         {navItems.map((item, index) =>
           item.divider ? (
             <li key={`divider-${index}`} className="nav-divider"></li>
+          ) : item.action ? (
+            <li key={`action-${item.tourId || item.label}`}>
+              <button
+                type="button"
+                className="nav-link nav-action-button"
+                onClick={item.action}
+                title={item.tooltip || ''}
+                data-tour-id={item.tourId || undefined}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-label">{item.label}</span>
+              </button>
+            </li>
           ) : (
             <li key={item.path}>
               <NavLink
@@ -238,20 +273,6 @@ function Sidebar() {
           )
         )}
       </ul>
-      <div className="sidebar-footer">
-        <button className="sidebar-footer-btn" onClick={startTour} title="Take a guided tour of the interface">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-          </svg>
-          Replay Tour
-        </button>
-        <button className="sidebar-footer-btn" onClick={startWizard} title="Walk through setup step by step">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
-          </svg>
-          Setup Wizard
-        </button>
-      </div>
     </nav>
   );
 }
