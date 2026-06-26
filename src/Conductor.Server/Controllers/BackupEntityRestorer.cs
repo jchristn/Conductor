@@ -145,6 +145,32 @@ namespace Conductor.Server.Controllers
             }
         }
 
+        internal async Task RestoreEndpointGroupAsync(EndpointGroup group, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
+        {
+            bool exists = await _Database.EndpointGroup.ExistsAsync(group.TenantId, group.Id, token).ConfigureAwait(false);
+
+            if (exists)
+            {
+                switch (conflictResolution)
+                {
+                    case ConflictResolutionMode.Skip:
+                        counter.Skipped++;
+                        break;
+                    case ConflictResolutionMode.Overwrite:
+                        await _Database.EndpointGroup.UpdateAsync(group, token).ConfigureAwait(false);
+                        counter.Updated++;
+                        break;
+                    case ConflictResolutionMode.Fail:
+                        throw new InvalidOperationException("Endpoint Group with ID '" + group.Id + "' already exists.");
+                }
+            }
+            else
+            {
+                await _Database.EndpointGroup.CreateAsync(group, token).ConfigureAwait(false);
+                counter.Created++;
+            }
+        }
+
         internal async Task RestoreModelDefinitionAsync(ModelDefinition modelDef, ConflictResolutionMode conflictResolution, EntityRestoreCount counter, CancellationToken token)
         {
             bool exists = await _Database.ModelDefinition.ExistsAsync(modelDef.TenantId, modelDef.Id, token).ConfigureAwait(false);

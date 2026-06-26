@@ -23,6 +23,34 @@ class ConductorClientTests(unittest.TestCase):
             "http://localhost:9000/v1.0/virtualmodelrunners/validate?existingId=vmr_123",
         )
 
+    def test_endpoint_group_methods_use_expected_routes(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"ok": True}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        group = {"Name": "Primary", "EndpointIds": ["mre_123"]}
+
+        client.list_endpoint_groups({"tenantId": "ten_123", "activeFilter": True})
+        client.get_endpoint_group("egp_123", "ten_123")
+        client.create_endpoint_group(group)
+        client.update_endpoint_group("egp_123", group)
+        client.delete_endpoint_group("egp_123", "ten_123")
+        client.validate_endpoint_group(group, "egp_123")
+
+        urls = [call.kwargs["url"] for call in session.request.call_args_list]
+        methods = [call.kwargs["method"] for call in session.request.call_args_list]
+        self.assertEqual(urls[0], "http://localhost:9000/v1.0/endpointgroups?tenantId=ten_123&activeFilter=True")
+        self.assertEqual(urls[1], "http://localhost:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123")
+        self.assertEqual(urls[2], "http://localhost:9000/v1.0/endpointgroups")
+        self.assertEqual(urls[3], "http://localhost:9000/v1.0/endpointgroups/egp_123")
+        self.assertEqual(urls[4], "http://localhost:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123")
+        self.assertEqual(urls[5], "http://localhost:9000/v1.0/endpointgroups/validate?existingId=egp_123")
+        self.assertEqual(methods, ["GET", "GET", "POST", "PUT", "DELETE", "POST"])
+
     def test_request_history_search_serializes_filters(self) -> None:
         session = MagicMock()
         response = MagicMock()

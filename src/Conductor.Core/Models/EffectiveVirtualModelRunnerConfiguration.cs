@@ -74,6 +74,11 @@ namespace Conductor.Core.Models
         public List<EffectiveEndpointSummary> Endpoints { get; set; } = new List<EffectiveEndpointSummary>();
 
         /// <summary>
+        /// Resolved endpoint groups.
+        /// </summary>
+        public List<EffectiveEndpointGroupSummary> EndpointGroups { get; set; } = new List<EffectiveEndpointGroupSummary>();
+
+        /// <summary>
         /// Resolved model definitions.
         /// </summary>
         public List<EffectiveModelDefinitionSummary> ModelDefinitions { get; set; } = new List<EffectiveModelDefinitionSummary>();
@@ -87,6 +92,42 @@ namespace Conductor.Core.Models
         /// Explicit model-to-configuration mappings.
         /// </summary>
         public Dictionary<string, string> ModelConfigurationMappings { get; set; } = new Dictionary<string, string>();
+    }
+
+    /// <summary>
+    /// Resolved endpoint group summary.
+    /// </summary>
+    public class EffectiveEndpointGroupSummary
+    {
+        /// <summary>
+        /// Endpoint group identifier.
+        /// </summary>
+        public string Id { get; set; } = null;
+
+        /// <summary>
+        /// Endpoint group name.
+        /// </summary>
+        public string Name { get; set; } = null;
+
+        /// <summary>
+        /// Whether this group is active.
+        /// </summary>
+        public bool Active { get; set; } = false;
+
+        /// <summary>
+        /// Priority value.
+        /// </summary>
+        public int Priority { get; set; } = 0;
+
+        /// <summary>
+        /// Traffic weight at the priority value.
+        /// </summary>
+        public int TrafficWeight { get; set; } = 0;
+
+        /// <summary>
+        /// Endpoint identifiers included in the group.
+        /// </summary>
+        public List<string> EndpointIds { get; set; } = new List<string>();
     }
 
     /// <summary>

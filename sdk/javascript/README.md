@@ -6,6 +6,7 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - effective configuration preview
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
+- endpoint group CRUD and validation
 - endpoint and virtual model runner model load or verification requests
 - VMR adaptive load-balancing configuration helpers through the VMR payload plus runtime stats, stats reset, and transient-backoff clear routes
 - Ollama endpoint model list, pull, and delete requests
@@ -40,6 +41,15 @@ const explanation = await client.explainVirtualModelRunnerRouting('vmr_123', {
     messages: [{ role: 'user', content: 'hello' }]
   })
 }, 'tenant_123');
+
+const endpointGroup = await client.createEndpointGroup({
+  TenantId: 'tenant_123',
+  Name: 'Primary GPU Pool',
+  Priority: 0,
+  TrafficWeight: 100,
+  EndpointIds: ['mre_123']
+});
+await client.validateEndpointGroup(endpointGroup);
 
 const analytics = await client.getRequestAnalyticsOverview({
   range: 'lastDay',
@@ -120,6 +130,14 @@ const vmrLoad = await client.loadVirtualModelRunnerModel('vmr_123', {
   ProbeKind: 'Auto'
 }, 'tenant_123');
 
+const endpointGroup = await client.createEndpointGroup({
+  TenantId: 'tenant_123',
+  Name: 'Primary',
+  Priority: 0,
+  TrafficWeight: 100,
+  EndpointIds: ['mre_fast']
+});
+
 await client.validateVirtualModelRunner({
   TenantId: 'tenant_123',
   Name: 'Adaptive production route',
@@ -131,22 +149,7 @@ await client.validateVirtualModelRunner({
     ExcludeBackoffEndpoints: true,
     BackoffBreaksSessionAffinity: true
   },
-  EndpointGroups: [
-    {
-      Id: 'primary',
-      Name: 'Primary',
-      Priority: 0,
-      TrafficWeight: 100,
-      EndpointIds: ['mre_fast']
-    },
-    {
-      Id: 'fallback',
-      Name: 'Fallback',
-      Priority: 1,
-      TrafficWeight: 100,
-      EndpointIds: ['mre_fallback']
-    }
-  ]
+  EndpointGroupIds: [endpointGroup.Id]
 });
 const runtimeStats = await client.getVirtualModelRunnerRuntimeStats('vmr_123', {
   tenantId: 'tenant_123'

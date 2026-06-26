@@ -33,6 +33,7 @@ namespace Conductor.Core.Database.PostgreSql
             User = new UserMethods(this);
             Credential = new CredentialMethods(this);
             ModelRunnerEndpoint = new ModelRunnerEndpointMethods(this);
+            EndpointGroup = new Conductor.Core.Database.EndpointGroupMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.PostgreSql);
             ModelDefinition = new ModelDefinitionMethods(this);
             ModelConfiguration = new ModelConfigurationMethods(this);
             VirtualModelRunner = new VirtualModelRunnerMethods(this);
@@ -58,6 +59,7 @@ namespace Conductor.Core.Database.PostgreSql
                 TableQueries.CreateUsersTable,
                 TableQueries.CreateCredentialsTable,
                 TableQueries.CreateModelRunnerEndpointsTable,
+                TableQueries.CreateEndpointGroupsTable,
                 TableQueries.CreateModelDefinitionsTable,
                 TableQueries.CreateModelConfigurationsTable,
                 TableQueries.CreateLoadBalancingPoliciesTable,
@@ -223,6 +225,7 @@ namespace Conductor.Core.Database.PostgreSql
             await EnsureColumnAsync("virtualmodelrunners", "modelconfigurationmappings", "ALTER TABLE virtualmodelrunners ADD COLUMN modelconfigurationmappings TEXT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "adaptiveloadbalancing", TableQueries.AddAdaptiveLoadBalancingColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "endpointgroupids", TableQueries.AddEndpointGroupIdsColumn, token).ConfigureAwait(false);
 
             await EnsureColumnAsync("modelrunnerendpoints", "rigmonitor", TableQueries.AddRigMonitorColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("modelrunnerendpoints", "servicestate", "ALTER TABLE modelrunnerendpoints ADD COLUMN servicestate INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);

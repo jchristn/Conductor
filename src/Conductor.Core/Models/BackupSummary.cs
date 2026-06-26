@@ -36,6 +36,11 @@ namespace Conductor.Core.Models
         public int ModelRunnerEndpointCount { get; set; } = 0;
 
         /// <summary>
+        /// Number of endpoint groups in the backup.
+        /// </summary>
+        public int EndpointGroupCount { get; set; } = 0;
+
+        /// <summary>
         /// Number of virtual model runners in the backup.
         /// </summary>
         public int VirtualModelRunnerCount { get; set; } = 0;

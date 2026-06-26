@@ -118,6 +118,32 @@ namespace Conductor.Core.Database.MySql.Queries
         ";
 
         /// <summary>
+        /// Create endpoint groups table.
+        /// </summary>
+        public static readonly string CreateEndpointGroupsTable = @"
+            CREATE TABLE IF NOT EXISTS endpointgroups (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                priority INT NOT NULL DEFAULT 0,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                trafficweight INT NOT NULL DEFAULT 100,
+                endpointids TEXT,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                INDEX idx_eg_tenantid (tenantid),
+                INDEX idx_eg_tenant_name (tenantid, name),
+                INDEX idx_eg_active (active),
+                INDEX idx_eg_lastupdateutc (lastupdateutc),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
         /// Create model definitions table.
         /// </summary>
         public static readonly string CreateModelDefinitionsTable = @"
@@ -282,6 +308,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 modelrunnerendpointids TEXT,
                 adaptiveloadbalancing TEXT,
                 endpointgroups TEXT,
+                endpointgroupids TEXT,
                 modelconfigurationids TEXT,
                 modeldefinitionids TEXT,
                 modelconfigurationmappings TEXT,
@@ -611,6 +638,13 @@ namespace Conductor.Core.Database.MySql.Queries
         /// </summary>
         public static readonly string AddEndpointGroupsColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN endpointgroups TEXT;
+        ";
+
+        /// <summary>
+        /// Add endpointgroupids column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddEndpointGroupIdsColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN endpointgroupids TEXT;
         ";
     }
 }

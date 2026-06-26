@@ -6,6 +6,7 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - effective configuration preview
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
+- endpoint group CRUD and validation
 - endpoint and virtual model runner model load or verification requests
 - VMR adaptive load-balancing configuration helpers through the VMR payload plus runtime stats, stats reset, and transient-backoff clear routes
 - Ollama endpoint model list, pull, and delete requests
@@ -41,6 +42,15 @@ explanation = client.explain_virtual_model_runner_routing(
     },
     tenant_id="tenant_123",
 )
+
+endpoint_group = client.create_endpoint_group({
+    "TenantId": "tenant_123",
+    "Name": "Primary GPU Pool",
+    "Priority": 0,
+    "TrafficWeight": 100,
+    "EndpointIds": ["mre_123"],
+})
+client.validate_endpoint_group(endpoint_group)
 
 analytics = client.get_request_analytics_overview({
     "range": "lastDay",
@@ -132,6 +142,14 @@ vmr_load = client.load_virtual_model_runner_model(
     tenant_id="tenant_123",
 )
 
+endpoint_group = client.create_endpoint_group({
+    "TenantId": "tenant_123",
+    "Name": "Primary",
+    "Priority": 0,
+    "TrafficWeight": 100,
+    "EndpointIds": ["mre_fast"],
+})
+
 client.validate_virtual_model_runner({
     "TenantId": "tenant_123",
     "Name": "Adaptive production route",
@@ -143,22 +161,7 @@ client.validate_virtual_model_runner({
         "ExcludeBackoffEndpoints": True,
         "BackoffBreaksSessionAffinity": True,
     },
-    "EndpointGroups": [
-        {
-            "Id": "primary",
-            "Name": "Primary",
-            "Priority": 0,
-            "TrafficWeight": 100,
-            "EndpointIds": ["mre_fast"],
-        },
-        {
-            "Id": "fallback",
-            "Name": "Fallback",
-            "Priority": 1,
-            "TrafficWeight": 100,
-            "EndpointIds": ["mre_fallback"],
-        },
-    ],
+    "EndpointGroupIds": [endpoint_group["Id"]],
 })
 runtime_stats = client.get_virtual_model_runner_runtime_stats("vmr_123", {
     "tenantId": "tenant_123",

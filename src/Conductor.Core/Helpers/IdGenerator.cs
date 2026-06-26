@@ -29,6 +29,11 @@ namespace Conductor.Core.Helpers
         public const string ModelRunnerEndpointPrefix = "mre_";
 
         /// <summary>
+        /// Endpoint group ID prefix.
+        /// </summary>
+        public const string EndpointGroupPrefix = "egp_";
+
+        /// <summary>
         /// Model definition ID prefix.
         /// </summary>
         public const string ModelDefinitionPrefix = "md_";
@@ -134,6 +139,15 @@ namespace Conductor.Core.Helpers
         public static string NewModelRunnerEndpointId()
         {
             return _Generator.GenerateKSortable(ModelRunnerEndpointPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new endpoint group ID.
+        /// </summary>
+        /// <returns>K-sortable endpoint group ID.</returns>
+        public static string NewEndpointGroupId()
+        {
+            return _Generator.GenerateKSortable(EndpointGroupPrefix, DefaultIdLength);
         }
 
         /// <summary>

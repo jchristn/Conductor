@@ -402,6 +402,35 @@ class ConductorApi {
     return this.request('POST', `/v1.0/modelrunnerendpoints/${id}/ollama/models/delete${query}`, payload);
   }
 
+  // Endpoint Group APIs
+  async listEndpointGroups(params = {}) {
+    const query = this.buildQueryString(params);
+    return this.dedupedRequest(`listEndpointGroups:${query}`, 'GET', `/v1.0/endpointgroups${query}`);
+  }
+
+  async getEndpointGroup(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/endpointgroups/${id}${query}`);
+  }
+
+  async createEndpointGroup(group) {
+    return this.request('POST', '/v1.0/endpointgroups', group);
+  }
+
+  async validateEndpointGroup(group, existingId = null) {
+    const query = existingId ? `?existingId=${encodeURIComponent(existingId)}` : '';
+    return this.request('POST', `/v1.0/endpointgroups/validate${query}`, group);
+  }
+
+  async updateEndpointGroup(id, group) {
+    return this.request('PUT', `/v1.0/endpointgroups/${id}`, group);
+  }
+
+  async deleteEndpointGroup(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('DELETE', `/v1.0/endpointgroups/${id}${query}`);
+  }
+
   // Model Definition APIs
   async listModelDefinitions(params = {}) {
     const query = this.buildQueryString(params);

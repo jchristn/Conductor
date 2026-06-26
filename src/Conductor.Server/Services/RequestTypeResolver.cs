@@ -79,6 +79,14 @@ namespace Conductor.Server.Services
             { new RouteKey("DELETE", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.DeleteModelRunnerEndpoint },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints"), RequestTypeEnum.ListModelRunnerEndpoints },
 
+            // Endpoint Groups
+            { new RouteKey("POST", "/v1.0/endpointgroups"), RequestTypeEnum.CreateEndpointGroup },
+            { new RouteKey("POST", "/v1.0/endpointgroups/validate"), RequestTypeEnum.ValidateEndpointGroup },
+            { new RouteKey("GET", "/v1.0/endpointgroups/{id}"), RequestTypeEnum.ReadEndpointGroup },
+            { new RouteKey("PUT", "/v1.0/endpointgroups/{id}"), RequestTypeEnum.UpdateEndpointGroup },
+            { new RouteKey("DELETE", "/v1.0/endpointgroups/{id}"), RequestTypeEnum.DeleteEndpointGroup },
+            { new RouteKey("GET", "/v1.0/endpointgroups"), RequestTypeEnum.ListEndpointGroups },
+
             // Model Definitions
             { new RouteKey("POST", "/v1.0/modeldefinitions"), RequestTypeEnum.CreateModelDefinition },
             { new RouteKey("GET", "/v1.0/modeldefinitions/{id}"), RequestTypeEnum.ReadModelDefinition },

@@ -91,7 +91,8 @@ Key VMR fields:
 | `AdaptiveLoadBalancing.BackoffBaseMs` / `BackoffMaxMs` | Transient backoff duration bounds after rate limits or failures. |
 | `AdaptiveLoadBalancing.FailureThreshold` | Consecutive failures required before repeated non-immediate errors create backoff. |
 | `AdaptiveLoadBalancing.Weights` | Relative score weights for success, latency, TTFT, pending work, and configured endpoint weight. |
-| `EndpointGroups` | Optional active groups with `Priority`, `TrafficWeight`, and `EndpointIds`. |
+| `EndpointGroupIds` | Optional reusable active groups with `Priority`, `TrafficWeight`, and endpoint membership. |
+| `EndpointGroups` | Legacy inline groups retained for compatibility. Prefer reusable endpoint group references. |
 
 Runtime stats are in-memory and can be inspected or cleared through the VMR runtime routes. Request history and explain-routing responses include strategy, group, selected score, fallback, and backoff evidence when available.
 
@@ -106,7 +107,7 @@ Use these short runbooks when adaptive routing needs operator action:
 | Adaptive rollout | Start with a small endpoint group or low-traffic VMR, keep request history enabled, and watch selected score, latency, error EWMA, pending count, and backoff reason facets. | Expand to more VMRs only after runtime stats and request history show stable behavior. |
 | Canary or migration split | Put stable and canary endpoints in the same priority level with explicit `TrafficWeight` values. | Increase the canary weight in small steps and use request-history group facets to confirm observed distribution. |
 | Priority fallback | Confirm the primary group has active, normal, healthy, under-capacity endpoints. | If fallback is unexpected, inspect health, capacity, service state, group active flags, and endpoint membership before changing traffic weights. |
-| Revert to compatibility routing | Record the current adaptive settings, then switch `LoadBalancingMode` to `RoundRobin`, `Random`, `FirstAvailable`, or `LeastRecentlyUsed`. | Keep endpoint groups only if the same grouping behavior is still desired; otherwise clear `EndpointGroups` to return to the attached endpoint list. |
+| Revert to compatibility routing | Record the current adaptive settings, then switch `LoadBalancingMode` to `RoundRobin`, `Random`, `FirstAvailable`, or `LeastRecentlyUsed`. | Keep endpoint group references only if the same grouping behavior is still desired; otherwise clear `EndpointGroupIds` to return to the attached endpoint list. |
 
 ## Top-level policy JSON
 

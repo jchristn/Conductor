@@ -68,6 +68,18 @@ function Sidebar() {
       )
     },
     {
+      path: '/endpoint-groups',
+      label: 'Endpoint Groups',
+      tourId: 'nav-endpoint-groups',
+      tooltip: 'Manage reusable endpoint collections for virtual model runners',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M4 4a2 2 0 114 0 2 2 0 01-4 0zM12 4a2 2 0 114 0 2 2 0 01-4 0zM4 14a2 2 0 114 0 2 2 0 01-4 0z" />
+          <path d="M8 4h4v2H8V4zM7 6l1.4 1.4-2 2L5 8l2-2zM13 6l2 2-1.4 1.4-2-2L13 6z" />
+        </svg>
+      )
+    },
+    {
       path: '/definitions',
       label: 'Model Definitions',
       tourId: 'nav-definitions',

@@ -226,6 +226,38 @@ namespace Conductor.Core.Enums
         /// </summary>
         DeleteOllamaEndpointModel,
 
+        // ==================== Endpoint Group Operations ====================
+
+        /// <summary>
+        /// Create endpoint group.
+        /// </summary>
+        CreateEndpointGroup,
+
+        /// <summary>
+        /// Read endpoint group.
+        /// </summary>
+        ReadEndpointGroup,
+
+        /// <summary>
+        /// Update endpoint group.
+        /// </summary>
+        UpdateEndpointGroup,
+
+        /// <summary>
+        /// Delete endpoint group.
+        /// </summary>
+        DeleteEndpointGroup,
+
+        /// <summary>
+        /// List endpoint groups.
+        /// </summary>
+        ListEndpointGroups,
+
+        /// <summary>
+        /// Validate an endpoint group draft.
+        /// </summary>
+        ValidateEndpointGroup,
+
         // ==================== Model Definition Operations ====================
 
         /// <summary>

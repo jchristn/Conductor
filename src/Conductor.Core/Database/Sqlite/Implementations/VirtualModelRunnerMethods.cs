@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
             vmr.CreatedUtc = DateTime.UtcNow;
             vmr.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelaccesspolicyid, modelrunnerendpointids, adaptiveloadbalancing, endpointgroups, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelaccesspolicyid, modelrunnerendpointids, adaptiveloadbalancing, endpointgroups, endpointgroupids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(vmr.Id) + "', " +
                            "'" + _Driver.Sanitize(vmr.TenantId) + "', " +
                            "'" + _Driver.Sanitize(vmr.Name) + "', " +
@@ -48,6 +48,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.AdaptiveLoadBalancingJson) + ", " +
                            _Driver.FormatNullableString(vmr.EndpointGroupsJson) + ", " +
+                           _Driver.FormatNullableString(vmr.EndpointGroupIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.ModelConfigurationIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.ModelDefinitionIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.ModelConfigurationMappingsJson) + ", " +
@@ -139,6 +140,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "modelrunnerendpointids = " + _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            "adaptiveloadbalancing = " + _Driver.FormatNullableString(vmr.AdaptiveLoadBalancingJson) + ", " +
                            "endpointgroups = " + _Driver.FormatNullableString(vmr.EndpointGroupsJson) + ", " +
+                           "endpointgroupids = " + _Driver.FormatNullableString(vmr.EndpointGroupIdsJson) + ", " +
                            "modelconfigurationids = " + _Driver.FormatNullableString(vmr.ModelConfigurationIdsJson) + ", " +
                            "modeldefinitionids = " + _Driver.FormatNullableString(vmr.ModelDefinitionIdsJson) + ", " +
                            "modelconfigurationmappings = " + _Driver.FormatNullableString(vmr.ModelConfigurationMappingsJson) + ", " +

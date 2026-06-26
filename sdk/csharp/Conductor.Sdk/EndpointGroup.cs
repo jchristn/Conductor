@@ -1,22 +1,31 @@
 namespace Conductor.Sdk
 {
-    using System;
     using System.Collections.Generic;
 
     /// <summary>
-    /// Priority and traffic-split group for virtual model runner endpoints.
+    /// Tenant-scoped reusable priority and traffic-split group for model runner endpoints.
     /// </summary>
     public class EndpointGroup
     {
         /// <summary>
         /// Group identifier.
         /// </summary>
-        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Id { get; set; } = null;
+
+        /// <summary>
+        /// Tenant identifier.
+        /// </summary>
+        public string TenantId { get; set; } = null;
 
         /// <summary>
         /// Operator-facing group name.
         /// </summary>
         public string Name { get; set; } = "Default";
+
+        /// <summary>
+        /// Optional description.
+        /// </summary>
+        public string Description { get; set; } = null;
 
         /// <summary>
         /// Lower priority numbers are preferred before higher priority numbers.
@@ -47,6 +56,21 @@ namespace Conductor.Sdk
                 _EndpointIds = value ?? new List<string>();
             }
         }
+
+        /// <summary>
+        /// Labels for categorization.
+        /// </summary>
+        public List<string> Labels { get; set; } = new List<string>();
+
+        /// <summary>
+        /// Tags for key-value metadata.
+        /// </summary>
+        public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
+
+        /// <summary>
+        /// Free-form metadata.
+        /// </summary>
+        public object Metadata { get; set; } = null;
 
         private List<string> _EndpointIds = new List<string>();
     }

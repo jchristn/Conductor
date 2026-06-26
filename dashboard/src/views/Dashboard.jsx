@@ -36,6 +36,7 @@ function Dashboard() {
     { label: 'Users', count: counts.users, path: '/users', color: '#10b981', tooltip: 'User accounts that authenticate via API credentials' },
     { label: 'Credentials', count: counts.credentials, path: '/credentials', color: '#f59e0b', tooltip: 'API bearer tokens used for authentication' },
     { label: 'Model Runner Endpoints', count: counts.modelRunnerEndpoints, path: '/endpoints', color: '#8b5cf6', tooltip: 'Backend inference servers (Ollama, OpenAI, vLLM, Gemini, etc.)' },
+    { label: 'Endpoint Groups', count: counts.endpointGroups, path: '/endpoint-groups', color: '#14b8a6', tooltip: 'Reusable endpoint collections for virtual model runners' },
     { label: 'Model Definitions', count: counts.modelDefinitions, path: '/definitions', color: '#ec4899', tooltip: 'Model metadata describing available models' },
     { label: 'Model Configurations', count: counts.modelConfigurations, path: '/configurations', color: '#06b6d4', tooltip: 'Parameter presets applied to inference requests' },
     { label: 'Virtual Model Runners', count: counts.virtualModelRunners, path: '/vmr', color: '#f97316', tooltip: 'Virtualized API endpoints exposed to clients' }
@@ -97,6 +98,10 @@ function Dashboard() {
             <Link to="/endpoints" className="action-card" title="Register a new backend inference server (Ollama, OpenAI, vLLM, Gemini, etc.)">
               <span className="action-icon">+</span>
               <span>Add Model Runner Endpoint</span>
+            </Link>
+            <Link to="/endpoint-groups" className="action-card" title="Create a reusable collection of model runner endpoints">
+              <span className="action-icon">+</span>
+              <span>Create Endpoint Group</span>
             </Link>
             <Link to="/configurations" className="action-card" title="Create a parameter preset to apply to inference requests">
               <span className="action-icon">+</span>

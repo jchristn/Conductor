@@ -28,6 +28,35 @@ test('builds validation request with existingId query', async () => {
   assert.equal(capturedUrl, 'http://localhost:9000/v1.0/virtualmodelrunners/validate?existingId=vmr_123');
 });
 
+test('endpoint group methods use expected routes', async () => {
+  const captured = [];
+  const group = { Name: 'Primary', EndpointIds: ['mre_123'] };
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options = {}) => {
+      captured.push({ url, method: options.method || 'GET', body: options.body });
+      return createJsonResponse({ ok: true });
+    }
+  });
+
+  await client.listEndpointGroups({ tenantId: 'ten_123', activeFilter: true });
+  await client.getEndpointGroup('egp_123', 'ten_123');
+  await client.createEndpointGroup(group);
+  await client.updateEndpointGroup('egp_123', group);
+  await client.deleteEndpointGroup('egp_123', 'ten_123');
+  await client.validateEndpointGroup(group, 'egp_123');
+
+  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/endpointgroups?tenantId=ten_123&activeFilter=true');
+  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123');
+  assert.equal(captured[2].method, 'POST');
+  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/endpointgroups');
+  assert.equal(captured[3].method, 'PUT');
+  assert.equal(captured[3].url, 'http://localhost:9000/v1.0/endpointgroups/egp_123');
+  assert.equal(captured[4].method, 'DELETE');
+  assert.equal(captured[4].url, 'http://localhost:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123');
+  assert.equal(captured[5].url, 'http://localhost:9000/v1.0/endpointgroups/validate?existingId=egp_123');
+});
+
 test('builds request-history search query string', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({

@@ -268,6 +268,26 @@ These are the primary JSON resources used across the API.
 }
 ```
 
+### Endpoint Group
+
+```jsonc
+{
+  "Id": "egp_xxx",
+  "TenantId": "default",
+  "Name": "Primary GPU Pool",            // required
+  "Description": "Preferred low-latency endpoints",
+  "Priority": 0,
+  "Active": true,
+  "TrafficWeight": 100,
+  "EndpointIds": ["mre_a", "mre_b"],     // required; endpoints must be in the same tenant
+  "Labels": [],
+  "Tags": {},
+  "Metadata": null,
+  "CreatedUtc": "2026-06-26T12:00:00Z",
+  "LastUpdateUtc": "2026-06-26T12:00:00Z"
+}
+```
+
 ### Model Definition
 
 ```jsonc
@@ -428,16 +448,8 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
       "EndpointWeight": 10
     }
   },
-  "EndpointGroups": [
-    {
-      "Id": "primary",
-      "Name": "Primary",
-      "Priority": 0,
-      "Active": true,
-      "TrafficWeight": 100,
-      "EndpointIds": ["mre_a"]
-    }
-  ],
+  "EndpointGroupIds": ["egp_primary"],
+  "EndpointGroups": [],                  // legacy inline groups; prefer EndpointGroupIds
   "ModelConfigurationIds": ["mc_default"],
   "ModelConfigurationMappings": {
     "llama3.2:latest": "mc_default"
@@ -631,7 +643,7 @@ Auth level: `Authenticated`
 | `POST` | `/v1.0/modelrunnerendpoints/validate` | Validate an endpoint draft without saving it. Optional query: `tenantId`, `existingId`. |
 | `GET` | `/v1.0/modelrunnerendpoints/{id}` | Read endpoint. Optional `tenantId` query. |
 | `PUT` | `/v1.0/modelrunnerendpoints/{id}` | Update endpoint. Cross-tenant callers supply `TenantId` in the body. |
-| `DELETE` | `/v1.0/modelrunnerendpoints/{id}` | Delete endpoint. Optional `tenantId` query. Also removes the endpoint from referenced VMRs. |
+| `DELETE` | `/v1.0/modelrunnerendpoints/{id}` | Delete endpoint. Optional `tenantId` query. Also removes the endpoint from referenced VMRs and endpoint groups. |
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/drain` | Move the endpoint to `Draining` service state. Optional `tenantId` query. |
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/resume` | Move the endpoint back to `Normal` service state. Optional `tenantId` query. |
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/quarantine` | Move the endpoint to `Quarantined` service state. Optional `tenantId` query. |
@@ -683,6 +695,21 @@ RigMonitor status response fields include:
 - `Telemetry`
 
 `Capabilities` is a cached summary of platform support. `Telemetry` contains nested `System`, `Cpu`, `Memory`, `Network`, `Disk`, `Gpu`, and `Ollama` sections.
+
+### Endpoint Groups
+
+Auth level: `Authenticated`
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/endpointgroups` | List endpoint groups. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
+| `POST` | `/v1.0/endpointgroups` | Create endpoint group. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/endpointgroups/validate` | Validate an endpoint group draft without saving it. Optional query: `tenantId`, `existingId`. |
+| `GET` | `/v1.0/endpointgroups/{id}` | Read endpoint group. Optional `tenantId` query. |
+| `PUT` | `/v1.0/endpointgroups/{id}` | Update endpoint group. Cross-tenant callers supply `TenantId` in the body. |
+| `DELETE` | `/v1.0/endpointgroups/{id}` | Delete endpoint group. Optional `tenantId` query. Also detaches the group from VMRs. |
+
+Endpoint groups are tenant-wide reusable objects. A VMR references them through `EndpointGroupIds`; during save, the server expands the referenced group endpoint IDs into the VMR endpoint inventory so the route remains directly inspectable.
 
 #### Ollama Endpoint Model Management
 
@@ -1116,7 +1143,7 @@ Backup package shape:
 
 ```jsonc
 {
-  "SchemaVersion": "1.3",
+  "SchemaVersion": "1.4",
   "CreatedUtc": "2026-05-18T12:00:00Z",
   "SourceInstance": "host-name",
   "CreatedBy": "admin@example.com",
@@ -1126,6 +1153,7 @@ Backup package shape:
   "ModelDefinitions": [],
   "ModelConfigurations": [],
   "ModelRunnerEndpoints": [],
+  "EndpointGroups": [],
   "VirtualModelRunners": [],
   "VirtualModelRunnerReservations": [],
   "LoadBalancingPolicies": [],
@@ -1135,7 +1163,7 @@ Backup package shape:
 }
 ```
 
-Backups include VMR reservations and nested reservation subjects. Validation checks reservation tenant, VMR, user, credential, subject, and overlap rules before restore; restore uses the same `Skip`, `Overwrite`, or `Fail` conflict mode as the other configuration entities.
+Backups include endpoint groups, VMR reservations, and nested reservation subjects. Validation checks endpoint group endpoint membership plus reservation tenant, VMR, user, credential, subject, and overlap rules before restore; restore uses the same `Skip`, `Overwrite`, or `Fail` conflict mode as the other configuration entities.
 
 Restore request shape:
 
@@ -1165,6 +1193,7 @@ Validation response shape:
     "ModelDefinitionCount": 0,
     "ModelConfigurationCount": 0,
     "ModelRunnerEndpointCount": 0,
+    "EndpointGroupCount": 0,
     "VirtualModelRunnerCount": 0,
     "VirtualModelRunnerReservationCount": 0,
     "AdministratorCount": 0,
@@ -1188,6 +1217,7 @@ Restore response shape:
     "ModelDefinitions": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "ModelConfigurations": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "ModelRunnerEndpoints": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
+    "EndpointGroups": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "VirtualModelRunners": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "VirtualModelRunnerReservations": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "Administrators": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
@@ -1692,7 +1722,8 @@ These VMR fields affect proxied behavior:
 | `LoadBalancingMode` | Built-in selection mode used directly or as a policy fallback. Supported values: `RoundRobin`, `Random`, `FirstAvailable`, `LeastRecentlyUsed`, `Adaptive`. |
 | `LoadBalancingPolicyId` | Optional advanced policy attachment. |
 | `AdaptiveLoadBalancing` | Optional adaptive scoring settings used when `LoadBalancingMode` is `Adaptive`. |
-| `EndpointGroups` | Optional priority or traffic-split endpoint groups evaluated before the final selection strategy. |
+| `EndpointGroupIds` | Optional reusable endpoint group attachments evaluated before the final selection strategy. |
+| `EndpointGroups` | Legacy inline priority or traffic-split endpoint groups retained for compatibility. Prefer `EndpointGroupIds`. |
 | `AllowEmbeddings` | If `false`, embedding routes are rejected. |
 | `AllowCompletions` | If `false`, completion/chat routes are rejected. |
 | `AllowModelManagement` | If `false`, model management routes such as list/pull/delete are rejected. |

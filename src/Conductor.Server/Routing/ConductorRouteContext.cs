@@ -51,6 +51,7 @@ namespace Conductor.Server.Routing
             UserController = new UserController(Database, AuthService, Serializer, Logging);
             CredentialController = new CredentialController(Database, AuthService, Serializer, Logging);
             ModelRunnerEndpointController = new ModelRunnerEndpointController(Database, AuthService, Serializer, Logging, HealthCheckService, ConfigurationValidationService, ModelLoadService, OllamaModelManagementService);
+            EndpointGroupController = new EndpointGroupController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             ModelDefinitionController = new ModelDefinitionController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             ModelConfigurationController = new ModelConfigurationController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             LoadBalancingPolicyController = new LoadBalancingPolicyController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
@@ -108,6 +109,8 @@ namespace Conductor.Server.Routing
         internal CredentialController CredentialController { get; }
 
         internal ModelRunnerEndpointController ModelRunnerEndpointController { get; }
+
+        internal EndpointGroupController EndpointGroupController { get; }
 
         internal ModelDefinitionController ModelDefinitionController { get; }
 

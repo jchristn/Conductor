@@ -19,7 +19,7 @@ Existing VMRs continue using `RoundRobin`, `Random`, `FirstAvailable`, `LeastRec
 Adaptive mode uses these layers:
 
 - endpoint inventory from the existing VMR endpoint list
-- optional endpoint groups with priority and traffic weight
+- optional reusable endpoint groups with priority and traffic weight
 - existing active, service-state, health, and capacity screening
 - existing session affinity, with severe transient backoff allowed to invalidate a stale pin by default
 - attached load-balancing policy filters and ranking, when configured
@@ -38,9 +38,10 @@ Runtime statistics are local to the current Conductor server process for the fir
 `VirtualModelRunner` adds:
 
 - `AdaptiveLoadBalancingSettings`
-- `EndpointGroups`
+- `EndpointGroupIds`
+- legacy `EndpointGroups` compatibility
 
-These are persisted as JSON columns so the schema remains additive and compatible across database providers. Existing `ModelRunnerEndpointIds` remains the source of compatibility routing. When no endpoint groups are configured, routing builds a default group from `ModelRunnerEndpointIds`.
+Adaptive settings and endpoint group references are persisted as additive columns across database providers. Endpoint groups are tenant-scoped reusable resources with their own IDs and endpoint membership. Existing `ModelRunnerEndpointIds` remains the direct route inventory for compatibility, and VMR saves expand selected group endpoints into that inventory. When no endpoint groups are configured, routing uses `ModelRunnerEndpointIds` directly.
 
 Runtime APIs are:
 
@@ -146,11 +147,10 @@ Validation returns structured field-level errors through the existing validation
 
 ## Dashboard And SDK Scope
 
-Dashboard users can configure adaptive settings, endpoint groups, and traffic split weights in the VMR create/edit flow, inspect runtime stats, clear backoff, and use explain-routing evidence. UX review for layout, consistency, keyboard access, and responsive behavior is release-blocking.
+Dashboard users can configure adaptive settings in the VMR create/edit flow, manage reusable endpoint groups from their own top-level workspace, attach those groups to VMRs, inspect runtime stats, clear backoff, and use explain-routing evidence. UX review for layout, consistency, keyboard access, and responsive behavior is release-blocking.
 
 JavaScript, Python, and C# SDKs expose VMR runtime stats, reset stats, clear backoff, validation, and explain-routing helpers.
 
 ## Consequences
 
 Operators get adaptive routing that can avoid overloaded, failing, or rate-limited endpoints without changing endpoint service state. Existing deployments retain compatibility behavior. In-memory runtime state is simple and fast, but multi-node deployments will see node-local adaptive behavior until a future shared state design is implemented.
-

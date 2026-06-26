@@ -13,6 +13,7 @@ import Tenants from './views/Tenants';
 import Users from './views/Users';
 import Credentials from './views/Credentials';
 import ModelRunnerEndpoints from './views/ModelRunnerEndpoints';
+import EndpointGroups from './views/EndpointGroups';
 import ModelDefinitions from './views/ModelDefinitions';
 import ModelConfigurations from './views/ModelConfigurations';
 import LoadBalancingPolicies from './views/LoadBalancingPolicies';
@@ -50,6 +51,7 @@ function App() {
             <Route path="/users" element={<Users />} />
             <Route path="/credentials" element={<Credentials />} />
             <Route path="/endpoints" element={<ModelRunnerEndpoints />} />
+            <Route path="/endpoint-groups" element={<EndpointGroups />} />
             <Route path="/definitions" element={<ModelDefinitions />} />
             <Route path="/configurations" element={<ModelConfigurations />} />
             <Route path="/policies" element={<LoadBalancingPolicies />} />

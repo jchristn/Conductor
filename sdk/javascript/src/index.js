@@ -95,6 +95,30 @@ export class ConductorClient {
     return this.#request('POST', `/v1.0/modelrunnerendpoints/validate${this.#existingIdQuery(existingId)}`, draft);
   }
 
+  async listEndpointGroups(filters = {}) {
+    return this.#request('GET', `/v1.0/endpointgroups${this.#queryString(filters)}`);
+  }
+
+  async getEndpointGroup(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/endpointgroups/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createEndpointGroup(group) {
+    return this.#request('POST', '/v1.0/endpointgroups', group);
+  }
+
+  async updateEndpointGroup(id, group) {
+    return this.#request('PUT', `/v1.0/endpointgroups/${encodeURIComponent(id)}`, group);
+  }
+
+  async deleteEndpointGroup(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/endpointgroups/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async validateEndpointGroup(draft, existingId = null) {
+    return this.#request('POST', `/v1.0/endpointgroups/validate${this.#existingIdQuery(existingId)}`, draft);
+  }
+
   async drainModelRunnerEndpoint(id, tenantId = null) {
     return this.#request('POST', `/v1.0/modelrunnerendpoints/${encodeURIComponent(id)}/drain${this.#tenantQuery(tenantId)}`);
   }

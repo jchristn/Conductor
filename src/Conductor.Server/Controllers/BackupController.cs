@@ -105,6 +105,11 @@ namespace Conductor.Server.Controllers
                     .EnumerateAsync(tenant.Id, request, token).ConfigureAwait(false);
                 package.ModelRunnerEndpoints.AddRange(endpoints.Data);
 
+                // Endpoint Groups
+                EnumerationResult<EndpointGroup> endpointGroups = await Database.EndpointGroup
+                    .EnumerateAsync(tenant.Id, request, token).ConfigureAwait(false);
+                package.EndpointGroups.AddRange(endpointGroups.Data);
+
                 // Virtual Model Runners
                 EnumerationResult<VirtualModelRunner> vmrs = await Database.VirtualModelRunner
                     .EnumerateAsync(tenant.Id, request, token).ConfigureAwait(false);
@@ -150,6 +155,7 @@ namespace Conductor.Server.Controllers
                 package.ModelDefinitions.Count + " model definitions, " +
                 package.ModelConfigurations.Count + " model configurations, " +
                 package.ModelRunnerEndpoints.Count + " model runner endpoints, " +
+                package.EndpointGroups.Count + " endpoint groups, " +
                 package.VirtualModelRunners.Count + " virtual model runners, " +
                 package.VirtualModelRunnerReservations.Count + " virtual model runner reservations, " +
                 package.LoadBalancingPolicies.Count + " load-balancing policies, " +
@@ -239,7 +245,16 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored model runner endpoints: " + result.Summary.ModelRunnerEndpoints.Created + " created, " + result.Summary.ModelRunnerEndpoints.Updated + " updated, " + result.Summary.ModelRunnerEndpoints.Skipped + " skipped");
 
-                // 6. Model Definitions (depends on Tenant)
+                // 6. Endpoint Groups (depends on Tenant + Model Runner Endpoints)
+                foreach (EndpointGroup group in package.EndpointGroups.Where(g => tenantIdsToRestore.Contains(g.TenantId)))
+                {
+                    token.ThrowIfCancellationRequested();
+                    await ValidateBackupEndpointGroupAsync(group, token).ConfigureAwait(false);
+                    await _EntityRestorer.RestoreEndpointGroupAsync(group, options.ConflictResolution, result.Summary.EndpointGroups, token).ConfigureAwait(false);
+                }
+                Logging.Debug(_Header + "restored endpoint groups: " + result.Summary.EndpointGroups.Created + " created, " + result.Summary.EndpointGroups.Updated + " updated, " + result.Summary.EndpointGroups.Skipped + " skipped");
+
+                // 7. Model Definitions (depends on Tenant)
                 foreach (ModelDefinition modelDef in package.ModelDefinitions.Where(m => tenantIdsToRestore.Contains(m.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -248,7 +263,7 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored model definitions: " + result.Summary.ModelDefinitions.Created + " created, " + result.Summary.ModelDefinitions.Updated + " updated, " + result.Summary.ModelDefinitions.Skipped + " skipped");
 
-                // 7. Model Configurations (depends on Tenant)
+                // 8. Model Configurations (depends on Tenant)
                 foreach (ModelConfiguration modelConfig in package.ModelConfigurations.Where(m => tenantIdsToRestore.Contains(m.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -257,7 +272,7 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored model configurations: " + result.Summary.ModelConfigurations.Created + " created, " + result.Summary.ModelConfigurations.Updated + " updated, " + result.Summary.ModelConfigurations.Skipped + " skipped");
 
-                // 8. Load Balancing Policies (depends on Tenant)
+                // 9. Load Balancing Policies (depends on Tenant)
                 foreach (LoadBalancingPolicy policy in package.LoadBalancingPolicies.Where(p => tenantIdsToRestore.Contains(p.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -266,7 +281,7 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored load-balancing policies: " + result.Summary.LoadBalancingPolicies.Created + " created, " + result.Summary.LoadBalancingPolicies.Updated + " updated, " + result.Summary.LoadBalancingPolicies.Skipped + " skipped");
 
-                // 9. Model Access Policies (depends on Tenant)
+                // 10. Model Access Policies (depends on Tenant)
                 foreach (ModelAccessPolicy policy in package.ModelAccessPolicies.Where(p => tenantIdsToRestore.Contains(p.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -274,7 +289,7 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored model access policies: " + result.Summary.ModelAccessPolicies.Created + " created, " + result.Summary.ModelAccessPolicies.Updated + " updated, " + result.Summary.ModelAccessPolicies.Skipped + " skipped");
 
-                // 10. Model Access Rules (depends on Model Access Policies)
+                // 11. Model Access Rules (depends on Model Access Policies)
                 foreach (ModelAccessRule rule in package.ModelAccessRules.Where(r => tenantIdsToRestore.Contains(r.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -288,7 +303,7 @@ namespace Conductor.Server.Controllers
                     _ModelAccessControlService?.InvalidateCache(tenantId);
                 }
 
-                // 11. Virtual Model Runners (depends on Tenant + referenced IDs)
+                // 12. Virtual Model Runners (depends on Tenant + referenced IDs)
                 foreach (VirtualModelRunner vmr in package.VirtualModelRunners.Where(v => tenantIdsToRestore.Contains(v.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -297,7 +312,7 @@ namespace Conductor.Server.Controllers
                 }
                 Logging.Debug(_Header + "restored virtual model runners: " + result.Summary.VirtualModelRunners.Created + " created, " + result.Summary.VirtualModelRunners.Updated + " updated, " + result.Summary.VirtualModelRunners.Skipped + " skipped");
 
-                // 12. VMR reservations (depends on Tenant + VMR + Users/Credentials)
+                // 13. VMR reservations (depends on Tenant + VMR + Users/Credentials)
                 foreach (VirtualModelRunnerReservation reservation in package.VirtualModelRunnerReservations.Where(r => tenantIdsToRestore.Contains(r.TenantId)))
                 {
                     token.ThrowIfCancellationRequested();
@@ -350,6 +365,7 @@ namespace Conductor.Server.Controllers
                 ModelDefinitionCount = package.ModelDefinitions?.Count ?? 0,
                 ModelConfigurationCount = package.ModelConfigurations?.Count ?? 0,
                 ModelRunnerEndpointCount = package.ModelRunnerEndpoints?.Count ?? 0,
+                EndpointGroupCount = package.EndpointGroups?.Count ?? 0,
                 VirtualModelRunnerCount = package.VirtualModelRunners?.Count ?? 0,
                 VirtualModelRunnerReservationCount = package.VirtualModelRunnerReservations?.Count ?? 0,
                 AdministratorCount = package.Administrators?.Count ?? 0,
@@ -483,6 +499,28 @@ namespace Conductor.Server.Controllers
                 }
             }
 
+            // Check for endpoint group ID conflicts and references
+            if (package.EndpointGroups != null)
+            {
+                foreach (EndpointGroup group in package.EndpointGroups)
+                {
+                    token.ThrowIfCancellationRequested();
+                    await AppendBackupValidationErrorsAsync(
+                        result,
+                        "endpoint group",
+                        group.Name ?? group.Id,
+                        group.Id,
+                        ValidateBackupEndpointGroupShape(group)).ConfigureAwait(false);
+
+                    await ValidateBackupEndpointGroupReferenceAsync(result, package, group, token).ConfigureAwait(false);
+
+                    if (await Database.EndpointGroup.ExistsAsync(group.TenantId, group.Id, token).ConfigureAwait(false))
+                    {
+                        result.Conflicts.Add("Endpoint Group '" + group.Name + "' (ID: " + group.Id + ") already exists.");
+                    }
+                }
+            }
+
             // Check for virtual model runner ID conflicts
             if (package.VirtualModelRunners != null)
             {
@@ -499,6 +537,7 @@ namespace Conductor.Server.Controllers
                             : null).ConfigureAwait(false);
 
                     await ValidateBackupModelAccessAttachmentAsync(result, package, vmr, token).ConfigureAwait(false);
+                    await ValidateBackupEndpointGroupAttachmentAsync(result, package, vmr, token).ConfigureAwait(false);
 
                     if (await Database.VirtualModelRunner.ExistsAsync(vmr.TenantId, vmr.Id, token).ConfigureAwait(false))
                     {
@@ -590,6 +629,7 @@ namespace Conductor.Server.Controllers
             package.ModelDefinitions = package.ModelDefinitions;
             package.ModelConfigurations = package.ModelConfigurations;
             package.ModelRunnerEndpoints = package.ModelRunnerEndpoints;
+            package.EndpointGroups = package.EndpointGroups;
             package.VirtualModelRunners = package.VirtualModelRunners;
             package.VirtualModelRunnerReservations = package.VirtualModelRunnerReservations;
             package.LoadBalancingPolicies = package.LoadBalancingPolicies;
@@ -605,9 +645,18 @@ namespace Conductor.Server.Controllers
                 endpoint.Tags = endpoint.Tags;
             }
 
+            foreach (EndpointGroup group in package.EndpointGroups)
+            {
+                group.EndpointIds = group.EndpointIds;
+                group.Labels = group.Labels;
+                group.Tags = group.Tags;
+            }
+
             foreach (VirtualModelRunner vmr in package.VirtualModelRunners)
             {
                 vmr.ModelRunnerEndpointIds = vmr.ModelRunnerEndpointIds;
+                vmr.EndpointGroupIds = vmr.EndpointGroupIds;
+                vmr.EndpointGroups = vmr.EndpointGroups;
                 vmr.ModelConfigurationIds = vmr.ModelConfigurationIds;
                 vmr.ModelDefinitionIds = vmr.ModelDefinitionIds;
                 vmr.ModelConfigurationMappings = vmr.ModelConfigurationMappings;
@@ -651,6 +700,14 @@ namespace Conductor.Server.Controllers
 
             ResourceValidationResult validation = await _ValidationService.ValidateModelRunnerEndpointAsync(endpoint.TenantId, endpoint, endpoint.Id, token).ConfigureAwait(false);
             ThrowIfInvalid(validation, "endpoint");
+        }
+
+        private async Task ValidateBackupEndpointGroupAsync(EndpointGroup group, CancellationToken token)
+        {
+            if (_ValidationService == null || group == null) return;
+
+            ResourceValidationResult validation = await _ValidationService.ValidateEndpointGroupAsync(group.TenantId, group, group.Id, token).ConfigureAwait(false);
+            ThrowIfInvalid(validation, "endpoint group");
         }
 
         private async Task ValidateBackupModelDefinitionAsync(ModelDefinition definition, CancellationToken token)
@@ -732,6 +789,60 @@ namespace Conductor.Server.Controllers
             if (!exists)
             {
                 result.Errors.Add("Backup virtual model runner '" + vmr.Name + "' (ID: " + vmr.Id + ") references missing model access policy '" + vmr.ModelAccessPolicyId + "'.");
+                result.IsValid = false;
+            }
+        }
+
+        private async Task ValidateBackupEndpointGroupReferenceAsync(ValidationResult result, BackupPackage package, EndpointGroup group, CancellationToken token)
+        {
+            if (result == null || group == null) return;
+
+            if (String.IsNullOrWhiteSpace(group.TenantId))
+            {
+                result.Errors.Add("Backup endpoint group '" + group.Name + "' (ID: " + group.Id + ") is missing TenantId.");
+                result.IsValid = false;
+                return;
+            }
+
+            HashSet<string> endpointIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string endpointId in group.EndpointIds ?? new List<string>())
+            {
+                if (String.IsNullOrWhiteSpace(endpointId) || !endpointIds.Add(endpointId))
+                {
+                    continue;
+                }
+
+                string error = await ValidateModelRunnerEndpointReferenceAsync(package, group.TenantId, endpointId, token).ConfigureAwait(false);
+                if (!String.IsNullOrWhiteSpace(error))
+                {
+                    result.Errors.Add("Backup endpoint group '" + group.Name + "' (ID: " + group.Id + ") " + error);
+                    result.IsValid = false;
+                }
+            }
+        }
+
+        private async Task ValidateBackupEndpointGroupAttachmentAsync(ValidationResult result, BackupPackage package, VirtualModelRunner vmr, CancellationToken token)
+        {
+            if (result == null || vmr == null || vmr.EndpointGroupIds == null || vmr.EndpointGroupIds.Count < 1) return;
+
+            HashSet<string> groupIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string groupId in vmr.EndpointGroupIds)
+            {
+                if (String.IsNullOrWhiteSpace(groupId) || !groupIds.Add(groupId))
+                {
+                    continue;
+                }
+
+                if (PackageContainsEndpointGroup(package, vmr.TenantId, groupId)
+                    || await Database.EndpointGroup.ReadAsync(vmr.TenantId, groupId, token).ConfigureAwait(false) != null)
+                {
+                    continue;
+                }
+
+                bool existsElsewhere = PackageContainsEndpointGroup(package, null, groupId)
+                    || await Database.EndpointGroup.ReadByIdAsync(groupId, token).ConfigureAwait(false) != null;
+                result.Errors.Add("Backup virtual model runner '" + vmr.Name + "' (ID: " + vmr.Id + ") references " +
+                    (existsElsewhere ? "cross-tenant endpoint group '" : "missing endpoint group '") + groupId + "'.");
                 result.IsValid = false;
             }
         }
@@ -875,6 +986,21 @@ namespace Conductor.Server.Controllers
             return errors;
         }
 
+        private async Task<string> ValidateModelRunnerEndpointReferenceAsync(BackupPackage package, string tenantId, string endpointId, CancellationToken token)
+        {
+            if (PackageContainsModelRunnerEndpoint(package, tenantId, endpointId)
+                || await Database.ModelRunnerEndpoint.ReadAsync(tenantId, endpointId, token).ConfigureAwait(false) != null)
+            {
+                return null;
+            }
+
+            bool existsElsewhere = PackageContainsModelRunnerEndpoint(package, null, endpointId)
+                || await Database.ModelRunnerEndpoint.ReadByIdAsync(endpointId, token).ConfigureAwait(false) != null;
+            return existsElsewhere
+                ? "references cross-tenant endpoint '" + endpointId + "'."
+                : "references missing endpoint '" + endpointId + "'.";
+        }
+
         private async Task<string> ValidateCredentialReferenceAsync(BackupPackage package, string tenantId, string credentialId, CancellationToken token)
         {
             if (PackageContainsCredential(package, tenantId, credentialId)
@@ -944,6 +1070,22 @@ namespace Conductor.Server.Controllers
                 String.Equals(policy.Id, policyId, StringComparison.Ordinal));
         }
 
+        private static bool PackageContainsEndpointGroup(BackupPackage package, string tenantId, string groupId)
+        {
+            if (package == null || String.IsNullOrWhiteSpace(groupId)) return false;
+            return package.EndpointGroups.Any(group =>
+                (String.IsNullOrWhiteSpace(tenantId) || String.Equals(group.TenantId, tenantId, StringComparison.Ordinal)) &&
+                String.Equals(group.Id, groupId, StringComparison.Ordinal));
+        }
+
+        private static bool PackageContainsModelRunnerEndpoint(BackupPackage package, string tenantId, string endpointId)
+        {
+            if (package == null || String.IsNullOrWhiteSpace(endpointId)) return false;
+            return package.ModelRunnerEndpoints.Any(endpoint =>
+                (String.IsNullOrWhiteSpace(tenantId) || String.Equals(endpoint.TenantId, tenantId, StringComparison.Ordinal)) &&
+                String.Equals(endpoint.Id, endpointId, StringComparison.Ordinal));
+        }
+
         private static bool PackageContainsCredential(BackupPackage package, string tenantId, string credentialId)
         {
             if (package == null || String.IsNullOrWhiteSpace(credentialId)) return false;
@@ -1006,6 +1148,64 @@ namespace Conductor.Server.Controllers
 
             result.IsValid = false;
             return Task.CompletedTask;
+        }
+
+        private static ResourceValidationResult ValidateBackupEndpointGroupShape(EndpointGroup group)
+        {
+            ResourceValidationResult result = new ResourceValidationResult
+            {
+                ResourceType = "EndpointGroup"
+            };
+
+            if (group == null)
+            {
+                result.Errors.Add(new ResourceValidationIssue { Code = "InvalidBody", Message = "An endpoint group payload is required." });
+                result.IsValid = false;
+                return result;
+            }
+
+            if (String.IsNullOrWhiteSpace(group.TenantId))
+            {
+                result.Errors.Add(new ResourceValidationIssue { Code = "TenantRequired", Field = "TenantId", Message = "TenantId is required." });
+            }
+
+            if (String.IsNullOrWhiteSpace(group.Name))
+            {
+                result.Errors.Add(new ResourceValidationIssue { Code = "NameRequired", Field = "Name", Message = "Name is required." });
+            }
+
+            if (group.Priority < 0)
+            {
+                result.Errors.Add(new ResourceValidationIssue { Code = "EndpointGroupPriorityInvalid", Field = "Priority", Message = "Endpoint group priority must be zero or greater." });
+            }
+
+            if (group.TrafficWeight < 0)
+            {
+                result.Errors.Add(new ResourceValidationIssue { Code = "EndpointGroupTrafficWeightInvalid", Field = "TrafficWeight", Message = "Endpoint group traffic weight must not be negative." });
+            }
+
+            if (group.EndpointIds == null || group.EndpointIds.Count < 1)
+            {
+                result.Errors.Add(new ResourceValidationIssue { Code = "EndpointGroupEmpty", Field = "EndpointIds", Message = "Endpoint group must reference at least one endpoint." });
+            }
+            else
+            {
+                HashSet<string> endpointIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (string endpointId in group.EndpointIds)
+                {
+                    if (String.IsNullOrWhiteSpace(endpointId))
+                    {
+                        result.Errors.Add(new ResourceValidationIssue { Code = "EndpointGroupEndpointIdRequired", Field = "EndpointIds", Message = "Endpoint group endpoint ids cannot be blank." });
+                    }
+                    else if (!endpointIds.Add(endpointId))
+                    {
+                        result.Errors.Add(new ResourceValidationIssue { Code = "EndpointGroupEndpointDuplicate", Field = "EndpointIds", Message = "Endpoint group contains duplicate endpoint id '" + endpointId + "'." });
+                    }
+                }
+            }
+
+            result.IsValid = result.Errors.Count < 1;
+            return result;
         }
 
     }

@@ -154,6 +154,33 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Reusable endpoint group identifiers attached to this route.
+        /// </summary>
+        public List<string> EndpointGroupIds
+        {
+            get => _EndpointGroupIds;
+            set
+            {
+                _EndpointGroupIds = value ?? new List<string>();
+                _EndpointGroupIdsJson = _Serializer.SerializeJson(_EndpointGroupIds, false);
+            }
+        }
+
+        /// <summary>
+        /// JSON-serialized reusable endpoint group IDs for database storage.
+        /// </summary>
+        [JsonIgnore]
+        public string EndpointGroupIdsJson
+        {
+            get => _EndpointGroupIdsJson;
+            set
+            {
+                _EndpointGroupIdsJson = String.IsNullOrEmpty(value) ? "[]" : value;
+                _EndpointGroupIds = _Serializer.DeserializeJson<List<string>>(_EndpointGroupIdsJson) ?? new List<string>();
+            }
+        }
+
+        /// <summary>
         /// List of model configuration identifiers.
         /// </summary>
         public List<string> ModelConfigurationIds
@@ -396,6 +423,8 @@ namespace Conductor.Core.Models
         private string _AdaptiveLoadBalancingJson = "{}";
         private List<EndpointGroup> _EndpointGroups = new List<EndpointGroup>();
         private string _EndpointGroupsJson = "[]";
+        private List<string> _EndpointGroupIds = new List<string>();
+        private string _EndpointGroupIdsJson = "[]";
         private List<string> _ModelConfigurationIds = new List<string>();
         private string _ModelConfigurationIdsJson = "[]";
         private List<string> _ModelDefinitionIds = new List<string>();
@@ -481,6 +510,15 @@ namespace Conductor.Core.Models
                 if (!String.IsNullOrEmpty(endpointGroupsJson))
                 {
                     obj.EndpointGroupsJson = endpointGroupsJson;
+                }
+            }
+
+            if (row.Table.Columns.Contains("endpointgroupids"))
+            {
+                string endpointGroupIdsJson = DataTableHelper.GetStringValue(row, "endpointgroupids");
+                if (!String.IsNullOrEmpty(endpointGroupIdsJson))
+                {
+                    obj.EndpointGroupIdsJson = endpointGroupIdsJson;
                 }
             }
 

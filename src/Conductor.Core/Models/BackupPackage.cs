@@ -11,7 +11,7 @@ namespace Conductor.Core.Models
         /// <summary>
         /// Schema version for forward/backward compatibility.
         /// </summary>
-        public string SchemaVersion { get; set; } = "1.3";
+        public string SchemaVersion { get; set; } = "1.4";
 
         /// <summary>
         /// UTC timestamp when the backup was created.
@@ -83,6 +83,15 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// All endpoint group records.
+        /// </summary>
+        public List<EndpointGroup> EndpointGroups
+        {
+            get => _EndpointGroups;
+            set => _EndpointGroups = (value != null ? value : new List<EndpointGroup>());
+        }
+
+        /// <summary>
         /// All virtual model runner records.
         /// </summary>
         public List<VirtualModelRunner> VirtualModelRunners
@@ -143,6 +152,7 @@ namespace Conductor.Core.Models
         private List<ModelDefinition> _ModelDefinitions = new List<ModelDefinition>();
         private List<ModelConfiguration> _ModelConfigurations = new List<ModelConfiguration>();
         private List<ModelRunnerEndpoint> _ModelRunnerEndpoints = new List<ModelRunnerEndpoint>();
+        private List<EndpointGroup> _EndpointGroups = new List<EndpointGroup>();
         private List<VirtualModelRunner> _VirtualModelRunners = new List<VirtualModelRunner>();
         private List<VirtualModelRunnerReservation> _VirtualModelRunnerReservations = new List<VirtualModelRunnerReservation>();
         private List<LoadBalancingPolicy> _LoadBalancingPolicies = new List<LoadBalancingPolicy>();

@@ -71,6 +71,7 @@ namespace Conductor.Server.Controllers
                 ? VmrBasePathPrefix + vmr.Id + "/"
                 : NormalizeBasePath(vmr.BasePath);
             vmr.TenantId = tenantId;
+            await ExpandEndpointGroupsAsync(vmr).ConfigureAwait(false);
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
             await ValidateModelAccessPolicyAsync(tenantId, vmr.ModelAccessPolicyId).ConfigureAwait(false);
             await ValidateAsync(tenantId, vmr, null).ConfigureAwait(false);
@@ -125,6 +126,7 @@ namespace Conductor.Server.Controllers
             vmr.TenantId = tenantId;
             vmr.CreatedUtc = existing.CreatedUtc;
             vmr.BasePath = NormalizeBasePath(vmr.BasePath);
+            await ExpandEndpointGroupsAsync(vmr).ConfigureAwait(false);
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
             await ValidateModelAccessPolicyAsync(tenantId, vmr.ModelAccessPolicyId).ConfigureAwait(false);
             await ValidateAsync(tenantId, vmr, id).ConfigureAwait(false);
@@ -421,6 +423,35 @@ namespace Conductor.Server.Controllers
                 CredentialName = auth.Credential?.Name,
                 RequestType = RequestTypeEnum.LoadVirtualModelRunnerModel
             };
+        }
+
+        private async Task ExpandEndpointGroupsAsync(VirtualModelRunner vmr)
+        {
+            if (vmr == null || vmr.EndpointGroupIds == null || vmr.EndpointGroupIds.Count < 1)
+            {
+                return;
+            }
+
+            HashSet<string> endpointIds = new HashSet<string>(vmr.ModelRunnerEndpointIds ?? new List<string>(), StringComparer.Ordinal);
+            foreach (string groupId in vmr.EndpointGroupIds)
+            {
+                if (String.IsNullOrWhiteSpace(groupId)) continue;
+
+                EndpointGroup group = String.IsNullOrEmpty(vmr.TenantId)
+                    ? await Database.EndpointGroup.ReadByIdAsync(groupId).ConfigureAwait(false)
+                    : await Database.EndpointGroup.ReadAsync(vmr.TenantId, groupId).ConfigureAwait(false);
+                if (group == null) continue;
+
+                foreach (string endpointId in group.EndpointIds ?? new List<string>())
+                {
+                    if (!String.IsNullOrWhiteSpace(endpointId))
+                    {
+                        endpointIds.Add(endpointId);
+                    }
+                }
+            }
+
+            vmr.ModelRunnerEndpointIds = endpointIds.ToList();
         }
 
         private async Task ValidateModelAccessPolicyAsync(string tenantId, string policyId)

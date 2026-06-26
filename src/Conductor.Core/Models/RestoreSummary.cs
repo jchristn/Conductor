@@ -36,6 +36,11 @@ namespace Conductor.Core.Models
         public EntityRestoreCount ModelRunnerEndpoints { get; set; } = new EntityRestoreCount();
 
         /// <summary>
+        /// Count of endpoint group restore operations.
+        /// </summary>
+        public EntityRestoreCount EndpointGroups { get; set; } = new EntityRestoreCount();
+
+        /// <summary>
         /// Count of virtual model runner restore operations.
         /// </summary>
         public EntityRestoreCount VirtualModelRunners { get; set; } = new EntityRestoreCount();

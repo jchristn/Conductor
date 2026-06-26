@@ -10,7 +10,8 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Model Runner Endpoints**: Define and manage first-class endpoint types for OpenAI, vLLM, Gemini, and Ollama model runners
 - **Model Definitions**: Catalog your models with metadata like family, parameter size, and quantization
 - **Model Configurations**: Create reusable configurations with pinned properties for embeddings and completions
-- **Virtual Model Runners**: Combine endpoints and configurations into virtual endpoints with load balancing
+- **Endpoint Groups**: Reuse tenant-scoped endpoint collections across virtual model runners
+- **Virtual Model Runners**: Combine endpoints, endpoint groups, and configurations into virtual endpoints with load balancing
 - **VMR Reservations**: Schedule exclusive access windows for selected users or credentials while preserving normal on-demand access outside the window
 - **Configuration Pinning**: Automatically inject model parameters into requests (like OllamaFlow)
 - **Session Affinity**: Pin clients to specific backend endpoints based on IP address, API key, or custom headers to minimize context drops and model swapping
@@ -178,6 +179,7 @@ Users have three permission levels:
 | User | `usr_` | `/v1.0/users` |
 | Credential | `cred_` | `/v1.0/credentials` |
 | Model Runner Endpoint | `mre_` | `/v1.0/modelrunnerendpoints` |
+| Endpoint Group | `egp_` | `/v1.0/endpointgroups` |
 | Model Definition | `md_` | `/v1.0/modeldefinitions` |
 | Model Configuration | `mc_` | `/v1.0/modelconfigurations` |
 | Load Balancing Policy | `lbp_` | `/v1.0/loadbalancingpolicies` |
@@ -264,7 +266,7 @@ Policies combine:
 
 Built-in VMR `LoadBalancingMode` values are `RoundRobin`, `Random`, `FirstAvailable`, `LeastRecentlyUsed`, and `Adaptive`. `LeastRecentlyUsed` selects the eligible endpoint with the oldest route-scoped assignment history and uses endpoint order as the deterministic tie-breaker for endpoints with no history. `Adaptive` samples eligible endpoints and scores them with runtime success, latency, time-to-first-token, pending-work, and configured endpoint-weight signals.
 
-Adaptive routing is opt-in per VMR. Operators can configure adaptive scoring weights, cold-start behavior, transient backoff windows, and endpoint groups with priorities or traffic weights. Runtime stats are in-memory operational state, not durable configuration; they can be inspected with `GET /v1.0/virtualmodelrunners/{id}/runtime-stats`, reset with `POST /v1.0/virtualmodelrunners/{id}/runtime-stats/reset`, and cleared for transient backoff with `POST /v1.0/virtualmodelrunners/{id}/runtime-backoff/clear`.
+Adaptive routing is opt-in per VMR. Operators can configure adaptive scoring weights, cold-start behavior, transient backoff windows, and reusable endpoint groups with priorities or traffic weights. Endpoint groups are tenant-scoped resources managed through `/v1.0/endpointgroups` and attached to VMRs by `EndpointGroupIds`. Runtime stats are in-memory operational state, not durable configuration; they can be inspected with `GET /v1.0/virtualmodelrunners/{id}/runtime-stats`, reset with `POST /v1.0/virtualmodelrunners/{id}/runtime-stats/reset`, and cleared for transient backoff with `POST /v1.0/virtualmodelrunners/{id}/runtime-backoff/clear`.
 
 Example policy payload:
 

@@ -71,6 +71,77 @@ namespace Conductor.Sdk
         }
 
         /// <summary>
+        /// List endpoint groups.
+        /// </summary>
+        /// <param name="filters">Query-string filters.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ListEndpointGroupsAsync(IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/endpointgroups" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get an endpoint group.
+        /// </summary>
+        /// <param name="id">Endpoint group ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetEndpointGroupAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/endpointgroups/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Create an endpoint group.
+        /// </summary>
+        /// <param name="group">Endpoint group payload.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> CreateEndpointGroupAsync(object group, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/endpointgroups", group ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Update an endpoint group.
+        /// </summary>
+        /// <param name="id">Endpoint group ID.</param>
+        /// <param name="group">Endpoint group payload.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> UpdateEndpointGroupAsync(string id, object group, CancellationToken token = default)
+        {
+            return await PutJsonAsync("/v1.0/endpointgroups/" + Uri.EscapeDataString(id), group ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete an endpoint group.
+        /// </summary>
+        /// <param name="id">Endpoint group ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        public async Task DeleteEndpointGroupAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            await DeleteAsync("/v1.0/endpointgroups/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Validate an endpoint group draft.
+        /// </summary>
+        /// <param name="draft">Endpoint group draft.</param>
+        /// <param name="existingId">Optional existing endpoint group ID for update validation.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ValidateEndpointGroupAsync(object draft, string existingId = null, CancellationToken token = default)
+        {
+            Dictionary<string, string> query = new Dictionary<string, string> { ["existingId"] = existingId };
+            return await PostJsonAsync("/v1.0/endpointgroups/validate" + QueryString(query), draft ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Get effective virtual model runner configuration.
         /// </summary>
         /// <param name="id">Virtual model runner ID.</param>

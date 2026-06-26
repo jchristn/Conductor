@@ -227,6 +227,7 @@ namespace Conductor.Server.Services
                 AddTimeline(decision, "SessionAffinity", "Session Affinity", "Skipped", "Session affinity is not active for this request.");
             }
 
+            List<EndpointGroup> endpointGroups = await ResolveEndpointGroupsAsync(vmr, token).ConfigureAwait(false);
             List<EndpointAvailability> availableEndpoints = new List<EndpointAvailability>();
             AvailabilitySummary availabilitySummary = new AvailabilitySummary();
             PopulateAvailability(decision, endpoints, availableEndpoints, availabilitySummary);
@@ -239,7 +240,7 @@ namespace Conductor.Server.Services
                     return FinalizeMetrics(result, vmr, requestContext, decisionStart);
                 }
 
-                availableEndpoints = ApplyEndpointGroups(vmr, availableEndpoints, decision);
+                availableEndpoints = ApplyEndpointGroups(vmr, endpointGroups, availableEndpoints, decision);
                 if (availableEndpoints.Count < 1)
                 {
                     Deny(decision, 502, "NoEndpointGroupAvailable", "No configured endpoint group has available endpoints.");
@@ -797,7 +798,17 @@ namespace Conductor.Server.Services
         private async Task<List<ModelRunnerEndpoint>> ResolveEndpointsAsync(VirtualModelRunner vmr, CancellationToken token)
         {
             List<ModelRunnerEndpoint> endpoints = new List<ModelRunnerEndpoint>();
-            foreach (string endpointId in vmr.ModelRunnerEndpointIds ?? new List<string>())
+            HashSet<string> endpointIds = new HashSet<string>(vmr.ModelRunnerEndpointIds ?? new List<string>(), StringComparer.Ordinal);
+
+            foreach (EndpointGroup group in await ResolveEndpointGroupsAsync(vmr, token).ConfigureAwait(false))
+            {
+                foreach (string endpointId in group.EndpointIds ?? new List<string>())
+                {
+                    endpointIds.Add(endpointId);
+                }
+            }
+
+            foreach (string endpointId in endpointIds)
             {
                 ModelRunnerEndpoint endpoint = await _Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, endpointId, token).ConfigureAwait(false);
                 if (endpoint != null)
@@ -807,6 +818,33 @@ namespace Conductor.Server.Services
             }
 
             return endpoints;
+        }
+
+        private async Task<List<EndpointGroup>> ResolveEndpointGroupsAsync(VirtualModelRunner vmr, CancellationToken token)
+        {
+            List<EndpointGroup> groups = new List<EndpointGroup>();
+            if (vmr == null)
+            {
+                return groups;
+            }
+
+            if (vmr.EndpointGroupIds != null && vmr.EndpointGroupIds.Count > 0)
+            {
+                foreach (string groupId in vmr.EndpointGroupIds)
+                {
+                    if (String.IsNullOrWhiteSpace(groupId)) continue;
+
+                    EndpointGroup group = await _Database.EndpointGroup.ReadAsync(vmr.TenantId, groupId, token).ConfigureAwait(false);
+                    if (group != null)
+                    {
+                        groups.Add(group);
+                    }
+                }
+
+                return groups;
+            }
+
+            return vmr.EndpointGroups ?? new List<EndpointGroup>();
         }
 
         private async Task<ModelRunnerEndpoint> TryResolvePinnedEndpointAsync(
@@ -952,25 +990,24 @@ namespace Conductor.Server.Services
             AddTimeline(decision, "Availability", "Availability Screening", "Passed", availableEndpoints.Count + " endpoint(s) remain eligible after active, service-state, health, and capacity screening.");
         }
 
-        private List<EndpointAvailability> ApplyEndpointGroups(VirtualModelRunner vmr, List<EndpointAvailability> availableEndpoints, RoutingDecision decision)
+        private List<EndpointAvailability> ApplyEndpointGroups(VirtualModelRunner vmr, List<EndpointGroup> endpointGroups, List<EndpointAvailability> availableEndpoints, RoutingDecision decision)
         {
-            if (vmr?.EndpointGroups == null || vmr.EndpointGroups.Count < 1 || availableEndpoints == null || availableEndpoints.Count < 1)
+            if (endpointGroups == null || endpointGroups.Count < 1 || availableEndpoints == null || availableEndpoints.Count < 1)
             {
                 AddTimeline(decision, "EndpointGroups", "Endpoint Groups", "Skipped", "No endpoint groups are configured; using the route endpoint list.");
                 return availableEndpoints ?? new List<EndpointAvailability>();
             }
 
-            HashSet<string> configuredEndpointIds = new HashSet<string>(vmr.ModelRunnerEndpointIds ?? new List<string>(), StringComparer.Ordinal);
             Dictionary<string, EndpointAvailability> availableById = availableEndpoints
                 .Where(item => item?.Endpoint != null)
                 .ToDictionary(item => item.Endpoint.Id, item => item, StringComparer.Ordinal);
 
-            List<EndpointGroup> viableGroups = vmr.EndpointGroups
+            List<EndpointGroup> viableGroups = endpointGroups
                 .Where(group => group != null
                     && group.Active
                     && group.TrafficWeight > 0
                     && group.EndpointIds != null
-                    && group.EndpointIds.Exists(endpointId => configuredEndpointIds.Contains(endpointId) && availableById.ContainsKey(endpointId)))
+                    && group.EndpointIds.Exists(endpointId => availableById.ContainsKey(endpointId)))
                 .OrderBy(group => group.Priority)
                 .ThenBy(group => group.Name)
                 .ToList();

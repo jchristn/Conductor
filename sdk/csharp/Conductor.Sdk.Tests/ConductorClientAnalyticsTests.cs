@@ -62,6 +62,37 @@ namespace Conductor.Sdk.Tests
         }
 
         [Fact]
+        public async Task EndpointGroupMethods_UseExpectedRoutesAndBodies()
+        {
+            RecordingHandler handler = new RecordingHandler(request =>
+            {
+                if (request.Method == HttpMethod.Delete) return new HttpResponseMessage(HttpStatusCode.NoContent);
+                return JsonResponse("{}");
+            });
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            var group = new { Name = "Primary", EndpointIds = new[] { "mre_1" } };
+            using JsonDocument list = await client.ListEndpointGroupsAsync(new Dictionary<string, string> { ["tenantId"] = "ten_1", ["activeFilter"] = "true" });
+            using JsonDocument get = await client.GetEndpointGroupAsync("egp_1", "ten_1");
+            using JsonDocument create = await client.CreateEndpointGroupAsync(group);
+            using JsonDocument update = await client.UpdateEndpointGroupAsync("egp_1", group);
+            await client.DeleteEndpointGroupAsync("egp_1", "ten_1");
+            using JsonDocument validate = await client.ValidateEndpointGroupAsync(group, "egp_1");
+
+            Assert.Equal("https://conductor.local/v1.0/endpointgroups?tenantId=ten_1&activeFilter=true", handler.Requests[0].Uri.ToString());
+            Assert.Equal("https://conductor.local/v1.0/endpointgroups/egp_1?tenantId=ten_1", handler.Requests[1].Uri.ToString());
+            Assert.Equal(HttpMethod.Post, handler.Requests[2].Method);
+            Assert.Equal("https://conductor.local/v1.0/endpointgroups", handler.Requests[2].Uri.ToString());
+            Assert.Contains("\"Name\":\"Primary\"", handler.Requests[2].Body);
+            Assert.Equal(HttpMethod.Put, handler.Requests[3].Method);
+            Assert.Equal("https://conductor.local/v1.0/endpointgroups/egp_1", handler.Requests[3].Uri.ToString());
+            Assert.Equal(HttpMethod.Delete, handler.Requests[4].Method);
+            Assert.Equal("https://conductor.local/v1.0/endpointgroups/egp_1?tenantId=ten_1", handler.Requests[4].Uri.ToString());
+            Assert.Equal("https://conductor.local/v1.0/endpointgroups/validate?existingId=egp_1", handler.Requests[5].Uri.ToString());
+        }
+
+        [Fact]
         public async Task SavedReportMethods_UseExpectedRoutesAndTenantScope()
         {
             RecordingHandler handler = new RecordingHandler(request =>

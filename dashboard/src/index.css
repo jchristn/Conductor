@@ -1106,6 +1106,30 @@ body {
   gap: 12px;
 }
 
+.adaptive-weight-row {
+  margin-top: 12px;
+}
+
+.vmr-session-affinity-row {
+  margin-top: 14px;
+}
+
+.endpoint-group-select-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.endpoint-group-select-card input[type="checkbox"] {
+  margin-top: 3px;
+}
+
+.endpoint-group-select-main {
+  min-width: 0;
+}
+
 .text-muted {
   color: var(--text-secondary);
 }

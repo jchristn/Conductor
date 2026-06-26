@@ -142,6 +142,125 @@ namespace Test.Shared.Server.Controllers
             validation.Summary.VirtualModelRunnerReservationCount.Should().Be(1);
         }
 
+        public async Task CreateBackup_IncludesEndpointGroups()
+        {
+            ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Grouped Endpoint",
+                Hostname = "http://localhost:11434",
+                ApiType = ApiTypeEnum.Ollama
+            }).ConfigureAwait(false);
+            EndpointGroup group = await Database.EndpointGroup.CreateAsync(new EndpointGroup
+            {
+                TenantId = TestTenantId,
+                Name = "Primary Group",
+                Priority = 0,
+                TrafficWeight = 100,
+                EndpointIds = new List<string> { endpoint.Id }
+            }).ConfigureAwait(false);
+
+            BackupPackage package = await _Controller.CreateBackup("admin@example.com").ConfigureAwait(false);
+
+            package.EndpointGroups.Should().ContainSingle(item => item.Id == group.Id);
+
+            ValidationResult validation = await _Controller.ValidateBackup(package).ConfigureAwait(false);
+            validation.Summary.EndpointGroupCount.Should().Be(1);
+        }
+
+        public async Task RestoreBackup_WithEndpointGroup_RestoresBeforeVirtualModelRunner()
+        {
+            TenantMetadata tenant = new TenantMetadata
+            {
+                Name = "Restored Endpoint Group Tenant",
+                Active = true
+            };
+            ModelRunnerEndpoint endpoint = new ModelRunnerEndpoint
+            {
+                TenantId = tenant.Id,
+                Name = "Restored Grouped Endpoint",
+                Hostname = "http://localhost:11434",
+                ApiType = ApiTypeEnum.Ollama
+            };
+            EndpointGroup group = new EndpointGroup
+            {
+                TenantId = tenant.Id,
+                Name = "Restored Primary Group",
+                Priority = 0,
+                TrafficWeight = 100,
+                EndpointIds = new List<string> { endpoint.Id }
+            };
+            VirtualModelRunner vmr = new VirtualModelRunner
+            {
+                TenantId = tenant.Id,
+                Name = "Restored Group VMR",
+                BasePath = "/v1.0/api/restored-group/",
+                ModelRunnerEndpointIds = new List<string> { endpoint.Id },
+                EndpointGroupIds = new List<string> { group.Id }
+            };
+
+            BackupPackage package = new BackupPackage
+            {
+                SchemaVersion = "1.4",
+                Tenants = new List<TenantMetadata> { tenant },
+                ModelRunnerEndpoints = new List<ModelRunnerEndpoint> { endpoint },
+                EndpointGroups = new List<EndpointGroup> { group },
+                VirtualModelRunners = new List<VirtualModelRunner> { vmr }
+            };
+
+            RestoreResult result = await _Controller.RestoreBackup(new RestoreRequest
+            {
+                Package = package,
+                Options = new RestoreOptions
+                {
+                    ConflictResolution = ConflictResolutionMode.Fail
+                }
+            }).ConfigureAwait(false);
+
+            result.Success.Should().BeTrue();
+            result.Summary.EndpointGroups.Created.Should().Be(1);
+            EndpointGroup restoredGroup = await Database.EndpointGroup.ReadAsync(tenant.Id, group.Id).ConfigureAwait(false);
+            restoredGroup.Should().NotBeNull();
+            restoredGroup.EndpointIds.Should().ContainSingle(endpoint.Id);
+            VirtualModelRunner restoredVmr = await Database.VirtualModelRunner.ReadAsync(tenant.Id, vmr.Id).ConfigureAwait(false);
+            restoredVmr.EndpointGroupIds.Should().ContainSingle(group.Id);
+        }
+
+        public async Task ValidateBackup_WithCrossTenantEndpointGroupReference_ReturnsValidationError()
+        {
+            TenantMetadata otherTenant = await Database.Tenant.CreateAsync(new TenantMetadata
+            {
+                Name = "Endpoint Group Other Tenant",
+                Active = true
+            }).ConfigureAwait(false);
+            EndpointGroup otherGroup = await Database.EndpointGroup.CreateAsync(new EndpointGroup
+            {
+                TenantId = otherTenant.Id,
+                Name = "Other Tenant Group",
+                EndpointIds = new List<string> { "mre_missing" }
+            }).ConfigureAwait(false);
+
+            BackupPackage package = new BackupPackage
+            {
+                SchemaVersion = "1.4",
+                VirtualModelRunners = new List<VirtualModelRunner>
+                {
+                    new VirtualModelRunner
+                    {
+                        TenantId = TestTenantId,
+                        Name = "Cross Tenant Group VMR",
+                        BasePath = "/v1.0/api/cross-tenant-group/",
+                        EndpointGroupIds = new List<string> { otherGroup.Id }
+                    }
+                }
+            };
+
+            ValidationResult result = await _Controller.ValidateBackup(package).ConfigureAwait(false);
+
+            result.IsValid.Should().BeFalse();
+            result.Errors.Should().Contain(item => item.Contains("cross-tenant endpoint group"));
+        }
+
         public async Task RestoreBackup_WithVirtualModelRunnerReservation_RestoresSubjects()
         {
             TenantMetadata tenant = new TenantMetadata

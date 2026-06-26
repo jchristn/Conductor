@@ -144,6 +144,20 @@ namespace Conductor.Server.Controllers
                 }
             }
 
+            EnumerationResult<EndpointGroup> endpointGroups = await Database.EndpointGroup.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });
+            foreach (EndpointGroup group in endpointGroups.Data ?? new List<EndpointGroup>())
+            {
+                if (group.EndpointIds == null || !group.EndpointIds.Contains(id))
+                {
+                    continue;
+                }
+
+                group.EndpointIds = group.EndpointIds
+                    .Where(endpointId => !String.Equals(endpointId, id, StringComparison.Ordinal))
+                    .ToList();
+                await Database.EndpointGroup.UpdateAsync(group);
+            }
+
             await Database.ModelRunnerEndpoint.DeleteAsync(tenantId, id);
 
             // Notify health check service

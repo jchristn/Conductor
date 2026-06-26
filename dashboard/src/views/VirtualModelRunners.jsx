@@ -155,20 +155,6 @@ function normalizeAdaptiveLoadBalancing(value) {
   };
 }
 
-function createEndpointGroup(index = 0) {
-  return {
-    Id: `group-${Date.now()}-${index}`,
-    Name: index === 0 ? 'Primary' : `Group ${index + 1}`,
-    Priority: index,
-    Active: true,
-    TrafficWeight: 100,
-    EndpointIds: [],
-    Labels: [],
-    Tags: {},
-    Metadata: null
-  };
-}
-
 function VirtualModelRunners() {
   const { api, setError, serverUrl } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
@@ -177,6 +163,7 @@ function VirtualModelRunners() {
   const [reservations, setReservations] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [endpoints, setEndpoints] = useState([]);
+  const [endpointGroups, setEndpointGroups] = useState([]);
   const [configurations, setConfigurations] = useState([]);
   const [definitions, setDefinitions] = useState([]);
   const [loadBalancingPolicies, setLoadBalancingPolicies] = useState([]);
@@ -215,7 +202,7 @@ function VirtualModelRunners() {
     ModelAccessPolicyId: '',
     ModelRunnerEndpointIds: [],
     AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
-    EndpointGroups: [],
+    EndpointGroupIds: [],
     ModelConfigurationIds: [],
     ModelDefinitionIds: [],
     ModelConfigurationMappingsJson: '{}',
@@ -237,11 +224,12 @@ function VirtualModelRunners() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [vmrResult, reservationResult, tenantsResult, endpointsResult, configurationsResult, definitionsResult, policiesResult, modelAccessPolicyResult] = await Promise.all([
+      const [vmrResult, reservationResult, tenantsResult, endpointsResult, endpointGroupsResult, configurationsResult, definitionsResult, policiesResult, modelAccessPolicyResult] = await Promise.all([
         api.listVirtualModelRunners({ maxResults: 1000 }),
         api.listVirtualModelRunnerReservations({ maxResults: 1000 }),
         api.listTenants({ maxResults: 1000 }),
         api.listModelRunnerEndpoints({ maxResults: 1000 }),
+        api.listEndpointGroups({ maxResults: 1000 }),
         api.listModelConfigurations({ maxResults: 1000 }),
         api.listModelDefinitions({ maxResults: 1000 }),
         api.listLoadBalancingPolicies({ maxResults: 1000 }),
@@ -251,6 +239,7 @@ function VirtualModelRunners() {
       setReservations(reservationResult.Data || []);
       setTenants(tenantsResult.Data || []);
       setEndpoints(endpointsResult.Data || []);
+      setEndpointGroups(endpointGroupsResult.Data || []);
       setConfigurations(configurationsResult.Data || []);
       setDefinitions(definitionsResult.Data || []);
       setLoadBalancingPolicies(policiesResult.Data || []);
@@ -287,7 +276,7 @@ function VirtualModelRunners() {
       ModelAccessPolicyId: '',
       ModelRunnerEndpointIds: [],
       AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
-      EndpointGroups: [],
+      EndpointGroupIds: [],
       ModelConfigurationIds: [],
       ModelDefinitionIds: [],
       ModelConfigurationMappingsJson: '{}',
@@ -323,7 +312,7 @@ function VirtualModelRunners() {
       ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
       AdaptiveLoadBalancing: normalizeAdaptiveLoadBalancing(vmr.AdaptiveLoadBalancing),
-      EndpointGroups: vmr.EndpointGroups || [],
+      EndpointGroupIds: vmr.EndpointGroupIds || [],
       ModelConfigurationIds: vmr.ModelConfigurationIds || [],
       ModelDefinitionIds: vmr.ModelDefinitionIds || [],
       ModelConfigurationMappingsJson: JSON.stringify(vmr.ModelConfigurationMappings || {}, null, 2),
@@ -412,12 +401,8 @@ function VirtualModelRunners() {
           EndpointWeight: parseFloat(formData.AdaptiveLoadBalancing.Weights.EndpointWeight)
         }
       },
-      EndpointGroups: (formData.EndpointGroups || []).map((group) => ({
-        ...group,
-        Priority: parseInt(group.Priority),
-        TrafficWeight: parseInt(group.TrafficWeight),
-        EndpointIds: group.EndpointIds || []
-      })),
+      EndpointGroupIds: formData.EndpointGroupIds || [],
+      EndpointGroups: [],
       ModelConfigurationIds: formData.ModelConfigurationIds,
       ModelDefinitionIds: formData.ModelDefinitionIds,
       ModelConfigurationMappings: modelConfigurationMappings,
@@ -632,11 +617,7 @@ function VirtualModelRunners() {
     if (current.includes(endpointId)) {
       setFormData({
         ...formData,
-        ModelRunnerEndpointIds: current.filter((id) => id !== endpointId),
-        EndpointGroups: (formData.EndpointGroups || []).map((group) => ({
-          ...group,
-          EndpointIds: (group.EndpointIds || []).filter((id) => id !== endpointId)
-        }))
+        ModelRunnerEndpointIds: current.filter((id) => id !== endpointId)
       });
     } else {
       setFormData({
@@ -669,37 +650,20 @@ function VirtualModelRunners() {
     });
   };
 
-  const addEndpointGroup = () => {
-    const nextGroups = [...(formData.EndpointGroups || []), createEndpointGroup((formData.EndpointGroups || []).length)];
-    setFormData({ ...formData, EndpointGroups: nextGroups });
-  };
-
-  const updateEndpointGroup = (index, patch) => {
-    const nextGroups = (formData.EndpointGroups || []).map((group, groupIndex) =>
-      groupIndex === index ? { ...group, ...patch } : group
-    );
-    setFormData({ ...formData, EndpointGroups: nextGroups });
-  };
-
-  const removeEndpointGroup = (index) => {
+  const handleEndpointGroupToggle = (group) => {
+    const current = formData.EndpointGroupIds || [];
+    const selected = current.includes(group.Id)
+      ? current.filter((id) => id !== group.Id)
+      : [...current, group.Id];
+    const endpointIdSet = new Set(formData.ModelRunnerEndpointIds || []);
+    if (!current.includes(group.Id)) {
+      (group.EndpointIds || []).forEach((endpointId) => endpointIdSet.add(endpointId));
+    }
     setFormData({
       ...formData,
-      EndpointGroups: (formData.EndpointGroups || []).filter((_, groupIndex) => groupIndex !== index)
+      EndpointGroupIds: selected,
+      ModelRunnerEndpointIds: Array.from(endpointIdSet)
     });
-  };
-
-  const toggleEndpointGroupEndpoint = (index, endpointId) => {
-    const nextGroups = (formData.EndpointGroups || []).map((group, groupIndex) => {
-      if (groupIndex !== index) return group;
-      const endpointIds = group.EndpointIds || [];
-      return {
-        ...group,
-        EndpointIds: endpointIds.includes(endpointId)
-          ? endpointIds.filter((id) => id !== endpointId)
-          : [...endpointIds, endpointId]
-      };
-    });
-    setFormData({ ...formData, EndpointGroups: nextGroups });
   };
 
   const handleConfigurationToggle = (configId) => {
@@ -935,7 +899,7 @@ function VirtualModelRunners() {
                 LoadBalancingPolicyId: '',
                 ModelAccessPolicyId: '',
                 ModelRunnerEndpointIds: [],
-                EndpointGroups: [],
+                EndpointGroupIds: [],
                 ModelConfigurationIds: [],
                 ModelDefinitionIds: []
               })}
@@ -1111,7 +1075,7 @@ function VirtualModelRunners() {
                   Remove session pins during transient backoff
                 </label>
               </div>
-              <div className="form-row">
+              <div className="form-row adaptive-weight-row">
                 <div className="form-group">
                   <label htmlFor="adaptiveWeightSuccess">Success Weight</label>
                   <input id="adaptiveWeightSuccess" type="number" min="0" value={formData.AdaptiveLoadBalancing.Weights.Success} onChange={(e) => updateAdaptiveWeight('Success', e.target.value)} />
@@ -1142,7 +1106,7 @@ function VirtualModelRunners() {
             </p>
           )}
 
-          <div className="form-row">
+          <div className="form-row vmr-session-affinity-row">
             <div className="form-group">
               <label htmlFor="sessionAffinityMode" title="Pin subsequent requests from the same client to the same backend endpoint to minimize context drops">Session Affinity Mode</label>
               <select
@@ -1224,65 +1188,43 @@ function VirtualModelRunners() {
           <div className="detail-section">
             <div className="section-header">
               <h3>Endpoint Groups</h3>
-              <button type="button" className="btn-secondary" onClick={addEndpointGroup}>Add Group</button>
+              <button type="button" className="btn-secondary" onClick={() => navigate('/endpoint-groups')}>Manage Groups</button>
             </div>
-            {(formData.EndpointGroups || []).length < 1 ? (
-              <p className="no-items">No endpoint groups configured. The selected endpoint list is used directly.</p>
+            {!formData.TenantId ? (
+              <p className="no-items">Select a tenant first.</p>
+            ) : endpointGroups.filter((group) => group.TenantId === formData.TenantId).length < 1 ? (
+              <p className="no-items">No endpoint groups are available for this tenant.</p>
             ) : (
               <div className="explain-candidate-list">
-                {(formData.EndpointGroups || []).map((group, index) => (
-                  <div className="explain-candidate-card" key={group.Id || index}>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label htmlFor={`endpointGroupName-${index}`}>Name</label>
-                        <input id={`endpointGroupName-${index}`} value={group.Name || ''} onChange={(e) => updateEndpointGroup(index, { Name: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor={`endpointGroupId-${index}`}>Group ID</label>
-                        <input id={`endpointGroupId-${index}`} value={group.Id || ''} onChange={(e) => updateEndpointGroup(index, { Id: e.target.value })} />
-                      </div>
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label htmlFor={`endpointGroupPriority-${index}`}>Priority</label>
-                        <input id={`endpointGroupPriority-${index}`} type="number" min="0" value={group.Priority} onChange={(e) => updateEndpointGroup(index, { Priority: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor={`endpointGroupWeight-${index}`}>Traffic Weight</label>
-                        <input id={`endpointGroupWeight-${index}`} type="number" min="0" value={group.TrafficWeight} onChange={(e) => updateEndpointGroup(index, { TrafficWeight: e.target.value })} />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor={`endpointGroupActive-${index}`}>Active</label>
-                        <select id={`endpointGroupActive-${index}`} value={group.Active === false ? 'false' : 'true'} onChange={(e) => updateEndpointGroup(index, { Active: e.target.value === 'true' })}>
-                          <option value="true">Active</option>
-                          <option value="false">Inactive</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <label>Assigned Endpoints</label>
-                      <div className="endpoint-list">
-                        {(formData.ModelRunnerEndpointIds || []).length < 1 ? (
-                          <p className="no-items">Select endpoints above before assigning groups.</p>
-                        ) : (
-                          (formData.ModelRunnerEndpointIds || []).map((endpointId) => {
-                            const endpoint = endpoints.find((item) => item.Id === endpointId);
-                            return (
-                              <label key={`${group.Id}-${endpointId}`} className="endpoint-item">
-                                <input type="checkbox" checked={(group.EndpointIds || []).includes(endpointId)} onChange={() => toggleEndpointGroupEndpoint(index, endpointId)} />
-                                <span className="endpoint-name">{endpoint?.Name || endpointId}</span>
-                              </label>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                    <div className="form-actions">
-                      <button type="button" className="btn-secondary" onClick={() => removeEndpointGroup(index)}>Remove Group</button>
-                    </div>
-                  </div>
-                ))}
+                {endpointGroups
+                  .filter((group) => group.TenantId === formData.TenantId)
+                  .map((group) => {
+                    const selected = (formData.EndpointGroupIds || []).includes(group.Id);
+                    const groupEndpoints = (group.EndpointIds || [])
+                      .map((endpointId) => endpoints.find((endpoint) => endpoint.Id === endpointId)?.Name || endpointId)
+                      .join(', ');
+                    return (
+                      <label className="explain-candidate-card endpoint-group-select-card" key={group.Id}>
+                        <input type="checkbox" checked={selected} onChange={() => handleEndpointGroupToggle(group)} />
+                        <div className="endpoint-group-select-main">
+                          <div className="explain-candidate-header">
+                            <strong>{group.Name || group.Id}</strong>
+                            <span className={`service-state-badge ${group.Active === false ? 'danger' : 'success'}`}>
+                              {group.Active === false ? 'Inactive' : 'Active'}
+                            </span>
+                          </div>
+                          <div className="text-muted">
+                            Priority {group.Priority ?? 0} &middot; Weight {group.TrafficWeight ?? 0} &middot; {(group.EndpointIds || []).length} endpoint(s)
+                          </div>
+                          <div className="text-muted">{groupEndpoints || 'No endpoints assigned.'}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
               </div>
+            )}
+            {(formData.EndpointGroupIds || []).length < 1 && (
+              <p className="form-help">No groups selected. The selected endpoint list is used directly.</p>
             )}
           </div>
 

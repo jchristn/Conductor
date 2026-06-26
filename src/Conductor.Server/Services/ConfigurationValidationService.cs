@@ -135,6 +135,7 @@ namespace Conductor.Server.Services
             }
 
             ValidateAdaptiveLoadBalancing(result, vmr);
+            await ValidateEndpointGroupReferencesAsync(result, tenantId, vmr, endpoints, token).ConfigureAwait(false);
             ValidateEndpointGroups(result, vmr, endpoints);
 
             List<ModelDefinition> modelDefinitions = new List<ModelDefinition>();
@@ -365,6 +366,76 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Validate an endpoint group draft.
+        /// </summary>
+        public async Task<ResourceValidationResult> ValidateEndpointGroupAsync(string tenantId, EndpointGroup group, string existingId = null, CancellationToken token = default)
+        {
+            ResourceValidationResult result = CreateResult("EndpointGroup");
+            if (group == null)
+            {
+                AddError(result, "InvalidBody", null, "An endpoint group payload is required.");
+                return Finalize(result);
+            }
+
+            if (String.IsNullOrWhiteSpace(group.Name))
+            {
+                AddError(result, "NameRequired", "Name", "Name is required.");
+            }
+
+            if (group.Priority < 0)
+            {
+                AddError(result, "EndpointGroupPriorityInvalid", "Priority", "Endpoint group priority must be zero or greater.");
+            }
+
+            if (group.TrafficWeight < 0)
+            {
+                AddError(result, "EndpointGroupTrafficWeightInvalid", "TrafficWeight", "Endpoint group traffic weight must not be negative.");
+            }
+
+            if (group.Active && group.TrafficWeight == 0)
+            {
+                AddWarning(result, "EndpointGroupZeroTrafficWeight", "TrafficWeight", "An active endpoint group with zero traffic weight cannot receive traffic while another group at the same priority has weight.");
+            }
+
+            if (group.EndpointIds == null || group.EndpointIds.Count < 1)
+            {
+                AddError(result, "EndpointGroupEmpty", "EndpointIds", "Endpoint group must reference at least one endpoint.");
+            }
+            else
+            {
+                HashSet<string> endpointIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (string endpointId in group.EndpointIds)
+                {
+                    if (String.IsNullOrWhiteSpace(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointIdRequired", "EndpointIds", "Endpoint group endpoint ids cannot be blank.");
+                        continue;
+                    }
+
+                    if (!endpointIds.Add(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointDuplicate", "EndpointIds", "Endpoint group contains duplicate endpoint id '" + endpointId + "'.");
+                        continue;
+                    }
+
+                    ModelRunnerEndpoint endpoint = await _Database.ModelRunnerEndpoint.ReadAsync(tenantId, endpointId, token).ConfigureAwait(false);
+                    if (endpoint == null)
+                    {
+                        AddError(result, "EndpointGroupEndpointMissing", "EndpointIds", "Endpoint '" + endpointId + "' was not found in the same tenant.");
+                    }
+                }
+            }
+
+            EnumerationResult<EndpointGroup> groups = await _Database.EndpointGroup.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 }, token).ConfigureAwait(false);
+            if ((groups.Data ?? new List<EndpointGroup>()).Exists(item => !String.Equals(item.Id, existingId ?? group.Id, StringComparison.Ordinal) && String.Equals(item.Name, group.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                AddWarning(result, "DuplicateEndpointGroupName", "Name", "Another endpoint group in this tenant already uses the same name.");
+            }
+
+            return Finalize(result);
+        }
+
+        /// <summary>
         /// Build an effective VMR preview from the same resource graph used during routing.
         /// </summary>
         public Task<EffectiveVirtualModelRunnerConfiguration> BuildEffectiveVirtualModelRunnerConfigurationAsync(VirtualModelRunner vmr, CancellationToken token = default)
@@ -427,6 +498,61 @@ namespace Conductor.Server.Services
             if (weights.Success + weights.Latency + weights.TimeToFirstToken + weights.Pending + weights.EndpointWeight <= 0)
             {
                 AddError(result, "AdaptiveScoreWeightsEmpty", "AdaptiveLoadBalancing.Weights", "At least one adaptive score weight must be greater than zero.");
+            }
+        }
+
+        private async Task ValidateEndpointGroupReferencesAsync(ResourceValidationResult result, string tenantId, VirtualModelRunner vmr, List<ModelRunnerEndpoint> endpoints, CancellationToken token)
+        {
+            if (vmr.EndpointGroupIds == null || vmr.EndpointGroupIds.Count < 1)
+            {
+                return;
+            }
+
+            HashSet<string> groupIds = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<string> configuredEndpointIds = new HashSet<string>(vmr.ModelRunnerEndpointIds ?? new List<string>(), StringComparer.Ordinal);
+            HashSet<string> resolvedEndpointIds = new HashSet<string>((endpoints ?? new List<ModelRunnerEndpoint>()).Select(item => item.Id), StringComparer.Ordinal);
+
+            foreach (string groupId in vmr.EndpointGroupIds)
+            {
+                if (String.IsNullOrWhiteSpace(groupId))
+                {
+                    AddError(result, "EndpointGroupIdRequired", "EndpointGroupIds", "Endpoint group ids cannot be blank.");
+                    continue;
+                }
+
+                if (!groupIds.Add(groupId))
+                {
+                    AddError(result, "EndpointGroupIdDuplicate", "EndpointGroupIds", "Endpoint group id '" + groupId + "' is duplicated.");
+                    continue;
+                }
+
+                EndpointGroup group = await _Database.EndpointGroup.ReadAsync(tenantId, groupId, token).ConfigureAwait(false);
+                if (group == null)
+                {
+                    AddError(result, "EndpointGroupMissing", "EndpointGroupIds", "Endpoint group '" + groupId + "' was not found in the same tenant.");
+                    continue;
+                }
+
+                if (!group.Active)
+                {
+                    AddWarning(result, "EndpointGroupInactive", "EndpointGroupIds", "Endpoint group '" + group.Name + "' is inactive and cannot receive traffic.");
+                }
+
+                foreach (string endpointId in group.EndpointIds ?? new List<string>())
+                {
+                    if (String.IsNullOrWhiteSpace(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointIdRequired", "EndpointGroupIds", "Endpoint group '" + group.Name + "' contains a blank endpoint id.");
+                    }
+                    else if (!configuredEndpointIds.Contains(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointNotAttached", "EndpointGroupIds", "Endpoint '" + endpointId + "' from endpoint group '" + group.Name + "' must be attached to ModelRunnerEndpointIds before the group can be used.");
+                    }
+                    else if (!resolvedEndpointIds.Contains(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointMissing", "EndpointGroupIds", "Endpoint '" + endpointId + "' from endpoint group '" + group.Name + "' was not found in the same tenant.");
+                    }
+                }
             }
         }
 

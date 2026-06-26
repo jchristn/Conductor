@@ -1,6 +1,6 @@
 # Conductor C# SDK
 
-This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover VMR validation, effective configuration, routing explanation, runtime stats, runtime-state reset, transient-backoff clear, VMR reservations, and the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
+This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover endpoint groups, VMR validation, effective configuration, routing explanation, runtime stats, runtime-state reset, transient-backoff clear, VMR reservations, and the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
 
 ```csharp
 using System.Collections.Generic;
@@ -12,6 +12,16 @@ using ConductorClient client = new ConductorClient(
     bearerToken: "your-token");
 
 using JsonDocument catalog = await client.GetAnalyticsCatalogAsync();
+
+EndpointGroup primaryGroup = new EndpointGroup
+{
+    TenantId = "tenant_123",
+    Name = "Primary",
+    Priority = 0,
+    TrafficWeight = 100,
+    EndpointIds = new List<string> { "mre_fast" }
+};
+using JsonDocument createdGroup = await client.CreateEndpointGroupAsync(primaryGroup);
 
 AdaptiveLoadBalancingSettings adaptiveSettings = new AdaptiveLoadBalancingSettings
 {
@@ -28,25 +38,7 @@ using JsonDocument validation = await client.ValidateVirtualModelRunnerAsync(new
     LoadBalancingMode = LoadBalancingMode.Adaptive.ToString(),
     ModelRunnerEndpointIds = new[] { "mre_fast", "mre_fallback" },
     AdaptiveLoadBalancing = adaptiveSettings,
-    EndpointGroups = new[]
-    {
-        new EndpointGroup
-        {
-            Id = "primary",
-            Name = "Primary",
-            Priority = 0,
-            TrafficWeight = 100,
-            EndpointIds = new List<string> { "mre_fast" }
-        },
-        new EndpointGroup
-        {
-            Id = "fallback",
-            Name = "Fallback",
-            Priority = 1,
-            TrafficWeight = 100,
-            EndpointIds = new List<string> { "mre_fallback" }
-        }
-    }
+    EndpointGroupIds = new[] { "egp_primary" }
 });
 
 using JsonDocument runtimeStats = await client.GetVirtualModelRunnerRuntimeStatsAsync(

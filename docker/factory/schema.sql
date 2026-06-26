@@ -115,6 +115,28 @@ CREATE INDEX IF NOT EXISTS idx_mre_tenantid ON modelrunnerendpoints(tenantid);
 CREATE INDEX IF NOT EXISTS idx_mre_active ON modelrunnerendpoints(active);
 CREATE INDEX IF NOT EXISTS idx_mre_apitype ON modelrunnerendpoints(apitype);
 
+-- Endpoint Groups
+CREATE TABLE IF NOT EXISTS endpointgroups (
+    id TEXT PRIMARY KEY,
+    tenantid TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    priority INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    trafficweight INTEGER NOT NULL DEFAULT 100,
+    endpointids TEXT,
+    createdutc TEXT NOT NULL,
+    lastupdateutc TEXT NOT NULL,
+    labels TEXT,
+    tags TEXT,
+    metadata TEXT,
+    FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_eg_tenantid ON endpointgroups(tenantid);
+CREATE INDEX IF NOT EXISTS idx_eg_tenant_name ON endpointgroups(tenantid, name);
+CREATE INDEX IF NOT EXISTS idx_eg_active ON endpointgroups(active);
+CREATE INDEX IF NOT EXISTS idx_eg_lastupdateutc ON endpointgroups(lastupdateutc);
+
 -- Model Definitions
 CREATE TABLE IF NOT EXISTS modeldefinitions (
     id TEXT PRIMARY KEY,
@@ -233,6 +255,7 @@ CREATE TABLE IF NOT EXISTS virtualmodelrunners (
     modelrunnerendpointids TEXT,
     adaptiveloadbalancing TEXT,
     endpointgroups TEXT,
+    endpointgroupids TEXT,
     modelconfigurationids TEXT,
     modeldefinitionids TEXT,
     modelconfigurationmappings TEXT,

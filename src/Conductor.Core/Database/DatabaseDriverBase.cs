@@ -33,6 +33,11 @@ namespace Conductor.Core.Database
         public IModelRunnerEndpointMethods ModelRunnerEndpoint { get; protected set; }
 
         /// <summary>
+        /// Endpoint group methods.
+        /// </summary>
+        public IEndpointGroupMethods EndpointGroup { get; protected set; }
+
+        /// <summary>
         /// Model definition methods.
         /// </summary>
         public IModelDefinitionMethods ModelDefinition { get; protected set; }

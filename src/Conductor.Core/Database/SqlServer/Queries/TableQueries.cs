@@ -136,6 +136,37 @@ namespace Conductor.Core.Database.SqlServer.Queries
         ";
 
         /// <summary>
+        /// Create endpoint groups table.
+        /// </summary>
+        public static readonly string CreateEndpointGroupsTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='endpointgroups' AND xtype='U')
+            CREATE TABLE endpointgroups (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                priority INT NOT NULL DEFAULT 0,
+                active BIT NOT NULL DEFAULT 1,
+                trafficweight INT NOT NULL DEFAULT 100,
+                endpointids NVARCHAR(MAX),
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL,
+                labels NVARCHAR(MAX),
+                tags NVARCHAR(MAX),
+                metadata NVARCHAR(MAX),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_eg_tenantid')
+            CREATE INDEX idx_eg_tenantid ON endpointgroups(tenantid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_eg_tenant_name')
+            CREATE INDEX idx_eg_tenant_name ON endpointgroups(tenantid, name);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_eg_active')
+            CREATE INDEX idx_eg_active ON endpointgroups(active);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_eg_lastupdateutc')
+            CREATE INDEX idx_eg_lastupdateutc ON endpointgroups(lastupdateutc);
+        ";
+
+        /// <summary>
         /// Create model definitions table.
         /// </summary>
         public static readonly string CreateModelDefinitionsTable = @"
@@ -332,6 +363,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 modelrunnerendpointids NVARCHAR(MAX),
                 adaptiveloadbalancing NVARCHAR(MAX),
                 endpointgroups NVARCHAR(MAX),
+                endpointgroupids NVARCHAR(MAX),
                 modelconfigurationids NVARCHAR(MAX),
                 modeldefinitionids NVARCHAR(MAX),
                 modelconfigurationmappings NVARCHAR(MAX),
@@ -696,6 +728,13 @@ namespace Conductor.Core.Database.SqlServer.Queries
         /// </summary>
         public static readonly string AddEndpointGroupsColumn = @"
             ALTER TABLE virtualmodelrunners ADD endpointgroups NVARCHAR(MAX);
+        ";
+
+        /// <summary>
+        /// Add endpointgroupids column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddEndpointGroupIdsColumn = @"
+            ALTER TABLE virtualmodelrunners ADD endpointgroupids NVARCHAR(MAX);
         ";
     }
 }

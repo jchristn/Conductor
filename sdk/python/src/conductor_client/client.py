@@ -90,6 +90,24 @@ class ConductorClient:
     def validate_model_runner_endpoint(self, draft: dict[str, Any], existing_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/modelrunnerendpoints/validate{self._existing_id_query(existing_id)}", draft)
 
+    def list_endpoint_groups(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/endpointgroups{self._query_string(filters)}")
+
+    def get_endpoint_group(self, group_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/endpointgroups/{group_id}{self._tenant_query(tenant_id)}")
+
+    def create_endpoint_group(self, group: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/endpointgroups", group)
+
+    def update_endpoint_group(self, group_id: str, group: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PUT", f"/v1.0/endpointgroups/{group_id}", group)
+
+    def delete_endpoint_group(self, group_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+        return self._request("DELETE", f"/v1.0/endpointgroups/{group_id}{self._tenant_query(tenant_id)}")
+
+    def validate_endpoint_group(self, draft: dict[str, Any], existing_id: str | None = None) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/endpointgroups/validate{self._existing_id_query(existing_id)}", draft)
+
     def validate_model_definition(self, draft: dict[str, Any], existing_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/modeldefinitions/validate{self._existing_id_query(existing_id)}", draft)
 

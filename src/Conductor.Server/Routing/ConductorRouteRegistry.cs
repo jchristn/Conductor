@@ -16,6 +16,7 @@ namespace Conductor.Server.Routing
             new UserRouteModule(_Context).Register();
             new CredentialRouteModule(_Context).Register();
             new ModelRunnerRouteModule(_Context).Register();
+            new EndpointGroupRouteModule(_Context).Register();
             new ModelDefinitionRouteModule(_Context).Register();
             new LoadBalancingPolicyRouteModule(_Context).Register();
             new ModelAccessPolicyRouteModule(_Context).Register();

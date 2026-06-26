@@ -54,6 +54,7 @@ namespace Conductor.Server.Services
 
             await AppendPolicyAsync(effective, vmr, token).ConfigureAwait(false);
             await AppendModelAccessPolicyAsync(effective, vmr, token).ConfigureAwait(false);
+            await AppendEndpointGroupsAsync(effective, vmr, token).ConfigureAwait(false);
             await AppendEndpointsAsync(effective, vmr, token).ConfigureAwait(false);
             await AppendModelDefinitionsAsync(effective, vmr, token).ConfigureAwait(false);
             await AppendModelConfigurationsAsync(effective, vmr, token).ConfigureAwait(false);
@@ -109,7 +110,16 @@ namespace Conductor.Server.Services
 
         private async Task AppendEndpointsAsync(EffectiveVirtualModelRunnerConfiguration effective, VirtualModelRunner vmr, CancellationToken token)
         {
-            foreach (string endpointId in vmr.ModelRunnerEndpointIds ?? new List<string>())
+            HashSet<string> endpointIds = new HashSet<string>(vmr.ModelRunnerEndpointIds ?? new List<string>(), StringComparer.Ordinal);
+            foreach (EffectiveEndpointGroupSummary group in effective.EndpointGroups ?? new List<EffectiveEndpointGroupSummary>())
+            {
+                foreach (string endpointId in group.EndpointIds ?? new List<string>())
+                {
+                    endpointIds.Add(endpointId);
+                }
+            }
+
+            foreach (string endpointId in endpointIds)
             {
                 ModelRunnerEndpoint endpoint = await _Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, endpointId, token).ConfigureAwait(false);
                 if (endpoint == null) continue;
@@ -123,6 +133,37 @@ namespace Conductor.Server.Services
                     ServiceState = endpoint.ServiceState,
                     Weight = endpoint.Weight,
                     MaxParallelRequests = endpoint.MaxParallelRequests
+                });
+            }
+        }
+
+        private async Task AppendEndpointGroupsAsync(EffectiveVirtualModelRunnerConfiguration effective, VirtualModelRunner vmr, CancellationToken token)
+        {
+            List<EndpointGroup> groups = new List<EndpointGroup>();
+            if (vmr.EndpointGroupIds != null && vmr.EndpointGroupIds.Count > 0)
+            {
+                foreach (string groupId in vmr.EndpointGroupIds)
+                {
+                    if (String.IsNullOrWhiteSpace(groupId)) continue;
+                    EndpointGroup group = await _Database.EndpointGroup.ReadAsync(vmr.TenantId, groupId, token).ConfigureAwait(false);
+                    if (group != null) groups.Add(group);
+                }
+            }
+            else
+            {
+                groups.AddRange(vmr.EndpointGroups ?? new List<EndpointGroup>());
+            }
+
+            foreach (EndpointGroup group in groups)
+            {
+                effective.EndpointGroups.Add(new EffectiveEndpointGroupSummary
+                {
+                    Id = group.Id,
+                    Name = group.Name,
+                    Active = group.Active,
+                    Priority = group.Priority,
+                    TrafficWeight = group.TrafficWeight,
+                    EndpointIds = new List<string>(group.EndpointIds ?? new List<string>())
                 });
             }
         }

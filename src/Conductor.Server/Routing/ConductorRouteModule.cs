@@ -26,6 +26,7 @@ namespace Conductor.Server.Routing
         protected readonly UserController userController;
         protected readonly CredentialController credentialController;
         protected readonly ModelRunnerEndpointController mreController;
+        protected readonly EndpointGroupController endpointGroupController;
         protected readonly ModelDefinitionController mdController;
         protected readonly ModelConfigurationController mcController;
         protected readonly LoadBalancingPolicyController lbpController;
@@ -49,6 +50,7 @@ namespace Conductor.Server.Routing
             userController = context.UserController;
             credentialController = context.CredentialController;
             mreController = context.ModelRunnerEndpointController;
+            endpointGroupController = context.EndpointGroupController;
             mdController = context.ModelDefinitionController;
             mcController = context.ModelConfigurationController;
             lbpController = context.LoadBalancingPolicyController;
