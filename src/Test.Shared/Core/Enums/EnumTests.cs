@@ -2,6 +2,7 @@ namespace Test.Shared.Core.Enums
 {
     using System;
     using Conductor.Core.Enums;
+    using Conductor.Core.Serialization;
     using FluentAssertions;
     
     /// <summary>
@@ -22,10 +23,26 @@ namespace Test.Shared.Core.Enums
         {
             ((int)LoadBalancingModeEnum.FirstAvailable).Should().Be(2);
         }
+        public void LoadBalancingModeEnum_LeastRecentlyUsed_HasValue3()
+        {
+            ((int)LoadBalancingModeEnum.LeastRecentlyUsed).Should().Be(3);
+        }
         public void LoadBalancingModeEnum_CanParse()
         {
             Enum.TryParse<LoadBalancingModeEnum>("RoundRobin", out LoadBalancingModeEnum result).Should().BeTrue();
             result.Should().Be(LoadBalancingModeEnum.RoundRobin);
+            Enum.TryParse<LoadBalancingModeEnum>("LeastRecentlyUsed", out result).Should().BeTrue();
+            result.Should().Be(LoadBalancingModeEnum.LeastRecentlyUsed);
+        }
+        public void LoadBalancingModeEnum_LeastRecentlyUsed_SerializesAsJsonString()
+        {
+            Serializer serializer = new Serializer();
+
+            string json = serializer.SerializeJson(LoadBalancingModeEnum.LeastRecentlyUsed, false);
+            LoadBalancingModeEnum result = serializer.DeserializeJson<LoadBalancingModeEnum>("\"LeastRecentlyUsed\"");
+
+            json.Should().Be("\"LeastRecentlyUsed\"");
+            result.Should().Be(LoadBalancingModeEnum.LeastRecentlyUsed);
         }
 
         #endregion

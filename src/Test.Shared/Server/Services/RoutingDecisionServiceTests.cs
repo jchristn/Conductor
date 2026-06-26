@@ -2,7 +2,10 @@ namespace Test.Shared.Server.Services
 {
     using System;
     using System.Collections.Generic;
+    using System.Net;
+    using System.Net.Http;
     using System.Text;
+    using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
@@ -76,6 +79,170 @@ namespace Test.Shared.Server.Services
             decision.SessionAffinityOutcome.Should().Be("Quarantined");
             _SessionAffinityService.TryGetPinnedEndpoint(vmr.Id, "203.0.113.30", out string pinnedEndpointId).Should().BeFalse();
             pinnedEndpointId.Should().BeNull();
+        }
+
+        public async Task Evaluate_WithLeastRecentlyUsedMode_RotatesThroughEligibleEndpointsByRoute()
+        {
+            ModelRunnerEndpoint first = await CreateEndpointAsync("LRU First Endpoint", "lru-first.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            ModelRunnerEndpoint second = await CreateEndpointAsync("LRU Second Endpoint", "lru-second.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            ModelRunnerEndpoint third = await CreateEndpointAsync("LRU Third Endpoint", "lru-third.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(
+                new List<string> { first.Id, second.Id, third.Id },
+                SessionAffinityModeEnum.None,
+                null,
+                null,
+                LoadBalancingModeEnum.LeastRecentlyUsed).ConfigureAwait(false);
+
+            RoutingDecision firstDecision = await EvaluateDecisionAsync(vmr, "203.0.113.60").ConfigureAwait(false);
+            RoutingDecision secondDecision = await EvaluateDecisionAsync(vmr, "203.0.113.61").ConfigureAwait(false);
+            RoutingDecision thirdDecision = await EvaluateDecisionAsync(vmr, "203.0.113.62").ConfigureAwait(false);
+            RoutingDecision fourthDecision = await EvaluateDecisionAsync(vmr, "203.0.113.63").ConfigureAwait(false);
+
+            firstDecision.SelectedEndpointId.Should().Be(first.Id);
+            secondDecision.SelectedEndpointId.Should().Be(second.Id);
+            thirdDecision.SelectedEndpointId.Should().Be(third.Id);
+            fourthDecision.SelectedEndpointId.Should().Be(first.Id);
+            firstDecision.Timeline.Should().ContainSingle(item => item.Code == "EndpointSelection" && item.Message.Contains("LeastRecentlyUsed"));
+        }
+
+        public async Task Evaluate_WithLeastRecentlyUsedMode_TracksRecencyPerVmr()
+        {
+            ModelRunnerEndpoint first = await CreateEndpointAsync("Scoped LRU First Endpoint", "scoped-lru-first.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            ModelRunnerEndpoint second = await CreateEndpointAsync("Scoped LRU Second Endpoint", "scoped-lru-second.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner firstVmr = await CreateVmrAsync(
+                new List<string> { first.Id, second.Id },
+                SessionAffinityModeEnum.None,
+                null,
+                null,
+                LoadBalancingModeEnum.LeastRecentlyUsed).ConfigureAwait(false);
+            VirtualModelRunner secondVmr = await CreateVmrAsync(
+                new List<string> { first.Id, second.Id },
+                SessionAffinityModeEnum.None,
+                null,
+                null,
+                LoadBalancingModeEnum.LeastRecentlyUsed).ConfigureAwait(false);
+
+            RoutingDecision firstVmrFirstDecision = await EvaluateDecisionAsync(firstVmr, "203.0.113.64").ConfigureAwait(false);
+            RoutingDecision firstVmrSecondDecision = await EvaluateDecisionAsync(firstVmr, "203.0.113.65").ConfigureAwait(false);
+            RoutingDecision secondVmrFirstDecision = await EvaluateDecisionAsync(secondVmr, "203.0.113.66").ConfigureAwait(false);
+
+            firstVmrFirstDecision.SelectedEndpointId.Should().Be(first.Id);
+            firstVmrSecondDecision.SelectedEndpointId.Should().Be(second.Id);
+            secondVmrFirstDecision.SelectedEndpointId.Should().Be(first.Id);
+        }
+
+        public async Task Evaluate_WithLeastRecentlyUsedMode_SkipsUnavailableEndpoints()
+        {
+            ModelRunnerEndpoint draining = await CreateEndpointAsync("LRU Draining Endpoint", "lru-draining.local", EndpointServiceStateEnum.Draining).ConfigureAwait(false);
+            ModelRunnerEndpoint first = await CreateEndpointAsync("LRU Healthy First Endpoint", "lru-healthy-first.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            ModelRunnerEndpoint second = await CreateEndpointAsync("LRU Healthy Second Endpoint", "lru-healthy-second.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(
+                new List<string> { draining.Id, first.Id, second.Id },
+                SessionAffinityModeEnum.None,
+                null,
+                null,
+                LoadBalancingModeEnum.LeastRecentlyUsed).ConfigureAwait(false);
+
+            RoutingDecision firstDecision = await EvaluateDecisionAsync(vmr, "203.0.113.67").ConfigureAwait(false);
+            RoutingDecision secondDecision = await EvaluateDecisionAsync(vmr, "203.0.113.68").ConfigureAwait(false);
+
+            firstDecision.SelectedEndpointId.Should().Be(first.Id);
+            secondDecision.SelectedEndpointId.Should().Be(second.Id);
+            firstDecision.Candidates.Should().ContainSingle(item => item.EndpointId == draining.Id && item.ExclusionReasonCode == "EndpointDraining");
+            secondDecision.Candidates.Should().ContainSingle(item => item.EndpointId == draining.Id && item.ExclusionReasonCode == "EndpointDraining");
+        }
+
+        public async Task Evaluate_WithLeastRecentlyUsedMode_SkipsInactiveUnhealthyAndQuarantinedEndpoints()
+        {
+            HealthCheckService healthCheckService = new HealthCheckService(Database, Logging, new RoutingHealthCheckHandler());
+            ModelRunnerEndpoint inactive = await CreateEndpointAsync("LRU Inactive Endpoint", "lru-inactive.local", EndpointServiceStateEnum.Normal, false).ConfigureAwait(false);
+            ModelRunnerEndpoint unhealthy = await CreateEndpointAsync("LRU Unhealthy Endpoint", "lru-unhealthy.local", EndpointServiceStateEnum.Normal, true, 0, "/unhealthy").ConfigureAwait(false);
+            ModelRunnerEndpoint quarantined = await CreateEndpointAsync("LRU Quarantined Endpoint", "lru-quarantined.local", EndpointServiceStateEnum.Quarantined).ConfigureAwait(false);
+            ModelRunnerEndpoint healthy = await CreateEndpointAsync("LRU Only Healthy Endpoint", "lru-only-healthy.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(
+                new List<string> { inactive.Id, unhealthy.Id, quarantined.Id, healthy.Id },
+                SessionAffinityModeEnum.None,
+                null,
+                null,
+                LoadBalancingModeEnum.LeastRecentlyUsed).ConfigureAwait(false);
+
+            try
+            {
+                await healthCheckService.StartAsync().ConfigureAwait(false);
+                await WaitForHealthyAsync(healthCheckService, new List<string> { healthy.Id }).ConfigureAwait(false);
+                _Service = new RoutingDecisionService(Database, Logging, healthCheckService, _SessionAffinityService);
+
+                RoutingDecision decision = await EvaluateDecisionAsync(vmr, "203.0.113.69").ConfigureAwait(false);
+
+                decision.SelectedEndpointId.Should().Be(healthy.Id);
+                decision.Candidates.Should().ContainSingle(item => item.EndpointId == inactive.Id && item.ExclusionReasonCode == "EndpointInactive");
+                decision.Candidates.Should().ContainSingle(item => item.EndpointId == unhealthy.Id && item.ExclusionReasonCode == "EndpointUnhealthy");
+                decision.Candidates.Should().ContainSingle(item => item.EndpointId == quarantined.Id && item.ExclusionReasonCode == "EndpointQuarantined");
+            }
+            finally
+            {
+                await healthCheckService.StopAsync().ConfigureAwait(false);
+                healthCheckService.Dispose();
+            }
+        }
+
+        public async Task Evaluate_WithLeastRecentlyUsedMode_SkipsAtCapacityEndpoint()
+        {
+            HealthCheckService healthCheckService = new HealthCheckService(Database, Logging, new RoutingHealthCheckHandler());
+            ModelRunnerEndpoint atCapacity = await CreateEndpointAsync("LRU At Capacity Endpoint", "lru-at-capacity.local", EndpointServiceStateEnum.Normal, true, 1).ConfigureAwait(false);
+            ModelRunnerEndpoint first = await CreateEndpointAsync("LRU Capacity First Healthy Endpoint", "lru-capacity-first.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            ModelRunnerEndpoint second = await CreateEndpointAsync("LRU Capacity Second Healthy Endpoint", "lru-capacity-second.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(
+                new List<string> { atCapacity.Id, first.Id, second.Id },
+                SessionAffinityModeEnum.None,
+                null,
+                null,
+                LoadBalancingModeEnum.LeastRecentlyUsed).ConfigureAwait(false);
+
+            try
+            {
+                await healthCheckService.StartAsync().ConfigureAwait(false);
+                await WaitForHealthyAsync(healthCheckService, new List<string> { atCapacity.Id, first.Id, second.Id }).ConfigureAwait(false);
+                healthCheckService.TryIncrementInFlight(atCapacity.Id, atCapacity.MaxParallelRequests).Should().BeTrue();
+                _Service = new RoutingDecisionService(Database, Logging, healthCheckService, _SessionAffinityService);
+
+                RoutingDecision firstDecision = await EvaluateDecisionAsync(vmr, "203.0.113.70").ConfigureAwait(false);
+                RoutingDecision secondDecision = await EvaluateDecisionAsync(vmr, "203.0.113.71").ConfigureAwait(false);
+
+                firstDecision.SelectedEndpointId.Should().Be(first.Id);
+                secondDecision.SelectedEndpointId.Should().Be(second.Id);
+                firstDecision.Candidates.Should().ContainSingle(item => item.EndpointId == atCapacity.Id && item.ExclusionReasonCode == "AllEndpointsAtCapacity");
+                secondDecision.Candidates.Should().ContainSingle(item => item.EndpointId == atCapacity.Id && item.ExclusionReasonCode == "AllEndpointsAtCapacity");
+            }
+            finally
+            {
+                healthCheckService.DecrementInFlight(atCapacity.Id);
+                await healthCheckService.StopAsync().ConfigureAwait(false);
+                healthCheckService.Dispose();
+            }
+        }
+
+        public async Task Evaluate_WithLeastRecentlyUsedMode_ReusesSessionAffinityPinWithoutUpdatingRecency()
+        {
+            ModelRunnerEndpoint first = await CreateEndpointAsync("LRU Pin First Endpoint", "lru-pin-first.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            ModelRunnerEndpoint second = await CreateEndpointAsync("LRU Pin Second Endpoint", "lru-pin-second.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(
+                new List<string> { first.Id, second.Id },
+                SessionAffinityModeEnum.SourceIP,
+                null,
+                null,
+                LoadBalancingModeEnum.LeastRecentlyUsed).ConfigureAwait(false);
+            _SessionAffinityService.SetPinnedEndpoint(vmr.Id, "203.0.113.72", second.Id, vmr.SessionTimeoutMs, vmr.SessionMaxEntries);
+
+            RoutingDecision pinnedDecision = await EvaluateDecisionAsync(vmr, "203.0.113.72").ConfigureAwait(false);
+            RoutingDecision firstBalancedDecision = await EvaluateDecisionAsync(vmr, "203.0.113.73").ConfigureAwait(false);
+            RoutingDecision secondBalancedDecision = await EvaluateDecisionAsync(vmr, "203.0.113.74").ConfigureAwait(false);
+
+            pinnedDecision.SelectedEndpointId.Should().Be(second.Id);
+            pinnedDecision.SessionPinUsed.Should().BeTrue();
+            pinnedDecision.SessionAffinityOutcome.Should().Be("Hit");
+            firstBalancedDecision.SelectedEndpointId.Should().Be(first.Id);
+            secondBalancedDecision.SelectedEndpointId.Should().Be(second.Id);
         }
 
         public async Task Evaluate_WithModelAccessPolicyDefaultDeny_DeniesBeforeEndpointInventory()
@@ -277,14 +444,29 @@ namespace Test.Shared.Server.Services
             }
         }
 
-        private async Task<ModelRunnerEndpoint> CreateEndpointAsync(string name, string hostname, EndpointServiceStateEnum serviceState)
+        private async Task<ModelRunnerEndpoint> CreateEndpointAsync(
+            string name,
+            string hostname,
+            EndpointServiceStateEnum serviceState,
+            bool active = true,
+            int maxParallelRequests = 0,
+            string healthCheckUrl = "/health")
         {
             return await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
             {
                 TenantId = TestTenantId,
                 Name = name,
                 Hostname = hostname,
-                ServiceState = serviceState
+                ServiceState = serviceState,
+                Active = active,
+                MaxParallelRequests = maxParallelRequests,
+                HealthCheckUrl = healthCheckUrl,
+                HealthCheckMethod = HealthCheckMethodEnum.GET,
+                HealthCheckIntervalMs = 25,
+                HealthCheckTimeoutMs = 1000,
+                HealthCheckExpectedStatusCode = 200,
+                HealthyThreshold = 1,
+                UnhealthyThreshold = 1
             }).ConfigureAwait(false);
         }
 
@@ -341,14 +523,18 @@ namespace Test.Shared.Server.Services
             List<string> endpointIds,
             SessionAffinityModeEnum sessionAffinityMode,
             List<string> modelDefinitionIds = null,
-            string modelAccessPolicyId = null)
+            string modelAccessPolicyId = null,
+            LoadBalancingModeEnum loadBalancingMode = LoadBalancingModeEnum.RoundRobin)
         {
+            string uniqueSuffix = Guid.NewGuid().ToString("N");
+
             return await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
             {
                 TenantId = TestTenantId,
-                Name = "Routing Test VMR " + endpointIds.Count,
-                BasePath = "/v1.0/api/routing-test-" + endpointIds.Count + "/",
+                Name = "Routing Test VMR " + uniqueSuffix,
+                BasePath = "/v1.0/api/routing-test-" + uniqueSuffix + "/",
                 SessionAffinityMode = sessionAffinityMode,
+                LoadBalancingMode = loadBalancingMode,
                 ModelRunnerEndpointIds = endpointIds,
                 ModelDefinitionIds = modelDefinitionIds,
                 ModelAccessPolicyId = modelAccessPolicyId
@@ -419,6 +605,44 @@ namespace Test.Shared.Server.Services
 
             RoutingExecutionResult result = await _Service.EvaluateAsync(vmr, urlContext, requestContext, false).ConfigureAwait(false);
             return result.Decision;
+        }
+
+        private static async Task WaitForHealthyAsync(HealthCheckService healthCheckService, List<string> endpointIds)
+        {
+            DateTime deadlineUtc = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadlineUtc)
+            {
+                bool allHealthy = true;
+                foreach (string endpointId in endpointIds)
+                {
+                    EndpointHealthState state = healthCheckService.GetHealthState(endpointId);
+                    if (state == null || !state.IsHealthy)
+                    {
+                        allHealthy = false;
+                        break;
+                    }
+                }
+
+                if (allHealthy)
+                {
+                    return;
+                }
+
+                await Task.Delay(10).ConfigureAwait(false);
+            }
+
+            throw new TimeoutException("Health checks did not complete within the expected time.");
+        }
+
+        private sealed class RoutingHealthCheckHandler : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                HttpStatusCode statusCode = request.RequestUri.AbsolutePath.Contains("unhealthy")
+                    ? HttpStatusCode.InternalServerError
+                    : HttpStatusCode.OK;
+                return Task.FromResult(new HttpResponseMessage(statusCode));
+            }
         }
     }
 }

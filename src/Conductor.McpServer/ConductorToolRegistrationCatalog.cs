@@ -1,7 +1,7 @@
 namespace Conductor.McpServer
 {
     using System;
-    using Voltaic;
+    using Voltaic.Mcp;
 
     internal sealed class ConductorToolRegistrationCatalog
     {
@@ -161,7 +161,7 @@ namespace Conductor.McpServer
                         api_type = new { type = "string", description = "API type: 'Ollama', 'OpenAI', 'vLLM', or 'Gemini' (default: Ollama)" },
                         endpoint_ids = new { type = "array", items = new { type = "string" }, description = "List of endpoint IDs to include" },
                         configuration_ids = new { type = "array", items = new { type = "string" }, description = "List of configuration IDs to apply (optional)" },
-                        load_balancing = new { type = "string", description = "Load balancing mode: 'RoundRobin', 'Random', or 'FirstAvailable' (default: RoundRobin)" },
+                        load_balancing = new { type = "string", description = "Load balancing mode: 'RoundRobin', 'Random', 'FirstAvailable', or 'LeastRecentlyUsed' (default: RoundRobin)" },
                         allow_completions = new { type = "boolean", description = "Allow completion requests (default: true)" },
                         allow_embeddings = new { type = "boolean", description = "Allow embedding requests (default: true)" }
                     },

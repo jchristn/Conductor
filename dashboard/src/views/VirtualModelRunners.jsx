@@ -874,6 +874,7 @@ function VirtualModelRunners() {
                 <option value="RoundRobin">Round Robin</option>
                 <option value="Random">Random</option>
                 <option value="FirstAvailable">First Available</option>
+                <option value="LeastRecentlyUsed">Least Recently Used</option>
               </select>
             </div>
           </div>

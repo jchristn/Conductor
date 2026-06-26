@@ -17,6 +17,15 @@ Policies are attached to a VMR with `LoadBalancingPolicyId`.
 
 Without a policy, a VMR uses its `LoadBalancingMode` directly.
 
+Supported VMR `LoadBalancingMode` values are:
+
+| Value | Meaning |
+| --- | --- |
+| `RoundRobin` | Rotate across eligible endpoints using endpoint weights. |
+| `Random` | Choose an eligible endpoint randomly using endpoint weights. |
+| `FirstAvailable` | Use the first eligible endpoint in configured endpoint order. |
+| `LeastRecentlyUsed` | Choose the eligible endpoint with the oldest route-scoped assignment history. Endpoints with no history use configured endpoint order as the deterministic tie-breaker. |
+
 ## Runtime evaluation order
 
 When a proxied request reaches a VMR, Conductor evaluates routing in this order:

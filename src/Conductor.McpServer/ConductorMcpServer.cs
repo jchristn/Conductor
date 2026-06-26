@@ -7,7 +7,8 @@ namespace Conductor.McpServer
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Models;
-    using Voltaic;
+    using Voltaic.Core;
+    using Voltaic.Mcp;
 
     /// <summary>
     /// Main MCP server for Conductor that exposes Conductor APIs as MCP tools.

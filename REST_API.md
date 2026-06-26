@@ -23,7 +23,7 @@ http://localhost:9000/v1.0/virtualmodelrunners
 ## Content type and enum format
 
 - Request and response bodies use JSON unless noted otherwise.
-- Enum values are serialized as strings such as `OpenAI`, `RoundRobin`, or `FailClosed`.
+- Enum values are serialized as strings such as `OpenAI`, `LeastRecentlyUsed`, or `FailClosed`.
 - Successful deletes return HTTP `204 No Content`.
 - Successful creates generally return HTTP `201 Created`.
 
@@ -407,7 +407,7 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
   "Hostname": null,
   "BasePath": "/v1.0/api/gpu-chat/",      // required; exactly one segment after /v1.0/api/
   "ApiType": "OpenAI",
-  "LoadBalancingMode": "RoundRobin",
+  "LoadBalancingMode": "RoundRobin",      // RoundRobin, Random, FirstAvailable, LeastRecentlyUsed
   "LoadBalancingPolicyId": "lbp_xxx",
   "ModelAccessPolicyId": "map_xxx",
   "ModelRunnerEndpointIds": ["mre_a", "mre_b"],
@@ -1659,7 +1659,7 @@ These VMR fields affect proxied behavior:
 
 | Field | Meaning |
 | --- | --- |
-| `LoadBalancingMode` | Built-in selection mode used directly or as a policy fallback. |
+| `LoadBalancingMode` | Built-in selection mode used directly or as a policy fallback. Supported values: `RoundRobin`, `Random`, `FirstAvailable`, `LeastRecentlyUsed`. |
 | `LoadBalancingPolicyId` | Optional advanced policy attachment. |
 | `AllowEmbeddings` | If `false`, embedding routes are rejected. |
 | `AllowCompletions` | If `false`, completion/chat routes are rejected. |

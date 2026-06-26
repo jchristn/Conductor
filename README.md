@@ -262,6 +262,8 @@ Policies combine:
 - `FallbackMode`: use the VMR's legacy load-balancing mode or fail closed
 - `TieBreaker`: round-robin, random, or first available when scores are equal
 
+Built-in VMR `LoadBalancingMode` values are `RoundRobin`, `Random`, `FirstAvailable`, and `LeastRecentlyUsed`. `LeastRecentlyUsed` selects the eligible endpoint with the oldest route-scoped assignment history and uses endpoint order as the deterministic tie-breaker for endpoints with no history.
+
 Example policy payload:
 
 ```json

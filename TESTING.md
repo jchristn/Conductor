@@ -90,6 +90,7 @@ Changes in the following areas should ship with targeted shared-suite coverage:
 
 - model access policy validation, evaluation, routing enforcement, list-model filtering, and request-history recording
 - routing explanation, session affinity, and policy evidence
+- load-balancing mode compatibility, eligibility screening, route-scoped state, and policy evidence
 - validation routes and effective-configuration preview
 - request-history search, summary, redaction, and retention behavior
 - observability metrics aggregation and export
@@ -106,6 +107,39 @@ cd dashboard && npm run build
 cd sdk/javascript && npm test
 cd sdk/python && set PYTHONPATH=src && python -m unittest discover -s tests
 ```
+
+## Load Balancing Release Gate
+
+Load-balancing changes must be verified across backend routing behavior, enum serialization, dashboard create/edit affordances, docs, Postman examples, and SDK compatibility checks.
+
+Run the focused product gate before marking load-balancing work complete:
+
+```powershell
+dotnet restore src\Conductor.sln --disable-parallel
+dotnet list src\Conductor.sln package --outdated
+dotnet list src\Conductor.sln package --vulnerable --include-transitive
+dotnet build src\Conductor.sln --no-restore
+dotnet test src\Test.Xunit\Test.Xunit.csproj --no-restore --no-build --logger "console;verbosity=minimal"
+dotnet test src\Test.Nunit\Test.Nunit.csproj --no-restore --no-build --logger "console;verbosity=minimal"
+dotnet run --project src\Test.Automated\Test.Automated.csproj --no-restore --no-build -- --results "$env:TEMP\conductor-test-automated-results.json"
+Push-Location dashboard; npm.cmd run build; Pop-Location
+Push-Location sdk\javascript; npm.cmd test; Pop-Location
+Push-Location sdk\python; $env:PYTHONPATH='src'; python -m pytest; Pop-Location
+Push-Location sdk\csharp; dotnet test --no-restore --no-build; Pop-Location
+Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null
+```
+
+Focused shared tests for `LeastRecentlyUsed` live in:
+
+- `src/Test.Shared/Core/Enums/EnumTests.cs`
+- `src/Test.Shared/Server/Services/RoutingDecisionServiceTests.cs`
+
+Manual dashboard checks:
+
+- Create a VMR and confirm `Least Recently Used` appears in the same load-balancing mode control as the existing values.
+- Edit an existing VMR, switch to `Least Recently Used`, save, reopen, and confirm the value persists without changing unrelated fields.
+- Cancel an edit after changing the load-balancing mode and confirm the original value is retained.
+- Verify the create/edit modal at 1280px, 768px, and 390px so the selector, labels, validation messages, and action buttons do not overlap or wrap awkwardly.
 
 ## Model Access Release Gate
 

@@ -1478,7 +1478,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\",\n  \"LoadBalancingMode\": \"RoundRobin\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\",\n  \"ModelRunnerEndpointIds\": [\"{{endpointId}}\"]\n}"
+              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\",\n  \"LoadBalancingMode\": \"LeastRecentlyUsed\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\",\n  \"ModelRunnerEndpointIds\": [\"{{endpointId}}\"]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",

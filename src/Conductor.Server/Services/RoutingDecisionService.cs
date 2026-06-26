@@ -1,6 +1,7 @@
 namespace Conductor.Server.Services
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Linq;
     using System.Text;
@@ -18,8 +19,11 @@ namespace Conductor.Server.Services
     public class RoutingDecisionService
     {
         private const string _Header = "[RoutingDecisionService] ";
+        private const string _DefaultLeastRecentlyUsedScope = "global";
+        private static readonly ConcurrentDictionary<string, long> _LeastRecentlyUsedSelections = new ConcurrentDictionary<string, long>(StringComparer.Ordinal);
         private static readonly object _RoundRobinLock = new object();
         private static readonly Random _Random = new Random();
+        private static long _LeastRecentlyUsedSequence = 0;
         private static int _RoundRobinIndex = 0;
 
         private readonly DatabaseDriverBase _Database;
@@ -271,7 +275,7 @@ namespace Conductor.Server.Services
 
                 if (selectedEndpoint == null)
                 {
-                    selectedEndpoint = SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode);
+                    selectedEndpoint = SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode, BuildLoadBalancingScopeKey(vmr));
                     AddTimeline(decision, "EndpointSelection", "Endpoint Selection", "Passed", "Selected endpoint '" + selectedEndpoint.Name + "' using " + vmr.LoadBalancingMode + ".");
                 }
 
@@ -1072,13 +1076,33 @@ namespace Conductor.Server.Services
             }
         }
 
-        private static ModelRunnerEndpoint SelectEndpointWithWeight(List<EndpointAvailability> endpoints, LoadBalancingModeEnum mode)
+        private static string BuildLoadBalancingScopeKey(VirtualModelRunner vmr)
+        {
+            if (vmr == null)
+            {
+                return _DefaultLeastRecentlyUsedScope;
+            }
+
+            return (vmr.TenantId ?? String.Empty) + ":" + (vmr.Id ?? String.Empty);
+        }
+
+        private static ModelRunnerEndpoint SelectEndpointWithWeight(List<EndpointAvailability> endpoints, LoadBalancingModeEnum mode, string routeScopeKey = null)
         {
             if (endpoints == null || endpoints.Count < 1) return null;
-            if (endpoints.Count == 1) return endpoints[0].Endpoint;
+            if (endpoints.Count == 1)
+            {
+                if (mode == LoadBalancingModeEnum.LeastRecentlyUsed)
+                {
+                    MarkLeastRecentlyUsedSelection(routeScopeKey, endpoints[0].Endpoint.Id);
+                }
+
+                return endpoints[0].Endpoint;
+            }
 
             switch (mode)
             {
+                case LoadBalancingModeEnum.LeastRecentlyUsed:
+                    return SelectLeastRecentlyUsedEndpoint(endpoints, routeScopeKey);
                 case LoadBalancingModeEnum.Random:
                     int totalWeight = endpoints.Sum(item => item.Endpoint.Weight);
                     int randomValue = _Random.Next(totalWeight);
@@ -1114,6 +1138,53 @@ namespace Conductor.Server.Services
                     }
                     return endpoints[endpoints.Count - 1].Endpoint;
             }
+        }
+
+        private static ModelRunnerEndpoint SelectLeastRecentlyUsedEndpoint(List<EndpointAvailability> endpoints, string routeScopeKey)
+        {
+            EndpointAvailability selected = endpoints[0];
+            long selectedSequence = GetLeastRecentlyUsedSequence(routeScopeKey, selected.Endpoint.Id);
+
+            for (int i = 1; i < endpoints.Count; i++)
+            {
+                EndpointAvailability candidate = endpoints[i];
+                long candidateSequence = GetLeastRecentlyUsedSequence(routeScopeKey, candidate.Endpoint.Id);
+                if (candidateSequence < selectedSequence)
+                {
+                    selected = candidate;
+                    selectedSequence = candidateSequence;
+                }
+            }
+
+            MarkLeastRecentlyUsedSelection(routeScopeKey, selected.Endpoint.Id);
+            return selected.Endpoint;
+        }
+
+        private static long GetLeastRecentlyUsedSequence(string routeScopeKey, string endpointId)
+        {
+            if (_LeastRecentlyUsedSelections.TryGetValue(BuildLeastRecentlyUsedKey(routeScopeKey, endpointId), out long sequence))
+            {
+                return sequence;
+            }
+
+            return 0;
+        }
+
+        private static void MarkLeastRecentlyUsedSelection(string routeScopeKey, string endpointId)
+        {
+            if (String.IsNullOrWhiteSpace(endpointId))
+            {
+                return;
+            }
+
+            long sequence = Interlocked.Increment(ref _LeastRecentlyUsedSequence);
+            _LeastRecentlyUsedSelections[BuildLeastRecentlyUsedKey(routeScopeKey, endpointId)] = sequence;
+        }
+
+        private static string BuildLeastRecentlyUsedKey(string routeScopeKey, string endpointId)
+        {
+            string scope = !String.IsNullOrWhiteSpace(routeScopeKey) ? routeScopeKey : _DefaultLeastRecentlyUsedScope;
+            return scope + "|" + (endpointId ?? String.Empty);
         }
 
         private static void AddTimeline(RoutingDecision decision, string code, string title, string outcome, string message, Dictionary<string, string> attributes = null)

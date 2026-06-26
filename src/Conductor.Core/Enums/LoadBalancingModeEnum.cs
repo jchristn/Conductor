@@ -20,6 +20,11 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// First available (always use the first healthy endpoint).
         /// </summary>
-        FirstAvailable = 2
+        FirstAvailable = 2,
+
+        /// <summary>
+        /// Select the eligible endpoint that was least recently assigned for this virtual model runner.
+        /// </summary>
+        LeastRecentlyUsed = 3
     }
 }
