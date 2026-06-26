@@ -154,6 +154,36 @@ namespace Conductor.Core.Models
         public string RoutingOutcomeCode { get; set; } = null;
 
         /// <summary>
+        /// Endpoint selection strategy used for this request. May be null.
+        /// </summary>
+        public string SelectionStrategy { get; set; } = null;
+
+        /// <summary>
+        /// Selected endpoint group identifier, if group routing applied. May be null.
+        /// </summary>
+        public string EndpointGroupGuid { get; set; } = null;
+
+        /// <summary>
+        /// Selected endpoint group name, if group routing applied. May be null.
+        /// </summary>
+        public string EndpointGroupName { get; set; } = null;
+
+        /// <summary>
+        /// Backoff reason associated with this request, if any. May be null.
+        /// </summary>
+        public string BackoffReason { get; set; } = null;
+
+        /// <summary>
+        /// Whether adaptive endpoint scoring selected or evaluated this route.
+        /// </summary>
+        public bool AdaptiveSelection { get; set; } = false;
+
+        /// <summary>
+        /// Whether the attached load-balancing policy fell back to route-level selection.
+        /// </summary>
+        public bool PolicyFallbackUsed { get; set; } = false;
+
+        /// <summary>
         /// Denial reason code for non-routed requests. May be null.
         /// </summary>
         public string DenialReasonCode { get; set; } = null;
@@ -439,6 +469,12 @@ namespace Conductor.Core.Models
                 EffectiveModel = DataTableHelper.GetStringValue(row, "effectivemodel"),
                 RequestType = DataTableHelper.GetStringValue(row, "requesttype"),
                 RoutingOutcomeCode = DataTableHelper.GetStringValue(row, "routingoutcomecode"),
+                SelectionStrategy = DataTableHelper.GetStringValue(row, "selectionstrategy"),
+                EndpointGroupGuid = DataTableHelper.GetStringValue(row, "endpointgroupguid"),
+                EndpointGroupName = DataTableHelper.GetStringValue(row, "endpointgroupname"),
+                BackoffReason = DataTableHelper.GetStringValue(row, "backoffreason"),
+                AdaptiveSelection = DataTableHelper.GetBooleanValue(row, "adaptiveselection"),
+                PolicyFallbackUsed = DataTableHelper.GetBooleanValue(row, "policyfallbackused"),
                 DenialReasonCode = DataTableHelper.GetStringValue(row, "denialreasoncode"),
                 DenialReason = DataTableHelper.GetStringValue(row, "denialreason"),
                 ReservationGuid = DataTableHelper.GetStringValue(row, "reservationguid"),

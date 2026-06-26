@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `LeastRecentlyUsed` and `Adaptive` virtual model runner load-balancing modes, with route-scoped recency tracking, endpoint-group routing, traffic weights, adaptive runtime scoring, transient backoff, runtime stats management APIs, dashboard controls, SDK helpers, Postman coverage, REST documentation, and shared backend tests.
+- Updated .NET package dependencies across the main solution and C# SDK, including the SQLite native bundle remediation and the MCP dependency namespace migration.
 - Added tenant-scoped VMR reservations with time-window admission enforcement, user and credential participants, validation, reservation-denial logs, request-history/analytics denial attribution, dashboard management, VMR badges, backup/restore support, SDK helpers, and REST documentation.
 - Added tenant-scoped model access policies with VMR attachment, enforce/monitor/disabled modes, proxy credential attribution, denied/would-deny request history, analytics counters, audit logging, list-model filtering or synthesis, backup/restore support, SDK helpers, Postman examples, and documented rollout semantics.
 - Added `ACCESS_POLICIES.md`, a user-facing model access policy authoring guide with dashboard/API workflow and real-world policy examples.

@@ -68,6 +68,31 @@ namespace Conductor.Core.Models
         public string MutationSummary { get; set; } = null;
 
         /// <summary>
+        /// Filter by endpoint selection strategy. May be null.
+        /// </summary>
+        public string SelectionStrategy { get; set; } = null;
+
+        /// <summary>
+        /// Filter by selected endpoint group identifier. May be null.
+        /// </summary>
+        public string EndpointGroupGuid { get; set; } = null;
+
+        /// <summary>
+        /// Filter by transient backoff reason. May be null.
+        /// </summary>
+        public string BackoffReason { get; set; } = null;
+
+        /// <summary>
+        /// Filter by whether adaptive scoring was used. May be null.
+        /// </summary>
+        public bool? AdaptiveSelection { get; set; } = null;
+
+        /// <summary>
+        /// Filter by whether policy fallback was used. May be null.
+        /// </summary>
+        public bool? PolicyFallbackUsed { get; set; } = null;
+
+        /// <summary>
         /// Filter by denial reason code. May be null.
         /// </summary>
         public string DenialReasonCode { get; set; } = null;

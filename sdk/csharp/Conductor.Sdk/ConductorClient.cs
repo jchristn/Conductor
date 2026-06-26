@@ -58,6 +58,93 @@ namespace Conductor.Sdk
         }
 
         /// <summary>
+        /// Validate a virtual model runner draft.
+        /// </summary>
+        /// <param name="draft">Virtual model runner draft.</param>
+        /// <param name="existingId">Optional existing virtual model runner ID for update validation.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ValidateVirtualModelRunnerAsync(object draft, string existingId = null, CancellationToken token = default)
+        {
+            Dictionary<string, string> query = new Dictionary<string, string> { ["existingId"] = existingId };
+            return await PostJsonAsync("/v1.0/virtualmodelrunners/validate" + QueryString(query), draft ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get effective virtual model runner configuration.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetVirtualModelRunnerEffectiveConfigurationAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + "/effective" + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Load or verify a model through a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="payload">Load model request payload.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> LoadVirtualModelRunnerModelAsync(string id, object payload, string tenantId = null, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + "/load-model" + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), payload ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Explain endpoint routing for a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="payload">Routing simulation payload.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ExplainVirtualModelRunnerRoutingAsync(string id, object payload, string tenantId = null, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + "/explain-routing" + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), payload ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get endpoint runtime statistics for a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="filters">Query-string filters such as tenantId and endpointId.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetVirtualModelRunnerRuntimeStatsAsync(string id, IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + "/runtime-stats" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Reset endpoint runtime statistics for a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="filters">Query-string filters such as tenantId and endpointId.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ResetVirtualModelRunnerRuntimeStatsAsync(string id, IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + "/runtime-stats/reset" + QueryString(filters), new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Clear transient runtime backoff for a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="filters">Query-string filters such as tenantId and endpointId.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ClearVirtualModelRunnerRuntimeBackoffAsync(string id, IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + "/runtime-backoff/clear" + QueryString(filters), new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// List virtual model runner reservations.
         /// </summary>
         /// <param name="filters">Query-string filters.</param>

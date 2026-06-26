@@ -20,6 +20,7 @@ namespace Conductor.Server.Routing
             HealthCheckService healthCheckService,
             SessionAffinityService sessionAffinityService,
             OperationalMetricsService operationalMetricsService,
+            EndpointRuntimeStatsService runtimeStatsService,
             RoutingDecisionService routingDecisionService,
             ConfigurationValidationService configurationValidationService,
             IModelAccessControlService modelAccessControlService,
@@ -37,6 +38,7 @@ namespace Conductor.Server.Routing
             HealthCheckService = healthCheckService;
             SessionAffinityService = sessionAffinityService;
             OperationalMetricsService = operationalMetricsService;
+            RuntimeStatsService = runtimeStatsService;
             RoutingDecisionService = routingDecisionService;
             ConfigurationValidationService = configurationValidationService;
             ModelAccessControlService = modelAccessControlService;
@@ -53,7 +55,7 @@ namespace Conductor.Server.Routing
             ModelConfigurationController = new ModelConfigurationController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             LoadBalancingPolicyController = new LoadBalancingPolicyController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             ModelAccessPolicyController = new ModelAccessPolicyController(Database, AuthService, Serializer, Logging, ModelAccessControlService);
-            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService);
+            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService, RuntimeStatsService);
             VirtualModelRunnerReservationController = new VirtualModelRunnerReservationController(Database, AuthService, Serializer, Logging, VirtualModelRunnerReservationService);
             AuthController = new AuthController(Database, AuthService, Serializer, Logging, Settings.AdminApiKeys);
             AdministratorController = new AdministratorController(Database, AuthService, Serializer, Logging);
@@ -82,6 +84,8 @@ namespace Conductor.Server.Routing
         internal SessionAffinityService SessionAffinityService { get; }
 
         internal OperationalMetricsService OperationalMetricsService { get; }
+
+        internal EndpointRuntimeStatsService RuntimeStatsService { get; }
 
         internal RoutingDecisionService RoutingDecisionService { get; }
 

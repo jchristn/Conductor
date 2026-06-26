@@ -230,6 +230,104 @@ namespace Test.Shared.Server.Services
             result.Success.Should().BeTrue();
             result.Candidates[0].Availability.Endpoint.Id.Should().Be("mre_balanced_a");
         }
+        public void Evaluate_WithRuntimeBackoffFilter_ExcludesBackedOffEndpoint()
+        {
+            LoadBalancingPolicy policy = new LoadBalancingPolicy
+            {
+                TenantId = "ten_test",
+                Name = "No Backoff",
+                Filters = new List<LoadBalancingPolicyFilter>
+                {
+                    new LoadBalancingPolicyFilter
+                    {
+                        Metric = "runtime.backoffActive",
+                        Operator = LoadBalancingPolicyOperatorEnum.Equal,
+                        ValueType = LoadBalancingMetricValueTypeEnum.Boolean,
+                        Value = "false"
+                    }
+                }
+            };
+
+            Dictionary<string, EndpointRuntimeStatsSnapshot> runtimeStats = new Dictionary<string, EndpointRuntimeStatsSnapshot>
+            {
+                ["mre_clear"] = new EndpointRuntimeStatsSnapshot { EndpointId = "mre_clear", BackoffActive = false },
+                ["mre_backoff"] = new EndpointRuntimeStatsSnapshot { EndpointId = "mre_backoff", BackoffActive = true, BackoffUntilUtc = DateTime.UtcNow.AddSeconds(30) }
+            };
+
+            LoadBalancingPolicyEvaluator.EvaluationResult result = _Evaluator.Evaluate(
+                policy,
+                new List<EndpointAvailability> { CreateAvailability("mre_backoff"), CreateAvailability("mre_clear") },
+                _ => null,
+                endpointId => runtimeStats[endpointId]);
+
+            result.Success.Should().BeTrue();
+            result.Candidates.Should().ContainSingle();
+            result.Candidates[0].Availability.Endpoint.Id.Should().Be("mre_clear");
+            result.Diagnostics.Should().Contain(item => item.Availability.Endpoint.Id == "mre_backoff" && item.ExclusionReasonCode == "FilterMismatch");
+        }
+
+        public void Evaluate_WithRuntimeLatencyRanking_PrefersLowestLatency()
+        {
+            LoadBalancingPolicy policy = new LoadBalancingPolicy
+            {
+                TenantId = "ten_test",
+                Name = "Lowest Runtime Latency",
+                Ranking = new List<LoadBalancingPolicyRankingRule>
+                {
+                    new LoadBalancingPolicyRankingRule
+                    {
+                        Metric = "runtime.latencyEwmaMs",
+                        Direction = LoadBalancingPolicyRankingDirectionEnum.Ascending,
+                        Weight = 1
+                    }
+                }
+            };
+
+            Dictionary<string, EndpointRuntimeStatsSnapshot> runtimeStats = new Dictionary<string, EndpointRuntimeStatsSnapshot>
+            {
+                ["mre_fast"] = new EndpointRuntimeStatsSnapshot { EndpointId = "mre_fast", LatencyEwmaMs = 100 },
+                ["mre_slow"] = new EndpointRuntimeStatsSnapshot { EndpointId = "mre_slow", LatencyEwmaMs = 1200 }
+            };
+
+            LoadBalancingPolicyEvaluator.EvaluationResult result = _Evaluator.Evaluate(
+                policy,
+                new List<EndpointAvailability> { CreateAvailability("mre_slow"), CreateAvailability("mre_fast") },
+                _ => null,
+                endpointId => runtimeStats[endpointId]);
+
+            result.Success.Should().BeTrue();
+            result.Candidates[0].Availability.Endpoint.Id.Should().Be("mre_fast");
+            result.Diagnostics.Find(item => item.Availability.Endpoint.Id == "mre_fast")
+                .Ranking.Should().ContainSingle(item => item.Metric == "runtime.latencyEwmaMs" && item.RawValue == 100);
+        }
+
+        public void Evaluate_WithMissingRuntimeRankingMetric_ReturnsFailure()
+        {
+            LoadBalancingPolicy policy = new LoadBalancingPolicy
+            {
+                TenantId = "ten_test",
+                Name = "Missing Runtime",
+                Ranking = new List<LoadBalancingPolicyRankingRule>
+                {
+                    new LoadBalancingPolicyRankingRule
+                    {
+                        Metric = "runtime.successEwma",
+                        Direction = LoadBalancingPolicyRankingDirectionEnum.Descending,
+                        Weight = 1
+                    }
+                }
+            };
+
+            LoadBalancingPolicyEvaluator.EvaluationResult result = _Evaluator.Evaluate(
+                policy,
+                new List<EndpointAvailability> { CreateAvailability("mre_unknown") },
+                _ => null,
+                _ => null);
+
+            result.Success.Should().BeFalse();
+            result.FailureReason.Should().NotBeNullOrWhiteSpace();
+            result.Diagnostics.Should().ContainSingle(item => item.Ranking.Exists(rule => rule.Metric == "runtime.successEwma" && rule.FailureCode == "MetricUnavailable"));
+        }
 
         private static EndpointAvailability CreateAvailability(string endpointId)
         {

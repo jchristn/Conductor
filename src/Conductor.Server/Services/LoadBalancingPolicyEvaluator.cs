@@ -305,7 +305,21 @@ namespace Conductor.Server.Services
         public bool IsEndpointEligible(LoadBalancingPolicy policy, EndpointAvailability availability, EndpointHealthState state)
         {
             if (policy == null || availability == null) return false;
-            return BuildEndpointDiagnostic(policy, availability, state).Included;
+            return BuildEndpointDiagnostic(policy, availability, state, null).Included;
+        }
+
+        /// <summary>
+        /// Determine whether an endpoint satisfies a policy's filtering and metric requirements.
+        /// </summary>
+        /// <param name="policy">Policy to evaluate.</param>
+        /// <param name="availability">Endpoint availability state.</param>
+        /// <param name="state">Cached endpoint health state.</param>
+        /// <param name="runtimeStats">Runtime statistics snapshot.</param>
+        /// <returns>True if the endpoint is eligible.</returns>
+        public bool IsEndpointEligible(LoadBalancingPolicy policy, EndpointAvailability availability, EndpointHealthState state, EndpointRuntimeStatsSnapshot runtimeStats)
+        {
+            if (policy == null || availability == null) return false;
+            return BuildEndpointDiagnostic(policy, availability, state, runtimeStats).Included;
         }
 
         /// <summary>
@@ -314,8 +328,13 @@ namespace Conductor.Server.Services
         /// <param name="policy">Policy to evaluate.</param>
         /// <param name="availableEndpoints">Endpoints already deemed available for routing.</param>
         /// <param name="stateAccessor">Function used to resolve cached health state by endpoint ID.</param>
+        /// <param name="runtimeStatsAccessor">Function used to resolve runtime stats by endpoint ID.</param>
         /// <returns>Evaluation result.</returns>
-        public EvaluationResult Evaluate(LoadBalancingPolicy policy, List<EndpointAvailability> availableEndpoints, Func<string, EndpointHealthState> stateAccessor)
+        public EvaluationResult Evaluate(
+            LoadBalancingPolicy policy,
+            List<EndpointAvailability> availableEndpoints,
+            Func<string, EndpointHealthState> stateAccessor,
+            Func<string, EndpointRuntimeStatsSnapshot> runtimeStatsAccessor = null)
         {
             if (policy == null) return new EvaluationResult { FailureReason = "Policy is required." };
             if (availableEndpoints == null || availableEndpoints.Count < 1) return new EvaluationResult { FailureReason = "No endpoints available." };
@@ -327,7 +346,8 @@ namespace Conductor.Server.Services
             foreach (EndpointAvailability availability in availableEndpoints)
             {
                 EndpointHealthState state = stateAccessor?.Invoke(availability.Endpoint.Id);
-                EndpointDiagnostic diagnostic = BuildEndpointDiagnostic(policy, availability, state);
+                EndpointRuntimeStatsSnapshot runtimeStats = runtimeStatsAccessor?.Invoke(availability.Endpoint.Id);
+                EndpointDiagnostic diagnostic = BuildEndpointDiagnostic(policy, availability, state, runtimeStats);
                 diagnostics.Add(diagnostic);
 
                 if (diagnostic.Filters.Exists(filter => String.Equals(filter.FailureCode, "TelemetryFreshnessUnavailable", StringComparison.Ordinal)))
@@ -368,7 +388,8 @@ namespace Conductor.Server.Services
 
                 foreach (EndpointEvaluationItem filteredItem in filtered)
                 {
-                    LoadBalancingPolicyMetricResolutionResult resolution = LoadBalancingPolicyMetricResolver.ResolveMetric(rule.Metric, filteredItem.Availability, filteredItem.State, policy.MaxTelemetryAgeMs);
+                    EndpointRuntimeStatsSnapshot runtimeStats = runtimeStatsAccessor?.Invoke(filteredItem.Availability.Endpoint.Id);
+                    LoadBalancingPolicyMetricResolutionResult resolution = LoadBalancingPolicyMetricResolver.ResolveMetric(rule.Metric, filteredItem.Availability, filteredItem.State, policy.MaxTelemetryAgeMs, runtimeStats);
                     RankingDiagnostic rankingDiagnostic = filteredItem.Diagnostic.Ranking.Find(item => String.Equals(item.Metric, rule.Metric, StringComparison.OrdinalIgnoreCase));
                     rankingDiagnostic ??= new RankingDiagnostic
                     {
@@ -447,7 +468,7 @@ namespace Conductor.Server.Services
             };
         }
 
-        private EndpointDiagnostic BuildEndpointDiagnostic(LoadBalancingPolicy policy, EndpointAvailability availability, EndpointHealthState state)
+        private EndpointDiagnostic BuildEndpointDiagnostic(LoadBalancingPolicy policy, EndpointAvailability availability, EndpointHealthState state, EndpointRuntimeStatsSnapshot runtimeStats)
         {
             EndpointDiagnostic diagnostic = new EndpointDiagnostic
             {
@@ -472,7 +493,7 @@ namespace Conductor.Server.Services
                     ExpectedValue = filter.Value
                 };
 
-                LoadBalancingPolicyMetricResolutionResult actualResolution = LoadBalancingPolicyMetricResolver.ResolveMetric(filter.Metric, availability, state, policy.MaxTelemetryAgeMs);
+                LoadBalancingPolicyMetricResolutionResult actualResolution = LoadBalancingPolicyMetricResolver.ResolveMetric(filter.Metric, availability, state, policy.MaxTelemetryAgeMs, runtimeStats);
                 if (!actualResolution.Success)
                 {
                     filterDiagnostic.Passed = false;
@@ -525,7 +546,7 @@ namespace Conductor.Server.Services
                     Weight = rule.Weight
                 };
 
-                LoadBalancingPolicyMetricResolutionResult resolution = LoadBalancingPolicyMetricResolver.ResolveMetric(rule.Metric, availability, state, policy.MaxTelemetryAgeMs);
+                LoadBalancingPolicyMetricResolutionResult resolution = LoadBalancingPolicyMetricResolver.ResolveMetric(rule.Metric, availability, state, policy.MaxTelemetryAgeMs, runtimeStats);
                 if (!resolution.Success || !resolution.Value.Number.HasValue)
                 {
                     rankingDiagnostic.FailureCode = resolution.FailureCode ?? "MetricUnavailable";

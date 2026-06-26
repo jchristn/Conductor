@@ -134,6 +134,9 @@ namespace Conductor.Server.Services
                 AddWarning(result, "NoNormallyRoutableEndpoints", "ModelRunnerEndpointIds", "No attached endpoint is currently both active and in the Normal service state.");
             }
 
+            ValidateAdaptiveLoadBalancing(result, vmr);
+            ValidateEndpointGroups(result, vmr, endpoints);
+
             List<ModelDefinition> modelDefinitions = new List<ModelDefinition>();
             foreach (string definitionId in vmr.ModelDefinitionIds ?? new List<string>())
             {
@@ -374,6 +377,136 @@ namespace Conductor.Server.Services
             IEnumerable<string> metricIds = (policy?.Filters ?? new List<LoadBalancingPolicyFilter>()).Select(item => item.Metric)
                 .Concat((policy?.Ranking ?? new List<LoadBalancingPolicyRankingRule>()).Select(item => item.Metric));
             return metricIds.Any(metric => !String.IsNullOrWhiteSpace(metric) && metric.StartsWith("rig.", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void ValidateAdaptiveLoadBalancing(ResourceValidationResult result, VirtualModelRunner vmr)
+        {
+            AdaptiveLoadBalancingSettings settings = vmr.AdaptiveLoadBalancing ?? new AdaptiveLoadBalancingSettings();
+            if (vmr.LoadBalancingMode == LoadBalancingModeEnum.Adaptive && settings == null)
+            {
+                AddError(result, "AdaptiveSettingsRequired", "AdaptiveLoadBalancing", "AdaptiveLoadBalancing settings are required when LoadBalancingMode is Adaptive.");
+                return;
+            }
+
+            if (settings.SampleCount < 1 || settings.SampleCount > 8)
+            {
+                AddError(result, "AdaptiveSampleCountInvalid", "AdaptiveLoadBalancing.SampleCount", "Adaptive sample count must be between 1 and 8.");
+            }
+
+            if (settings.ColdStartScore < 0 || settings.ColdStartScore > 100)
+            {
+                AddError(result, "AdaptiveColdStartScoreInvalid", "AdaptiveLoadBalancing.ColdStartScore", "Adaptive cold-start score must be between 0 and 100.");
+            }
+
+            if (settings.EwmaAlpha < 0.01 || settings.EwmaAlpha > 1)
+            {
+                AddError(result, "AdaptiveEwmaAlphaInvalid", "AdaptiveLoadBalancing.EwmaAlpha", "Adaptive EWMA alpha must be between 0.01 and 1.");
+            }
+
+            if (settings.BackoffBaseMs < 1000)
+            {
+                AddError(result, "AdaptiveBackoffBaseInvalid", "AdaptiveLoadBalancing.BackoffBaseMs", "Adaptive backoff base duration must be at least 1000 milliseconds.");
+            }
+
+            if (settings.BackoffMaxMs < settings.BackoffBaseMs)
+            {
+                AddError(result, "AdaptiveBackoffMaxInvalid", "AdaptiveLoadBalancing.BackoffMaxMs", "Adaptive backoff maximum duration must be greater than or equal to the base duration.");
+            }
+
+            if (settings.FailureThreshold < 1)
+            {
+                AddError(result, "AdaptiveFailureThresholdInvalid", "AdaptiveLoadBalancing.FailureThreshold", "Adaptive failure threshold must be at least 1.");
+            }
+
+            AdaptiveScoreWeights weights = settings.Weights ?? new AdaptiveScoreWeights();
+            if (weights.Success < 0 || weights.Latency < 0 || weights.TimeToFirstToken < 0 || weights.Pending < 0 || weights.EndpointWeight < 0)
+            {
+                AddError(result, "AdaptiveScoreWeightInvalid", "AdaptiveLoadBalancing.Weights", "Adaptive score weights must not be negative.");
+            }
+
+            if (weights.Success + weights.Latency + weights.TimeToFirstToken + weights.Pending + weights.EndpointWeight <= 0)
+            {
+                AddError(result, "AdaptiveScoreWeightsEmpty", "AdaptiveLoadBalancing.Weights", "At least one adaptive score weight must be greater than zero.");
+            }
+        }
+
+        private static void ValidateEndpointGroups(ResourceValidationResult result, VirtualModelRunner vmr, List<ModelRunnerEndpoint> endpoints)
+        {
+            if (vmr.EndpointGroups == null || vmr.EndpointGroups.Count < 1)
+            {
+                return;
+            }
+
+            HashSet<string> configuredEndpointIds = new HashSet<string>(vmr.ModelRunnerEndpointIds ?? new List<string>(), StringComparer.Ordinal);
+            HashSet<string> resolvedEndpointIds = new HashSet<string>((endpoints ?? new List<ModelRunnerEndpoint>()).Select(item => item.Id), StringComparer.Ordinal);
+            HashSet<string> groupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int index = 0;
+            foreach (EndpointGroup group in vmr.EndpointGroups)
+            {
+                string fieldPrefix = "EndpointGroups[" + index + "]";
+                index++;
+                if (group == null)
+                {
+                    AddError(result, "EndpointGroupInvalid", "EndpointGroups", "Endpoint groups cannot contain null entries.");
+                    continue;
+                }
+
+                if (String.IsNullOrWhiteSpace(group.Id))
+                {
+                    AddError(result, "EndpointGroupIdRequired", fieldPrefix + ".Id", "Endpoint group id is required.");
+                }
+                else if (!groupIds.Add(group.Id))
+                {
+                    AddError(result, "EndpointGroupIdDuplicate", fieldPrefix + ".Id", "Endpoint group id '" + group.Id + "' is duplicated.");
+                }
+
+                if (String.IsNullOrWhiteSpace(group.Name))
+                {
+                    AddError(result, "EndpointGroupNameRequired", fieldPrefix + ".Name", "Endpoint group name is required.");
+                }
+
+                if (group.Priority < 0)
+                {
+                    AddError(result, "EndpointGroupPriorityInvalid", fieldPrefix + ".Priority", "Endpoint group priority must be zero or greater.");
+                }
+
+                if (group.TrafficWeight < 0)
+                {
+                    AddError(result, "EndpointGroupTrafficWeightInvalid", fieldPrefix + ".TrafficWeight", "Endpoint group traffic weight must not be negative.");
+                }
+
+                if (group.Active && group.TrafficWeight == 0)
+                {
+                    AddWarning(result, "EndpointGroupZeroTrafficWeight", fieldPrefix + ".TrafficWeight", "An active endpoint group with zero traffic weight cannot receive traffic while another group at the same priority has weight.");
+                }
+
+                if (group.EndpointIds == null || group.EndpointIds.Count < 1)
+                {
+                    AddError(result, "EndpointGroupEmpty", fieldPrefix + ".EndpointIds", "Endpoint group must reference at least one endpoint.");
+                    continue;
+                }
+
+                HashSet<string> endpointIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (string endpointId in group.EndpointIds)
+                {
+                    if (String.IsNullOrWhiteSpace(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointIdRequired", fieldPrefix + ".EndpointIds", "Endpoint group endpoint ids cannot be blank.");
+                    }
+                    else if (!endpointIds.Add(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointDuplicate", fieldPrefix + ".EndpointIds", "Endpoint group contains duplicate endpoint id '" + endpointId + "'.");
+                    }
+                    else if (!configuredEndpointIds.Contains(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointNotAttached", fieldPrefix + ".EndpointIds", "Endpoint '" + endpointId + "' must be attached to ModelRunnerEndpointIds before it can be used in a group.");
+                    }
+                    else if (!resolvedEndpointIds.Contains(endpointId))
+                    {
+                        AddError(result, "EndpointGroupEndpointMissing", fieldPrefix + ".EndpointIds", "Endpoint '" + endpointId + "' was not found in the same tenant.");
+                    }
+                }
+            }
         }
 
         private static string NormalizeBasePath(string basePath)

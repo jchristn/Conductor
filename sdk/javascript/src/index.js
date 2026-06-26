@@ -47,6 +47,18 @@ export class ConductorClient {
     return this.#request('POST', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/explain-routing${this.#tenantQuery(tenantId)}`, payload);
   }
 
+  async getVirtualModelRunnerRuntimeStats(id, filters = {}) {
+    return this.#request('GET', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/runtime-stats${this.#queryString(filters)}`);
+  }
+
+  async resetVirtualModelRunnerRuntimeStats(id, filters = {}) {
+    return this.#request('POST', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/runtime-stats/reset${this.#queryString(filters)}`, {});
+  }
+
+  async clearVirtualModelRunnerRuntimeBackoff(id, filters = {}) {
+    return this.#request('POST', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/runtime-backoff/clear${this.#queryString(filters)}`, {});
+  }
+
   async listVirtualModelRunnerReservations(filters = {}) {
     return this.#request('GET', `/v1.0/vmrreservations${this.#queryString(filters)}`);
   }

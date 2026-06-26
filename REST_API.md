@@ -23,7 +23,7 @@ http://localhost:9000/v1.0/virtualmodelrunners
 ## Content type and enum format
 
 - Request and response bodies use JSON unless noted otherwise.
-- Enum values are serialized as strings such as `OpenAI`, `RoundRobin`, or `FailClosed`.
+- Enum values are serialized as strings such as `OpenAI`, `LeastRecentlyUsed`, or `FailClosed`.
 - Successful deletes return HTTP `204 No Content`.
 - Successful creates generally return HTTP `201 Created`.
 
@@ -407,10 +407,37 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
   "Hostname": null,
   "BasePath": "/v1.0/api/gpu-chat/",      // required; exactly one segment after /v1.0/api/
   "ApiType": "OpenAI",
-  "LoadBalancingMode": "RoundRobin",
+  "LoadBalancingMode": "RoundRobin",      // RoundRobin, Random, FirstAvailable, LeastRecentlyUsed, Adaptive
   "LoadBalancingPolicyId": "lbp_xxx",
   "ModelAccessPolicyId": "map_xxx",
   "ModelRunnerEndpointIds": ["mre_a", "mre_b"],
+  "AdaptiveLoadBalancing": {
+    "SampleCount": 2,
+    "ColdStartScore": 60,
+    "EwmaAlpha": 0.2,
+    "BackoffBaseMs": 30000,
+    "BackoffMaxMs": 300000,
+    "FailureThreshold": 3,
+    "ExcludeBackoffEndpoints": true,
+    "BackoffBreaksSessionAffinity": true,
+    "Weights": {
+      "Success": 35,
+      "Latency": 25,
+      "TimeToFirstToken": 15,
+      "Pending": 15,
+      "EndpointWeight": 10
+    }
+  },
+  "EndpointGroups": [
+    {
+      "Id": "primary",
+      "Name": "Primary",
+      "Priority": 0,
+      "Active": true,
+      "TrafficWeight": 100,
+      "EndpointIds": ["mre_a"]
+    }
+  ],
   "ModelConfigurationIds": ["mc_default"],
   "ModelConfigurationMappings": {
     "llama3.2:latest": "mc_default"
@@ -957,6 +984,9 @@ Auth level: `Authenticated`
 | `DELETE` | `/v1.0/virtualmodelrunners/{id}` | Delete VMR. Optional `tenantId` query. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}/health` | Get aggregated health for the VMR and its endpoints. Optional `tenantId` query. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}/effective` | Return the resolved read-only effective configuration for the VMR. Optional `tenantId` query. |
+| `GET` | `/v1.0/virtualmodelrunners/{id}/runtime-stats` | Return in-memory endpoint runtime stats for the VMR. Optional `tenantId` query. |
+| `POST` | `/v1.0/virtualmodelrunners/{id}/runtime-stats/reset` | Reset in-memory runtime stats for the VMR or one endpoint. Optional `tenantId` query. Body may include `EndpointId`. |
+| `POST` | `/v1.0/virtualmodelrunners/{id}/runtime-backoff/clear` | Clear transient runtime backoff for the VMR or one endpoint. Optional `tenantId` query. Body may include `EndpointId`. |
 | `POST` | `/v1.0/virtualmodelrunners/{id}/explain-routing` | Simulate routing for a representative request. Optional `tenantId` query. |
 | `POST` | `/v1.0/virtualmodelrunners/{id}/load-model` | Tenant-admin route to resolve VMR targets, then load or verify a model. Optional `tenantId` query. |
 
@@ -973,7 +1003,7 @@ VMR health response fields include:
 - `ActiveSessionCount`
 - `Endpoints`
 
-Validation routes return a `ResourceValidationResult` with `Errors` and `Warnings`. The VMR `effective` response resolves the endpoint inventory, request permissions, session-affinity settings, attached policy metadata, model definitions, model configurations, and `ModelConfigurationMappings` that the proxy path will use. The VMR `explain-routing` response returns a `RoutingDecision` containing a timeline, selected endpoint, session-affinity outcome, policy metadata, mutation summary, and per-candidate evidence.
+Validation routes return a `ResourceValidationResult` with `Errors` and `Warnings`. The VMR `effective` response resolves the endpoint inventory, request permissions, session-affinity settings, attached policy metadata, model definitions, model configurations, adaptive settings, endpoint groups, and `ModelConfigurationMappings` that the proxy path will use. Runtime stats responses return `EndpointRuntimeStatsCollection` with per-endpoint pending count, completed count, success/error EWMA, latency EWMA, TTFT EWMA, last status/error, consecutive failures, transient backoff state, and recency timestamps. The VMR `explain-routing` response returns a `RoutingDecision` containing a timeline, selected endpoint, selection strategy, endpoint group, adaptive score evidence, session-affinity outcome, policy metadata, mutation summary, and per-candidate evidence.
 
 ### Model loading
 
@@ -1659,8 +1689,10 @@ These VMR fields affect proxied behavior:
 
 | Field | Meaning |
 | --- | --- |
-| `LoadBalancingMode` | Built-in selection mode used directly or as a policy fallback. |
+| `LoadBalancingMode` | Built-in selection mode used directly or as a policy fallback. Supported values: `RoundRobin`, `Random`, `FirstAvailable`, `LeastRecentlyUsed`, `Adaptive`. |
 | `LoadBalancingPolicyId` | Optional advanced policy attachment. |
+| `AdaptiveLoadBalancing` | Optional adaptive scoring settings used when `LoadBalancingMode` is `Adaptive`. |
+| `EndpointGroups` | Optional priority or traffic-split endpoint groups evaluated before the final selection strategy. |
 | `AllowEmbeddings` | If `false`, embedding routes are rejected. |
 | `AllowCompletions` | If `false`, completion/chat routes are rejected. |
 | `AllowModelManagement` | If `false`, model management routes such as list/pull/delete are rejected. |

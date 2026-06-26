@@ -37,6 +37,7 @@ namespace Conductor.Server
         private static HealthCheckService _HealthCheckService;
         private static SessionAffinityService _SessionAffinityService;
         private static OperationalMetricsService _OperationalMetricsService;
+        private static EndpointRuntimeStatsService _RuntimeStatsService;
         private static ModelAccessControlService _ModelAccessControlService;
         private static RoutingDecisionService _RoutingDecisionService;
         private static ConfigurationValidationService _ConfigurationValidationService;
@@ -145,6 +146,7 @@ namespace Conductor.Server
 
             // Initialize shared routing, validation, and observability services
             _OperationalMetricsService = new OperationalMetricsService();
+            _RuntimeStatsService = new EndpointRuntimeStatsService();
             _ModelAccessControlService = new ModelAccessControlService(_Database, _Logging, _Settings.ModelAccessControl);
             _RoutingDecisionService = new RoutingDecisionService(
                 _Database,
@@ -153,7 +155,8 @@ namespace Conductor.Server
                 _SessionAffinityService,
                 _OperationalMetricsService,
                 _ModelAccessControlService,
-                _Settings.ModelAccessControl);
+                _Settings.ModelAccessControl,
+                _RuntimeStatsService);
             _ConfigurationValidationService = new ConfigurationValidationService(_Database, _Logging, _RoutingDecisionService);
             _VirtualModelRunnerReservationService = new VirtualModelRunnerReservationService(_Database, _Logging);
             _ModelLoadService = new ModelLoadService(
@@ -185,7 +188,7 @@ namespace Conductor.Server
             // a default route at construction time; the default route is the proxy handler.
             _ProxyController = new Controllers.ProxyController(
                 _Database, _AuthService, _Serializer, _Logging,
-                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService);
+                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService, _RuntimeStatsService);
 
             WatsonWebserver.Core.WebserverSettings webSettings = new WatsonWebserver.Core.WebserverSettings(
                 _Settings.Webserver.Hostname,
@@ -323,6 +326,7 @@ namespace Conductor.Server
                 _HealthCheckService,
                 _SessionAffinityService,
                 _OperationalMetricsService,
+                _RuntimeStatsService,
                 _RoutingDecisionService,
                 _ConfigurationValidationService,
                 _ModelAccessControlService,

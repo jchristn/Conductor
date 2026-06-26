@@ -54,6 +54,15 @@ class ConductorClient:
     def explain_virtual_model_runner_routing(self, vmr_id: str, payload: dict[str, Any], tenant_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/virtualmodelrunners/{vmr_id}/explain-routing{self._tenant_query(tenant_id)}", payload)
 
+    def get_virtual_model_runner_runtime_stats(self, vmr_id: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/virtualmodelrunners/{vmr_id}/runtime-stats{self._query_string(filters)}")
+
+    def reset_virtual_model_runner_runtime_stats(self, vmr_id: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/virtualmodelrunners/{vmr_id}/runtime-stats/reset{self._query_string(filters)}", {})
+
+    def clear_virtual_model_runner_runtime_backoff(self, vmr_id: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/virtualmodelrunners/{vmr_id}/runtime-backoff/clear{self._query_string(filters)}", {})
+
     def list_virtual_model_runner_reservations(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/vmrreservations{self._query_string(filters)}")
 

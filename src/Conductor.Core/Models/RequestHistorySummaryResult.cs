@@ -58,6 +58,31 @@ namespace Conductor.Core.Models
         public Dictionary<string, long> SessionAffinityOutcomeCounts { get; set; } = new Dictionary<string, long>();
 
         /// <summary>
+        /// Counts grouped by endpoint selection strategy.
+        /// </summary>
+        public Dictionary<string, long> SelectionStrategyCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
+        /// Counts grouped by selected endpoint group name.
+        /// </summary>
+        public Dictionary<string, long> EndpointGroupCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
+        /// Counts grouped by transient backoff reason.
+        /// </summary>
+        public Dictionary<string, long> BackoffReasonCounts { get; set; } = new Dictionary<string, long>();
+
+        /// <summary>
+        /// Total request count where adaptive scoring participated.
+        /// </summary>
+        public long AdaptiveSelectionCount { get; set; } = 0;
+
+        /// <summary>
+        /// Total request count where load-balancing policy fallback occurred.
+        /// </summary>
+        public long PolicyFallbackCount { get; set; } = 0;
+
+        /// <summary>
         /// Total requests across all buckets.
         /// </summary>
         public long TotalRequests => TotalSuccess + TotalFailure;

@@ -100,6 +100,60 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Adaptive load-balancing settings.
+        /// </summary>
+        public AdaptiveLoadBalancingSettings AdaptiveLoadBalancing
+        {
+            get => _AdaptiveLoadBalancing;
+            set
+            {
+                _AdaptiveLoadBalancing = value ?? new AdaptiveLoadBalancingSettings();
+                _AdaptiveLoadBalancingJson = _Serializer.SerializeJson(_AdaptiveLoadBalancing, false);
+            }
+        }
+
+        /// <summary>
+        /// JSON-serialized adaptive load-balancing settings for database storage.
+        /// </summary>
+        [JsonIgnore]
+        public string AdaptiveLoadBalancingJson
+        {
+            get => _Serializer.SerializeJson(_AdaptiveLoadBalancing ?? new AdaptiveLoadBalancingSettings(), false);
+            set
+            {
+                _AdaptiveLoadBalancingJson = String.IsNullOrEmpty(value) ? "{}" : value;
+                _AdaptiveLoadBalancing = _Serializer.DeserializeJson<AdaptiveLoadBalancingSettings>(_AdaptiveLoadBalancingJson) ?? new AdaptiveLoadBalancingSettings();
+            }
+        }
+
+        /// <summary>
+        /// Priority groups and traffic-split configuration for endpoint references.
+        /// </summary>
+        public List<EndpointGroup> EndpointGroups
+        {
+            get => _EndpointGroups;
+            set
+            {
+                _EndpointGroups = value ?? new List<EndpointGroup>();
+                _EndpointGroupsJson = _Serializer.SerializeJson(_EndpointGroups, false);
+            }
+        }
+
+        /// <summary>
+        /// JSON-serialized endpoint groups for database storage.
+        /// </summary>
+        [JsonIgnore]
+        public string EndpointGroupsJson
+        {
+            get => _Serializer.SerializeJson(_EndpointGroups ?? new List<EndpointGroup>(), false);
+            set
+            {
+                _EndpointGroupsJson = String.IsNullOrEmpty(value) ? "[]" : value;
+                _EndpointGroups = _Serializer.DeserializeJson<List<EndpointGroup>>(_EndpointGroupsJson) ?? new List<EndpointGroup>();
+            }
+        }
+
+        /// <summary>
         /// List of model configuration identifiers.
         /// </summary>
         public List<string> ModelConfigurationIds
@@ -338,6 +392,10 @@ namespace Conductor.Core.Models
         private string _BasePath = null;
         private List<string> _ModelRunnerEndpointIds = new List<string>();
         private string _ModelRunnerEndpointIdsJson = "[]";
+        private AdaptiveLoadBalancingSettings _AdaptiveLoadBalancing = new AdaptiveLoadBalancingSettings();
+        private string _AdaptiveLoadBalancingJson = "{}";
+        private List<EndpointGroup> _EndpointGroups = new List<EndpointGroup>();
+        private string _EndpointGroupsJson = "[]";
         private List<string> _ModelConfigurationIds = new List<string>();
         private string _ModelConfigurationIdsJson = "[]";
         private List<string> _ModelDefinitionIds = new List<string>();
@@ -406,6 +464,24 @@ namespace Conductor.Core.Models
             if (!String.IsNullOrEmpty(endpointIdsJson))
             {
                 obj.ModelRunnerEndpointIdsJson = endpointIdsJson;
+            }
+
+            if (row.Table.Columns.Contains("adaptiveloadbalancing"))
+            {
+                string adaptiveLoadBalancingJson = DataTableHelper.GetStringValue(row, "adaptiveloadbalancing");
+                if (!String.IsNullOrEmpty(adaptiveLoadBalancingJson))
+                {
+                    obj.AdaptiveLoadBalancingJson = adaptiveLoadBalancingJson;
+                }
+            }
+
+            if (row.Table.Columns.Contains("endpointgroups"))
+            {
+                string endpointGroupsJson = DataTableHelper.GetStringValue(row, "endpointgroups");
+                if (!String.IsNullOrEmpty(endpointGroupsJson))
+                {
+                    obj.EndpointGroupsJson = endpointGroupsJson;
+                }
             }
 
             string configIdsJson = DataTableHelper.GetStringValue(row, "modelconfigurationids");

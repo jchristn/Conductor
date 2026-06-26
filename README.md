@@ -262,6 +262,10 @@ Policies combine:
 - `FallbackMode`: use the VMR's legacy load-balancing mode or fail closed
 - `TieBreaker`: round-robin, random, or first available when scores are equal
 
+Built-in VMR `LoadBalancingMode` values are `RoundRobin`, `Random`, `FirstAvailable`, `LeastRecentlyUsed`, and `Adaptive`. `LeastRecentlyUsed` selects the eligible endpoint with the oldest route-scoped assignment history and uses endpoint order as the deterministic tie-breaker for endpoints with no history. `Adaptive` samples eligible endpoints and scores them with runtime success, latency, time-to-first-token, pending-work, and configured endpoint-weight signals.
+
+Adaptive routing is opt-in per VMR. Operators can configure adaptive scoring weights, cold-start behavior, transient backoff windows, and endpoint groups with priorities or traffic weights. Runtime stats are in-memory operational state, not durable configuration; they can be inspected with `GET /v1.0/virtualmodelrunners/{id}/runtime-stats`, reset with `POST /v1.0/virtualmodelrunners/{id}/runtime-stats/reset`, and cleared for transient backoff with `POST /v1.0/virtualmodelrunners/{id}/runtime-backoff/clear`.
+
 Example policy payload:
 
 ```json
@@ -305,15 +309,19 @@ The management plane now exposes first-class safety and explainability routes:
 - `POST /v1.0/loadbalancingpolicies/validate`
 - `POST /v1.0/virtualmodelrunners/validate`
 - `GET /v1.0/virtualmodelrunners/{id}/effective`
+- `GET /v1.0/virtualmodelrunners/{id}/runtime-stats`
+- `POST /v1.0/virtualmodelrunners/{id}/runtime-stats/reset`
+- `POST /v1.0/virtualmodelrunners/{id}/runtime-backoff/clear`
 - `POST /v1.0/virtualmodelrunners/{id}/explain-routing`
 
 Recommended operator flow:
 
 1. Validate drafts before saving.
 2. Inspect the effective VMR preview to confirm endpoint coverage, request permissions, policy attachment, and model pinning.
-3. Use explain-routing with a representative request body when you need to understand why a request would route, mutate, reuse a session pin, or be denied.
+3. Inspect runtime stats when adaptive routing is enabled so you can see success/error EWMA, latency EWMA, TTFT EWMA, pending requests, and transient backoff state.
+4. Use explain-routing with a representative request body when you need to understand why a request would route, mutate, reuse a session pin, or be denied.
 
-Request-history detail responses also expose the structured routing decision when history is enabled for the VMR.
+Request-history search and detail responses also expose adaptive routing evidence, including selection strategy, endpoint group, selected score, policy fallback state, and transient backoff reason when history is enabled for the VMR.
 
 ### Model Access Policies
 

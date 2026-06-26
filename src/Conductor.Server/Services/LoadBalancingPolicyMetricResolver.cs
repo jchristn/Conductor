@@ -63,7 +63,8 @@ namespace Conductor.Server.Services
             string metricId,
             EndpointAvailability availability,
             EndpointHealthState state,
-            int maxTelemetryAgeMs)
+            int maxTelemetryAgeMs,
+            EndpointRuntimeStatsSnapshot runtimeStats = null)
         {
             LoadBalancingPolicyMetricResolutionResult result = new LoadBalancingPolicyMetricResolutionResult();
             if (availability == null || availability.Endpoint == null)
@@ -95,6 +96,45 @@ namespace Conductor.Server.Services
                     result.Success = true;
                     result.Value = new LoadBalancingPolicyMetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = availability.Endpoint.MaxParallelRequests };
                     return result;
+                case "runtime.backoffActive":
+                    result.Success = true;
+                    result.Value = new LoadBalancingPolicyMetricValue { Type = LoadBalancingMetricValueTypeEnum.Boolean, Boolean = runtimeStats?.BackoffActive ?? false };
+                    return result;
+                case "runtime.backoffRemainingMs":
+                    result.Success = true;
+                    result.Value = new LoadBalancingPolicyMetricValue
+                    {
+                        Type = LoadBalancingMetricValueTypeEnum.Number,
+                        Number = runtimeStats?.BackoffActive == true && runtimeStats.BackoffUntilUtc.HasValue
+                            ? Math.Max(0, (runtimeStats.BackoffUntilUtc.Value - DateTime.UtcNow).TotalMilliseconds)
+                            : 0
+                    };
+                    return result;
+                case "runtime.inFlight":
+                    result.Success = true;
+                    result.Value = new LoadBalancingPolicyMetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = runtimeStats?.InFlight ?? 0 };
+                    return result;
+                case "runtime.pendingRequests":
+                case "runtime.pending":
+                    result.Success = true;
+                    result.Value = new LoadBalancingPolicyMetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = runtimeStats?.Pending ?? 0 };
+                    return result;
+                case "runtime.completedCount":
+                    result.Success = true;
+                    result.Value = new LoadBalancingPolicyMetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = runtimeStats?.CompletedCount ?? 0 };
+                    return result;
+                case "runtime.consecutiveFailures":
+                    result.Success = true;
+                    result.Value = new LoadBalancingPolicyMetricValue { Type = LoadBalancingMetricValueTypeEnum.Number, Number = runtimeStats?.ConsecutiveFailures ?? 0 };
+                    return result;
+                case "runtime.successEwma":
+                    return ResolveRuntimeNumber(runtimeStats?.SuccessEwma, "runtime success EWMA was unavailable.");
+                case "runtime.errorEwma":
+                    return ResolveRuntimeNumber(runtimeStats?.ErrorEwma, "runtime error EWMA was unavailable.");
+                case "runtime.latencyEwmaMs":
+                    return ResolveRuntimeNumber(runtimeStats?.LatencyEwmaMs, "runtime latency EWMA was unavailable.");
+                case "runtime.ttftEwmaMs":
+                    return ResolveRuntimeNumber(runtimeStats?.TimeToFirstTokenEwmaMs, "runtime time-to-first-token EWMA was unavailable.");
                 case "rig.ready":
                     if (state?.RigMonitor?.Ready.HasValue == true)
                     {
@@ -136,6 +176,25 @@ namespace Conductor.Server.Services
                     result.FailureReason = "Metric '" + metricId + "' is not supported.";
                     return result;
             }
+        }
+
+        private static LoadBalancingPolicyMetricResolutionResult ResolveRuntimeNumber(double? value, string missingReason)
+        {
+            LoadBalancingPolicyMetricResolutionResult result = new LoadBalancingPolicyMetricResolutionResult();
+            if (!value.HasValue)
+            {
+                result.FailureCode = "MetricUnavailable";
+                result.FailureReason = missingReason;
+                return result;
+            }
+
+            result.Success = true;
+            result.Value = new LoadBalancingPolicyMetricValue
+            {
+                Type = LoadBalancingMetricValueTypeEnum.Number,
+                Number = value.Value
+            };
+            return result;
         }
 
         internal static string FormatMetricValue(LoadBalancingPolicyMetricValue value)

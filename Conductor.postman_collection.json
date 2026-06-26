@@ -1478,7 +1478,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\",\n  \"LoadBalancingMode\": \"RoundRobin\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\",\n  \"ModelRunnerEndpointIds\": [\"{{endpointId}}\"]\n}"
+              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\",\n  \"LoadBalancingMode\": \"Adaptive\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\",\n  \"ModelRunnerEndpointIds\": [\"{{endpointId}}\"],\n  \"AdaptiveLoadBalancing\": {\n    \"SampleCount\": 2,\n    \"ColdStartScore\": 60,\n    \"EwmaAlpha\": 0.2,\n    \"BackoffBaseMs\": 30000,\n    \"BackoffMaxMs\": 300000,\n    \"FailureThreshold\": 3,\n    \"ExcludeBackoffEndpoints\": true,\n    \"BackoffBreaksSessionAffinity\": true,\n    \"Weights\": {\n      \"Success\": 35,\n      \"Latency\": 25,\n      \"TimeToFirstToken\": 15,\n      \"Pending\": 15,\n      \"EndpointWeight\": 10\n    }\n  },\n  \"EndpointGroups\": [\n    {\n      \"Id\": \"primary\",\n      \"Name\": \"Primary\",\n      \"Priority\": 0,\n      \"Active\": true,\n      \"TrafficWeight\": 100,\n      \"EndpointIds\": [\"{{endpointId}}\"]\n    }\n  ]\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
@@ -1550,6 +1550,100 @@
                 "virtualmodelrunners",
                 "{{vmrId}}",
                 "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get VMR Runtime Stats",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/runtime-stats?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "runtime-stats"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reset VMR Runtime Stats",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"EndpointId\": \"{{endpointId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/runtime-stats/reset?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "runtime-stats",
+                "reset"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Clear VMR Runtime Backoff",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"EndpointId\": \"{{endpointId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/runtime-backoff/clear?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "runtime-backoff",
+                "clear"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
               ]
             }
           }

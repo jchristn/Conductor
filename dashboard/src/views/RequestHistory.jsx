@@ -216,6 +216,11 @@ function RequestHistory() {
     reservationDecision: '',
     reservationReasonCode: '',
     sessionAffinityOutcome: '',
+    selectionStrategy: '',
+    endpointGroupGuid: '',
+    backoffReason: '',
+    adaptiveSelection: '',
+    policyFallbackUsed: '',
     statusClass: '',
     createdAfterUtc: '',
     createdBeforeUtc: '',
@@ -456,6 +461,11 @@ function RequestHistory() {
       reservationDecision: '',
       reservationReasonCode: '',
       sessionAffinityOutcome: '',
+      selectionStrategy: '',
+      endpointGroupGuid: '',
+      backoffReason: '',
+      adaptiveSelection: '',
+      policyFallbackUsed: '',
       statusClass: '',
       createdAfterUtc: '',
       createdBeforeUtc: '',
@@ -491,6 +501,12 @@ function RequestHistory() {
     if (!type || type === 0) return null;
     const label = type === 1 ? 'Chunked' : 'SSE';
     return <span className="badge badge-info">{label}</span>;
+  };
+
+  const formatBoolean = (value) => {
+    if (value === true) return 'Yes';
+    if (value === false) return 'No';
+    return '-';
   };
 
   const renderAnalyticsTimeline = () => {
@@ -655,6 +671,31 @@ function RequestHistory() {
       label: 'Endpoint',
       tooltip: 'Model Runner Endpoint that processed this request',
       render: (item) => item.ModelEndpointName || getEndpointName(item.ModelEndpointGuid) || '-'
+    },
+    {
+      key: 'SelectionStrategy',
+      label: 'Routing',
+      tooltip: 'Endpoint selection strategy, endpoint group, and adaptive routing evidence recorded for this request',
+      width: '190px',
+      render: (item) => (
+        <div className="stacked-cell">
+          <span>{item.SelectionStrategy || '-'}</span>
+          {item.EndpointGroupGuid && <span className="text-muted">{item.EndpointGroupName || item.EndpointGroupGuid}</span>}
+          <div className="summary-badge-row compact">
+            {item.AdaptiveSelection && <span className="service-state-badge neutral" title="Adaptive scoring was used for this request">Adaptive</span>}
+            {item.PolicyFallbackUsed && <span className="service-state-badge warning" title="Load-balancing policy fallback routing was used">Fallback</span>}
+            {item.BackoffReason && <span className="service-state-badge warning" title="Backoff evidence captured during routing">{item.BackoffReason}</span>}
+          </div>
+        </div>
+      ),
+      filterValue: (item) => [
+        item.SelectionStrategy,
+        item.EndpointGroupName,
+        item.EndpointGroupGuid,
+        item.BackoffReason,
+        item.AdaptiveSelection ? 'adaptive' : '',
+        item.PolicyFallbackUsed ? 'fallback' : ''
+      ].filter(Boolean).join(' ')
     },
     {
       key: 'ReservationName',
@@ -954,6 +995,55 @@ function RequestHistory() {
             />
           </div>
           <div className="filter-group">
+            <label>Strategy:</label>
+            <input
+              type="text"
+              value={filters.selectionStrategy}
+              onChange={(e) => handleFilterChange('selectionStrategy', e.target.value)}
+              placeholder="Adaptive, LeastRecentlyUsed..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>Group:</label>
+            <input
+              type="text"
+              value={filters.endpointGroupGuid}
+              onChange={(e) => handleFilterChange('endpointGroupGuid', e.target.value)}
+              placeholder="Endpoint group GUID"
+            />
+          </div>
+          <div className="filter-group">
+            <label>Backoff:</label>
+            <input
+              type="text"
+              value={filters.backoffReason}
+              onChange={(e) => handleFilterChange('backoffReason', e.target.value)}
+              placeholder="RateLimited, Failure..."
+            />
+          </div>
+          <div className="filter-group">
+            <label>Adaptive:</label>
+            <select
+              value={filters.adaptiveSelection}
+              onChange={(e) => handleFilterChange('adaptiveSelection', e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>Fallback:</label>
+            <select
+              value={filters.policyFallbackUsed}
+              onChange={(e) => handleFilterChange('policyFallbackUsed', e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+          <div className="filter-group">
             <label>Created After:</label>
             <input
               type="datetime-local"
@@ -1169,6 +1259,27 @@ function RequestHistory() {
                   <DetailItem label="Policy" tooltip="Load-balancing policy used during routing, if one was attached">
                     {detailData.LoadBalancingPolicyName || detailData.LoadBalancingPolicyGuid || '-'}
                   </DetailItem>
+                  <DetailItem label="Selection Strategy" tooltip="Endpoint selection strategy recorded for this request">
+                    {detailData.SelectionStrategy || '-'}
+                  </DetailItem>
+                  <DetailItem label="Endpoint Group" tooltip="Endpoint group selected by weighted group routing, when one applied">
+                    {detailData.EndpointGroupGuid
+                      ? (
+                        <>
+                          {detailData.EndpointGroupName || 'Endpoint Group'} <CopyableId value={detailData.EndpointGroupGuid} />
+                        </>
+                      )
+                      : '-'}
+                  </DetailItem>
+                  <DetailItem label="Adaptive Selection" tooltip="Whether adaptive scoring was used when this request selected an endpoint">
+                    {formatBoolean(detailData.AdaptiveSelection)}
+                  </DetailItem>
+                  <DetailItem label="Policy Fallback" tooltip="Whether fallback routing was used after a load-balancing policy could not select an endpoint">
+                    {formatBoolean(detailData.PolicyFallbackUsed)}
+                  </DetailItem>
+                  <DetailItem label="Backoff Reason" tooltip="Transient backoff reason captured by routing, when an endpoint was avoided or marked unhealthy">
+                    {detailData.BackoffReason || '-'}
+                  </DetailItem>
                   <DetailItem label="Access Policy" tooltip="Model access policy evaluated for this request, if one was attached">
                     {detailData.ModelAccessPolicyName || detailData.ModelAccessPolicyGuid || '-'}
                   </DetailItem>
@@ -1227,6 +1338,9 @@ function RequestHistory() {
                         {detailData.RoutingDecision.Success ? 'Routed' : 'Denied'}
                       </span>
                       <span className="service-state-badge neutral" title="HTTP status code Conductor associated with the routing decision">HTTP {detailData.RoutingDecision.HttpStatusCode}</span>
+                      {detailData.RoutingDecision.SelectionStrategy && <span className="service-state-badge neutral" title="Endpoint selection strategy recorded by this routing decision">{detailData.RoutingDecision.SelectionStrategy}</span>}
+                      {detailData.RoutingDecision.SelectedAdaptiveScore != null && <span className="service-state-badge neutral" title="Adaptive score selected for the chosen endpoint">Score {detailData.RoutingDecision.SelectedAdaptiveScore}</span>}
+                      {detailData.RoutingDecision.BackoffReason && <span className="service-state-badge warning" title="Transient backoff reason recorded by this routing decision">{detailData.RoutingDecision.BackoffReason}</span>}
                       {detailData.RoutingDecision.PolicyFallbackUsed && <span className="service-state-badge warning" title="The attached load-balancing policy could not select a route, so Conductor used fallback routing">Policy Fallback</span>}
                       {detailData.RoutingDecision.ModelAccessDecision && <span className={`service-state-badge ${detailData.RoutingDecision.ModelAccessDecision === 'Deny' ? 'warning' : 'success'}`} title="Model access policy decision recorded for this routing decision">Access {detailData.RoutingDecision.ModelAccessDecision}</span>}
                       {detailData.RoutingDecision.ModelAccessWouldDeny && <span className="service-state-badge warning" title="Monitor mode allowed the request but would deny it in enforce mode">Would Deny</span>}

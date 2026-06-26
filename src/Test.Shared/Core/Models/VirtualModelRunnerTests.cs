@@ -163,6 +163,74 @@ namespace Test.Shared.Core.Models
             vmr.ModelConfigurationMappings.Should().BeEquivalentTo(mappings);
             vmr.ModelConfigurationMappingsJson.Should().Contain("mc_llama");
         }
+        public void AdaptiveLoadBalancing_SerializesAndDeserializesCorrectly()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.AdaptiveLoadBalancing = new AdaptiveLoadBalancingSettings
+            {
+                SampleCount = 4,
+                ColdStartScore = 70,
+                EwmaAlpha = 0.35,
+                BackoffBaseMs = 2000,
+                BackoffMaxMs = 60000,
+                FailureThreshold = 2,
+                ExcludeBackoffEndpoints = true,
+                BackoffBreaksSessionAffinity = true,
+                Weights = new AdaptiveScoreWeights
+                {
+                    Success = 40,
+                    Latency = 20,
+                    TimeToFirstToken = 15,
+                    Pending = 15,
+                    EndpointWeight = 10
+                }
+            };
+
+            vmr.AdaptiveLoadBalancingJson.Should().Contain("\"SampleCount\":4");
+
+            VirtualModelRunner restored = new VirtualModelRunner();
+            restored.AdaptiveLoadBalancingJson = vmr.AdaptiveLoadBalancingJson;
+
+            restored.AdaptiveLoadBalancing.SampleCount.Should().Be(4);
+            restored.AdaptiveLoadBalancing.ColdStartScore.Should().Be(70);
+            restored.AdaptiveLoadBalancing.Weights.Success.Should().Be(40);
+        }
+        public void EndpointGroups_SerializesAndDeserializesCorrectly()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.EndpointGroups = new List<EndpointGroup>
+            {
+                new EndpointGroup
+                {
+                    Id = "primary",
+                    Name = "Primary",
+                    Priority = 0,
+                    Active = true,
+                    TrafficWeight = 100,
+                    EndpointIds = new List<string> { "mre_1", "mre_2" }
+                }
+            };
+
+            vmr.EndpointGroupsJson.Should().Contain("primary");
+
+            VirtualModelRunner restored = new VirtualModelRunner();
+            restored.EndpointGroupsJson = vmr.EndpointGroupsJson;
+
+            restored.EndpointGroups.Should().ContainSingle();
+            restored.EndpointGroups[0].Id.Should().Be("primary");
+            restored.EndpointGroups[0].EndpointIds.Should().BeEquivalentTo(new List<string> { "mre_1", "mre_2" });
+        }
+        public void AdaptiveJson_WhenMissing_UsesBackwardCompatibleDefaults()
+        {
+            VirtualModelRunner vmr = new VirtualModelRunner();
+            vmr.AdaptiveLoadBalancingJson = null;
+            vmr.EndpointGroupsJson = null;
+
+            vmr.AdaptiveLoadBalancing.Should().NotBeNull();
+            vmr.AdaptiveLoadBalancing.SampleCount.Should().Be(2);
+            vmr.EndpointGroups.Should().NotBeNull();
+            vmr.EndpointGroups.Should().BeEmpty();
+        }
 
         #endregion
 
@@ -460,6 +528,8 @@ namespace Test.Shared.Core.Models
             table.Columns.Add("loadbalancingpolicyid", typeof(string));
             table.Columns.Add("modelaccesspolicyid", typeof(string));
             table.Columns.Add("modelrunnerendpointids", typeof(string));
+            table.Columns.Add("adaptiveloadbalancing", typeof(string));
+            table.Columns.Add("endpointgroups", typeof(string));
             table.Columns.Add("modelconfigurationids", typeof(string));
             table.Columns.Add("modeldefinitionids", typeof(string));
             table.Columns.Add("timeoutms", typeof(int));

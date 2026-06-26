@@ -413,6 +413,39 @@ test('builds virtual model runner model load request with target mode', async ()
   assert.equal(capturedOptions.body, JSON.stringify(payload));
 });
 
+test('builds virtual model runner runtime state requests', async () => {
+  const captured = [];
+  const client = new ConductorClient({
+    baseUrl: 'http://localhost:9000',
+    fetchImpl: async (url, options) => {
+      captured.push({ url, options });
+      return createJsonResponse({ Endpoints: [] });
+    }
+  });
+
+  await client.getVirtualModelRunnerRuntimeStats('vmr_123', {
+    tenantId: 'ten_123',
+    endpointId: 'mre_123'
+  });
+  await client.resetVirtualModelRunnerRuntimeStats('vmr_123', {
+    tenantId: 'ten_123',
+    endpointId: 'mre_123'
+  });
+  await client.clearVirtualModelRunnerRuntimeBackoff('vmr_123', {
+    tenantId: 'ten_123',
+    endpointId: 'mre_123'
+  });
+
+  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats?tenantId=ten_123&endpointId=mre_123');
+  assert.equal(captured[0].options.method, 'GET');
+  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats/reset?tenantId=ten_123&endpointId=mre_123');
+  assert.equal(captured[1].options.method, 'POST');
+  assert.equal(captured[1].options.body, '{}');
+  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-backoff/clear?tenantId=ten_123&endpointId=mre_123');
+  assert.equal(captured[2].options.method, 'POST');
+  assert.equal(captured[2].options.body, '{}');
+});
+
 test('returns raw text for the observability metrics endpoint', async () => {
   const client = new ConductorClient({
     baseUrl: 'http://localhost:9000',

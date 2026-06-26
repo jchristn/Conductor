@@ -17,6 +17,16 @@ Policies are attached to a VMR with `LoadBalancingPolicyId`.
 
 Without a policy, a VMR uses its `LoadBalancingMode` directly.
 
+Supported VMR `LoadBalancingMode` values are:
+
+| Value | Meaning |
+| --- | --- |
+| `RoundRobin` | Rotate across eligible endpoints using endpoint weights. |
+| `Random` | Choose an eligible endpoint randomly using endpoint weights. |
+| `FirstAvailable` | Use the first eligible endpoint in configured endpoint order. |
+| `LeastRecentlyUsed` | Choose the eligible endpoint with the oldest route-scoped assignment history. Endpoints with no history use configured endpoint order as the deterministic tie-breaker. |
+| `Adaptive` | Sample eligible endpoints and score them using runtime success, latency, time-to-first-token, pending-work, and configured endpoint-weight signals. |
+
 ## Runtime evaluation order
 
 When a proxied request reaches a VMR, Conductor evaluates routing in this order:
@@ -27,14 +37,16 @@ When a proxied request reaches a VMR, Conductor evaluates routing in this order:
 4. Conductor builds a candidate list from the VMR's attached endpoints.
 5. For new work, only endpoints that are active, not quarantined, not draining, healthy, and currently have capacity remain in the candidate pool.
 6. A draining endpoint may still be reused when an existing sticky-session pin already targets it.
-7. If the VMR has no active attached policy, Conductor uses the VMR's `LoadBalancingMode`.
-8. If a policy is attached and active, every `Filters` rule must pass.
-9. Every `Ranking` metric must also be available for a candidate to remain eligible.
-10. Conductor normalizes each ranking metric, applies `Weight`, and sums the scores.
-11. If the top candidates tie, `TieBreaker` decides between them.
-12. If policy evaluation cannot produce a candidate:
+7. Endpoint groups, when configured, choose the active priority group or weighted split group before final endpoint selection.
+8. If the VMR has no active attached policy, Conductor uses the VMR's `LoadBalancingMode`.
+9. If a policy is attached and active, every `Filters` rule must pass.
+10. Every `Ranking` metric must also be available for a candidate to remain eligible.
+11. Conductor normalizes each ranking metric, applies `Weight`, and sums the scores.
+12. If the top candidates tie, `TieBreaker` decides between them.
+13. If policy evaluation cannot produce a candidate:
    - `UseLegacyLoadBalancingMode` falls back to the VMR's `LoadBalancingMode`
    - `FailClosed` returns an error instead of routing the request
+14. When the effective mode is `Adaptive`, Conductor samples the eligible survivors, scores them with runtime statistics, and records the selected score and sampled-candidate evidence.
 
 ## Important authoring rules
 
@@ -59,8 +71,42 @@ Use these surfaces to answer questions such as:
 - which candidates were eliminated before policy evaluation
 - which filter rule removed a specific endpoint
 - which ranking metrics produced the winning score
+- which endpoint group or traffic split applied
+- which adaptive score components selected an endpoint
+- whether transient backoff excluded an endpoint
 - whether a draining endpoint was reused because of session affinity
 - which request properties were mutated and why
+
+## Adaptive mode
+
+Adaptive mode is configured on the VMR, not inside a load-balancing policy. Use it when endpoint performance changes quickly enough that a static round-robin or random selector is not enough.
+
+Key VMR fields:
+
+| Field | Meaning |
+| --- | --- |
+| `AdaptiveLoadBalancing.SampleCount` | Number of eligible endpoints sampled before scoring. |
+| `AdaptiveLoadBalancing.ColdStartScore` | Bounded score used when an endpoint has no runtime data yet. |
+| `AdaptiveLoadBalancing.EwmaAlpha` | Smoothing factor for success, error, latency, and TTFT metrics. |
+| `AdaptiveLoadBalancing.BackoffBaseMs` / `BackoffMaxMs` | Transient backoff duration bounds after rate limits or failures. |
+| `AdaptiveLoadBalancing.FailureThreshold` | Consecutive failures required before repeated non-immediate errors create backoff. |
+| `AdaptiveLoadBalancing.Weights` | Relative score weights for success, latency, TTFT, pending work, and configured endpoint weight. |
+| `EndpointGroups` | Optional active groups with `Priority`, `TrafficWeight`, and `EndpointIds`. |
+
+Runtime stats are in-memory and can be inspected or cleared through the VMR runtime routes. Request history and explain-routing responses include strategy, group, selected score, fallback, and backoff evidence when available.
+
+## Operational runbooks
+
+Use these short runbooks when adaptive routing needs operator action:
+
+| Situation | Checks | Action |
+| --- | --- | --- |
+| Rate-limit backoff is active | Open VMR runtime stats and check `BackoffReason`, `BackoffUntilUtc`, and recent `429` history. | Reduce traffic to the provider group, increase provider quota, or wait for expiry. Use runtime backoff clear only after the upstream is ready to receive traffic again. |
+| All endpoints are backed off | Use explain-routing to confirm `AllEndpointsInTransientBackoff` and inspect per-candidate backoff evidence. | Add healthy capacity, switch the VMR to a compatibility mode temporarily, or clear backoff after validating the upstream issue is resolved. |
+| Adaptive rollout | Start with a small endpoint group or low-traffic VMR, keep request history enabled, and watch selected score, latency, error EWMA, pending count, and backoff reason facets. | Expand to more VMRs only after runtime stats and request history show stable behavior. |
+| Canary or migration split | Put stable and canary endpoints in the same priority level with explicit `TrafficWeight` values. | Increase the canary weight in small steps and use request-history group facets to confirm observed distribution. |
+| Priority fallback | Confirm the primary group has active, normal, healthy, under-capacity endpoints. | If fallback is unexpected, inspect health, capacity, service state, group active flags, and endpoint membership before changing traffic weights. |
+| Revert to compatibility routing | Record the current adaptive settings, then switch `LoadBalancingMode` to `RoundRobin`, `Random`, `FirstAvailable`, or `LeastRecentlyUsed`. | Keep endpoint groups only if the same grouping behavior is still desired; otherwise clear `EndpointGroups` to return to the attached endpoint list. |
 
 ## Top-level policy JSON
 

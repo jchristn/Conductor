@@ -12,7 +12,7 @@ namespace Test.McpServer
     using Conductor.Core.Models;
     using Conductor.Core.Settings;
     using Conductor.McpServer;
-    using Voltaic;
+    using Voltaic.Mcp;
 
     /// <summary>
     /// Test console application for exercising the Conductor MCP Server API.

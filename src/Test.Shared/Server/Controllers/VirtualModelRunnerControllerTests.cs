@@ -9,6 +9,7 @@ namespace Test.Shared.Server.Controllers
     using Conductor.Server.Controllers;
     using Conductor.Server.Services;
     using FluentAssertions;
+    using WatsonWebserver.Core;
     
     /// <summary>
     /// Unit tests for VirtualModelRunnerController.
@@ -1026,6 +1027,166 @@ namespace Test.Shared.Server.Controllers
             decision.MutationSummary.Changes.Should().Contain(item => item.PropertyName == "max_tokens");
             decision.Candidates.Should().ContainSingle(item => item.EndpointId == endpoint.Id && item.Included);
             decision.Timeline.Should().NotBeEmpty();
+        }
+
+        public async Task GetRuntimeStats_WithAttachedEndpoints_ReturnsTenantScopedSnapshots()
+        {
+            EndpointRuntimeStatsService runtimeStatsService = new EndpointRuntimeStatsService();
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, null, null, null, runtimeStatsService);
+
+            ModelRunnerEndpoint firstEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Runtime A",
+                Hostname = "runtime-a.local"
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint secondEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Runtime B",
+                Hostname = "runtime-b.local"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Runtime Stats VMR",
+                BasePath = "/v1.0/api/runtime-stats/",
+                ModelRunnerEndpointIds = new List<string> { firstEndpoint.Id, secondEndpoint.Id }
+            }).ConfigureAwait(false);
+
+            runtimeStatsService.RecordAdmission(vmr, firstEndpoint);
+            runtimeStatsService.RecordCompletion(vmr, firstEndpoint, 200, 120, 30, new AdaptiveLoadBalancingSettings());
+
+            EndpointRuntimeStatsCollection stats = await controller.GetRuntimeStats(TestTenantId, vmr.Id).ConfigureAwait(false);
+
+            stats.TenantId.Should().Be(TestTenantId);
+            stats.VirtualModelRunnerId.Should().Be(vmr.Id);
+            stats.Endpoints.Should().HaveCount(2);
+            stats.Endpoints.Should().Contain(item => item.EndpointId == firstEndpoint.Id && item.CompletedCount == 1 && item.LatencyEwmaMs == 120);
+            stats.Endpoints.Should().Contain(item => item.EndpointId == secondEndpoint.Id && item.CompletedCount == 0 && item.LatencyEwmaMs == null);
+        }
+
+        public async Task GetRuntimeStats_WithWrongTenant_ThrowsNotFound()
+        {
+            EndpointRuntimeStatsService runtimeStatsService = new EndpointRuntimeStatsService();
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, null, null, null, runtimeStatsService);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Wrong Tenant Runtime VMR",
+                BasePath = "/v1.0/api/wrong-tenant-runtime/"
+            }).ConfigureAwait(false);
+
+            Func<Task> action = async () => await controller.GetRuntimeStats("tenant_other", vmr.Id).ConfigureAwait(false);
+
+            await action.Should().ThrowAsync<WebserverException>().ConfigureAwait(false);
+        }
+
+        public async Task ResetRuntimeStats_WithEndpointId_ResetsOnlyRequestedEndpoint()
+        {
+            EndpointRuntimeStatsService runtimeStatsService = new EndpointRuntimeStatsService();
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, null, null, null, runtimeStatsService);
+
+            ModelRunnerEndpoint firstEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Reset Runtime A",
+                Hostname = "reset-runtime-a.local"
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint secondEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Reset Runtime B",
+                Hostname = "reset-runtime-b.local"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Reset Runtime VMR",
+                BasePath = "/v1.0/api/reset-runtime/",
+                ModelRunnerEndpointIds = new List<string> { firstEndpoint.Id, secondEndpoint.Id }
+            }).ConfigureAwait(false);
+
+            runtimeStatsService.RecordAdmission(vmr, firstEndpoint);
+            runtimeStatsService.RecordCompletion(vmr, firstEndpoint, 200, 100, 20, new AdaptiveLoadBalancingSettings());
+            runtimeStatsService.RecordAdmission(vmr, secondEndpoint);
+            runtimeStatsService.RecordCompletion(vmr, secondEndpoint, 200, 250, 80, new AdaptiveLoadBalancingSettings());
+
+            EndpointRuntimeStatsCollection stats = await controller.ResetRuntimeStats(TestTenantId, vmr.Id, firstEndpoint.Id).ConfigureAwait(false);
+
+            stats.Endpoints.Should().Contain(item => item.EndpointId == firstEndpoint.Id && item.CompletedCount == 0 && item.LatencyEwmaMs == null);
+            stats.Endpoints.Should().Contain(item => item.EndpointId == secondEndpoint.Id && item.CompletedCount == 1 && item.LatencyEwmaMs == 250);
+        }
+
+        public async Task ClearRuntimeBackoff_WithEndpointId_ClearsOnlyRequestedEndpoint()
+        {
+            EndpointRuntimeStatsService runtimeStatsService = new EndpointRuntimeStatsService();
+            AdaptiveLoadBalancingSettings settings = new AdaptiveLoadBalancingSettings();
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, null, null, null, runtimeStatsService);
+
+            ModelRunnerEndpoint firstEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Backoff Runtime A",
+                Hostname = "backoff-runtime-a.local"
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint secondEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Backoff Runtime B",
+                Hostname = "backoff-runtime-b.local"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Clear Backoff Runtime VMR",
+                BasePath = "/v1.0/api/clear-backoff-runtime/",
+                ModelRunnerEndpointIds = new List<string> { firstEndpoint.Id, secondEndpoint.Id }
+            }).ConfigureAwait(false);
+
+            runtimeStatsService.RecordAdmission(vmr, firstEndpoint);
+            runtimeStatsService.RecordCompletion(vmr, firstEndpoint, 429, 100, null, settings);
+            runtimeStatsService.RecordAdmission(vmr, secondEndpoint);
+            runtimeStatsService.RecordCompletion(vmr, secondEndpoint, 429, 120, null, settings);
+
+            EndpointRuntimeStatsCollection stats = await controller.ClearRuntimeBackoff(TestTenantId, vmr.Id, firstEndpoint.Id).ConfigureAwait(false);
+
+            stats.Endpoints.Should().Contain(item => item.EndpointId == firstEndpoint.Id && !item.BackoffActive && item.BackoffReason == null);
+            stats.Endpoints.Should().Contain(item => item.EndpointId == secondEndpoint.Id && item.BackoffActive && item.BackoffReason == "RateLimited");
+        }
+
+        public async Task GetRuntimeStats_WithUnattachedEndpoint_ThrowsNotFound()
+        {
+            EndpointRuntimeStatsService runtimeStatsService = new EndpointRuntimeStatsService();
+            VirtualModelRunnerController controller = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, null, null, null, null, null, runtimeStatsService);
+
+            ModelRunnerEndpoint attachedEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Attached Runtime",
+                Hostname = "attached-runtime.local"
+            }).ConfigureAwait(false);
+
+            ModelRunnerEndpoint unattachedEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = TestTenantId,
+                Name = "Unattached Runtime",
+                Hostname = "unattached-runtime.local"
+            }).ConfigureAwait(false);
+
+            VirtualModelRunner vmr = await controller.Create(TestTenantId, new VirtualModelRunner
+            {
+                Name = "Unattached Runtime VMR",
+                BasePath = "/v1.0/api/unattached-runtime/",
+                ModelRunnerEndpointIds = new List<string> { attachedEndpoint.Id }
+            }).ConfigureAwait(false);
+
+            Func<Task> action = async () => await controller.GetRuntimeStats(TestTenantId, vmr.Id, unattachedEndpoint.Id).ConfigureAwait(false);
+
+            await action.Should().ThrowAsync<WebserverException>().WithMessage("*not attached*").ConfigureAwait(false);
         }
 
         #endregion

@@ -7,6 +7,7 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
 - endpoint and virtual model runner model load or verification requests
+- VMR adaptive load-balancing configuration helpers through the VMR payload plus runtime stats, stats reset, and transient-backoff clear routes
 - Ollama endpoint model list, pull, and delete requests
 - model access policy CRUD, validation, evaluation, and effective-access queries
 - VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
@@ -118,6 +119,45 @@ const vmrLoad = await client.loadVirtualModelRunnerModel('vmr_123', {
   TargetMode: 'SelectedEndpoint',
   ProbeKind: 'Auto'
 }, 'tenant_123');
+
+await client.validateVirtualModelRunner({
+  TenantId: 'tenant_123',
+  Name: 'Adaptive production route',
+  BasePath: '/v1.0/api/adaptive-production/',
+  LoadBalancingMode: 'Adaptive',
+  ModelRunnerEndpointIds: ['mre_fast', 'mre_fallback'],
+  AdaptiveLoadBalancing: {
+    SampleCount: 2,
+    ExcludeBackoffEndpoints: true,
+    BackoffBreaksSessionAffinity: true
+  },
+  EndpointGroups: [
+    {
+      Id: 'primary',
+      Name: 'Primary',
+      Priority: 0,
+      TrafficWeight: 100,
+      EndpointIds: ['mre_fast']
+    },
+    {
+      Id: 'fallback',
+      Name: 'Fallback',
+      Priority: 1,
+      TrafficWeight: 100,
+      EndpointIds: ['mre_fallback']
+    }
+  ]
+});
+const runtimeStats = await client.getVirtualModelRunnerRuntimeStats('vmr_123', {
+  tenantId: 'tenant_123'
+});
+await client.resetVirtualModelRunnerRuntimeStats('vmr_123', {
+  tenantId: 'tenant_123',
+  endpointId: 'mre_fallback'
+});
+await client.clearVirtualModelRunnerRuntimeBackoff('vmr_123', {
+  tenantId: 'tenant_123'
+});
 
 const ollamaModels = await client.listOllamaEndpointModels('mre_123', 'tenant_123');
 const pullResult = await client.pullOllamaEndpointModel('mre_123', {

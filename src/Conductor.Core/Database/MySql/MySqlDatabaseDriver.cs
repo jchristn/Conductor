@@ -211,6 +211,8 @@ namespace Conductor.Core.Database.MySql
             await EnsureColumnAsync("virtualmodelrunners", "loadbalancingpolicyid", TableQueries.AddLoadBalancingPolicyIdColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "modelaccesspolicyid", TableQueries.AddModelAccessPolicyIdColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "modelconfigurationmappings", "ALTER TABLE virtualmodelrunners ADD COLUMN modelconfigurationmappings TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "adaptiveloadbalancing", TableQueries.AddAdaptiveLoadBalancingColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);
 
             await EnsureColumnAsync("modelrunnerendpoints", "rigmonitor", TableQueries.AddRigMonitorColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("modelrunnerendpoints", "servicestate", "ALTER TABLE modelrunnerendpoints ADD COLUMN servicestate INT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
@@ -234,6 +236,12 @@ namespace Conductor.Core.Database.MySql
             await EnsureColumnAsync("requesthistory", "effectivemodel", "ALTER TABLE requesthistory ADD COLUMN effectivemodel VARCHAR(255);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "requesttype", "ALTER TABLE requesthistory ADD COLUMN requesttype VARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "routingoutcomecode", "ALTER TABLE requesthistory ADD COLUMN routingoutcomecode VARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "selectionstrategy", "ALTER TABLE requesthistory ADD COLUMN selectionstrategy VARCHAR(64);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "endpointgroupguid", "ALTER TABLE requesthistory ADD COLUMN endpointgroupguid VARCHAR(64);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "endpointgroupname", "ALTER TABLE requesthistory ADD COLUMN endpointgroupname VARCHAR(255);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "backoffreason", "ALTER TABLE requesthistory ADD COLUMN backoffreason VARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "adaptiveselection", "ALTER TABLE requesthistory ADD COLUMN adaptiveselection TINYINT(1) NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "policyfallbackused", "ALTER TABLE requesthistory ADD COLUMN policyfallbackused TINYINT(1) NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "denialreasoncode", "ALTER TABLE requesthistory ADD COLUMN denialreasoncode VARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "denialreason", "ALTER TABLE requesthistory ADD COLUMN denialreason TEXT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "reservationguid", "ALTER TABLE requesthistory ADD COLUMN reservationguid VARCHAR(48);", token).ConfigureAwait(false);
@@ -280,6 +288,11 @@ namespace Conductor.Core.Database.MySql
             await EnsureIndexAsync("idx_requesthistory_modelaccesswoulddeny", "CREATE INDEX idx_requesthistory_modelaccesswoulddeny ON requesthistory(modelaccesswoulddeny);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_requestedmodel", "CREATE INDEX idx_requesthistory_requestedmodel ON requesthistory(requestedmodel);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_effectivemodel", "CREATE INDEX idx_requesthistory_effectivemodel ON requesthistory(effectivemodel);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_selectionstrategy", "CREATE INDEX idx_requesthistory_selectionstrategy ON requesthistory(selectionstrategy);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_endpointgroupguid", "CREATE INDEX idx_requesthistory_endpointgroupguid ON requesthistory(endpointgroupguid);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_backoffreason", "CREATE INDEX idx_requesthistory_backoffreason ON requesthistory(backoffreason);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_adaptiveselection", "CREATE INDEX idx_requesthistory_adaptiveselection ON requesthistory(adaptiveselection);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_policyfallbackused", "CREATE INDEX idx_requesthistory_policyfallbackused ON requesthistory(policyfallbackused);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_denialreasoncode", "CREATE INDEX idx_requesthistory_denialreasoncode ON requesthistory(denialreasoncode);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_reservationguid", "CREATE INDEX idx_requesthistory_reservationguid ON requesthistory(reservationguid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_reservationreasoncode", "CREATE INDEX idx_requesthistory_reservationreasoncode ON requesthistory(reservationreasoncode);", token).ConfigureAwait(false);

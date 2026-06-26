@@ -191,6 +191,60 @@ namespace Conductor.Server.Routing
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);
 
+            _App.Get("/v1.0/virtualmodelrunners/{id}/runtime-stats", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.GetRuntimeStats(tenantId, req.Parameters["id"], req.Http.Request.Query.Elements.Get("endpointId"));
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Get virtual model runner runtime stats")
+                .WithDescription("Return in-memory runtime statistics for endpoints attached to a virtual model runner")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithParameter(OpenApiParameterMetadata.Query("endpointId", "Optional attached endpoint ID to filter", false))
+                .WithResponse(200, Api.JsonResponse<EndpointRuntimeStatsCollection>("Runtime statistics"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post<object>("/v1.0/virtualmodelrunners/{id}/runtime-stats/reset", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.ResetRuntimeStats(tenantId, req.Parameters["id"], req.Http.Request.Query.Elements.Get("endpointId"));
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Reset virtual model runner runtime stats")
+                .WithDescription("Reset in-memory runtime statistics for a virtual model runner or one attached endpoint")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithParameter(OpenApiParameterMetadata.Query("endpointId", "Optional attached endpoint ID to reset", false))
+                .WithResponse(200, Api.JsonResponse<EndpointRuntimeStatsCollection>("Runtime statistics after reset"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post<object>("/v1.0/virtualmodelrunners/{id}/runtime-backoff/clear", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.ClearRuntimeBackoff(tenantId, req.Parameters["id"], req.Http.Request.Query.Elements.Get("endpointId"));
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Clear virtual model runner runtime backoff")
+                .WithDescription("Clear transient runtime backoff for a virtual model runner or one attached endpoint")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithParameter(OpenApiParameterMetadata.Query("endpointId", "Optional attached endpoint ID to clear", false))
+                .WithResponse(200, Api.JsonResponse<EndpointRuntimeStatsCollection>("Runtime statistics after clearing backoff"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
             _App.Post<RoutingSimulationRequest>("/v1.0/virtualmodelrunners/{id}/explain-routing", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));

@@ -191,6 +191,81 @@ namespace Conductor.Sdk.Tests
         }
 
         [Fact]
+        public async Task VirtualModelRunnerRuntimeMethods_UseExpectedRoutesAndBodies()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{\"Endpoints\":[]}"));
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            Dictionary<string, string> filters = new Dictionary<string, string>
+            {
+                ["tenantId"] = "ten_1",
+                ["endpointId"] = "mre_1"
+            };
+
+            using JsonDocument stats = await client.GetVirtualModelRunnerRuntimeStatsAsync("vmr_1", filters);
+            using JsonDocument reset = await client.ResetVirtualModelRunnerRuntimeStatsAsync("vmr_1", filters);
+            using JsonDocument clear = await client.ClearVirtualModelRunnerRuntimeBackoffAsync("vmr_1", filters);
+
+            Assert.Collection(
+                handler.Requests,
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Get, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/runtime-stats?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Post, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/runtime-stats/reset?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
+                    Assert.Equal("{}", request.Body);
+                },
+                request =>
+                {
+                    Assert.Equal(HttpMethod.Post, request.Method);
+                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/runtime-backoff/clear?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
+                    Assert.Equal("{}", request.Body);
+                });
+        }
+
+        [Fact]
+        public void AdaptiveLoadBalancingModels_SerializeExpectedContractShape()
+        {
+            Assert.Equal(3, (int)LoadBalancingMode.LeastRecentlyUsed);
+            Assert.Equal(4, (int)LoadBalancingMode.Adaptive);
+
+            AdaptiveLoadBalancingSettings settings = new AdaptiveLoadBalancingSettings
+            {
+                SampleCount = 3,
+                BackoffBreaksSessionAffinity = false,
+                Weights = new AdaptiveScoreWeights
+                {
+                    Success = 40,
+                    Latency = 30,
+                    TimeToFirstToken = 10,
+                    Pending = 10,
+                    EndpointWeight = 10
+                }
+            };
+            EndpointGroup group = new EndpointGroup
+            {
+                Id = "primary",
+                Name = "Primary",
+                Priority = 0,
+                TrafficWeight = 90,
+                EndpointIds = new List<string> { "mre_1", "mre_2" }
+            };
+
+            string settingsJson = JsonSerializer.Serialize(settings);
+            string groupJson = JsonSerializer.Serialize(group);
+
+            Assert.Contains("\"SampleCount\":3", settingsJson);
+            Assert.Contains("\"BackoffBreaksSessionAffinity\":false", settingsJson);
+            Assert.Contains("\"Latency\":30", settingsJson);
+            Assert.Contains("\"EndpointIds\":[\"mre_1\",\"mre_2\"]", groupJson);
+        }
+
+        [Fact]
         public async Task GetAnalyticsCatalogAsync_PropagatesCancellationToken()
         {
             RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));

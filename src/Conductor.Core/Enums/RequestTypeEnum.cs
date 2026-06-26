@@ -342,6 +342,21 @@ namespace Conductor.Core.Enums
         /// </summary>
         LoadVirtualModelRunnerModel,
 
+        /// <summary>
+        /// Read virtual model runner runtime statistics.
+        /// </summary>
+        ReadVirtualModelRunnerRuntimeStats,
+
+        /// <summary>
+        /// Reset virtual model runner runtime statistics.
+        /// </summary>
+        ResetVirtualModelRunnerRuntimeStats,
+
+        /// <summary>
+        /// Clear virtual model runner runtime backoff.
+        /// </summary>
+        ClearVirtualModelRunnerRuntimeBackoff,
+
         // ==================== Virtual Model Runner Reservation Operations ====================
 
         /// <summary>

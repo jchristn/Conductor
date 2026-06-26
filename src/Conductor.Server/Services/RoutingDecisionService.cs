@@ -1,6 +1,7 @@
 namespace Conductor.Server.Services
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Linq;
     using System.Text;
@@ -18,14 +19,20 @@ namespace Conductor.Server.Services
     public class RoutingDecisionService
     {
         private const string _Header = "[RoutingDecisionService] ";
+        private const string _DefaultLeastRecentlyUsedScope = "global";
+        private static readonly ConcurrentDictionary<string, long> _LeastRecentlyUsedSelections = new ConcurrentDictionary<string, long>(StringComparer.Ordinal);
         private static readonly object _RoundRobinLock = new object();
+        private static readonly object _RandomLock = new object();
         private static readonly Random _Random = new Random();
+        private static long _LeastRecentlyUsedSequence = 0;
         private static int _RoundRobinIndex = 0;
 
         private readonly DatabaseDriverBase _Database;
         private readonly LoggingModule _Logging;
         private readonly HealthCheckService _HealthCheckService;
         private readonly SessionAffinityService _SessionAffinityService;
+        private readonly EndpointRuntimeStatsService _RuntimeStatsService;
+        private readonly AdaptiveEndpointSelectionService _AdaptiveSelectionService = new AdaptiveEndpointSelectionService();
         private readonly LoadBalancingPolicyEvaluator _PolicyEvaluator = new LoadBalancingPolicyEvaluator();
         private readonly OperationalMetricsService _Metrics;
         private readonly RoutingModelMutationService _ModelMutationService;
@@ -43,7 +50,8 @@ namespace Conductor.Server.Services
             SessionAffinityService sessionAffinityService = null,
             OperationalMetricsService metrics = null,
             IModelAccessControlService modelAccessControlService = null,
-            ModelAccessControlSettings modelAccessSettings = null)
+            ModelAccessControlSettings modelAccessSettings = null,
+            EndpointRuntimeStatsService runtimeStatsService = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _ModelMutationService = new RoutingModelMutationService(_Database);
@@ -51,6 +59,7 @@ namespace Conductor.Server.Services
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _HealthCheckService = healthCheckService;
             _SessionAffinityService = sessionAffinityService;
+            _RuntimeStatsService = runtimeStatsService ?? new EndpointRuntimeStatsService();
             _Metrics = metrics;
             _ModelAccessControlService = modelAccessControlService;
             _ReservationService = new VirtualModelRunnerReservationService(_Database, _Logging);
@@ -79,7 +88,8 @@ namespace Conductor.Server.Services
                 VirtualModelRunnerName = vmr.Name,
                 ApiType = urlContext.ApiType,
                 RequestType = urlContext.RequestType,
-                HttpStatusCode = 200
+                HttpStatusCode = 200,
+                SelectionStrategy = vmr.LoadBalancingMode.ToString()
             };
 
             result.Decision = decision;
@@ -229,12 +239,21 @@ namespace Conductor.Server.Services
                     return FinalizeMetrics(result, vmr, requestContext, decisionStart);
                 }
 
+                availableEndpoints = ApplyEndpointGroups(vmr, availableEndpoints, decision);
+                if (availableEndpoints.Count < 1)
+                {
+                    Deny(decision, 502, "NoEndpointGroupAvailable", "No configured endpoint group has available endpoints.");
+                    AddTimeline(decision, "EndpointGroups", "Endpoint Groups", "Denied", decision.Message);
+                    return FinalizeMetrics(result, vmr, requestContext, decisionStart);
+                }
+
                 if (policy != null)
                 {
                     LoadBalancingPolicyEvaluator.EvaluationResult evaluation = _PolicyEvaluator.Evaluate(
                         policy,
                         availableEndpoints,
-                        endpointId => _HealthCheckService?.GetHealthState(endpointId));
+                        endpointId => _HealthCheckService?.GetHealthState(endpointId),
+                        endpointId => _RuntimeStatsService.GetSnapshot(vmr.TenantId, vmr.Id, endpointId));
 
                     MergePolicyDiagnostics(decision, evaluation);
                     if (evaluation.TelemetryFreshnessFailures > 0 && _Metrics != null)
@@ -247,11 +266,20 @@ namespace Conductor.Server.Services
 
                     if (evaluation.Success && evaluation.Candidates.Count > 0)
                     {
-                        List<EndpointAvailability> tiedCandidates = GetTiedCandidates(evaluation.Candidates);
-                        selectedEndpoint = SelectEndpointWithWeight(tiedCandidates, MapTieBreaker(policy.TieBreaker));
                         decision.LoadBalancingPolicyId = policy.Id;
                         decision.LoadBalancingPolicyName = policy.Name;
-                        AddTimeline(decision, "PolicyEvaluation", "Policy Evaluation", "Passed", "The attached policy ranked " + evaluation.Candidates.Count + " candidate endpoint(s).");
+                        if (vmr.LoadBalancingMode == LoadBalancingModeEnum.Adaptive)
+                        {
+                            availableEndpoints = evaluation.Candidates.Select(item => item.Availability).ToList();
+                            AddTimeline(decision, "PolicyEvaluation", "Policy Evaluation", "Passed", "The attached policy retained " + evaluation.Candidates.Count + " candidate endpoint(s) for adaptive scoring.");
+                        }
+                        else
+                        {
+                            List<EndpointAvailability> tiedCandidates = GetTiedCandidates(evaluation.Candidates);
+                            selectedEndpoint = SelectEndpointWithWeight(tiedCandidates, MapTieBreaker(policy.TieBreaker));
+                            decision.SelectionStrategy = "Policy:" + policy.TieBreaker.ToString();
+                            AddTimeline(decision, "PolicyEvaluation", "Policy Evaluation", "Passed", "The attached policy ranked " + evaluation.Candidates.Count + " candidate endpoint(s).");
+                        }
                     }
                     else if (policy.FallbackMode == LoadBalancingPolicyFallbackModeEnum.FailClosed)
                     {
@@ -271,7 +299,23 @@ namespace Conductor.Server.Services
 
                 if (selectedEndpoint == null)
                 {
-                    selectedEndpoint = SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode);
+                    if (vmr.LoadBalancingMode == LoadBalancingModeEnum.Adaptive)
+                    {
+                        decision.SelectionStrategy = LoadBalancingModeEnum.Adaptive.ToString();
+                        selectedEndpoint = _AdaptiveSelectionService.SelectEndpoint(vmr, availableEndpoints, _RuntimeStatsService, decision);
+                        if (selectedEndpoint == null)
+                        {
+                            decision.BackoffReason = FindBackoffReason(decision);
+                            Deny(decision, 503, "AllEndpointsInTransientBackoff", "All eligible endpoints are currently in transient backoff.");
+                            AddTimeline(decision, "EndpointSelection", "Endpoint Selection", "Denied", decision.Message);
+                            return FinalizeMetrics(result, vmr, requestContext, decisionStart);
+                        }
+                    }
+                    else
+                    {
+                        decision.SelectionStrategy = vmr.LoadBalancingMode.ToString();
+                        selectedEndpoint = SelectEndpointWithWeight(availableEndpoints, vmr.LoadBalancingMode, BuildLoadBalancingScopeKey(vmr));
+                    }
                     AddTimeline(decision, "EndpointSelection", "Endpoint Selection", "Passed", "Selected endpoint '" + selectedEndpoint.Name + "' using " + vmr.LoadBalancingMode + ".");
                 }
 
@@ -283,6 +327,7 @@ namespace Conductor.Server.Services
             }
             else
             {
+                decision.SelectionStrategy = "SessionAffinity";
                 AddTimeline(decision, "EndpointSelection", "Endpoint Selection", "Passed", "Reused session-affinity pin for endpoint '" + selectedEndpoint.Name + "'.");
             }
 
@@ -298,6 +343,7 @@ namespace Conductor.Server.Services
             decision.SelectedEndpointUrl = selectedEndpoint.GetBaseUrl();
             decision.SessionPinUsed = sessionPinUsed;
             requestContext.SelectedEndpointId = selectedEndpoint.Id;
+            _RuntimeStatsService.RecordSelection(vmr, selectedEndpoint);
 
             RoutingModelMutationResult mutation = await _ModelMutationService.ApplyAsync(vmr, urlContext, requestContext.Data, token).ConfigureAwait(false);
             result.RequestBody = mutation.RequestBody;
@@ -707,7 +753,14 @@ namespace Conductor.Server.Services
                     decision.DenialReasonCode,
                     decision.SessionAffinityOutcome,
                     decision.PolicyFallbackUsed,
-                    routeDecisionDurationMs);
+                    routeDecisionDurationMs,
+                    decision.SelectionStrategy,
+                    decision.AdaptiveModeUsed,
+                    decision.AdaptiveSampleCount,
+                    decision.SelectedAdaptiveScore,
+                    decision.SelectedEndpointGroupId,
+                    decision.BackoffReason,
+                    decision.SelectedEndpointId);
             }
 
             decision.EvaluatedUtc = DateTime.UtcNow;
@@ -800,6 +853,15 @@ namespace Conductor.Server.Services
             bool pinnedHealthy = pinnedState == null || pinnedState.IsHealthy;
             bool pinnedHasCapacity = pinnedEndpoint.MaxParallelRequests <= 0 || pinnedState == null || pinnedState.InFlightRequests < pinnedEndpoint.MaxParallelRequests;
 
+            if (vmr.AdaptiveLoadBalancing?.BackoffBreaksSessionAffinity == true
+                && _RuntimeStatsService.IsBackoffActive(vmr.TenantId, vmr.Id, pinnedEndpoint.Id))
+            {
+                _SessionAffinityService.RemovePinnedEndpoint(vmr.Id, clientKey);
+                decision.SessionAffinityOutcome = "BackoffRemoved";
+                AddTimeline(decision, "SessionAffinity", "Session Affinity", "Warning", "Removed a sticky-session pin because the pinned endpoint is in transient backoff.");
+                return null;
+            }
+
             if (!pinnedHealthy || !pinnedHasCapacity)
             {
                 _SessionAffinityService.RemovePinnedEndpoint(vmr.Id, clientKey);
@@ -811,7 +873,8 @@ namespace Conductor.Server.Services
             if (policy != null)
             {
                 EndpointAvailability availability = new EndpointAvailability(pinnedEndpoint, true, true);
-                if (!_PolicyEvaluator.IsEndpointEligible(policy, availability, pinnedState))
+                EndpointRuntimeStatsSnapshot runtimeStats = _RuntimeStatsService.GetSnapshot(vmr.TenantId, vmr.Id, pinnedEndpoint.Id, pinnedEndpoint.Name);
+                if (!_PolicyEvaluator.IsEndpointEligible(policy, availability, pinnedState, runtimeStats))
                 {
                     _SessionAffinityService.RemovePinnedEndpoint(vmr.Id, clientKey);
                     decision.SessionAffinityOutcome = "StaleRemoved";
@@ -845,6 +908,7 @@ namespace Conductor.Server.Services
                 EndpointHealthState state = _HealthCheckService?.GetHealthState(endpoint.Id);
                 candidate.IsHealthy = state == null || state.IsHealthy;
                 candidate.HasCapacity = endpoint.MaxParallelRequests <= 0 || state == null || state.InFlightRequests < endpoint.MaxParallelRequests;
+                candidate.RuntimeStats = _RuntimeStatsService.GetSnapshot(decision.TenantId, decision.VirtualModelRunnerId, endpoint.Id, endpoint.Name);
 
                 if (!endpoint.Active)
                 {
@@ -886,6 +950,105 @@ namespace Conductor.Server.Services
             }
 
             AddTimeline(decision, "Availability", "Availability Screening", "Passed", availableEndpoints.Count + " endpoint(s) remain eligible after active, service-state, health, and capacity screening.");
+        }
+
+        private List<EndpointAvailability> ApplyEndpointGroups(VirtualModelRunner vmr, List<EndpointAvailability> availableEndpoints, RoutingDecision decision)
+        {
+            if (vmr?.EndpointGroups == null || vmr.EndpointGroups.Count < 1 || availableEndpoints == null || availableEndpoints.Count < 1)
+            {
+                AddTimeline(decision, "EndpointGroups", "Endpoint Groups", "Skipped", "No endpoint groups are configured; using the route endpoint list.");
+                return availableEndpoints ?? new List<EndpointAvailability>();
+            }
+
+            HashSet<string> configuredEndpointIds = new HashSet<string>(vmr.ModelRunnerEndpointIds ?? new List<string>(), StringComparer.Ordinal);
+            Dictionary<string, EndpointAvailability> availableById = availableEndpoints
+                .Where(item => item?.Endpoint != null)
+                .ToDictionary(item => item.Endpoint.Id, item => item, StringComparer.Ordinal);
+
+            List<EndpointGroup> viableGroups = vmr.EndpointGroups
+                .Where(group => group != null
+                    && group.Active
+                    && group.TrafficWeight > 0
+                    && group.EndpointIds != null
+                    && group.EndpointIds.Exists(endpointId => configuredEndpointIds.Contains(endpointId) && availableById.ContainsKey(endpointId)))
+                .OrderBy(group => group.Priority)
+                .ThenBy(group => group.Name)
+                .ToList();
+
+            if (viableGroups.Count < 1)
+            {
+                return new List<EndpointAvailability>();
+            }
+
+            int selectedPriority = viableGroups[0].Priority;
+            List<EndpointGroup> priorityGroups = viableGroups.Where(group => group.Priority == selectedPriority).ToList();
+            EndpointGroup selectedGroup = SelectTrafficSplitGroup(priorityGroups, decision);
+            if (selectedGroup == null)
+            {
+                return new List<EndpointAvailability>();
+            }
+
+            decision.SelectedEndpointGroupId = selectedGroup.Id;
+            decision.SelectedEndpointGroupName = selectedGroup.Name;
+            decision.SelectedEndpointGroupPriority = selectedGroup.Priority;
+
+            HashSet<string> selectedEndpointIds = new HashSet<string>(selectedGroup.EndpointIds ?? new List<string>(), StringComparer.Ordinal);
+            List<EndpointAvailability> scoped = availableEndpoints
+                .Where(item => item?.Endpoint != null && selectedEndpointIds.Contains(item.Endpoint.Id))
+                .ToList();
+
+            foreach (RoutingEndpointCandidate candidate in decision.Candidates)
+            {
+                if (candidate.Included && !selectedEndpointIds.Contains(candidate.EndpointId))
+                {
+                    candidate.Included = false;
+                    candidate.ExclusionReasonCode = "EndpointGroupNotSelected";
+                    candidate.ExclusionReason = "The endpoint was not in the selected endpoint group.";
+                }
+            }
+
+            AddTimeline(decision, "EndpointGroups", "Endpoint Groups", "Passed", "Selected endpoint group '" + selectedGroup.Name + "' at priority " + selectedGroup.Priority + ".");
+            return scoped;
+        }
+
+        private static EndpointGroup SelectTrafficSplitGroup(List<EndpointGroup> groups, RoutingDecision decision)
+        {
+            if (groups == null || groups.Count < 1)
+            {
+                return null;
+            }
+
+            if (groups.Count == 1)
+            {
+                decision.TrafficSplitBucket = 0;
+                return groups[0];
+            }
+
+            int totalWeight = groups.Sum(group => group.TrafficWeight);
+            if (totalWeight <= 0)
+            {
+                decision.TrafficSplitBucket = 0;
+                return groups[0];
+            }
+
+            int bucket;
+            lock (_RandomLock)
+            {
+                bucket = _Random.Next(totalWeight);
+            }
+
+            decision.TrafficSplitBucket = bucket;
+            int cumulative = 0;
+            foreach (EndpointGroup group in groups)
+            {
+                cumulative += group.TrafficWeight;
+                if (bucket < cumulative)
+                {
+                    return group;
+                }
+            }
+
+            return groups[groups.Count - 1];
         }
 
         private void ApplyAvailabilityDenial(RoutingDecision decision, AvailabilitySummary summary)
@@ -1072,16 +1235,40 @@ namespace Conductor.Server.Services
             }
         }
 
-        private static ModelRunnerEndpoint SelectEndpointWithWeight(List<EndpointAvailability> endpoints, LoadBalancingModeEnum mode)
+        private static string BuildLoadBalancingScopeKey(VirtualModelRunner vmr)
+        {
+            if (vmr == null)
+            {
+                return _DefaultLeastRecentlyUsedScope;
+            }
+
+            return (vmr.TenantId ?? String.Empty) + ":" + (vmr.Id ?? String.Empty);
+        }
+
+        private static ModelRunnerEndpoint SelectEndpointWithWeight(List<EndpointAvailability> endpoints, LoadBalancingModeEnum mode, string routeScopeKey = null)
         {
             if (endpoints == null || endpoints.Count < 1) return null;
-            if (endpoints.Count == 1) return endpoints[0].Endpoint;
+            if (endpoints.Count == 1)
+            {
+                if (mode == LoadBalancingModeEnum.LeastRecentlyUsed)
+                {
+                    MarkLeastRecentlyUsedSelection(routeScopeKey, endpoints[0].Endpoint.Id);
+                }
+
+                return endpoints[0].Endpoint;
+            }
 
             switch (mode)
             {
+                case LoadBalancingModeEnum.LeastRecentlyUsed:
+                    return SelectLeastRecentlyUsedEndpoint(endpoints, routeScopeKey);
                 case LoadBalancingModeEnum.Random:
                     int totalWeight = endpoints.Sum(item => item.Endpoint.Weight);
-                    int randomValue = _Random.Next(totalWeight);
+                    int randomValue;
+                    lock (_RandomLock)
+                    {
+                        randomValue = _Random.Next(totalWeight);
+                    }
                     int randomCumulative = 0;
                     foreach (EndpointAvailability item in endpoints)
                     {
@@ -1116,6 +1303,53 @@ namespace Conductor.Server.Services
             }
         }
 
+        private static ModelRunnerEndpoint SelectLeastRecentlyUsedEndpoint(List<EndpointAvailability> endpoints, string routeScopeKey)
+        {
+            EndpointAvailability selected = endpoints[0];
+            long selectedSequence = GetLeastRecentlyUsedSequence(routeScopeKey, selected.Endpoint.Id);
+
+            for (int i = 1; i < endpoints.Count; i++)
+            {
+                EndpointAvailability candidate = endpoints[i];
+                long candidateSequence = GetLeastRecentlyUsedSequence(routeScopeKey, candidate.Endpoint.Id);
+                if (candidateSequence < selectedSequence)
+                {
+                    selected = candidate;
+                    selectedSequence = candidateSequence;
+                }
+            }
+
+            MarkLeastRecentlyUsedSelection(routeScopeKey, selected.Endpoint.Id);
+            return selected.Endpoint;
+        }
+
+        private static long GetLeastRecentlyUsedSequence(string routeScopeKey, string endpointId)
+        {
+            if (_LeastRecentlyUsedSelections.TryGetValue(BuildLeastRecentlyUsedKey(routeScopeKey, endpointId), out long sequence))
+            {
+                return sequence;
+            }
+
+            return 0;
+        }
+
+        private static void MarkLeastRecentlyUsedSelection(string routeScopeKey, string endpointId)
+        {
+            if (String.IsNullOrWhiteSpace(endpointId))
+            {
+                return;
+            }
+
+            long sequence = Interlocked.Increment(ref _LeastRecentlyUsedSequence);
+            _LeastRecentlyUsedSelections[BuildLeastRecentlyUsedKey(routeScopeKey, endpointId)] = sequence;
+        }
+
+        private static string BuildLeastRecentlyUsedKey(string routeScopeKey, string endpointId)
+        {
+            string scope = !String.IsNullOrWhiteSpace(routeScopeKey) ? routeScopeKey : _DefaultLeastRecentlyUsedScope;
+            return scope + "|" + (endpointId ?? String.Empty);
+        }
+
         private static void AddTimeline(RoutingDecision decision, string code, string title, string outcome, string message, Dictionary<string, string> attributes = null)
         {
             decision.Timeline.Add(new RoutingDecisionStage
@@ -1146,7 +1380,26 @@ namespace Conductor.Server.Services
             if (candidate != null)
             {
                 candidate.Selected = true;
+                if (candidate.AdaptiveScore != null)
+                {
+                    decision.SelectedAdaptiveScore = candidate.AdaptiveScore.Score;
+                }
+
+                if (candidate.RuntimeStats != null && candidate.RuntimeStats.BackoffActive && String.IsNullOrWhiteSpace(decision.BackoffReason))
+                {
+                    decision.BackoffReason = candidate.RuntimeStats.BackoffReason;
+                }
             }
+        }
+
+        private static string FindBackoffReason(RoutingDecision decision)
+        {
+            RoutingEndpointCandidate candidate = decision?.Candidates?.FirstOrDefault(item =>
+                String.Equals(item.ExclusionReasonCode, "EndpointInTransientBackoff", StringComparison.Ordinal)
+                && item.RuntimeStats != null
+                && !String.IsNullOrWhiteSpace(item.RuntimeStats.BackoffReason));
+
+            return candidate?.RuntimeStats?.BackoffReason;
         }
 
         private sealed class AvailabilitySummary

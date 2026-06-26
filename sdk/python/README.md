@@ -7,6 +7,7 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - explain-routing simulation
 - endpoint drain, resume, and quarantine actions
 - endpoint and virtual model runner model load or verification requests
+- VMR adaptive load-balancing configuration helpers through the VMR payload plus runtime stats, stats reset, and transient-backoff clear routes
 - Ollama endpoint model list, pull, and delete requests
 - model access policy CRUD, validation, evaluation, and effective-access queries
 - VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
@@ -130,6 +131,45 @@ vmr_load = client.load_virtual_model_runner_model(
     },
     tenant_id="tenant_123",
 )
+
+client.validate_virtual_model_runner({
+    "TenantId": "tenant_123",
+    "Name": "Adaptive production route",
+    "BasePath": "/v1.0/api/adaptive-production/",
+    "LoadBalancingMode": "Adaptive",
+    "ModelRunnerEndpointIds": ["mre_fast", "mre_fallback"],
+    "AdaptiveLoadBalancing": {
+        "SampleCount": 2,
+        "ExcludeBackoffEndpoints": True,
+        "BackoffBreaksSessionAffinity": True,
+    },
+    "EndpointGroups": [
+        {
+            "Id": "primary",
+            "Name": "Primary",
+            "Priority": 0,
+            "TrafficWeight": 100,
+            "EndpointIds": ["mre_fast"],
+        },
+        {
+            "Id": "fallback",
+            "Name": "Fallback",
+            "Priority": 1,
+            "TrafficWeight": 100,
+            "EndpointIds": ["mre_fallback"],
+        },
+    ],
+})
+runtime_stats = client.get_virtual_model_runner_runtime_stats("vmr_123", {
+    "tenantId": "tenant_123",
+})
+client.reset_virtual_model_runner_runtime_stats("vmr_123", {
+    "tenantId": "tenant_123",
+    "endpointId": "mre_fallback",
+})
+client.clear_virtual_model_runner_runtime_backoff("vmr_123", {
+    "tenantId": "tenant_123",
+})
 
 ollama_models = client.list_ollama_endpoint_models("mre_123", tenant_id="tenant_123")
 pull_result = client.pull_ollama_endpoint_model(

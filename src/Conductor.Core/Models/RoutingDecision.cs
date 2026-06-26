@@ -80,6 +80,51 @@ namespace Conductor.Core.Models
         public string SelectedEndpointUrl { get; set; } = null;
 
         /// <summary>
+        /// Selected endpoint group identifier when group routing applies.
+        /// </summary>
+        public string SelectedEndpointGroupId { get; set; } = null;
+
+        /// <summary>
+        /// Selected endpoint group display name when group routing applies.
+        /// </summary>
+        public string SelectedEndpointGroupName { get; set; } = null;
+
+        /// <summary>
+        /// Selected endpoint group priority when group routing applies.
+        /// </summary>
+        public int? SelectedEndpointGroupPriority { get; set; } = null;
+
+        /// <summary>
+        /// Traffic-split bucket selected for the route decision.
+        /// </summary>
+        public int? TrafficSplitBucket { get; set; } = null;
+
+        /// <summary>
+        /// Selection strategy used for the final endpoint decision.
+        /// </summary>
+        public string SelectionStrategy { get; set; } = null;
+
+        /// <summary>
+        /// Whether adaptive runtime scoring was used.
+        /// </summary>
+        public bool AdaptiveModeUsed { get; set; } = false;
+
+        /// <summary>
+        /// Number of endpoint candidates sampled for adaptive scoring.
+        /// </summary>
+        public int AdaptiveSampleCount { get; set; } = 0;
+
+        /// <summary>
+        /// Adaptive score for the selected endpoint, if adaptive scoring was used.
+        /// </summary>
+        public double? SelectedAdaptiveScore { get; set; } = null;
+
+        /// <summary>
+        /// Backoff reason associated with the selected or denied route, if any.
+        /// </summary>
+        public string BackoffReason { get; set; } = null;
+
+        /// <summary>
         /// Attached policy identifier, if any.
         /// </summary>
         public string LoadBalancingPolicyId { get; set; } = null;
@@ -305,6 +350,16 @@ namespace Conductor.Core.Models
         /// Aggregate policy score if ranking occurred.
         /// </summary>
         public double? PolicyScore { get; set; } = null;
+
+        /// <summary>
+        /// Adaptive score detail if runtime scoring occurred.
+        /// </summary>
+        public AdaptiveCandidateScore AdaptiveScore { get; set; } = null;
+
+        /// <summary>
+        /// Runtime statistics snapshot used during routing.
+        /// </summary>
+        public EndpointRuntimeStatsSnapshot RuntimeStats { get; set; } = null;
 
         /// <summary>
         /// Exclusion reason code when the endpoint was filtered out.
