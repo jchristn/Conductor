@@ -114,7 +114,7 @@ function Administrators() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this administrator',
-      width: '280px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

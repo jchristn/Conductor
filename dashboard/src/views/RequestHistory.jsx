@@ -612,7 +612,7 @@ function RequestHistory() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this request history entry',
-      width: '200px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

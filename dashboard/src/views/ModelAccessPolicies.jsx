@@ -353,7 +353,7 @@ function ModelAccessPolicies() {
     {
       key: 'Id',
       label: 'ID',
-      width: '250px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

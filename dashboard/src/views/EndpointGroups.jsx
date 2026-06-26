@@ -170,12 +170,6 @@ function EndpointGroups() {
 
   const columns = [
     {
-      key: 'Name',
-      label: 'Name',
-      width: '260px',
-      render: (group) => <strong className="endpoint-group-name-cell">{group.Name}</strong>
-    },
-    {
       key: 'Id',
       label: 'ID',
       width: '340px',
@@ -184,6 +178,12 @@ function EndpointGroups() {
           <CopyableId value={group.Id} />
         </span>
       )
+    },
+    {
+      key: 'Name',
+      label: 'Name',
+      width: '260px',
+      render: (group) => <strong className="endpoint-group-name-cell">{group.Name}</strong>
     },
     {
       key: 'TenantId',

@@ -199,7 +199,7 @@ function ModelConfigurations() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this configuration',
-      width: '280px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

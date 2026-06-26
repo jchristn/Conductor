@@ -386,6 +386,7 @@ body {
   background: var(--card-bg);
   border-radius: 8px;
   border: 1px solid var(--border-color);
+  overflow-x: auto;
 }
 
 .data-table {
@@ -474,6 +475,14 @@ body {
   max-width: 100%;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.data-table .copyable-id,
+.data-table .copyable-id .id-cell {
+  max-width: none;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
 }
 
 .copyable-id {

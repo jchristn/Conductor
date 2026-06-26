@@ -164,7 +164,7 @@ function Credentials() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this credential',
-      width: '280px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

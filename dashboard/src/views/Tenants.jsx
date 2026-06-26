@@ -126,7 +126,7 @@ function Tenants() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this tenant',
-      width: '300px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

@@ -158,7 +158,7 @@ function Users() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this user',
-      width: '280px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

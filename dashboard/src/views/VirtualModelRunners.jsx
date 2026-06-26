@@ -708,7 +708,7 @@ function VirtualModelRunners() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this virtual model runner',
-      width: '280px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {

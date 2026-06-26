@@ -180,7 +180,7 @@ function ModelDefinitions() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this model definition',
-      width: '280px',
+      width: '340px',
       render: (item) => <CopyableId value={item.Id} />
     },
     {
