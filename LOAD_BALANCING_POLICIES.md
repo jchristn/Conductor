@@ -95,6 +95,19 @@ Key VMR fields:
 
 Runtime stats are in-memory and can be inspected or cleared through the VMR runtime routes. Request history and explain-routing responses include strategy, group, selected score, fallback, and backoff evidence when available.
 
+## Operational runbooks
+
+Use these short runbooks when adaptive routing needs operator action:
+
+| Situation | Checks | Action |
+| --- | --- | --- |
+| Rate-limit backoff is active | Open VMR runtime stats and check `BackoffReason`, `BackoffUntilUtc`, and recent `429` history. | Reduce traffic to the provider group, increase provider quota, or wait for expiry. Use runtime backoff clear only after the upstream is ready to receive traffic again. |
+| All endpoints are backed off | Use explain-routing to confirm `AllEndpointsInTransientBackoff` and inspect per-candidate backoff evidence. | Add healthy capacity, switch the VMR to a compatibility mode temporarily, or clear backoff after validating the upstream issue is resolved. |
+| Adaptive rollout | Start with a small endpoint group or low-traffic VMR, keep request history enabled, and watch selected score, latency, error EWMA, pending count, and backoff reason facets. | Expand to more VMRs only after runtime stats and request history show stable behavior. |
+| Canary or migration split | Put stable and canary endpoints in the same priority level with explicit `TrafficWeight` values. | Increase the canary weight in small steps and use request-history group facets to confirm observed distribution. |
+| Priority fallback | Confirm the primary group has active, normal, healthy, under-capacity endpoints. | If fallback is unexpected, inspect health, capacity, service state, group active flags, and endpoint membership before changing traffic weights. |
+| Revert to compatibility routing | Record the current adaptive settings, then switch `LoadBalancingMode` to `RoundRobin`, `Random`, `FirstAvailable`, or `LeastRecentlyUsed`. | Keep endpoint groups only if the same grouping behavior is still desired; otherwise clear `EndpointGroups` to return to the attached endpoint list. |
+
 ## Top-level policy JSON
 
 Send policies to `/v1.0/loadbalancingpolicies` as normal JSON objects.
