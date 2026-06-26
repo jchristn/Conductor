@@ -385,11 +385,17 @@ function Reservations() {
     {
       key: 'Name',
       label: 'Reservation',
+      width: '220px',
+      render: (item) => <strong className="reservation-name-cell">{item.Name}</strong>
+    },
+    {
+      key: 'Id',
+      label: 'ID',
+      width: '340px',
       render: (item) => (
-        <div>
-          <strong>{item.Name}</strong>
+        <span className="reservation-id-cell">
           <CopyableId value={item.Id} />
-        </div>
+        </span>
       )
     },
     {
@@ -417,11 +423,13 @@ function Reservations() {
       key: 'Subjects',
       label: 'Participants',
       sortable: false,
-      render: (item) => subjectSummary(item.Subjects, usersById, credentialsById)
+      width: '96px',
+      render: (item) => (item.Subjects || []).length
     },
     {
       key: 'State',
       label: 'State',
+      width: '108px',
       sortValue: (item) => reservationState(item).label,
       render: (item) => {
         const state = reservationState(item);
@@ -431,12 +439,16 @@ function Reservations() {
     {
       key: 'Active',
       label: 'Enabled',
+      width: '92px',
       render: (item) => <StatusIndicator active={item.Active} />
     },
     {
       key: 'actions',
       label: 'Actions',
+      width: '80px',
       sortable: false,
+      filterable: false,
+      isAction: true,
       render: (item) => (
         <ActionMenu
           actions={[
@@ -499,7 +511,9 @@ function Reservations() {
         </div>
       </div>
 
-      <DataTable data={filteredReservations} columns={columns} loading={loading} onRowClick={handleEdit} />
+      <div className="reservations-table">
+        <DataTable data={filteredReservations} columns={columns} loading={loading} onRowClick={handleEdit} />
+      </div>
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Reservation' : 'Create Reservation'} extraWide>
         <form onSubmit={handleSubmit}>

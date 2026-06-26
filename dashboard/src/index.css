@@ -1159,6 +1159,27 @@ body {
   word-break: normal;
 }
 
+.reservations-table .data-table {
+  table-layout: auto;
+}
+
+.reservation-name-cell {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reservation-id-cell,
+.reservation-id-cell .copyable-id,
+.reservation-id-cell .id-cell {
+  max-width: none;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
+}
+
 .text-muted {
   color: var(--text-secondary);
 }
