@@ -172,11 +172,17 @@ function EndpointGroups() {
     {
       key: 'Name',
       label: 'Name',
+      width: '260px',
+      render: (group) => <strong className="endpoint-group-name-cell">{group.Name}</strong>
+    },
+    {
+      key: 'Id',
+      label: 'ID',
+      width: '340px',
       render: (group) => (
-        <div>
-          <strong>{group.Name}</strong>
-          <div className="text-muted"><CopyableId value={group.Id} /></div>
-        </div>
+        <span className="endpoint-group-id-cell">
+          <CopyableId value={group.Id} />
+        </span>
       )
     },
     {
@@ -187,27 +193,34 @@ function EndpointGroups() {
     {
       key: 'Priority',
       label: 'Priority',
+      width: '84px',
       render: (group) => group.Priority ?? 0
     },
     {
       key: 'TrafficWeight',
       label: 'Weight',
+      width: '84px',
       render: (group) => group.TrafficWeight ?? 0
     },
     {
       key: 'EndpointIds',
       label: 'Endpoints',
+      width: '96px',
       render: (group) => (group.EndpointIds || []).length
     },
     {
       key: 'Active',
       label: 'Status',
+      width: '104px',
       render: (group) => <span className={`service-state-badge ${group.Active === false ? 'danger' : 'success'}`}>{group.Active === false ? 'Inactive' : 'Active'}</span>
     },
     {
       key: 'actions',
       label: 'Actions',
+      width: '80px',
       sortable: false,
+      filterable: false,
+      isAction: true,
       render: (group) => (
         <ActionMenu
           actions={[
@@ -230,7 +243,9 @@ function EndpointGroups() {
         <button className="btn-primary" onClick={handleCreate}>Create Group</button>
       </div>
 
-      <DataTable data={groups} columns={columns} loading={loading} onRowClick={handleEdit} />
+      <div className="endpoint-groups-table">
+        <DataTable data={groups} columns={columns} loading={loading} onRowClick={handleEdit} />
+      </div>
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Endpoint Group' : 'Create Endpoint Group'} wide>
         <form onSubmit={handleSubmit}>

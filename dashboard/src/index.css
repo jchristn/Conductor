@@ -1130,6 +1130,27 @@ body {
   min-width: 0;
 }
 
+.endpoint-groups-table .data-table {
+  table-layout: auto;
+}
+
+.endpoint-group-name-cell {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.endpoint-group-id-cell,
+.endpoint-group-id-cell .copyable-id,
+.endpoint-group-id-cell .id-cell {
+  max-width: none;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
+}
+
 .text-muted {
   color: var(--text-secondary);
 }
@@ -1241,6 +1262,28 @@ body {
   font-size: 12px;
   color: var(--text-secondary);
   font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.endpoint-group-item {
+  gap: 8px;
+}
+
+.endpoint-group-item .endpoint-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.endpoint-group-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 /* Load Model */

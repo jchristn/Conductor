@@ -1195,7 +1195,7 @@ function VirtualModelRunners() {
             ) : endpointGroups.filter((group) => group.TenantId === formData.TenantId).length < 1 ? (
               <p className="no-items">No endpoint groups are available for this tenant.</p>
             ) : (
-              <div className="explain-candidate-list">
+              <div className="endpoint-list">
                 {endpointGroups
                   .filter((group) => group.TenantId === formData.TenantId)
                   .map((group) => {
@@ -1204,20 +1204,18 @@ function VirtualModelRunners() {
                       .map((endpointId) => endpoints.find((endpoint) => endpoint.Id === endpointId)?.Name || endpointId)
                       .join(', ');
                     return (
-                      <label className="explain-candidate-card endpoint-group-select-card" key={group.Id}>
+                      <label className="endpoint-item endpoint-group-item" key={group.Id}>
                         <input type="checkbox" checked={selected} onChange={() => handleEndpointGroupToggle(group)} />
-                        <div className="endpoint-group-select-main">
-                          <div className="explain-candidate-header">
-                            <strong>{group.Name || group.Id}</strong>
-                            <span className={`service-state-badge ${group.Active === false ? 'danger' : 'success'}`}>
-                              {group.Active === false ? 'Inactive' : 'Active'}
-                            </span>
-                          </div>
-                          <div className="text-muted">
-                            Priority {group.Priority ?? 0} &middot; Weight {group.TrafficWeight ?? 0} &middot; {(group.EndpointIds || []).length} endpoint(s)
-                          </div>
-                          <div className="text-muted">{groupEndpoints || 'No endpoints assigned.'}</div>
-                        </div>
+                        <span className="endpoint-name">{group.Name || group.Id}</span>
+                        <span className="endpoint-url">{groupEndpoints || 'No endpoints assigned.'}</span>
+                        <span className="endpoint-group-summary">
+                          Priority {group.Priority ?? 0}
+                          <span>Weight {group.TrafficWeight ?? 0}</span>
+                          <span>{(group.EndpointIds || []).length} endpoint(s)</span>
+                          <span className={`service-state-badge ${group.Active === false ? 'danger' : 'success'}`}>
+                            {group.Active === false ? 'Inactive' : 'Active'}
+                          </span>
+                        </span>
                       </label>
                     );
                   })}
