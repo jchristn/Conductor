@@ -637,8 +637,12 @@ function ModelRunnerEndpoints() {
       key: 'Id',
       label: 'ID',
       tooltip: 'Unique identifier for this endpoint',
-      width: '280px',
-      render: (item) => <CopyableId value={item.Id} />
+      width: '340px',
+      render: (item) => (
+        <span className="model-runner-endpoint-id-cell">
+          <CopyableId value={item.Id} />
+        </span>
+      )
     },
     {
       key: 'Name',
@@ -679,9 +683,9 @@ function ModelRunnerEndpoints() {
     },
       {
         key: 'ServiceState',
-        label: 'Service State',
+        label: 'State',
         tooltip: 'Operator-managed routing state for this endpoint: normal, draining, or quarantined',
-        width: '130px',
+        width: '104px',
         render: (item) => {
           const presentation = getServiceStatePresentation(getEffectiveServiceState(item));
           return (
@@ -693,10 +697,10 @@ function ModelRunnerEndpoints() {
         filterValue: (item) => normalizeServiceState(getEffectiveServiceState(item)).toLowerCase()
       },
       {
-        key: 'Active',
-        label: 'Status',
-        tooltip: 'Whether this endpoint is enabled for use in load balancing',
-      width: '100px',
+      key: 'Active',
+      label: 'Status',
+      tooltip: 'Whether this endpoint is enabled for use in load balancing',
+      width: '82px',
       render: (item) => (
         <span title={item.Active ? 'Endpoint is enabled and available for routing' : 'Endpoint is disabled and excluded from routing'}>
           <StatusIndicator active={item.Active} />
@@ -746,7 +750,7 @@ function ModelRunnerEndpoints() {
       key: 'Uptime',
       label: 'Uptime',
       tooltip: 'Percentage of time this endpoint has been healthy since monitoring started',
-      width: '90px',
+      width: '72px',
       render: (item) => {
         const h = healthData[item.Id];
         if (!h || !item.Active) return <span style={{ color: 'var(--text-secondary)' }} title="No uptime data available">-</span>;
@@ -772,7 +776,7 @@ function ModelRunnerEndpoints() {
     {
       key: 'actions',
       label: 'Actions',
-      width: '80px',
+      width: '72px',
       sortable: false,
       filterable: false,
       isAction: true,
@@ -853,7 +857,9 @@ function ModelRunnerEndpoints() {
         </div>
       )}
 
-      <DataTable data={endpoints} columns={columns} loading={loading} onRowClick={handleEdit} />
+      <div className="model-runner-endpoints-table">
+        <DataTable data={endpoints} columns={columns} loading={loading} onRowClick={handleEdit} />
+      </div>
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Endpoint' : 'Create Endpoint'} wide>
         <form onSubmit={handleSubmit}>

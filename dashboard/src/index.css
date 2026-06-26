@@ -1180,6 +1180,19 @@ body {
   word-break: normal;
 }
 
+.model-runner-endpoints-table .data-table {
+  table-layout: auto;
+}
+
+.model-runner-endpoint-id-cell,
+.model-runner-endpoint-id-cell .copyable-id,
+.model-runner-endpoint-id-cell .id-cell {
+  max-width: none;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  word-break: normal;
+}
+
 .text-muted {
   color: var(--text-secondary);
 }
