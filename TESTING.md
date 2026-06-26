@@ -129,17 +129,25 @@ Push-Location sdk\csharp; dotnet test --no-restore --no-build; Pop-Location
 Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null
 ```
 
-Focused shared tests for `LeastRecentlyUsed` live in:
+Focused shared tests for `LeastRecentlyUsed` and adaptive load balancing live in:
 
 - `src/Test.Shared/Core/Enums/EnumTests.cs`
 - `src/Test.Shared/Server/Services/RoutingDecisionServiceTests.cs`
+- `src/Test.Shared/Server/Services/EndpointRuntimeStatsServiceTests.cs`
+- `src/Test.Shared/Server/Services/ConfigurationValidationServiceTests.cs`
+- `src/Test.Shared/Core/Database/RequestHistorySchemaTests.cs`
+- `src/Test.Shared/Core/Database/RequestHistorySecurityTests.cs`
+- `src/Test.Shared/Server/Integration/DatabaseMigrationTests.cs`
 
 Manual dashboard checks:
 
 - Create a VMR and confirm `Least Recently Used` appears in the same load-balancing mode control as the existing values.
+- Create or edit a VMR with `Adaptive`, endpoint groups, and traffic weights; confirm validation feedback appears inline and the save payload preserves the configured values.
+- Open runtime stats from the VMR row, confirm loading and empty states, then verify reset stats and clear backoff both require confirmation.
+- Use explain-routing and request-history detail with adaptive evidence present; confirm strategy, endpoint group, score, fallback, and backoff fields are readable.
 - Edit an existing VMR, switch to `Least Recently Used`, save, reopen, and confirm the value persists without changing unrelated fields.
 - Cancel an edit after changing the load-balancing mode and confirm the original value is retained.
-- Verify the create/edit modal at 1280px, 768px, and 390px so the selector, labels, validation messages, and action buttons do not overlap or wrap awkwardly.
+- Verify the create/edit modal, runtime stats modal, explain-routing panel, and request-history filters/detail at 1440px, 1280px, 768px, and 390px so labels, badges, validation messages, tables, and action buttons do not overlap or wrap awkwardly.
 
 ## Model Access Release Gate
 

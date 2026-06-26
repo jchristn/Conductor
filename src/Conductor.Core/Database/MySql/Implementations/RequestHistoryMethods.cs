@@ -36,7 +36,8 @@ namespace Conductor.Core.Database.MySql.Implementations
                            "requestoruserguid, requestoruseremail, credentialguid, credentialname, loadbalancingpolicyguid, loadbalancingpolicyname, " +
                            "modelaccesspolicyguid, modelaccesspolicyname, modelaccessruleguid, modelaccessrulename, modelaccessdecision, modelaccesswoulddeny, " +
                            "modelendpointguid, modelendpointname, modelendpointurl, modeldefinitionguid, modeldefinitionname, " +
-                           "modelconfigurationguid, requestedmodel, effectivemodel, requesttype, routingoutcomecode, denialreasoncode, denialreason, " +
+                           "modelconfigurationguid, requestedmodel, effectivemodel, requesttype, routingoutcomecode, selectionstrategy, endpointgroupguid, endpointgroupname, " +
+                           "backoffreason, adaptiveselection, policyfallbackused, denialreasoncode, denialreason, " +
                            "reservationguid, reservationname, reservationdecision, reservationreasoncode, reservationwindowstartutc, reservationwindowendutc, " +
                            "sessionaffinityoutcome, mutationsummary, explanationsummary, requestbodyretained, requestbodyredacted, requestheadersredacted, " +
                            "responsebodyretained, responsebodyredacted, responseheadersredacted, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
@@ -69,6 +70,12 @@ namespace Conductor.Core.Database.MySql.Implementations
                            _Driver.FormatNullableString(entry.EffectiveModel) + ", " +
                            _Driver.FormatNullableString(entry.RequestType) + ", " +
                            _Driver.FormatNullableString(entry.RoutingOutcomeCode) + ", " +
+                           _Driver.FormatNullableString(entry.SelectionStrategy) + ", " +
+                           _Driver.FormatNullableString(entry.EndpointGroupGuid) + ", " +
+                           _Driver.FormatNullableString(entry.EndpointGroupName) + ", " +
+                           _Driver.FormatNullableString(entry.BackoffReason) + ", " +
+                           _Driver.FormatBoolean(entry.AdaptiveSelection) + ", " +
+                           _Driver.FormatBoolean(entry.PolicyFallbackUsed) + ", " +
                            _Driver.FormatNullableString(entry.DenialReasonCode) + ", " +
                            _Driver.FormatNullableString(entry.DenialReason) + ", " +
                            _Driver.FormatNullableString(entry.ReservationGuid) + ", " +
@@ -147,6 +154,12 @@ namespace Conductor.Core.Database.MySql.Implementations
                            "effectivemodel = " + _Driver.FormatNullableString(entry.EffectiveModel) + ", " +
                            "requesttype = " + _Driver.FormatNullableString(entry.RequestType) + ", " +
                            "routingoutcomecode = " + _Driver.FormatNullableString(entry.RoutingOutcomeCode) + ", " +
+                           "selectionstrategy = " + _Driver.FormatNullableString(entry.SelectionStrategy) + ", " +
+                           "endpointgroupguid = " + _Driver.FormatNullableString(entry.EndpointGroupGuid) + ", " +
+                           "endpointgroupname = " + _Driver.FormatNullableString(entry.EndpointGroupName) + ", " +
+                           "backoffreason = " + _Driver.FormatNullableString(entry.BackoffReason) + ", " +
+                           "adaptiveselection = " + _Driver.FormatBoolean(entry.AdaptiveSelection) + ", " +
+                           "policyfallbackused = " + _Driver.FormatBoolean(entry.PolicyFallbackUsed) + ", " +
                            "denialreasoncode = " + _Driver.FormatNullableString(entry.DenialReasonCode) + ", " +
                            "denialreason = " + _Driver.FormatNullableString(entry.DenialReason) + ", " +
                            "reservationguid = " + _Driver.FormatNullableString(entry.ReservationGuid) + ", " +
@@ -381,13 +394,28 @@ namespace Conductor.Core.Database.MySql.Implementations
                                        "FROM requesthistory " + whereClause + " GROUP BY COALESCE(NULLIF(denialreasoncode, ''), 'None');";
             string sessionOutcomeQuery = "SELECT COALESCE(NULLIF(sessionaffinityoutcome, ''), 'None') AS bucket_key, COUNT(*) AS bucket_count " +
                                          "FROM requesthistory " + whereClause + " GROUP BY COALESCE(NULLIF(sessionaffinityoutcome, ''), 'None');";
+            string selectionStrategyQuery = "SELECT COALESCE(NULLIF(selectionstrategy, ''), 'None') AS bucket_key, COUNT(*) AS bucket_count " +
+                                            "FROM requesthistory " + whereClause + " GROUP BY COALESCE(NULLIF(selectionstrategy, ''), 'None');";
+            string endpointGroupQuery = "SELECT COALESCE(NULLIF(endpointgroupname, ''), COALESCE(NULLIF(endpointgroupguid, ''), 'None')) AS bucket_key, COUNT(*) AS bucket_count " +
+                                        "FROM requesthistory " + whereClause + " GROUP BY COALESCE(NULLIF(endpointgroupname, ''), COALESCE(NULLIF(endpointgroupguid, ''), 'None'));";
+            string backoffReasonQuery = "SELECT COALESCE(NULLIF(backoffreason, ''), 'None') AS bucket_key, COUNT(*) AS bucket_count " +
+                                        "FROM requesthistory " + whereClause + " GROUP BY COALESCE(NULLIF(backoffreason, ''), 'None');";
+            string adaptiveSelectionQuery = "SELECT COALESCE(SUM(CASE WHEN adaptiveselection = " + _Driver.FormatBoolean(true) + " THEN 1 ELSE 0 END), 0) AS bucket_count " +
+                                            "FROM requesthistory " + whereClause + ";";
+            string policyFallbackQuery = "SELECT COALESCE(SUM(CASE WHEN policyfallbackused = " + _Driver.FormatBoolean(true) + " THEN 1 ELSE 0 END), 0) AS bucket_count " +
+                                         "FROM requesthistory " + whereClause + ";";
 
             Task<DataTable> bucketTask = _Driver.ExecuteQueryAsync(query, false, token);
             Task<DataTable> statusTask = _Driver.ExecuteQueryAsync(statusClassQuery, false, token);
             Task<DataTable> denialTask = _Driver.ExecuteQueryAsync(denialReasonQuery, false, token);
             Task<DataTable> sessionTask = _Driver.ExecuteQueryAsync(sessionOutcomeQuery, false, token);
+            Task<DataTable> selectionStrategyTask = _Driver.ExecuteQueryAsync(selectionStrategyQuery, false, token);
+            Task<DataTable> endpointGroupTask = _Driver.ExecuteQueryAsync(endpointGroupQuery, false, token);
+            Task<DataTable> backoffReasonTask = _Driver.ExecuteQueryAsync(backoffReasonQuery, false, token);
+            Task<DataTable> adaptiveSelectionTask = _Driver.ExecuteQueryAsync(adaptiveSelectionQuery, false, token);
+            Task<DataTable> policyFallbackTask = _Driver.ExecuteQueryAsync(policyFallbackQuery, false, token);
 
-            await Task.WhenAll(bucketTask, statusTask, denialTask, sessionTask).ConfigureAwait(false);
+            await Task.WhenAll(bucketTask, statusTask, denialTask, sessionTask, selectionStrategyTask, endpointGroupTask, backoffReasonTask, adaptiveSelectionTask, policyFallbackTask).ConfigureAwait(false);
 
             List<RequestHistorySummaryBucket> buckets = RequestHistorySummaryBucket.FromDataTable(bucketTask.Result) ?? new List<RequestHistorySummaryBucket>();
 
@@ -409,7 +437,12 @@ namespace Conductor.Core.Database.MySql.Implementations
                 TotalFailure = totalFailure,
                 StatusClassCounts = ReadBucketCounts(statusTask.Result),
                 DenialReasonCounts = ReadBucketCounts(denialTask.Result),
-                SessionAffinityOutcomeCounts = ReadBucketCounts(sessionTask.Result)
+                SessionAffinityOutcomeCounts = ReadBucketCounts(sessionTask.Result),
+                SelectionStrategyCounts = ReadBucketCounts(selectionStrategyTask.Result),
+                EndpointGroupCounts = ReadBucketCounts(endpointGroupTask.Result),
+                BackoffReasonCounts = ReadBucketCounts(backoffReasonTask.Result),
+                AdaptiveSelectionCount = ReadSingleCount(adaptiveSelectionTask.Result),
+                PolicyFallbackCount = ReadSingleCount(policyFallbackTask.Result)
             };
         }
 
@@ -466,6 +499,26 @@ namespace Conductor.Core.Database.MySql.Implementations
             {
                 string mutationSummary = _Driver.Sanitize(filter.MutationSummary).ToLowerInvariant();
                 conditions.Add("LOWER(COALESCE(mutationsummary, '')) LIKE '%" + mutationSummary + "%'");
+            }
+            if (!String.IsNullOrEmpty(filter.SelectionStrategy))
+            {
+                conditions.Add("selectionstrategy = '" + _Driver.Sanitize(filter.SelectionStrategy) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.EndpointGroupGuid))
+            {
+                conditions.Add("endpointgroupguid = '" + _Driver.Sanitize(filter.EndpointGroupGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.BackoffReason))
+            {
+                conditions.Add("backoffreason = '" + _Driver.Sanitize(filter.BackoffReason) + "'");
+            }
+            if (filter.AdaptiveSelection.HasValue)
+            {
+                conditions.Add("adaptiveselection = " + _Driver.FormatBoolean(filter.AdaptiveSelection.Value));
+            }
+            if (filter.PolicyFallbackUsed.HasValue)
+            {
+                conditions.Add("policyfallbackused = " + _Driver.FormatBoolean(filter.PolicyFallbackUsed.Value));
             }
             if (!String.IsNullOrEmpty(filter.DenialReasonCode))
             {
@@ -571,6 +624,26 @@ namespace Conductor.Core.Database.MySql.Implementations
                 string mutationSummary = _Driver.Sanitize(filter.MutationSummary).ToLowerInvariant();
                 conditions.Add("LOWER(COALESCE(mutationsummary, '')) LIKE '%" + mutationSummary + "%'");
             }
+            if (!String.IsNullOrEmpty(filter.SelectionStrategy))
+            {
+                conditions.Add("selectionstrategy = '" + _Driver.Sanitize(filter.SelectionStrategy) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.EndpointGroupGuid))
+            {
+                conditions.Add("endpointgroupguid = '" + _Driver.Sanitize(filter.EndpointGroupGuid) + "'");
+            }
+            if (!String.IsNullOrEmpty(filter.BackoffReason))
+            {
+                conditions.Add("backoffreason = '" + _Driver.Sanitize(filter.BackoffReason) + "'");
+            }
+            if (filter.AdaptiveSelection.HasValue)
+            {
+                conditions.Add("adaptiveselection = " + _Driver.FormatBoolean(filter.AdaptiveSelection.Value));
+            }
+            if (filter.PolicyFallbackUsed.HasValue)
+            {
+                conditions.Add("policyfallbackused = " + _Driver.FormatBoolean(filter.PolicyFallbackUsed.Value));
+            }
             if (!String.IsNullOrEmpty(filter.DenialReasonCode))
             {
                 conditions.Add("denialreasoncode = '" + _Driver.Sanitize(filter.DenialReasonCode) + "'");
@@ -673,6 +746,17 @@ namespace Conductor.Core.Database.MySql.Implementations
             }
 
             return counts;
+        }
+
+        private static long ReadSingleCount(DataTable table)
+        {
+            if (table == null || table.Rows.Count < 1 || !table.Columns.Contains("bucket_count"))
+            {
+                return 0;
+            }
+
+            object value = table.Rows[0]["bucket_count"];
+            return value == null || value == DBNull.Value ? 0 : Convert.ToInt64(value);
         }
     }
 }

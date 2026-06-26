@@ -124,6 +124,51 @@ function getDefaultExplainRequest(apiType) {
   }
 }
 
+function createDefaultAdaptiveLoadBalancing() {
+  return {
+    SampleCount: 2,
+    ColdStartScore: 60,
+    EwmaAlpha: 0.2,
+    BackoffBaseMs: 30000,
+    BackoffMaxMs: 300000,
+    FailureThreshold: 3,
+    ExcludeBackoffEndpoints: true,
+    BackoffBreaksSessionAffinity: true,
+    Weights: {
+      Success: 35,
+      Latency: 25,
+      TimeToFirstToken: 15,
+      Pending: 15,
+      EndpointWeight: 10
+    }
+  };
+}
+
+function normalizeAdaptiveLoadBalancing(value) {
+  return {
+    ...createDefaultAdaptiveLoadBalancing(),
+    ...(value || {}),
+    Weights: {
+      ...createDefaultAdaptiveLoadBalancing().Weights,
+      ...((value || {}).Weights || {})
+    }
+  };
+}
+
+function createEndpointGroup(index = 0) {
+  return {
+    Id: `group-${Date.now()}-${index}`,
+    Name: index === 0 ? 'Primary' : `Group ${index + 1}`,
+    Priority: index,
+    Active: true,
+    TrafficWeight: 100,
+    EndpointIds: [],
+    Labels: [],
+    Tags: {},
+    Metadata: null
+  };
+}
+
 function VirtualModelRunners() {
   const { api, setError, serverUrl } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
@@ -147,6 +192,9 @@ function VirtualModelRunners() {
   const [showHealth, setShowHealth] = useState(false);
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(false);
+  const [showRuntimeStats, setShowRuntimeStats] = useState(false);
+  const [runtimeStatsData, setRuntimeStatsData] = useState(null);
+  const [runtimeStatsLoading, setRuntimeStatsLoading] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [validationLoading, setValidationLoading] = useState(false);
   const [showEffective, setShowEffective] = useState(false);
@@ -166,6 +214,8 @@ function VirtualModelRunners() {
     LoadBalancingPolicyId: '',
     ModelAccessPolicyId: '',
     ModelRunnerEndpointIds: [],
+    AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
+    EndpointGroups: [],
     ModelConfigurationIds: [],
     ModelDefinitionIds: [],
     ModelConfigurationMappingsJson: '{}',
@@ -236,6 +286,8 @@ function VirtualModelRunners() {
       LoadBalancingPolicyId: '',
       ModelAccessPolicyId: '',
       ModelRunnerEndpointIds: [],
+      AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
+      EndpointGroups: [],
       ModelConfigurationIds: [],
       ModelDefinitionIds: [],
       ModelConfigurationMappingsJson: '{}',
@@ -270,6 +322,8 @@ function VirtualModelRunners() {
       LoadBalancingPolicyId: vmr.LoadBalancingPolicyId || '',
       ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
+      AdaptiveLoadBalancing: normalizeAdaptiveLoadBalancing(vmr.AdaptiveLoadBalancing),
+      EndpointGroups: vmr.EndpointGroups || [],
       ModelConfigurationIds: vmr.ModelConfigurationIds || [],
       ModelDefinitionIds: vmr.ModelDefinitionIds || [],
       ModelConfigurationMappingsJson: JSON.stringify(vmr.ModelConfigurationMappings || {}, null, 2),
@@ -342,6 +396,28 @@ function VirtualModelRunners() {
       LoadBalancingPolicyId: formData.LoadBalancingPolicyId || null,
       ModelAccessPolicyId: formData.ModelAccessPolicyId || null,
       ModelRunnerEndpointIds: formData.ModelRunnerEndpointIds,
+      AdaptiveLoadBalancing: {
+        ...formData.AdaptiveLoadBalancing,
+        SampleCount: parseInt(formData.AdaptiveLoadBalancing.SampleCount),
+        ColdStartScore: parseFloat(formData.AdaptiveLoadBalancing.ColdStartScore),
+        EwmaAlpha: parseFloat(formData.AdaptiveLoadBalancing.EwmaAlpha),
+        BackoffBaseMs: parseInt(formData.AdaptiveLoadBalancing.BackoffBaseMs),
+        BackoffMaxMs: parseInt(formData.AdaptiveLoadBalancing.BackoffMaxMs),
+        FailureThreshold: parseInt(formData.AdaptiveLoadBalancing.FailureThreshold),
+        Weights: {
+          Success: parseFloat(formData.AdaptiveLoadBalancing.Weights.Success),
+          Latency: parseFloat(formData.AdaptiveLoadBalancing.Weights.Latency),
+          TimeToFirstToken: parseFloat(formData.AdaptiveLoadBalancing.Weights.TimeToFirstToken),
+          Pending: parseFloat(formData.AdaptiveLoadBalancing.Weights.Pending),
+          EndpointWeight: parseFloat(formData.AdaptiveLoadBalancing.Weights.EndpointWeight)
+        }
+      },
+      EndpointGroups: (formData.EndpointGroups || []).map((group) => ({
+        ...group,
+        Priority: parseInt(group.Priority),
+        TrafficWeight: parseInt(group.TrafficWeight),
+        EndpointIds: group.EndpointIds || []
+      })),
       ModelConfigurationIds: formData.ModelConfigurationIds,
       ModelDefinitionIds: formData.ModelDefinitionIds,
       ModelConfigurationMappings: modelConfigurationMappings,
@@ -461,6 +537,58 @@ function VirtualModelRunners() {
     }
   };
 
+  const loadRuntimeStats = async (vmr) => {
+    setRuntimeStatsLoading(true);
+    try {
+      const result = await api.getVirtualModelRunnerRuntimeStats(vmr.Id, { tenantId: vmr.TenantId });
+      setRuntimeStatsData(result);
+    } catch (err) {
+      setError('Failed to fetch runtime stats: ' + err.message);
+      setRuntimeStatsData(null);
+    } finally {
+      setRuntimeStatsLoading(false);
+    }
+  };
+
+  const handleViewRuntimeStats = async (vmr) => {
+    setSelectedVmr(vmr);
+    setShowRuntimeStats(true);
+    await loadRuntimeStats(vmr);
+  };
+
+  const refreshRuntimeStats = async () => {
+    if (!selectedVmr) return;
+    await loadRuntimeStats(selectedVmr);
+  };
+
+  const resetRuntimeStats = async () => {
+    if (!selectedVmr) return;
+    if (!window.confirm('Reset runtime statistics for this virtual model runner?')) return;
+    setRuntimeStatsLoading(true);
+    try {
+      const result = await api.resetVirtualModelRunnerRuntimeStats(selectedVmr.Id, { tenantId: selectedVmr.TenantId });
+      setRuntimeStatsData(result);
+    } catch (err) {
+      setError('Failed to reset runtime stats: ' + err.message);
+    } finally {
+      setRuntimeStatsLoading(false);
+    }
+  };
+
+  const clearRuntimeBackoff = async () => {
+    if (!selectedVmr) return;
+    if (!window.confirm('Clear transient backoff state for this virtual model runner?')) return;
+    setRuntimeStatsLoading(true);
+    try {
+      const result = await api.clearVirtualModelRunnerRuntimeBackoff(selectedVmr.Id, { tenantId: selectedVmr.TenantId });
+      setRuntimeStatsData(result);
+    } catch (err) {
+      setError('Failed to clear runtime backoff: ' + err.message);
+    } finally {
+      setRuntimeStatsLoading(false);
+    }
+  };
+
   const formatDuration = (ms) => {
     if (!ms) return '-';
     const seconds = Math.floor(ms / 1000);
@@ -504,7 +632,11 @@ function VirtualModelRunners() {
     if (current.includes(endpointId)) {
       setFormData({
         ...formData,
-        ModelRunnerEndpointIds: current.filter((id) => id !== endpointId)
+        ModelRunnerEndpointIds: current.filter((id) => id !== endpointId),
+        EndpointGroups: (formData.EndpointGroups || []).map((group) => ({
+          ...group,
+          EndpointIds: (group.EndpointIds || []).filter((id) => id !== endpointId)
+        }))
       });
     } else {
       setFormData({
@@ -512,6 +644,62 @@ function VirtualModelRunners() {
         ModelRunnerEndpointIds: [...current, endpointId]
       });
     }
+  };
+
+  const updateAdaptiveSetting = (field, value) => {
+    setFormData({
+      ...formData,
+      AdaptiveLoadBalancing: {
+        ...formData.AdaptiveLoadBalancing,
+        [field]: value
+      }
+    });
+  };
+
+  const updateAdaptiveWeight = (field, value) => {
+    setFormData({
+      ...formData,
+      AdaptiveLoadBalancing: {
+        ...formData.AdaptiveLoadBalancing,
+        Weights: {
+          ...formData.AdaptiveLoadBalancing.Weights,
+          [field]: value
+        }
+      }
+    });
+  };
+
+  const addEndpointGroup = () => {
+    const nextGroups = [...(formData.EndpointGroups || []), createEndpointGroup((formData.EndpointGroups || []).length)];
+    setFormData({ ...formData, EndpointGroups: nextGroups });
+  };
+
+  const updateEndpointGroup = (index, patch) => {
+    const nextGroups = (formData.EndpointGroups || []).map((group, groupIndex) =>
+      groupIndex === index ? { ...group, ...patch } : group
+    );
+    setFormData({ ...formData, EndpointGroups: nextGroups });
+  };
+
+  const removeEndpointGroup = (index) => {
+    setFormData({
+      ...formData,
+      EndpointGroups: (formData.EndpointGroups || []).filter((_, groupIndex) => groupIndex !== index)
+    });
+  };
+
+  const toggleEndpointGroupEndpoint = (index, endpointId) => {
+    const nextGroups = (formData.EndpointGroups || []).map((group, groupIndex) => {
+      if (groupIndex !== index) return group;
+      const endpointIds = group.EndpointIds || [];
+      return {
+        ...group,
+        EndpointIds: endpointIds.includes(endpointId)
+          ? endpointIds.filter((id) => id !== endpointId)
+          : [...endpointIds, endpointId]
+      };
+    });
+    setFormData({ ...formData, EndpointGroups: nextGroups });
   };
 
   const handleConfigurationToggle = (configId) => {
@@ -673,6 +861,7 @@ function VirtualModelRunners() {
             actions={[
               { label: 'View Details', onClick: () => handleViewMetadata(item) },
               { label: 'Health Data', onClick: () => handleViewHealth(item) },
+              { label: 'Runtime Stats', onClick: () => handleViewRuntimeStats(item) },
               { label: 'Effective Config', onClick: () => handleViewEffectiveConfiguration(item) },
               { label: 'Explain Routing', onClick: () => handleOpenExplainRouting(item) },
               { label: 'Reservations', onClick: () => handleViewReservations(item) },
@@ -746,6 +935,7 @@ function VirtualModelRunners() {
                 LoadBalancingPolicyId: '',
                 ModelAccessPolicyId: '',
                 ModelRunnerEndpointIds: [],
+                EndpointGroups: [],
                 ModelConfigurationIds: [],
                 ModelDefinitionIds: []
               })}
@@ -875,13 +1065,80 @@ function VirtualModelRunners() {
                 <option value="Random">Random</option>
                 <option value="FirstAvailable">First Available</option>
                 <option value="LeastRecentlyUsed">Least Recently Used</option>
+                <option value="Adaptive">Adaptive</option>
               </select>
             </div>
           </div>
 
+          {formData.LoadBalancingMode === 'Adaptive' && (
+            <div className="detail-section">
+              <h3>Adaptive Selection</h3>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="adaptiveSampleCount" title="Number of eligible endpoints scored on each routing decision">Sample Count</label>
+                  <input id="adaptiveSampleCount" type="number" min="1" max="8" value={formData.AdaptiveLoadBalancing.SampleCount} onChange={(e) => updateAdaptiveSetting('SampleCount', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveColdStartScore" title="Initial score for endpoints without runtime history">Cold Start Score</label>
+                  <input id="adaptiveColdStartScore" type="number" min="0" max="100" value={formData.AdaptiveLoadBalancing.ColdStartScore} onChange={(e) => updateAdaptiveSetting('ColdStartScore', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveEwmaAlpha" title="EWMA smoothing factor for runtime measurements">EWMA Alpha</label>
+                  <input id="adaptiveEwmaAlpha" type="number" min="0.01" max="1" step="0.01" value={formData.AdaptiveLoadBalancing.EwmaAlpha} onChange={(e) => updateAdaptiveSetting('EwmaAlpha', e.target.value)} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="adaptiveBackoffBase" title="Base transient backoff duration after rate limits or failures">Backoff Base (ms)</label>
+                  <input id="adaptiveBackoffBase" type="number" min="1000" step="1000" value={formData.AdaptiveLoadBalancing.BackoffBaseMs} onChange={(e) => updateAdaptiveSetting('BackoffBaseMs', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveBackoffMax" title="Maximum transient backoff duration">Backoff Max (ms)</label>
+                  <input id="adaptiveBackoffMax" type="number" min="1000" step="1000" value={formData.AdaptiveLoadBalancing.BackoffMaxMs} onChange={(e) => updateAdaptiveSetting('BackoffMaxMs', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveFailureThreshold" title="Consecutive failures before repeated 5xx responses trigger backoff">Failure Threshold</label>
+                  <input id="adaptiveFailureThreshold" type="number" min="1" value={formData.AdaptiveLoadBalancing.FailureThreshold} onChange={(e) => updateAdaptiveSetting('FailureThreshold', e.target.value)} />
+                </div>
+              </div>
+              <div className="checkbox-group">
+                <label>
+                  <input type="checkbox" checked={formData.AdaptiveLoadBalancing.ExcludeBackoffEndpoints} onChange={(e) => updateAdaptiveSetting('ExcludeBackoffEndpoints', e.target.checked)} />
+                  Exclude endpoints in transient backoff
+                </label>
+                <label>
+                  <input type="checkbox" checked={formData.AdaptiveLoadBalancing.BackoffBreaksSessionAffinity} onChange={(e) => updateAdaptiveSetting('BackoffBreaksSessionAffinity', e.target.checked)} />
+                  Remove session pins during transient backoff
+                </label>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="adaptiveWeightSuccess">Success Weight</label>
+                  <input id="adaptiveWeightSuccess" type="number" min="0" value={formData.AdaptiveLoadBalancing.Weights.Success} onChange={(e) => updateAdaptiveWeight('Success', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveWeightLatency">Latency Weight</label>
+                  <input id="adaptiveWeightLatency" type="number" min="0" value={formData.AdaptiveLoadBalancing.Weights.Latency} onChange={(e) => updateAdaptiveWeight('Latency', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveWeightTtft">TTFT Weight</label>
+                  <input id="adaptiveWeightTtft" type="number" min="0" value={formData.AdaptiveLoadBalancing.Weights.TimeToFirstToken} onChange={(e) => updateAdaptiveWeight('TimeToFirstToken', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveWeightPending">Pending Weight</label>
+                  <input id="adaptiveWeightPending" type="number" min="0" value={formData.AdaptiveLoadBalancing.Weights.Pending} onChange={(e) => updateAdaptiveWeight('Pending', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="adaptiveWeightEndpoint">Endpoint Weight</label>
+                  <input id="adaptiveWeightEndpoint" type="number" min="0" value={formData.AdaptiveLoadBalancing.Weights.EndpointWeight} onChange={(e) => updateAdaptiveWeight('EndpointWeight', e.target.value)} />
+                </div>
+              </div>
+            </div>
+          )}
+
           {formData.LoadBalancingPolicyId && (
             <p className="form-help" style={{ marginTop: '-8px', marginBottom: '16px' }}>
-              The attached policy drives endpoint eligibility and ranking. The VMR load balancing mode remains available as the fallback path when the policy is configured to use it.
+              The attached policy drives endpoint eligibility. Adaptive mode scores the policy survivors; other modes use the policy ranking result unless the policy falls back.
             </p>
           )}
 
@@ -962,6 +1219,71 @@ function VirtualModelRunners() {
                 ))
               )}
             </div>
+          </div>
+
+          <div className="detail-section">
+            <div className="section-header">
+              <h3>Endpoint Groups</h3>
+              <button type="button" className="btn-secondary" onClick={addEndpointGroup}>Add Group</button>
+            </div>
+            {(formData.EndpointGroups || []).length < 1 ? (
+              <p className="no-items">No endpoint groups configured. The selected endpoint list is used directly.</p>
+            ) : (
+              <div className="explain-candidate-list">
+                {(formData.EndpointGroups || []).map((group, index) => (
+                  <div className="explain-candidate-card" key={group.Id || index}>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label htmlFor={`endpointGroupName-${index}`}>Name</label>
+                        <input id={`endpointGroupName-${index}`} value={group.Name || ''} onChange={(e) => updateEndpointGroup(index, { Name: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor={`endpointGroupId-${index}`}>Group ID</label>
+                        <input id={`endpointGroupId-${index}`} value={group.Id || ''} onChange={(e) => updateEndpointGroup(index, { Id: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label htmlFor={`endpointGroupPriority-${index}`}>Priority</label>
+                        <input id={`endpointGroupPriority-${index}`} type="number" min="0" value={group.Priority} onChange={(e) => updateEndpointGroup(index, { Priority: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor={`endpointGroupWeight-${index}`}>Traffic Weight</label>
+                        <input id={`endpointGroupWeight-${index}`} type="number" min="0" value={group.TrafficWeight} onChange={(e) => updateEndpointGroup(index, { TrafficWeight: e.target.value })} />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor={`endpointGroupActive-${index}`}>Active</label>
+                        <select id={`endpointGroupActive-${index}`} value={group.Active === false ? 'false' : 'true'} onChange={(e) => updateEndpointGroup(index, { Active: e.target.value === 'true' })}>
+                          <option value="true">Active</option>
+                          <option value="false">Inactive</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label>Assigned Endpoints</label>
+                      <div className="endpoint-list">
+                        {(formData.ModelRunnerEndpointIds || []).length < 1 ? (
+                          <p className="no-items">Select endpoints above before assigning groups.</p>
+                        ) : (
+                          (formData.ModelRunnerEndpointIds || []).map((endpointId) => {
+                            const endpoint = endpoints.find((item) => item.Id === endpointId);
+                            return (
+                              <label key={`${group.Id}-${endpointId}`} className="endpoint-item">
+                                <input type="checkbox" checked={(group.EndpointIds || []).includes(endpointId)} onChange={() => toggleEndpointGroupEndpoint(index, endpointId)} />
+                                <span className="endpoint-name">{endpoint?.Name || endpointId}</span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                    <div className="form-actions">
+                      <button type="button" className="btn-secondary" onClick={() => removeEndpointGroup(index)}>Remove Group</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="form-group">
@@ -1258,6 +1580,81 @@ function VirtualModelRunners() {
         </Modal>
 
         <Modal
+          isOpen={showRuntimeStats}
+          onClose={() => { setShowRuntimeStats(false); setRuntimeStatsData(null); }}
+          title={`Runtime Stats: ${selectedVmr?.Name || 'VMR'}`}
+          extraWide
+        >
+          <div className="detail-content">
+            <div className="section-header">
+              <div>
+                <h3>{selectedVmr?.Name}</h3>
+                {runtimeStatsData?.SnapshotUtc && (
+                  <p className="health-timestamp">Snapshot: {new Date(runtimeStatsData.SnapshotUtc).toLocaleString()}</p>
+                )}
+              </div>
+              <div className="view-actions">
+                <button type="button" className="btn-secondary" onClick={clearRuntimeBackoff} disabled={runtimeStatsLoading}>Clear Backoff</button>
+                <button type="button" className="btn-secondary" onClick={resetRuntimeStats} disabled={runtimeStatsLoading}>Reset Stats</button>
+                <button type="button" className="btn-icon" onClick={refreshRuntimeStats} disabled={runtimeStatsLoading} title="Refresh runtime stats">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" className={runtimeStatsLoading ? 'spinning' : ''}>
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {runtimeStatsLoading && !runtimeStatsData ? (
+              <div className="loading-spinner">Loading runtime stats...</div>
+            ) : runtimeStatsData?.Endpoints?.length ? (
+              <div className="health-endpoints">
+                <table className="health-table">
+                  <thead>
+                    <tr>
+                      <th>Endpoint</th>
+                      <th>Pending</th>
+                      <th>Completed</th>
+                      <th>Success</th>
+                      <th>Error</th>
+                      <th>Latency</th>
+                      <th>TTFT</th>
+                      <th>Backoff</th>
+                      <th>Last Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runtimeStatsData.Endpoints.map((endpoint) => (
+                      <tr key={endpoint.EndpointId}>
+                        <td>
+                          <div className="endpoint-info">
+                            <strong>{endpoint.EndpointName || endpoint.EndpointId}</strong>
+                            <CopyableId value={endpoint.EndpointId} />
+                          </div>
+                        </td>
+                        <td>{endpoint.Pending ?? 0} / {endpoint.InFlight ?? 0}</td>
+                        <td>{endpoint.CompletedCount ?? 0}</td>
+                        <td>{endpoint.SuccessEwma !== null && endpoint.SuccessEwma !== undefined ? endpoint.SuccessEwma.toFixed(3) : '-'}</td>
+                        <td>{endpoint.ErrorEwma !== null && endpoint.ErrorEwma !== undefined ? endpoint.ErrorEwma.toFixed(3) : '-'}</td>
+                        <td>{endpoint.LatencyEwmaMs !== null && endpoint.LatencyEwmaMs !== undefined ? `${endpoint.LatencyEwmaMs.toFixed(0)} ms` : '-'}</td>
+                        <td>{endpoint.TimeToFirstTokenEwmaMs !== null && endpoint.TimeToFirstTokenEwmaMs !== undefined ? `${endpoint.TimeToFirstTokenEwmaMs.toFixed(0)} ms` : '-'}</td>
+                        <td>
+                          <span className={`service-state-badge ${endpoint.BackoffActive ? 'warning' : 'success'}`}>
+                            {endpoint.BackoffActive ? (endpoint.BackoffReason || 'Backoff') : 'Clear'}
+                          </span>
+                          {endpoint.BackoffUntilUtc && <small className="form-help">{new Date(endpoint.BackoffUntilUtc).toLocaleTimeString()}</small>}
+                        </td>
+                        <td>{endpoint.LastStatusCode ?? endpoint.LastErrorCode ?? '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="no-items">No runtime statistics are available yet.</p>
+            )}
+          </div>
+        </Modal>
+
+        <Modal
           isOpen={showEffective}
           onClose={() => { setShowEffective(false); setEffectiveConfig(null); }}
           title={`Effective Configuration: ${selectedVmr?.Name || 'VMR'}`}
@@ -1406,6 +1803,8 @@ function VirtualModelRunners() {
                   {routingExplanation.PolicyFallbackUsed && <span className="service-state-badge warning">Policy Fallback</span>}
                   {routingExplanation.ModelAccessDecision && <span className={`service-state-badge ${routingExplanation.ModelAccessDecision === 'Deny' ? 'warning' : 'success'}`}>Access {routingExplanation.ModelAccessDecision}</span>}
                   {routingExplanation.ModelAccessWouldDeny && <span className="service-state-badge warning">Would Deny</span>}
+                  {routingExplanation.AdaptiveModeUsed && <span className="service-state-badge neutral">Adaptive {routingExplanation.AdaptiveSampleCount || 0}</span>}
+                  {routingExplanation.SelectedEndpointGroupName && <span className="service-state-badge neutral">Group {routingExplanation.SelectedEndpointGroupName}</span>}
                 </div>
                 <p className="section-description" style={{ marginTop: '12px', marginBottom: 0 }}>{routingExplanation.Message}</p>
                 {(routingExplanation.ModelAccessPolicyId || routingExplanation.ModelAccessRuleId) && (
@@ -1448,7 +1847,16 @@ function VirtualModelRunners() {
                         <div className="detail-item"><label>Healthy</label><span>{candidate.IsHealthy ? 'Yes' : 'No'}</span></div>
                         <div className="detail-item"><label>Capacity</label><span>{candidate.HasCapacity ? 'Available' : 'Full'}</span></div>
                         <div className="detail-item"><label>Policy Score</label><span>{candidate.PolicyScore ?? '-'}</span></div>
+                        <div className="detail-item"><label>Adaptive Score</label><span>{candidate.AdaptiveScore?.Score !== undefined ? candidate.AdaptiveScore.Score.toFixed(2) : '-'}</span></div>
+                        <div className="detail-item"><label>Pending</label><span>{candidate.RuntimeStats?.Pending ?? '-'}</span></div>
+                        <div className="detail-item"><label>Latency EWMA</label><span>{candidate.RuntimeStats?.LatencyEwmaMs !== null && candidate.RuntimeStats?.LatencyEwmaMs !== undefined ? `${candidate.RuntimeStats.LatencyEwmaMs.toFixed(0)} ms` : '-'}</span></div>
+                        <div className="detail-item"><label>Backoff</label><span>{candidate.RuntimeStats?.BackoffActive ? (candidate.RuntimeStats.BackoffReason || 'Active') : 'Clear'}</span></div>
                       </div>
+                      {candidate.AdaptiveScore?.Components && (
+                        <div className="code-block">
+                          {JSON.stringify(candidate.AdaptiveScore.Components, null, 2)}
+                        </div>
+                      )}
                       {candidate.ExclusionReason && <p className="form-help">{candidate.ExclusionReason}</p>}
                     </div>
                   ))}

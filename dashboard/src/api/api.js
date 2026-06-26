@@ -579,6 +579,21 @@ class ConductorApi {
     return this.request('GET', `/v1.0/virtualmodelrunners/${id}/effective${query}`);
   }
 
+  async getVirtualModelRunnerRuntimeStats(id, params = {}) {
+    const query = this.buildQueryString(params);
+    return this.request('GET', `/v1.0/virtualmodelrunners/${id}/runtime-stats${query}`);
+  }
+
+  async resetVirtualModelRunnerRuntimeStats(id, params = {}) {
+    const query = this.buildQueryString(params);
+    return this.request('POST', `/v1.0/virtualmodelrunners/${id}/runtime-stats/reset${query}`, {});
+  }
+
+  async clearVirtualModelRunnerRuntimeBackoff(id, params = {}) {
+    const query = this.buildQueryString(params);
+    return this.request('POST', `/v1.0/virtualmodelrunners/${id}/runtime-backoff/clear${query}`, {});
+  }
+
   async explainVirtualModelRunnerRouting(id, payload = {}, tenantId = null) {
     const query = tenantId ? `?tenantId=${tenantId}` : '';
     return this.request('POST', `/v1.0/virtualmodelrunners/${id}/explain-routing${query}`, payload);

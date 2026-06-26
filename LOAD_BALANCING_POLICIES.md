@@ -25,6 +25,7 @@ Supported VMR `LoadBalancingMode` values are:
 | `Random` | Choose an eligible endpoint randomly using endpoint weights. |
 | `FirstAvailable` | Use the first eligible endpoint in configured endpoint order. |
 | `LeastRecentlyUsed` | Choose the eligible endpoint with the oldest route-scoped assignment history. Endpoints with no history use configured endpoint order as the deterministic tie-breaker. |
+| `Adaptive` | Sample eligible endpoints and score them using runtime success, latency, time-to-first-token, pending-work, and configured endpoint-weight signals. |
 
 ## Runtime evaluation order
 
@@ -36,14 +37,16 @@ When a proxied request reaches a VMR, Conductor evaluates routing in this order:
 4. Conductor builds a candidate list from the VMR's attached endpoints.
 5. For new work, only endpoints that are active, not quarantined, not draining, healthy, and currently have capacity remain in the candidate pool.
 6. A draining endpoint may still be reused when an existing sticky-session pin already targets it.
-7. If the VMR has no active attached policy, Conductor uses the VMR's `LoadBalancingMode`.
-8. If a policy is attached and active, every `Filters` rule must pass.
-9. Every `Ranking` metric must also be available for a candidate to remain eligible.
-10. Conductor normalizes each ranking metric, applies `Weight`, and sums the scores.
-11. If the top candidates tie, `TieBreaker` decides between them.
-12. If policy evaluation cannot produce a candidate:
+7. Endpoint groups, when configured, choose the active priority group or weighted split group before final endpoint selection.
+8. If the VMR has no active attached policy, Conductor uses the VMR's `LoadBalancingMode`.
+9. If a policy is attached and active, every `Filters` rule must pass.
+10. Every `Ranking` metric must also be available for a candidate to remain eligible.
+11. Conductor normalizes each ranking metric, applies `Weight`, and sums the scores.
+12. If the top candidates tie, `TieBreaker` decides between them.
+13. If policy evaluation cannot produce a candidate:
    - `UseLegacyLoadBalancingMode` falls back to the VMR's `LoadBalancingMode`
    - `FailClosed` returns an error instead of routing the request
+14. When the effective mode is `Adaptive`, Conductor samples the eligible survivors, scores them with runtime statistics, and records the selected score and sampled-candidate evidence.
 
 ## Important authoring rules
 
@@ -68,8 +71,29 @@ Use these surfaces to answer questions such as:
 - which candidates were eliminated before policy evaluation
 - which filter rule removed a specific endpoint
 - which ranking metrics produced the winning score
+- which endpoint group or traffic split applied
+- which adaptive score components selected an endpoint
+- whether transient backoff excluded an endpoint
 - whether a draining endpoint was reused because of session affinity
 - which request properties were mutated and why
+
+## Adaptive mode
+
+Adaptive mode is configured on the VMR, not inside a load-balancing policy. Use it when endpoint performance changes quickly enough that a static round-robin or random selector is not enough.
+
+Key VMR fields:
+
+| Field | Meaning |
+| --- | --- |
+| `AdaptiveLoadBalancing.SampleCount` | Number of eligible endpoints sampled before scoring. |
+| `AdaptiveLoadBalancing.ColdStartScore` | Bounded score used when an endpoint has no runtime data yet. |
+| `AdaptiveLoadBalancing.EwmaAlpha` | Smoothing factor for success, error, latency, and TTFT metrics. |
+| `AdaptiveLoadBalancing.BackoffBaseMs` / `BackoffMaxMs` | Transient backoff duration bounds after rate limits or failures. |
+| `AdaptiveLoadBalancing.FailureThreshold` | Consecutive failures required before repeated non-immediate errors create backoff. |
+| `AdaptiveLoadBalancing.Weights` | Relative score weights for success, latency, TTFT, pending work, and configured endpoint weight. |
+| `EndpointGroups` | Optional active groups with `Priority`, `TrafficWeight`, and `EndpointIds`. |
+
+Runtime stats are in-memory and can be inspected or cleared through the VMR runtime routes. Request history and explain-routing responses include strategy, group, selected score, fallback, and backoff evidence when available.
 
 ## Top-level policy JSON
 

@@ -280,6 +280,8 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 apitype INTEGER NOT NULL DEFAULT 0,
                 loadbalancingmode INTEGER NOT NULL DEFAULT 0,
                 modelrunnerendpointids TEXT,
+                adaptiveloadbalancing TEXT,
+                endpointgroups TEXT,
                 modelconfigurationids TEXT,
                 modeldefinitionids TEXT,
                 modelconfigurationmappings TEXT,
@@ -406,6 +408,12 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 effectivemodel TEXT,
                 requesttype TEXT,
                 routingoutcomecode TEXT,
+                selectionstrategy TEXT,
+                endpointgroupguid TEXT,
+                endpointgroupname TEXT,
+                backoffreason TEXT,
+                adaptiveselection INTEGER NOT NULL DEFAULT 0,
+                policyfallbackused INTEGER NOT NULL DEFAULT 0,
                 denialreasoncode TEXT,
                 denialreason TEXT,
                 reservationguid TEXT,
@@ -589,6 +597,20 @@ namespace Conductor.Core.Database.Sqlite.Queries
         /// </summary>
         public static readonly string AddModelAccessPolicyIdColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN modelaccesspolicyid TEXT;
+        ";
+
+        /// <summary>
+        /// Add adaptiveloadbalancing column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddAdaptiveLoadBalancingColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN adaptiveloadbalancing TEXT;
+        ";
+
+        /// <summary>
+        /// Add endpointgroups column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddEndpointGroupsColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN endpointgroups TEXT;
         ";
     }
 }

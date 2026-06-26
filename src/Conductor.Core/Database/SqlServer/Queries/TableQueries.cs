@@ -330,6 +330,8 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 apitype INT NOT NULL DEFAULT 0,
                 loadbalancingmode INT NOT NULL DEFAULT 0,
                 modelrunnerendpointids NVARCHAR(MAX),
+                adaptiveloadbalancing NVARCHAR(MAX),
+                endpointgroups NVARCHAR(MAX),
                 modelconfigurationids NVARCHAR(MAX),
                 modeldefinitionids NVARCHAR(MAX),
                 modelconfigurationmappings NVARCHAR(MAX),
@@ -472,6 +474,12 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 effectivemodel NVARCHAR(255),
                 requesttype NVARCHAR(128),
                 routingoutcomecode NVARCHAR(128),
+                selectionstrategy NVARCHAR(64),
+                endpointgroupguid NVARCHAR(64),
+                endpointgroupname NVARCHAR(255),
+                backoffreason NVARCHAR(128),
+                adaptiveselection BIT NOT NULL DEFAULT 0,
+                policyfallbackused BIT NOT NULL DEFAULT 0,
                 denialreasoncode NVARCHAR(128),
                 denialreason NVARCHAR(MAX),
                 reservationguid NVARCHAR(48),
@@ -674,6 +682,20 @@ namespace Conductor.Core.Database.SqlServer.Queries
         /// </summary>
         public static readonly string AddModelAccessPolicyIdColumn = @"
             ALTER TABLE virtualmodelrunners ADD modelaccesspolicyid NVARCHAR(48);
+        ";
+
+        /// <summary>
+        /// Add adaptiveloadbalancing column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddAdaptiveLoadBalancingColumn = @"
+            ALTER TABLE virtualmodelrunners ADD adaptiveloadbalancing NVARCHAR(MAX);
+        ";
+
+        /// <summary>
+        /// Add endpointgroups column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddEndpointGroupsColumn = @"
+            ALTER TABLE virtualmodelrunners ADD endpointgroups NVARCHAR(MAX);
         ";
     }
 }

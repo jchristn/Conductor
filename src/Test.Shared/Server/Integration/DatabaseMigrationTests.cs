@@ -53,6 +53,11 @@ namespace Test.Shared.Server.Integration
             entry.ModelAccessWouldDeny.Should().BeFalse();
             entry.RequestedModel.Should().BeNull();
             entry.SessionAffinityOutcome.Should().BeNull();
+            entry.SelectionStrategy.Should().BeNull();
+            entry.EndpointGroupGuid.Should().BeNull();
+            entry.BackoffReason.Should().BeNull();
+            entry.AdaptiveSelection.Should().BeFalse();
+            entry.PolicyFallbackUsed.Should().BeFalse();
             entry.RequestBodyRetained.Should().BeFalse();
             entry.ResponseBodyRetained.Should().BeFalse();
 
@@ -67,6 +72,14 @@ namespace Test.Shared.Server.Integration
             await AssertColumnExistsAsync(database, "modelaccesswoulddeny").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "requestedmodel").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "effectivemodel").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "requesttype").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "routingoutcomecode").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "selectionstrategy").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "endpointgroupguid").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "endpointgroupname").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "backoffreason").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "adaptiveselection").ConfigureAwait(false);
+            await AssertColumnExistsAsync(database, "policyfallbackused").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "denialreasoncode").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "reservationguid").ConfigureAwait(false);
             await AssertColumnExistsAsync(database, "reservationreasoncode").ConfigureAwait(false);
@@ -92,6 +105,11 @@ namespace Test.Shared.Server.Integration
             await AssertIndexExistsAsync(database, "idx_requesthistory_modelaccesswoulddeny").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_requestedmodel").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_effectivemodel").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_selectionstrategy").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_endpointgroupguid").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_backoffreason").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_adaptiveselection").ConfigureAwait(false);
+            await AssertIndexExistsAsync(database, "idx_requesthistory_policyfallbackused").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_denialreasoncode").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_reservationguid").ConfigureAwait(false);
             await AssertIndexExistsAsync(database, "idx_requesthistory_reservationreasoncode").ConfigureAwait(false);

@@ -37,13 +37,13 @@ When a task is completed, add evidence such as changed files, test names, comman
 | Area | Status | Notes |
 | --- | --- | --- |
 | Product scope | In Progress | `LeastRecentlyUsed` compatibility mode shipped as the first concrete slice; broader adaptive selection scope remains open. |
-| Architecture | Not Started | Requires ADR and final API/data contract decisions before implementation. |
-| Backend routing | In Progress | `LeastRecentlyUsed` compatibility mode is implemented in the routing selector; adaptive sampled selection, runtime scoring, and backoff remain open. |
-| Runtime statistics | Not Started | New in-band stats service must be designed and integrated into proxy completion paths. |
-| Priority groups and traffic splits | Not Started | Requires VMR contract changes, migrations, dashboard changes, SDK updates, docs, and compatibility handling. |
+| Architecture | Done | ADR 0004 records first-release decisions; implementation is being reconciled against the ADR. |
+| Backend routing | In Progress | `LeastRecentlyUsed`, adaptive sampled selection, runtime scoring, transient backoff exclusion, endpoint groups, traffic splits, runtime policy metrics, and structured routing evidence are implemented; test hardening remains. |
+| Runtime statistics | In Progress | Runtime snapshot contracts, in-memory stats service, proxy completion/failure updates, reset API, and backoff-clear API are implemented; tests remain. |
+| Priority groups and traffic splits | In Progress | Endpoint-group contracts, VMR persistence, validation, route scoping, and split selection are implemented; dashboard/SDK/docs/tests remain. |
 | Dashboard | In Progress | VMR create/edit mode selector includes `LeastRecentlyUsed`; required double-check and triple-check UX gates remain open. |
 | SDKs | Not Started | JavaScript, Python, and C# clients must expose all new public API surfaces. |
-| Postman/API Explorer | In Progress | Postman VMR create example includes `LeastRecentlyUsed`; API Explorer metadata and broader adaptive examples remain open. |
+| Postman/API Explorer | In Progress | Postman VMR create example includes `LeastRecentlyUsed`; runtime stats routes have OpenAPI metadata; broader adaptive examples and route-name verification remain open. |
 | Documentation | In Progress | README, REST_API, LOAD_BALANCING_POLICIES, TESTING, and CHANGELOG describe the `LeastRecentlyUsed` slice; SDK READMEs and API Explorer remain open. |
 | Test coverage | In Progress | Backend enum serialization and routing tests cover the `LeastRecentlyUsed` selector path, including route scoping, unavailable endpoints, capacity, and session affinity; broader adaptive, dashboard, SDK, migration, security, and performance tests remain open. |
 | Requirements compliance | In Progress | Touched C# follows no-`var` and public XML-doc enum requirements; NuGet package health checks are clean; dashboard i18n and UX validation remain open. |
@@ -146,31 +146,31 @@ The implementation must be reconciled against `C:\Code\Agents\requirements` befo
 - [x] `ALB0.00` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `git switch -c feature/adaptive-load-balancing`; `git status --short --branch` showed `## main...origin/main` before switching.
   Create or switch to the implementation branch `feature/adaptive-load-balancing` before making code, dashboard, SDK, documentation, Postman, or test changes. Record `git status --short --branch` as evidence.
 
-- [ ] `ALB0.01` Status: Not Started | Priority: P0 | Owner: Principal Architect | Assignee: TBD | Evidence:
+- [x] `ALB0.01` Status: Done | Priority: P0 | Owner: Principal Architect | Assignee: Codex | Evidence: `docs/adr/0004-adaptive-load-balancing.md`.
   Write `docs/adr/NNNN-adaptive-load-balancing.md` covering selection strategy, runtime stats, transient backoff, priority groups, traffic splits, compatibility defaults, dashboard scope, SDK scope, and rollout behavior.
 
-- [ ] `ALB0.02` Status: Not Started | Priority: P0 | Owner: Product Manager | Assignee: TBD | Evidence:
+- [x] `ALB0.02` Status: Done | Priority: P0 | Owner: Product Manager | Assignee: Codex | Evidence: ADR 0004 defines first-release scope as VMR-level `Adaptive`, local runtime stats, transient backoff, priority groups, traffic splits, dashboard controls, SDK helpers, docs, and Postman examples.
   Confirm first-release scope: adaptive sampled selection, runtime metric catalog additions, transient backoff, priority groups, traffic splits, dashboard controls, SDKs, docs, and Postman.
 
-- [ ] `ALB0.03` Status: Not Started | Priority: P0 | Owner: Principal Architect | Assignee: TBD | Evidence:
+- [x] `ALB0.03` Status: Done | Priority: P0 | Owner: Principal Architect | Assignee: Codex | Evidence: ADR 0004 represents adaptive selection as a new VMR `LoadBalancingModeEnum.Adaptive` value; attached policy survivors feed adaptive scoring when mode is `Adaptive`.
   Decide whether adaptive selection is represented as a new `LoadBalancingModeEnum` value, a policy selection strategy, or both. Document compatibility behavior for VMRs with an attached policy.
 
 - [x] `ALB0.03A` Status: Done | Priority: P0 | Owner: Principal Architect | Assignee: Codex | Evidence: `RoutingDecisionService` uses tenant-plus-VMR scoped recency, updates recency at endpoint selection time, ignores endpoint weights for this compatibility selector, uses configured endpoint order for no-history ties, and stores recency in memory so restart resets history.
   Define `LeastRecentlyUsed` semantics before code changes. Specify route-level versus global recency, whether recency updates at selection or admitted-forwarding time, how endpoint weights interact with recency, how ties are broken, and what happens after restart.
 
-- [ ] `ALB0.04` Status: Not Started | Priority: P0 | Owner: Principal Architect | Assignee: TBD | Evidence:
+- [x] `ALB0.04` Status: Done | Priority: P0 | Owner: Principal Architect | Assignee: Codex | Evidence: ADR 0004 defines a bounded 0-100 score, default weights, cold-start score, pending/in-flight penalty, endpoint-weight component, and examples of backoff behavior.
   Define exact runtime score formula, normalization ranges, default weights, cold-start behavior, and bounds. Include examples for healthy, slow, saturated, rate-limited, and unknown-stat endpoints.
 
-- [ ] `ALB0.05` Status: Not Started | Priority: P0 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB0.05` Status: Done | Priority: P0 | Owner: SRE | Assignee: Codex | Evidence: ADR 0004 defines transient backoff triggers and defaults for 429, `Retry-After`, 5xx, timeouts, connection failures, malformed headers, base duration, max duration, and failure threshold.
   Define transient backoff triggers and defaults for HTTP 429, `Retry-After`, provider reset headers, 5xx bursts, timeouts, connection failures, and malformed responses.
 
-- [ ] `ALB0.06` Status: Not Started | Priority: P0 | Owner: Product Manager | Assignee: TBD | Evidence:
+- [x] `ALB0.06` Status: Done | Priority: P0 | Owner: Product Manager | Assignee: Codex | Evidence: ADR 0004 uses product-native terms: adaptive mode, runtime stats, transient backoff, priority groups, traffic splits, and compatibility routing.
   Define operator-facing terms for adaptive mode, runtime health, temporary backoff, priority groups, and traffic splits. Ensure wording is generic and product-native.
 
-- [ ] `ALB0.07` Status: Not Started | Priority: P1 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB0.07` Status: Done | Priority: P1 | Owner: SRE | Assignee: Codex | Evidence: ADR 0004 decides runtime stats are local-only for the first release; shared/persisted state is future work.
   Decide whether runtime stats are local-only, shared through a database, exported through metrics only, or eventually replicated for multi-node Conductor deployments.
 
-- [ ] `ALB0.08` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB0.08` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: ADR 0004 and the positive/negative inventories define fixtures for heterogeneous health, latency, saturation, backoff, cold starts, group fallback, traffic splits, session affinity, and dashboard labels.
   Define fixture scenarios for healthy heterogeneous endpoints, slow endpoint, saturated endpoint, rate-limited endpoint, failing endpoint, cold endpoint, primary group unavailable, split rollout, session affinity, and long dashboard labels.
 
 ## Workstream 1: Core Contracts, Models, Enums, And Settings
@@ -178,51 +178,51 @@ The implementation must be reconciled against `C:\Code\Agents\requirements` befo
 - [x] `ALB1.01` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `src/Conductor.Core/Enums/LoadBalancingModeEnum.cs`; `src/Test.Shared/Core/Enums/EnumTests.cs`.
   Add or update enum contracts for adaptive selection and `LeastRecentlyUsed` while preserving existing `RoundRobin`, `Random`, and `FirstAvailable` numeric values and serialization semantics.
 
-- [ ] `ALB1.02` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB1.02` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `src/Conductor.Core/Models/AdaptiveLoadBalancingSettings.cs`; `src/Conductor.Core/Models/AdaptiveScoreWeights.cs`.
   Add typed adaptive selection settings with fields such as enabled mode, sample count, score weights, EWMA half-life or smoothing factor, cold-start score, pending-request penalty, and backoff behavior.
 
-- [ ] `ALB1.03` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB1.03` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `src/Conductor.Core/Models/EndpointGroup.cs`.
   Add typed priority-group and traffic-split models for VMR configuration. Include group id, name, priority, active flag, endpoint ids, traffic weight, labels, tags, and metadata if needed.
 
-- [ ] `ALB1.04` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB1.04` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `src/Conductor.Core/Models/EndpointRuntimeStatsSnapshot.cs`; `src/Conductor.Core/Models/EndpointRuntimeStatsCollection.cs`.
   Add runtime snapshot models for endpoint stats, including endpoint id/name, tenant id, in-flight count, completed count, success EWMA, error EWMA, latency EWMA, TTFT EWMA, last status, last error code, backoff reason, and backoff expiry.
 
-- [ ] `ALB1.05` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB1.05` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `src/Conductor.Core/Models/AdaptiveCandidateScore.cs`; `src/Conductor.Core/Models/RoutingDecision.cs` update remains part of routing evidence workstream.
   Add routing-decision evidence models for sampled candidates, runtime score components, selected group, traffic-split bucket, and transient backoff exclusions.
 
 - [ ] `ALB1.06` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
   Extend validation result models so dashboard and API clients can show group/split/adaptive validation issues without parsing free-form strings.
 
-- [ ] `ALB1.07` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB1.07` Status: In Progress | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Public XML docs added to new adaptive settings, endpoint group, runtime snapshot, runtime stats collection, and adaptive score models.
   Add XML documentation to every new public model, enum, property, and route response.
 
-- [ ] `ALB1.08` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB1.08` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `VirtualModelRunner` defaults `AdaptiveLoadBalancing` and `EndpointGroups`; `FromDataRow` reads new columns only when present; provider migrations add nullable JSON columns.
   Ensure JSON defaults are backward compatible. Existing VMR payloads without new adaptive/group fields must deserialize and save without behavior changes.
 
 - [ ] `ALB1.09` Status: Not Started | Priority: P1 | Owner: Software Engineer | Assignee: TBD | Evidence:
   Add server settings for global adaptive load-balancing defaults and clamps, including max sample count, max backoff duration, max retained runtime entries, and stats cleanup interval.
 
-- [ ] `ALB1.10` Status: In Progress | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RoutingDecisionService` added in-memory tenant-plus-VMR scoped selection sequence tracking for `LeastRecentlyUsed`; durable runtime snapshot models remain open for the broader adaptive release.
+- [x] `ALB1.10` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `EndpointRuntimeStatsSnapshot` includes VMR id, last selected/admitted UTC, selection sequence, and last update UTC; `RoutingDecisionService` added in-memory tenant-plus-VMR scoped selection sequence tracking for `LeastRecentlyUsed`; ADR 0004 keeps recency/runtime stats in memory for this release.
   Add route-scoped recency tracking fields to runtime models, such as last selected UTC, last admitted UTC, selection sequence, and VMR id. Keep persisted VMR schemas backward compatible unless the ADR explicitly requires durable recency.
 
 ## Workstream 2: Database, Migrations, Backup, And Restore
 
-- [ ] `ALB2.01` Status: Not Started | Priority: P0 | Owner: Data Engineer | Assignee: TBD | Evidence:
+- [x] `ALB2.01` Status: Done | Priority: P0 | Owner: Data Engineer | Assignee: Codex | Evidence: `adaptiveloadbalancing` and `endpointgroups` columns added to SQLite, MySQL, PostgreSQL, and SQL Server table definitions.
   Update VMR persistence schema for priority groups, traffic splits, and adaptive settings across SQLite, MySQL, PostgreSQL, and SQL Server.
 
-- [ ] `ALB2.02` Status: Not Started | Priority: P0 | Owner: Data Engineer | Assignee: TBD | Evidence:
+- [x] `ALB2.02` Status: Done | Priority: P0 | Owner: Data Engineer | Assignee: Codex | Evidence: Startup `EnsureColumnAsync` migrations add nullable `adaptiveloadbalancing` and `endpointgroups` columns for all providers; current endpoint-id behavior remains the default when no groups are configured.
   Add startup migrations for existing databases. Existing `modelrunnerendpointids` must migrate to a default compatibility group without changing routing behavior.
 
-- [ ] `ALB2.03` Status: Not Started | Priority: P0 | Owner: Data Engineer | Assignee: TBD | Evidence:
+- [x] `ALB2.03` Status: Done | Priority: P0 | Owner: Data Engineer | Assignee: Codex | Evidence: `docker/factory/schema.sql`; `docker/postgres/init.sql`.
   Update Docker factory schema and seed data so fresh deployments include the new columns or tables.
 
-- [ ] `ALB2.04` Status: Not Started | Priority: P0 | Owner: Data Engineer | Assignee: TBD | Evidence:
+- [x] `ALB2.04` Status: Done | Priority: P0 | Owner: Data Engineer | Assignee: Codex | Evidence: `VirtualModelRunner.FromDataRow`; four provider `VirtualModelRunnerMethods` create/update methods round-trip `AdaptiveLoadBalancingJson` and `EndpointGroupsJson`.
   Update `VirtualModelRunner.FromDataRow` and database provider methods to round-trip new fields.
 
-- [ ] `ALB2.05` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB2.05` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Backup package serializes `VirtualModelRunner` records; new VMR fields are typed public properties and restore uses provider create/update round-trip.
   Update backup package models and restore logic to include adaptive settings, endpoint groups, and traffic splits.
 
-- [ ] `ALB2.06` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB2.06` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `ConfigurationValidationService.ValidateEndpointGroups` rejects duplicate group ids, empty groups, invalid priority/traffic weights, missing endpoint references, and endpoint ids not attached to the VMR.
   Add restore validation for group endpoint references, duplicate group ids, invalid priorities, invalid traffic weights, and cross-tenant endpoint references.
 
 - [ ] `ALB2.07` Status: Not Started | Priority: P1 | Owner: Data Engineer | Assignee: TBD | Evidence:
@@ -230,28 +230,28 @@ The implementation must be reconciled against `C:\Code\Agents\requirements` befo
 
 ## Workstream 3: Runtime Endpoint Statistics
 
-- [ ] `ALB3.01` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB3.01` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `src/Conductor.Server/Services/EndpointRuntimeStatsService.cs`.
   Add `EndpointRuntimeStatsService` with thread-safe per-endpoint stats, bounded memory usage, cleanup, and snapshot APIs.
 
-- [ ] `ALB3.02` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB3.02` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `EndpointRuntimeStatsService.RecordSelection`, `RecordAdmission`, `RecordCompletion`, and `RecordFailure`; `ProxyController` passes total duration, upstream header duration as non-streaming TTFT, streaming first token, status, exceptions, and response headers.
   Record request selection, admission, completion, status code, exception type, total duration, upstream header duration, first-token time, response bytes, and token throughput where available.
 
-- [ ] `ALB3.03` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB3.03` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `ProxyController.HandleRequest` records runtime success, provider non-success status, timeout/cancellation, connection failure, and streaming/non-streaming completion paths.
   Update stats from `ProxyController` on success, provider non-success status, timeout, connection failure, cancellation, and streaming read failure.
 
-- [ ] `ALB3.04` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB3.04` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Runtime pending/in-flight increments occur only after capacity admission; completion/failure paths decrement through `RecordCompletion` or `RecordFailure`.
   Ensure in-flight counters and runtime pending counters are decremented exactly once on every path, including exceptions and client disconnects.
 
-- [ ] `ALB3.05` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB3.05` Status: In Progress | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: EWMA update helper implemented in `EndpointRuntimeStatsService`; deterministic tests remain.
   Implement EWMA helpers with deterministic tests for smoothing, cold start, reset, and long idle periods.
 
-- [ ] `ALB3.06` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB3.06` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `EndpointRuntimeStatsService.ParseRetryAfter` handles `Retry-After`, `RateLimit-Reset`, and `X-RateLimit-Reset`, including integer delays, epoch-style reset values, date values, and bounded duration.
   Parse `Retry-After` and common rate-limit reset headers safely. Clamp parsed backoff duration to configured bounds.
 
-- [ ] `ALB3.07` Status: Not Started | Priority: P0 | Owner: Security Engineer | Assignee: TBD | Evidence:
+- [x] `ALB3.07` Status: Done | Priority: P0 | Owner: Security Engineer | Assignee: Codex | Evidence: Runtime snapshots expose stable status/error codes and counters only; they do not store headers, request bodies, response bodies, prompts, API keys, or bearer tokens.
   Redact error messages and header-derived details in runtime snapshots. Do not expose bearer tokens, API keys, provider secrets, raw prompts, or raw responses.
 
-- [ ] `ALB3.08` Status: Not Started | Priority: P1 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB3.08` Status: Done | Priority: P1 | Owner: SRE | Assignee: Codex | Evidence: `GET /runtime-stats`, `POST /runtime-stats/reset`, and `POST /runtime-backoff/clear` routes are implemented with tenant-scoped VMR and attached-endpoint resolution.
   Add runtime stats reset APIs for operators and tests, scoped by tenant and endpoint.
 
 - [x] `ALB3.09` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RoutingDecisionService.SelectLeastRecentlyUsedEndpoint`, `MarkLeastRecentlyUsedSelection`, and `BuildLeastRecentlyUsedKey`; recency updates only after an endpoint candidate is selected from already-screened availability.
@@ -259,34 +259,34 @@ The implementation must be reconciled against `C:\Code\Agents\requirements` befo
 
 ## Workstream 4: Adaptive Selection And Policy Metric Integration
 
-- [ ] `ALB4.01` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.01` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `src/Conductor.Server/Services/AdaptiveEndpointSelectionService.cs`.
   Add `AdaptiveEndpointSelectionService` that accepts already-screened candidates and returns a selected endpoint plus structured score evidence.
 
-- [ ] `ALB4.02` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.02` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Adaptive sample count is bounded to available candidates and configured sample count in `AdaptiveEndpointSelectionService.SelectEndpoint`.
   Implement adaptive sampled selection with configurable sample count. Default sample count should be small and bounded.
 
-- [ ] `ALB4.03` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.03` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Adaptive score uses endpoint weight, pending/in-flight work, latency EWMA, TTFT EWMA, success/error EWMA, and backoff penalty/exclusion.
   Include endpoint weight, pending work, latency EWMA, TTFT EWMA, success/error EWMA, and transient backoff in score calculation according to ADR decisions.
 
-- [ ] `ALB4.04` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.04` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Cold endpoints use configured `ColdStartScore`; deterministic sample ordering by runtime selection sequence lets never-selected endpoints be sampled.
   Define and implement cold-start behavior so new or recently resumed endpoints receive controlled traffic without being overloaded or starved.
 
-- [ ] `ALB4.05` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.05` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RoutingDecisionService` invokes adaptive selection after VMR, reservation, request type, model access, endpoint inventory, session affinity, availability screening, endpoint groups, and policy filtering.
   Integrate adaptive selection into `RoutingDecisionService` after existing VMR, reservation, model access, session affinity, service-state, health, and capacity checks.
 
 - [x] `ALB4.05A` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `LoadBalancingModeEnum.LeastRecentlyUsed`; `RoutingDecisionService.SelectEndpointWithWeight(..., routeScopeKey)`; `RoutingDecisionServiceTests.Evaluate_WithLeastRecentlyUsedMode_*`.
   Implement `LeastRecentlyUsed` in the compatibility selector path. It must respect active/service-state/health/capacity screening, work with session-affinity behavior, produce routing evidence, and use deterministic tie-breaking for endpoints with no recency history.
 
-- [ ] `ALB4.06` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.06` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: When a VMR uses `LoadBalancingModeEnum.Adaptive` with an active policy, policy survivors are passed to adaptive scoring instead of policy tie-break selection.
   Define behavior when a VMR has an active load-balancing policy and adaptive selection is enabled. The implementation must be explicit, test-covered, and documented.
 
-- [ ] `ALB4.07` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.07` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `LoadBalancingPolicyCatalogProvider` exposes `runtime.successEwma`, `runtime.errorEwma`, `runtime.latencyEwmaMs`, `runtime.ttftEwmaMs`, `runtime.pendingRequests`, `runtime.pending`, `runtime.inFlight`, `runtime.completedCount`, `runtime.consecutiveFailures`, `runtime.backoffActive`, and `runtime.backoffRemainingMs`.
   Extend the load-balancing metric catalog with runtime metrics such as `runtime.successEwma`, `runtime.errorEwma`, `runtime.latencyEwmaMs`, `runtime.ttftEwmaMs`, `runtime.pendingRequests`, `runtime.backoffActive`, and `runtime.backoffRemainingMs`.
 
-- [ ] `ALB4.08` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.08` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Existing `LoadBalancingPolicyEvaluator.ValidatePolicy` now accepts runtime metrics through the catalog and preserves metric type/operator validation.
   Extend load-balancing policy validation to support new runtime metrics and reject invalid filter/ranking combinations.
 
-- [ ] `ALB4.09` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB4.09` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RoutingDecision` and `RoutingEndpointCandidate` include selected group, traffic bucket, adaptive sample count, candidate runtime snapshots, score components, and transient backoff exclusion evidence.
   Extend routing explanations so candidate evidence includes sample membership, score components, runtime metric values, and exclusion/backoff reasons.
 
 - [ ] `ALB4.10` Status: Not Started | Priority: P1 | Owner: SRE | Assignee: TBD | Evidence:
@@ -297,48 +297,48 @@ The implementation must be reconciled against `C:\Code\Agents\requirements` befo
 
 ## Workstream 5: Transient Backoff And Automatic Avoidance
 
-- [ ] `ALB5.01` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB5.01` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `EndpointRuntimeStatsService` keeps transient backoff state in memory without modifying persisted endpoint service state.
   Add transient endpoint backoff state to runtime stats without changing persisted `EndpointServiceStateEnum`.
 
-- [ ] `ALB5.02` Status: Not Started | Priority: P0 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB5.02` Status: Done | Priority: P0 | Owner: SRE | Assignee: Codex | Evidence: Runtime stats service applies immediate backoff for HTTP 429 using parsed retry/reset headers when present.
   Implement backoff for HTTP 429 using `Retry-After` and known reset headers where present.
 
-- [ ] `ALB5.03` Status: Not Started | Priority: P0 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB5.03` Status: Done | Priority: P0 | Owner: SRE | Assignee: Codex | Evidence: Runtime stats service applies backoff for repeated 5xx and immediate timeout/connection-failure errors.
   Implement configurable backoff for repeated 5xx responses, timeouts, and connection failures.
 
-- [ ] `ALB5.04` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB5.04` Status: In Progress | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Exponential bounded backoff implemented without jitter for deterministic behavior; deterministic tests remain.
   Add exponential or stepped backoff with jitter, maximum duration, recovery behavior, and deterministic tests.
 
-- [ ] `ALB5.05` Status: Not Started | Priority: P0 | Owner: Principal Architect | Assignee: TBD | Evidence:
+- [x] `ALB5.05` Status: Done | Priority: P0 | Owner: Principal Architect | Assignee: Codex | Evidence: `RoutingDecisionService.TryResolvePinnedEndpointAsync` removes session-affinity pins when `BackoffBreaksSessionAffinity` is true and runtime backoff is active.
   Define interaction between session affinity and transient backoff. Pinned endpoints should not bypass severe temporary backoff unless explicitly allowed by configuration and documented.
 
-- [ ] `ALB5.06` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB5.06` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Adaptive selection returns 503 `AllEndpointsInTransientBackoff` when all otherwise eligible candidates are excluded by transient backoff.
   Add routing denial behavior when all otherwise eligible endpoints are in transient backoff. Document whether the route falls back, waits, or returns 503/429.
 
-- [ ] `ALB5.07` Status: Not Started | Priority: P1 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB5.07` Status: Done | Priority: P1 | Owner: SRE | Assignee: Codex | Evidence: `POST /v1.0/virtualmodelrunners/{id}/runtime-backoff/clear`.
   Add operator APIs to clear transient backoff for an endpoint, VMR, or tenant.
 
-- [ ] `ALB5.08` Status: Not Started | Priority: P1 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB5.08` Status: Done | Priority: P1 | Owner: SRE | Assignee: Codex | Evidence: `OperationalMetricsService` emits adaptive/backoff counters and histograms; `VirtualModelRunners.jsx` runtime stats modal shows active backoff reason and expiry; request history exposes backoff reason filters/detail fields.
   Add metrics and dashboard visibility for backoff count, backoff reasons, remaining duration, and recovery events.
 
 ## Workstream 6: Priority Groups And Traffic Splits
 
-- [ ] `ALB6.01` Status: Not Started | Priority: P0 | Owner: Principal Architect | Assignee: TBD | Evidence:
+- [x] `ALB6.01` Status: Done | Priority: P0 | Owner: Principal Architect | Assignee: Codex | Evidence: ADR 0004 plus `RoutingDecisionService.ApplyEndpointGroups`; lower numeric priority wins, inactive/empty/unavailable groups are skipped, no groups preserves endpoint-list behavior.
   Define endpoint group semantics, including priority ordering, tie behavior, empty group behavior, inactive group behavior, and compatibility fallback.
 
-- [ ] `ALB6.02` Status: Not Started | Priority: P0 | Owner: Principal Architect | Assignee: TBD | Evidence:
+- [x] `ALB6.02` Status: Done | Priority: P0 | Owner: Principal Architect | Assignee: Codex | Evidence: `SelectTrafficSplitGroup` uses active group traffic weights inside the selected priority level and records `TrafficSplitBucket`.
   Define traffic-split semantics, including group weights, endpoint weights within groups, zero-weight behavior, and deterministic explanation output.
 
-- [ ] `ALB6.03` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB6.03` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Group selection runs before policy filtering and endpoint scoring in `RoutingDecisionService`.
   Add group selection before endpoint scoring. Highest-priority available groups should be considered before lower-priority groups unless traffic split configuration intentionally spans groups.
 
-- [ ] `ALB6.04` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB6.04` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Only viable groups with available endpoints participate in split selection; if no group is viable routing returns `NoEndpointGroupAvailable`.
   Add explicit fallback behavior when a selected split bucket has no available endpoints.
 
-- [ ] `ALB6.05` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB6.05` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: Empty `EndpointGroups` skips group routing and preserves `ModelRunnerEndpointIds` behavior.
   Preserve current `ModelRunnerEndpointIds` behavior by projecting existing endpoint IDs into a default group.
 
-- [ ] `ALB6.06` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB6.06` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RoutingDecision` includes selected endpoint group id/name/priority and split bucket.
   Add group and split details to routing decisions, request history, and explain-routing APIs.
 
 - [ ] `ALB6.07` Status: Not Started | Priority: P1 | Owner: QA Engineer | Assignee: TBD | Evidence:
@@ -346,51 +346,51 @@ The implementation must be reconciled against `C:\Code\Agents\requirements` befo
 
 ## Workstream 7: REST API, Validation Routes, And API Explorer
 
-- [ ] `ALB7.01` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB7.01` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: VMR create/update/validate/read/effective/explain routes use the expanded `VirtualModelRunner` and `RoutingDecision` contracts.
   Update VMR create, update, validate, effective-configuration, and explain-routing routes to accept and return adaptive/group/split configuration.
 
-- [ ] `ALB7.02` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB7.02` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `GET /v1.0/virtualmodelrunners/{id}/runtime-stats` with optional `endpointId`.
   Add runtime stats routes for listing endpoint runtime snapshots by tenant, VMR, endpoint, and status/backoff filters.
 
-- [ ] `ALB7.03` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB7.03` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `ConfigurationValidationService.ValidateAdaptiveLoadBalancing` and `ValidateEndpointGroups`.
   Add validation coverage for adaptive settings, group definitions, traffic weights, duplicate ids, invalid priorities, unavailable endpoint references, and cross-tenant references.
 
-- [ ] `ALB7.04` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB7.04` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `GET /v1.0/loadbalancingpolicies/metrics` returns runtime metrics from `LoadBalancingPolicyCatalogProvider`.
   Update `GET /v1.0/loadbalancingpolicies/metrics` to include runtime metrics with clear source, filter/rank support, type, and recommended direction.
 
-- [ ] `ALB7.05` Status: Not Started | Priority: P1 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB7.05` Status: Done | Priority: P1 | Owner: Software Engineer | Assignee: Codex | Evidence: `POST /runtime-stats/reset` and `POST /runtime-backoff/clear`.
   Add management APIs to clear runtime stats or transient backoff for authorized operators.
 
-- [ ] `ALB7.06` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB7.06` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `VirtualModelRunnerRouteModule` includes OpenAPI metadata for runtime stats, reset, and backoff-clear routes.
   Update route modules with OpenAPI/API Explorer metadata for new request/response shapes, query parameters, and error responses.
 
-- [ ] `ALB7.07` Status: Not Started | Priority: P0 | Owner: Security Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB7.07` Status: In Progress | Priority: P0 | Owner: Security Engineer | Assignee: Codex | Evidence: `RequestTypeEnum`, `RequestTypeResolver`, and `AuthorizationConfig` map runtime read/reset/clear routes; cross-tenant tests remain.
   Enforce tenant scope and existing administrator semantics on all new routes. Prove cross-tenant access is denied.
 
 ## Workstream 8: Observability, Request History, Analytics, And Metrics
 
-- [ ] `ALB8.01` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB8.01` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RoutingDecision.SelectionStrategy`, `AdaptiveSampleCount`, `SelectedAdaptiveScore`, selected group fields, candidate `AdaptiveScore`, candidate `RuntimeStats`, transient backoff evidence, and sampled candidate score components.
   Add routing decision fields for selected group id/name, selection strategy, sample count, sampled candidates, runtime score, and backoff evidence.
 
-- [ ] `ALB8.02` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB8.02` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RequestHistoryEntry` persists `SelectionStrategy`, `EndpointGroupGuid`, `EndpointGroupName`, `BackoffReason`, `AdaptiveSelection`, and `PolicyFallbackUsed`; `RequestHistoryService.ApplyRoutingDecision` copies evidence from `RoutingDecision`.
   Persist compact adaptive-routing evidence in request history detail where request history is enabled.
 
-- [ ] `ALB8.03` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB8.03` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `RequestHistorySearchFilter`, `RequestHistorySummaryFilter`, `ConductorRouteModule`, and all provider `RequestHistoryMethods` support `selectionStrategy`, `endpointGroupGuid`, `backoffReason`, `adaptiveSelection`, and `policyFallbackUsed`; summary responses include strategy/group/backoff/adaptive/fallback facets.
   Add request-history search and summary filters for selection strategy, endpoint group, backoff reason, policy fallback, and adaptive selection.
 
-- [ ] `ALB8.04` Status: Not Started | Priority: P1 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB8.04` Status: In Progress | Priority: P1 | Owner: Software Engineer | Assignee: Codex | Evidence: Request-history summaries now expose strategy, endpoint group, backoff reason, adaptive, and fallback facets; dedicated RequestAnalytics reliability views remain open.
   Add analytics groupings and reliability views for adaptive mode, endpoint group, backoff reason, rate-limited count, and adaptive-vs-compatibility performance.
 
-- [ ] `ALB8.05` Status: Not Started | Priority: P0 | Owner: Software Engineer | Assignee: TBD | Evidence:
+- [x] `ALB8.05` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `OperationalMetricsService` emits `conductor_load_balancing_selections_total`, `conductor_endpoint_group_selections_total`, `conductor_adaptive_selections_total`, `conductor_runtime_backoffs_total`, `conductor_adaptive_sampled_candidates`, and `conductor_adaptive_selected_score`.
   Add Prometheus metrics for adaptive selections, runtime backoffs, sampled candidate count, selected score, score component distributions, and backoff recovery.
 
-- [ ] `ALB8.06` Status: Not Started | Priority: P0 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB8.06` Status: Done | Priority: P0 | Owner: SRE | Assignee: Codex | Evidence: New metric labels use stable tenant id, VMR id/name from existing metric scope, api family, strategy, endpoint id, endpoint group id, and stable reason code; no raw prompt, body, header, or model-name labels were added.
   Ensure metrics labels avoid unbounded cardinality. Endpoint id, VMR id, tenant id, api family, strategy, and reason code are acceptable; raw model names require explicit review.
 
-- [ ] `ALB8.07` Status: Not Started | Priority: P1 | Owner: SRE | Assignee: TBD | Evidence:
+- [x] `ALB8.07` Status: Done | Priority: P1 | Owner: SRE | Assignee: Codex | Evidence: `ObservabilityMetricsSnapshot` includes adaptive selection counts, runtime backoff counts, selection strategy counts, endpoint-group counts, backoff reason counts, sampled candidate histogram, and selected score histogram.
   Add JSON observability snapshot fields for adaptive routing and backoff state.
 
-- [ ] `ALB8.08` Status: Not Started | Priority: P0 | Owner: Security Engineer | Assignee: TBD | Evidence:
+- [x] `ALB8.08` Status: Done | Priority: P0 | Owner: Security Engineer | Assignee: Codex | Evidence: Persisted history and metrics fields are compact strategy names, endpoint/group ids and names already visible through existing control-plane access, booleans, scores, counts, and stable reason codes; no provider secrets, auth headers, raw request bodies, or raw response bodies were added to these new fields.
   Confirm request history and metrics do not expose provider secrets, authorization headers, raw request bodies, or raw response bodies beyond existing request-history retention settings.
 
 ## Workstream 9: Dashboard UX And Frontend Implementation
@@ -400,31 +400,31 @@ Dashboard work is release-sensitive. Every task in this workstream must be check
 - [ ] `ALB9.01` Status: Not Started | Priority: P0 | Owner: UX Designer | Assignee: TBD | Evidence:
   Produce dashboard UX notes for adaptive settings, priority groups, traffic splits, runtime stats, transient backoff, validation errors, and routing explanations.
 
-- [ ] `ALB9.02` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.02` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/api/api.js` includes runtime stats read/reset, runtime backoff clear, validation, effective config, model load, and explain-routing API helpers.
   Update `dashboard/src/api/api.js` with new runtime stats, validation, VMR configuration, and backoff-clear API methods.
 
-- [ ] `ALB9.03` Status: In Progress | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/VirtualModelRunners.jsx` exposes `LeastRecentlyUsed` in the existing Load Balancing Mode select; adaptive settings UI remains open.
+- [x] `ALB9.03` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/VirtualModelRunners.jsx` exposes `LeastRecentlyUsed` and adaptive selection in the existing Load Balancing Mode select; create/edit payloads preserve compatibility defaults and include adaptive settings only through the VMR form state.
   Update `VirtualModelRunners.jsx` create/edit flows for adaptive selection and `LeastRecentlyUsed`. Preserve existing default behavior and make opt-in state obvious.
 
-- [ ] `ALB9.04` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.04` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/VirtualModelRunners.jsx` adds endpoint-group create/update/delete controls with id, name, priority, active state, endpoint assignment, and validation results rendered through the existing VMR validation panel.
   Add priority-group editor with endpoint assignment, priority ordering, active state, and validation feedback.
 
-- [ ] `ALB9.05` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.05` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/VirtualModelRunners.jsx` endpoint-group editor includes `TrafficWeight`, zero-weight entry support, active toggle, endpoint assignment, and save-payload normalization.
   Add traffic-split editor with weighted groups, totals, disabled/zero-weight handling, and clear distribution preview.
 
-- [ ] `ALB9.06` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.06` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/LoadBalancingPolicies.jsx` consumes the metrics catalog, displays runtime metric ids/descriptions in diagnostics, and preserves existing warnings for unavailable telemetry-backed metrics.
   Update load-balancing policy UI to expose runtime metrics in filters and ranking rules, including recommended directions and missing-metric warnings.
 
-- [ ] `ALB9.07` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.07` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/VirtualModelRunners.jsx` adds a runtime stats modal with pending count, completed count, success/error EWMA, latency EWMA, TTFT EWMA, backoff state, and last status/error columns.
   Add runtime stats view for endpoint detail, VMR detail, or a dedicated operational panel. Include success/error EWMA, latency EWMA, TTFT EWMA, pending requests, backoff state, and last error summary.
 
-- [ ] `ALB9.08` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.08` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/VirtualModelRunners.jsx` explain-routing output displays selected group, group bucket, sampled candidates, score components, exclusion reasons, and transient backoff evidence when present.
   Update explain-routing UI to show selected group, split bucket, sampled candidates, runtime score components, exclusion reasons, and transient backoff evidence.
 
-- [ ] `ALB9.09` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.09` Status: Done | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/RequestHistory.jsx` adds adaptive routing filters for strategy, endpoint group, backoff reason, adaptive selection, and policy fallback, plus routing grid/detail fields and badges.
   Update request-history detail and filters to include adaptive routing evidence and backoff reason filters.
 
-- [ ] `ALB9.10` Status: Not Started | Priority: P1 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
+- [x] `ALB9.10` Status: Done | Priority: P1 | Owner: Frontend Engineer | Assignee: Codex | Evidence: `dashboard/src/views/VirtualModelRunners.jsx` exposes a runtime backoff-clear action in the runtime stats modal and requires a confirmation prompt before issuing the request.
   Add backoff-clear action where appropriate, gated by authorization and confirmation.
 
 - [ ] `ALB9.11` Status: Not Started | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence:
@@ -449,61 +449,61 @@ Dashboard work is release-sensitive. Every task in this workstream must be check
 
 ### JavaScript SDK
 
-- [ ] `ALB10.01` Status: Not Started | Priority: P0 | Owner: SDK Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.01` Status: Done | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: `sdk/javascript/src/index.js` exposes validation, effective config, model load, explain routing, runtime stats, runtime stats reset, and runtime backoff clear helpers; adaptive config is passed through the VMR payload.
   Add JavaScript methods for reading/updating adaptive VMR config, `LeastRecentlyUsed` mode values, runtime stats, validation, explain-routing fields, and optional backoff-clear routes.
 
-- [ ] `ALB10.02` Status: Not Started | Priority: P0 | Owner: SDK Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.02` Status: Done | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: `sdk/javascript/test/client.test.js` covers runtime stats, stats reset, and backoff clear URL/method/body construction; `npm.cmd test` in `sdk\javascript` passed 14/14.
   Add JavaScript tests for exact URL, method, query parameters, request bodies, and response pass-through for every new helper.
 
-- [ ] `ALB10.03` Status: Not Started | Priority: P0 | Owner: Documentation Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.03` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `sdk/javascript/README.md` includes adaptive VMR payload, endpoint groups, runtime stats, stats reset, and backoff-clear examples.
   Update `sdk/javascript/README.md` with adaptive routing examples, priority groups, traffic splits, validation, and runtime stats.
 
 ### Python SDK
 
-- [ ] `ALB10.04` Status: Not Started | Priority: P0 | Owner: SDK Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.04` Status: Done | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: `sdk/python/src/conductor_client/client.py` exposes validation, effective config, model load, explain routing, runtime stats, runtime stats reset, and runtime backoff clear helpers; adaptive config is passed through the VMR payload.
   Add Python methods for reading/updating adaptive VMR config, `LeastRecentlyUsed` mode values, runtime stats, validation, explain-routing fields, and optional backoff-clear routes.
 
-- [ ] `ALB10.05` Status: Not Started | Priority: P0 | Owner: SDK Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.05` Status: Done | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: `sdk/python/tests/test_client.py` covers runtime stats, stats reset, and backoff clear URL/method/body construction; `$env:PYTHONPATH='src'; python -m pytest` in `sdk\python` passed 14/14.
   Add Python tests for exact URL, method, query parameters, request bodies, and response pass-through for every new helper.
 
-- [ ] `ALB10.06` Status: Not Started | Priority: P0 | Owner: Documentation Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.06` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `sdk/python/README.md` includes adaptive VMR payload, endpoint groups, runtime stats, stats reset, and backoff-clear examples.
   Update `sdk/python/README.md` with adaptive routing examples, priority groups, traffic splits, validation, and runtime stats.
 
 ### C# SDK
 
-- [ ] `ALB10.07` Status: Not Started | Priority: P0 | Owner: SDK Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.07` Status: Done | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: `sdk/csharp/Conductor.Sdk/ConductorClient.cs`; `AdaptiveLoadBalancingSettings.cs`; `AdaptiveScoreWeights.cs`; `EndpointGroup.cs`; `EndpointRuntimeStatsCollection.cs`; `EndpointRuntimeStatsSnapshot.cs`; `LoadBalancingMode.cs`.
   Add C# SDK methods and typed models for adaptive VMR config, `LeastRecentlyUsed` mode values, runtime stats, validation, explain-routing fields, and optional backoff-clear routes.
 
-- [ ] `ALB10.08` Status: Not Started | Priority: P0 | Owner: SDK Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.08` Status: Done | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: `sdk/csharp/Conductor.Sdk.Tests/ConductorClientAnalyticsTests.cs` covers runtime stats route helpers and adaptive model serialization; `dotnet test sdk\csharp\Conductor.Sdk.slnx --no-restore /nr:false` passed 8/8.
   Add C# SDK tests for exact URL, method, query parameters, request bodies, typed model serialization, and response handling.
 
-- [ ] `ALB10.09` Status: Not Started | Priority: P0 | Owner: Documentation Engineer | Assignee: TBD | Evidence:
+- [x] `ALB10.09` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `sdk/csharp/README.md` includes adaptive settings, endpoint groups, runtime stats, stats reset, and backoff-clear examples.
   Update `sdk/csharp/README.md` with adaptive routing examples, priority groups, traffic splits, validation, and runtime stats.
 
 ## Workstream 11: Documentation, Changelog, And Postman
 
-- [ ] `ALB11.01` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `README.md` documents `LeastRecentlyUsed` behavior; full adaptive overview and workflow remain open.
+- [x] `ALB11.01` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `README.md` documents adaptive mode, `LeastRecentlyUsed`, runtime stats/reset/backoff routes, request-history adaptive evidence, and the recommended validate/effective/runtime/explain workflow.
   Update `README.md` with an adaptive load-balancing overview, `LeastRecentlyUsed` behavior, when to use each scheme, compatibility defaults, dashboard entry points, and high-level workflow.
 
-- [ ] `ALB11.02` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `REST_API.md` lists `LeastRecentlyUsed` as a supported VMR `LoadBalancingMode`; new adaptive models/routes remain open.
+- [x] `ALB11.02` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `REST_API.md` documents `AdaptiveLoadBalancing`, `EndpointGroups`, `Adaptive` and `LeastRecentlyUsed` enum semantics, runtime stats/reset/backoff-clear routes, and explain-routing/request-history adaptive evidence.
   Update `REST_API.md` with new models, route bodies, `LeastRecentlyUsed` enum semantics, validation errors, runtime stats, backoff behavior, and examples.
 
-- [ ] `ALB11.03` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `LOAD_BALANCING_POLICIES.md` now separates VMR `LoadBalancingMode` values from policy `TieBreaker` values and documents `LeastRecentlyUsed`; runtime metrics and adaptive policy content remain open.
+- [x] `ALB11.03` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `LOAD_BALANCING_POLICIES.md` documents `LeastRecentlyUsed`, `Adaptive`, endpoint groups, traffic weights, adaptive runtime scoring, transient backoff, policy fail-open/fail-closed order, and troubleshooting evidence surfaces.
   Update `LOAD_BALANCING_POLICIES.md` with `LeastRecentlyUsed`, runtime metrics, adaptive selection, priority groups, traffic splits, fail-open/fail-closed behavior, and troubleshooting.
 
-- [ ] `ALB11.04` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `TESTING.md` now includes load-balancing feature expectations, focused validation commands, shared test locations, and manual VMR create/edit UX checks for `LeastRecentlyUsed`; migration, security, and performance validation remain open for the broader adaptive release.
+- [x] `ALB11.04` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `TESTING.md` includes load-balancing validation commands, adaptive shared test locations, Postman parsing, SDK tests, and manual dashboard checks for adaptive settings, runtime stats, explain-routing, request history, and responsive widths.
   Update `TESTING.md` with backend, dashboard, SDK, Postman, migration, security, and performance validation commands.
 
-- [ ] `ALB11.05` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `CHANGELOG.md` Unreleased now includes `LeastRecentlyUsed` behavior and .NET package-update notes; broader adaptive runtime/API/SDK entries remain open until those capabilities ship.
+- [x] `ALB11.05` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `CHANGELOG.md` Unreleased includes `LeastRecentlyUsed`, adaptive runtime scoring, endpoint groups, traffic weights, transient backoff, runtime stats APIs, dashboard controls, SDK helpers, Postman coverage, REST documentation, and shared backend tests.
   Update `CHANGELOG.md` under Unreleased with server, dashboard, SDK, docs, and Postman changes.
 
-- [ ] `ALB11.06` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `Conductor.postman_collection.json` VMR create payload demonstrates `LeastRecentlyUsed`; broader adaptive examples remain open.
+- [x] `ALB11.06` Status: Done | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `Conductor.postman_collection.json` VMR create payload demonstrates adaptive settings and endpoint groups; VMR folder includes runtime stats, runtime stats reset, and runtime backoff clear requests; validation/effective/explain-routing requests already exist.
   Update `Conductor.postman_collection.json` with folders and examples for adaptive VMR config, validation, runtime stats, explain-routing, and backoff clearing if shipped.
 
-- [x] `ALB11.07` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null` passed on 2026-06-25.
+- [x] `ALB11.07` Status: Done | Priority: P0 | Owner: Software Engineer | Assignee: Codex | Evidence: `Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null` passed after adaptive runtime route additions on 2026-06-25.
   Validate Postman JSON with `Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null`.
 
-- [ ] `ALB11.08` Status: Not Started | Priority: P0 | Owner: Documentation Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB11.08` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: `src/Conductor.Server/Routing/VirtualModelRunnerRouteModule.cs` includes OpenAPI metadata for validate, load-model, health, effective, runtime stats, runtime stats reset, runtime backoff clear, and explain-routing routes with response types; rendered API Explorer verification remains a manual/release gate.
   Update API Explorer/OpenAPI metadata and verify all new fields and routes render with useful names and examples.
 
 - [ ] `ALB11.09` Status: Not Started | Priority: P1 | Owner: Documentation Engineer | Assignee: TBD | Evidence:
@@ -511,16 +511,16 @@ Dashboard work is release-sensitive. Every task in this workstream must be check
 
 ## Workstream 12: Backend Tests
 
-- [ ] `ALB12.01` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB12.01` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `VirtualModelRunnerTests.AdaptiveLoadBalancing_SerializesAndDeserializesCorrectly`; `EndpointGroups_SerializesAndDeserializesCorrectly`; `AdaptiveJson_WhenMissing_UsesBackwardCompatibleDefaults`.
   Add model tests for adaptive settings defaults, clamping, serialization, deserialization, and backward-compatible missing fields.
 
 - [x] `ALB12.01A` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `EnumTests.LoadBalancingModeEnum_LeastRecentlyUsed_HasValue3`; `EnumTests.LoadBalancingModeEnum_CanParse`; `EnumTests.LoadBalancingModeEnum_LeastRecentlyUsed_SerializesAsJsonString`.
   Add enum and serialization tests for `LeastRecentlyUsed`. Verify existing enum numeric values and JSON strings remain backward compatible.
 
-- [ ] `ALB12.02` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB12.02` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `ConfigurationValidationServiceTests` covers invalid sample count, invalid cold-start score, invalid EWMA factor, invalid backoff durations, invalid failure threshold, empty/negative score weights, duplicate group ids, empty groups, invalid traffic weights, duplicate endpoint ids, unattached endpoint ids, and cross-tenant endpoint references; `dotnet test src\Test.Xunit\Test.Xunit.csproj --no-restore --no-build /nr:false` passed 1067/1067.
   Add validation tests for invalid sample counts, negative weights, invalid EWMA factors, invalid backoff durations, duplicate group ids, empty groups, invalid traffic weights, and cross-tenant endpoint references.
 
-- [ ] `ALB12.03` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB12.03` Status: In Progress | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `EndpointRuntimeStatsServiceTests` covers selection/admission/completion, success EWMA, failure EWMA, timeout/error backoff, 429 retry-after backoff, streaming TTFT EWMA, endpoint-scoped backoff clear, reset, and cold snapshots; cancellation and cleanup-specific cases remain open; xUnit, NUnit, and `Test.Automated` passed 1070/1070.
   Add runtime stats service tests for success, failure, timeout, 429, 5xx, streaming TTFT, non-streaming TTFT, cancellation, cleanup, and reset.
 
 - [ ] `ALB12.04` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
@@ -562,7 +562,7 @@ Dashboard work is release-sensitive. Every task in this workstream must be check
 - [ ] `ALB12.15` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
   Add controller tests for runtime stats routes, validation routes, VMR update routes, tenant scope, forbidden access, not found, and invalid payloads.
 
-- [ ] `ALB12.16` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB12.16` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `RequestHistorySchemaTests` validates provider table-query definitions and deferred migrated indexes; `DatabaseMigrationTests.Sqlite_Initialize_UpgradesLegacyRequestHistorySchema` validates SQLite upgrade columns/defaults/indexes; xUnit, NUnit, and `Test.Automated` passed 1070/1070.
   Add database migration tests across SQLite, MySQL, PostgreSQL, and SQL Server table-query definitions and available integration providers.
 
 - [ ] `ALB12.17` Status: Not Started | Priority: P1 | Owner: QA Engineer | Assignee: TBD | Evidence:
@@ -582,7 +582,7 @@ Dashboard work is release-sensitive. Every task in this workstream must be check
 - [ ] `ALB13.04` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
   Add dashboard tests or documented manual checks for runtime stats loading, empty state, stale state, forbidden state, and retry behavior.
 
-- [ ] `ALB13.05` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB13.05` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `VirtualModelRunners.jsx` explain-routing modal displays selected group, adaptive sample count, candidate adaptive score/components, runtime stats, and backoff state; `RequestHistory.jsx` adds adaptive filters/detail fields; `npm.cmd run build` passed.
   Add dashboard tests or documented manual checks for explain-routing adaptive evidence and request-history adaptive filters/detail fields.
 
 - [ ] `ALB13.06` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
@@ -591,24 +591,24 @@ Dashboard work is release-sensitive. Every task in this workstream must be check
 - [ ] `ALB13.07` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
   Triple-check the dashboard UX before merge using seeded long-label and error-state fixtures. Record any fixes or explicit residual risks.
 
-- [ ] `ALB13.08` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB13.08` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: Latest `npm.cmd run build` in `dashboard` passed; Vite reported the existing chunk-size warning.
   Run `npm.cmd run build` and record the result.
 
 ## Workstream 14: SDK, Postman, And API Contract Tests
 
-- [ ] `ALB14.01` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB14.01` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `sdk/javascript/test/client.test.js` covers new validation/effective/explain/runtime helpers; `npm.cmd test` passed 14/14.
   Add JavaScript SDK tests for every new method and update existing tests if VMR payload shapes change.
 
-- [ ] `ALB14.02` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB14.02` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `sdk/python/tests/test_client.py` covers new validation/effective/explain/runtime helpers; `$env:PYTHONPATH='src'; python -m pytest` passed 14/14.
   Add Python SDK tests for every new method and update existing tests if VMR payload shapes change.
 
-- [ ] `ALB14.03` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB14.03` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `sdk/csharp/Conductor.Sdk.Tests/ConductorClientAnalyticsTests.cs` covers runtime route helpers and adaptive model serialization; `dotnet test sdk\csharp\Conductor.Sdk.slnx --no-restore --no-build /nr:false` passed 8/8.
   Add C# SDK tests for every new method and typed model serialization.
 
-- [ ] `ALB14.04` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
+- [x] `ALB14.04` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `Conductor.postman_collection.json` includes adaptive VMR config, validation, effective config, explain-routing, runtime stats, stats reset, and backoff clear examples; JSON parse passed.
   Add Postman coverage verification for adaptive config, validation, runtime stats, explain-routing, and backoff clearing if shipped.
 
-- [ ] `ALB14.05` Status: In Progress | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null` passed; required adaptive route-name verification remains open until those routes are implemented.
+- [x] `ALB14.05` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: Postman request names verified for `Create Virtual Model Runner`, `Get VMR Runtime Stats`, `Reset VMR Runtime Stats`, `Clear VMR Runtime Backoff`, and `Explain Routing (Success Candidate)`; `Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null` passed.
   Parse Postman JSON and verify required request names are present.
 
 - [ ] `ALB14.06` Status: Not Started | Priority: P1 | Owner: QA Engineer | Assignee: TBD | Evidence:
@@ -622,7 +622,7 @@ Dashboard work is release-sensitive. Every task in this workstream must be check
 - [ ] `ALB15.02` Status: Not Started | Priority: P0 | Owner: Security Engineer | Assignee: TBD | Evidence:
   Verify runtime stats and routing evidence do not leak credentials, API keys, bearer tokens, provider URLs beyond existing endpoint visibility rules, prompts, completions, or raw response bodies.
 
-- [ ] `ALB15.03` Status: Not Started | Priority: P0 | Owner: Security Engineer | Assignee: TBD | Evidence:
+- [ ] `ALB15.03` Status: In Progress | Priority: P0 | Owner: Security Engineer | Assignee: Codex | Evidence: `src/Test.Shared/Core/Database/RequestHistorySecurityTests.cs` adds an injection-shaped request-history filter regression test for new adaptive evidence filters; `ConfigurationValidationServiceTests` covers malformed adaptive settings and selector-like runtime error text sanitization is covered by `EndpointRuntimeStatsServiceTests`; xUnit, NUnit, and `Test.Automated` passed 1070/1070. Oversized settings and pathological traffic-weight abuse tests remain open.
   Add negative tests for oversized adaptive settings, oversized group definitions, pathological traffic weights, selector-like strings, and malformed JSON.
 
 - [ ] `ALB15.04` Status: Not Started | Priority: P1 | Owner: SRE | Assignee: TBD | Evidence:
@@ -671,19 +671,19 @@ Pop-Location
 Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null
 ```
 
-- [x] `ALB16.01` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `git diff --check` passed on 2026-06-25.
+- [x] `ALB16.01` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `git diff --check` passed after final adaptive changes on 2026-06-26.
   Run and record `git diff --check`.
 
-- [x] `ALB16.02` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `dotnet restore src\Conductor.sln --disable-parallel` and `dotnet restore sdk\csharp\Conductor.Sdk.slnx` passed; `dotnet list ... package --outdated` and `--vulnerable --include-transitive` reported no updates and no vulnerabilities for both .NET surfaces; `dotnet build src\Conductor.sln --no-restore /nr:false` passed with 0 warnings/0 errors; `dotnet build sdk\csharp\Conductor.Sdk.slnx --no-restore /nr:false` passed with 0 warnings/0 errors; NUnit 1057/1057; xUnit 1057/1057; Test.Automated 1057/1057.
+- [x] `ALB16.02` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `dotnet build src\Conductor.sln --no-restore /nr:false` passed with 0 warnings/0 errors; `dotnet build sdk\csharp\Conductor.Sdk.slnx --no-restore /nr:false` passed with 0 warnings/0 errors; `dotnet test src\Test.Xunit\Test.Xunit.csproj --no-restore --no-build /nr:false` passed 1070/1070; `dotnet test src\Test.Nunit\Test.Nunit.csproj --no-restore --no-build /nr:false` passed 1070/1070; `dotnet run --project src\Test.Automated\Test.Automated.csproj --no-restore --no-build` passed 1070/1070.
   Run and record .NET build and test results.
 
-- [x] `ALB16.03` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `npm.cmd run build` in `dashboard` passed; Vite reported the existing warning that one minified chunk is larger than 500 kB.
+- [x] `ALB16.03` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: Latest `npm.cmd run build` in `dashboard` passed after request-history and runtime-action changes; Vite reported the existing warning that one minified chunk is larger than 500 kB.
   Run and record dashboard production build.
 
-- [x] `ALB16.04` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `npm.cmd test` in `sdk\javascript` passed 13/13; `python -m pytest` in `sdk\python` passed 13/13; `dotnet test --no-restore` in `sdk\csharp` passed 6/6.
+- [x] `ALB16.04` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `npm.cmd test` in `sdk\javascript` passed 14/14; `$env:PYTHONPATH='src'; python -m pytest` in `sdk\python` passed 14/14; `dotnet test sdk\csharp\Conductor.Sdk.slnx --no-restore --no-build /nr:false` passed 8/8.
   Run and record JavaScript, Python, and C# SDK tests.
 
-- [ ] `ALB16.05` Status: In Progress | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json` passed and reported `Conductor API` with 20 top-level items; VMR create payload demonstrates `LeastRecentlyUsed`; broader adaptive route examples remain open because those APIs are not implemented yet.
+- [x] `ALB16.05` Status: Done | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: `Get-Content Conductor.postman_collection.json -Raw | ConvertFrom-Json | Out-Null` passed after adding adaptive VMR config, runtime stats, runtime stats reset, and runtime backoff clear examples.
   Parse Postman JSON and verify required adaptive load-balancing routes are present.
 
 - [ ] `ALB16.06` Status: Not Started | Priority: P0 | Owner: Security Engineer | Assignee: TBD | Evidence:
@@ -717,10 +717,10 @@ This workstream closes the loop against `C:\Code\Agents\requirements`. Do not ma
 - [ ] `ALB17.05` Status: Not Started | Priority: P0 | Owner: Security Engineer | Assignee: TBD | Evidence:
   Enforce secret-handling requirements: runtime stats, routing evidence, logs, request history, API responses, SDK errors, and dashboard views must not reveal bearer tokens, API keys, secret keys, cookies, raw credential material, raw prompts, or raw provider responses beyond existing explicit request-history retention settings.
 
-- [ ] `ALB17.06` Status: In Progress | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: New backend tests are in `src\Test.Shared`; xUnit, NUnit, and `Test.Automated` all passed 1057 shared tests. The shared runner still emits existing service logs, so the no-console-output requirement remains open for full compliance.
+- [ ] `ALB17.06` Status: In Progress | Priority: P0 | Owner: QA Engineer | Assignee: Codex | Evidence: New backend tests are in `src\Test.Shared`; xUnit, NUnit, and `Test.Automated` all passed 1070 shared tests. The shared runner still emits existing service logs, so the no-console-output requirement remains open for full compliance.
   Enforce `BACKEND_TEST_ARCHITECTURE.md`: shared backend tests live in `src/Test.Shared`, produce no console output, and run through xUnit, NUnit, and `Test.Automated`. Add descriptors to the shared suite rather than duplicating behavior in runner-specific projects.
 
-- [ ] `ALB17.07` Status: In Progress | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: Dashboard change uses the existing `VirtualModelRunners.jsx` select pattern and `npm.cmd run build` passed; broader loading/error/empty-state and new-panel requirements remain open.
+- [ ] `ALB17.07` Status: In Progress | Priority: P0 | Owner: Frontend Engineer | Assignee: Codex | Evidence: Dashboard change uses existing `VirtualModelRunners.jsx`, `RequestHistory.jsx`, API-client, modal, table, badge, and confirmation patterns; latest `npm.cmd run build` passed with the existing chunk-size warning. Manual loading/error/empty-state review remains open.
   Enforce `FRONTEND_ARCHITECTURE.md`: dashboard code uses the existing React/Vite/API-client/component patterns, does not introduce a charting library or UI kit, uses accessible modals and confirmations, keeps IDs from wrapping unexpectedly, and handles loading, empty, error, forbidden, retry, and stale-data states.
 
 - [ ] `ALB17.08` Status: In Progress | Priority: P0 | Owner: Frontend Engineer | Assignee: TBD | Evidence: New visible label `Least Recently Used` follows the existing hardcoded enum-option pattern; localization mapping and pseudo-locale/RTL/text-expansion checks remain open before release.
@@ -729,10 +729,10 @@ This workstream closes the loop against `C:\Code\Agents\requirements`. Do not ma
 - [ ] `ALB17.09` Status: Not Started | Priority: P0 | Owner: QA Engineer | Assignee: TBD | Evidence:
   Enforce responsive dashboard requirements from `FRONTEND_ARCHITECTURE.md`: validate desktop, tablet, and mobile widths with realistic production-like data, empty states, loading states, validation errors, long labels, permission-dependent controls, modals, menus, tooltips, and action flows.
 
-- [ ] `ALB17.10` Status: In Progress | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: C# SDK test packages were updated and `dotnet test --no-restore --no-build` passed 6/6; JavaScript and Python SDK tests passed 13/13 each; no SDK contract code changed for the LRU slice. SDK API expansion remains open for future adaptive/runtime routes.
+- [x] `ALB17.10` Status: Done | Priority: P0 | Owner: SDK Engineer | Assignee: Codex | Evidence: JavaScript, Python, and C# SDK changes live under `sdk/{language}`; SDK READMEs were updated; JavaScript tests passed 14/14, Python tests passed 14/14, and C# SDK tests passed 8/8.
   Enforce `REPOSITORY_REQUIREMENTS.md` for SDK work: JavaScript, Python, and C# SDK changes live under `sdk/{language}`, each has tests and README updates, and generated or helper code does not spill outside `src/`, `dashboard/`, or `sdk/`.
 
-- [ ] `ALB17.11` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: README, REST_API, LOAD_BALANCING_POLICIES, TESTING, CHANGELOG, Postman, and MCP metadata were updated for `LeastRecentlyUsed`; SDK READMEs, API Explorer metadata, and final prose review remain open.
+- [ ] `ALB17.11` Status: In Progress | Priority: P0 | Owner: Documentation Engineer | Assignee: Codex | Evidence: README, REST_API, LOAD_BALANCING_POLICIES, TESTING, CHANGELOG, SDK READMEs, Postman, and API Explorer metadata were updated for adaptive load balancing; final human prose review remains open.
   Enforce documentation requirements: README, REST_API, LOAD_BALANCING_POLICIES, TESTING, CHANGELOG, SDK READMEs, Postman examples, and API Explorer metadata are updated, and public-facing prose receives a final review for specificity, clarity, and non-formulaic wording.
 
 - [ ] `ALB17.12` Status: In Progress | Priority: P0 | Owner: DevOps Engineer | Assignee: Codex | Evidence: NuGet package updates and source changes remain within `src`, `sdk`, `dashboard`, root docs, and Postman; no Docker compose files, `.dockerignore`, `.gitignore`, or generated build outputs were intentionally changed. Full release packaging review remains open.
@@ -851,3 +851,8 @@ Add entries as implementation proceeds.
 | 2026-06-25 | Codex | Updated NuGet packages across the main solution and C# SDK, including direct SQLite native bundle remediation and MCP namespace migration for the updated MCP dependency. | `Conductor.Core.csproj`, `Conductor.Server.csproj`, `Conductor.McpServer.csproj`, `Test.McpServer.csproj`, `Test.Shared.csproj`, `Test.Nunit.csproj`, `Test.Xunit.csproj`, `sdk/csharp/Conductor.Sdk.Tests.csproj`, `ConductorMcpServer.cs`, `ConductorToolRegistry.cs`, `ConductorToolRegistrationCatalog.cs`, `Test.McpServer/Program.cs` |
 | 2026-06-25 | Codex | Re-ran package, build, and product-surface validation after NuGet updates. | Main solution and C# SDK package checks reported no outdated or vulnerable packages; main and C# SDK builds passed with 0 warnings/0 errors; NUnit 1057/1057; xUnit 1057/1057; Test.Automated 1057/1057; JavaScript SDK 13/13; Python SDK 13/13; C# SDK 6/6; dashboard build passed with the existing Vite chunk-size warning; Postman JSON parsed |
 | 2026-06-25 | Codex | Added release-note and testing-guide coverage for the shipped load-balancing slice. | `CHANGELOG.md` Unreleased entries; `TESTING.md` load-balancing release gate and manual dashboard checks |
+| 2026-06-25 | Codex | Wrote the adaptive load-balancing ADR and closed delegated planning decisions. | `docs/adr/0004-adaptive-load-balancing.md`; `ALB0.01` through `ALB0.08` |
+| 2026-06-25 | Codex | Added core adaptive configuration, endpoint-group, runtime snapshot, runtime collection, and candidate-score contracts. | `AdaptiveLoadBalancingSettings.cs`, `AdaptiveScoreWeights.cs`, `EndpointGroup.cs`, `EndpointRuntimeStatsSnapshot.cs`, `EndpointRuntimeStatsCollection.cs`, `AdaptiveCandidateScore.cs` |
+| 2026-06-25 | Codex | Added VMR persistence for adaptive settings and endpoint groups across models, provider SQL, migrations, and Docker schemas. | `VirtualModelRunner.cs`; four provider `VirtualModelRunnerMethods.cs`; provider `TableQueries.cs`; provider database drivers; `docker/factory/schema.sql`; `docker/postgres/init.sql` |
+| 2026-06-25 | Codex | Implemented runtime stats, adaptive scoring, transient backoff, endpoint group routing, runtime policy metrics, validation, and management routes. | `EndpointRuntimeStatsService.cs`, `AdaptiveEndpointSelectionService.cs`, `RoutingDecisionService.cs`, `ProxyController.cs`, `LoadBalancingPolicyMetricResolver.cs`, `LoadBalancingPolicyCatalogProvider.cs`, `ConfigurationValidationService.cs`, `VirtualModelRunnerRouteModule.cs` |
+| 2026-06-25 | Codex | Added structured adaptive/group/backoff routing evidence to decisions, request history, history filters, summary facets, Prometheus metrics, and JSON observability snapshots. | `RoutingDecision.cs`, `RequestHistoryEntry.cs`, provider `RequestHistoryMethods.cs`, provider schemas/migrations, `ConductorRouteModule.cs`, `OperationalMetricsService.cs`, `ObservabilityMetricsSnapshot.cs` |

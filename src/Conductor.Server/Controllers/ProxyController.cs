@@ -29,6 +29,7 @@ namespace Conductor.Server.Controllers
         private readonly RequestHistoryService _RequestHistoryService;
         private readonly RoutingDecisionService _RoutingDecisionService;
         private readonly OperationalMetricsService _Metrics;
+        private readonly EndpointRuntimeStatsService _RuntimeStatsService;
         private readonly ModelAccessControlSettings _ModelAccessControlSettings;
         private readonly ModelAccessListModelsResponseFilter _ModelAccessListModelsResponseFilter;
 
@@ -51,6 +52,7 @@ namespace Conductor.Server.Controllers
         /// <param name="metrics">Operational metrics service (optional).</param>
         /// <param name="modelAccessControlSettings">Model access control settings (optional).</param>
         /// <param name="modelAccessControlService">Model access control service (optional).</param>
+        /// <param name="runtimeStatsService">Runtime stats service (optional).</param>
         public ProxyController(
             DatabaseDriverBase database,
             AuthenticationService authService,
@@ -62,13 +64,15 @@ namespace Conductor.Server.Controllers
             RoutingDecisionService routingDecisionService = null,
             OperationalMetricsService metrics = null,
             ModelAccessControlSettings modelAccessControlSettings = null,
-            IModelAccessControlService modelAccessControlService = null)
+            IModelAccessControlService modelAccessControlService = null,
+            EndpointRuntimeStatsService runtimeStatsService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
             _RequestHistoryService = requestHistoryService;
             _RoutingDecisionService = routingDecisionService;
             _Metrics = metrics;
+            _RuntimeStatsService = runtimeStatsService;
             _ModelAccessControlSettings = modelAccessControlSettings ?? new ModelAccessControlSettings();
             if (modelAccessControlService != null)
             {
@@ -97,6 +101,8 @@ namespace Conductor.Server.Controllers
             ModelRunnerEndpoint endpoint = null;
             VirtualModelRunner vmr = null;
             bool incrementedInFlight = false;
+            bool runtimeStatsAdmitted = false;
+            bool runtimeStatsCompleted = false;
             RequestAnalyticsCapture analyticsCapture = new RequestAnalyticsCapture();
 
             try
@@ -201,6 +207,12 @@ namespace Conductor.Server.Controllers
                     }
                 }
 
+                if (_RuntimeStatsService != null)
+                {
+                    _RuntimeStatsService.RecordAdmission(vmr, endpoint);
+                    runtimeStatsAdmitted = true;
+                }
+
                 string targetUrl = BuildTargetUrl(endpoint, routingResult.UrlContext);
                 analyticsCapture.UpstreamStartOffsetMs = (int)stopwatch.ElapsedMilliseconds;
                 using (HttpResponseMessage response = await ForwardRequestAsync(
@@ -221,6 +233,7 @@ namespace Conductor.Server.Controllers
                         historyDetail,
                         stopwatch,
                         analyticsCapture,
+                        () => runtimeStatsCompleted = true,
                         cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -246,6 +259,17 @@ namespace Conductor.Server.Controllers
                         cancellationToken,
                         null,
                         analyticsCapture).ConfigureAwait(false);
+                }
+
+                if (runtimeStatsAdmitted && !runtimeStatsCompleted && _RuntimeStatsService != null && vmr != null && endpoint != null)
+                {
+                    _RuntimeStatsService.RecordFailure(
+                        vmr,
+                        endpoint,
+                        MapRuntimeErrorCode(ex),
+                        stopwatch.Elapsed.TotalMilliseconds,
+                        vmr.AdaptiveLoadBalancing);
+                    runtimeStatsCompleted = true;
                 }
             }
             finally
@@ -392,6 +416,7 @@ namespace Conductor.Server.Controllers
             RequestHistoryDetail historyDetail,
             Stopwatch stopwatch,
             RequestAnalyticsCapture analyticsCapture,
+            Action runtimeStatsCompletionRecorded,
             CancellationToken cancellationToken)
         {
             RoutingDecision decision = routingResult?.Decision ?? new RoutingDecision();
@@ -495,6 +520,21 @@ namespace Conductor.Server.Controllers
                 responseBodyString = responseBody != null ? Encoding.UTF8.GetString(responseBody) : null;
             }
 
+            if (_RuntimeStatsService != null && vmr != null && endpoint != null)
+            {
+                int? effectiveFirstTokenTimeMs = firstTokenTimeMs ?? analyticsCapture?.UpstreamHeadersOffsetMs;
+                _RuntimeStatsService.RecordCompletion(
+                    vmr,
+                    endpoint,
+                    (int)response.StatusCode,
+                    stopwatch.Elapsed.TotalMilliseconds,
+                    effectiveFirstTokenTimeMs,
+                    vmr.AdaptiveLoadBalancing,
+                    response.Headers,
+                    response.Content?.Headers);
+                runtimeStatsCompletionRecorded?.Invoke();
+            }
+
             // Update request history with response
             if (historyDetail != null && _RequestHistoryService != null)
             {
@@ -525,6 +565,26 @@ namespace Conductor.Server.Controllers
                     stopwatch.Elapsed.TotalMilliseconds,
                     firstTokenTimeMs);
             }
+        }
+
+        private static string MapRuntimeErrorCode(Exception ex)
+        {
+            if (ex == null)
+            {
+                return "UpstreamFailure";
+            }
+
+            if (ex is TaskCanceledException || ex is OperationCanceledException)
+            {
+                return "Timeout";
+            }
+
+            if (ex is HttpRequestException)
+            {
+                return "ConnectionFailure";
+            }
+
+            return ex.GetType().Name;
         }
 
         private async Task<byte[]> ApplyModelAccessListModelsResponseFilterAsync(

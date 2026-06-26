@@ -557,6 +557,12 @@ namespace Conductor.Server.Services
             detail.EffectiveModel = routingDecision.EffectiveModel;
             detail.RequestType = routingDecision.RequestType.ToString();
             detail.RoutingOutcomeCode = routingDecision.OutcomeCode;
+            detail.SelectionStrategy = routingDecision.SelectionStrategy;
+            detail.EndpointGroupGuid = routingDecision.SelectedEndpointGroupId;
+            detail.EndpointGroupName = routingDecision.SelectedEndpointGroupName;
+            detail.BackoffReason = routingDecision.BackoffReason;
+            detail.AdaptiveSelection = routingDecision.AdaptiveModeUsed;
+            detail.PolicyFallbackUsed = routingDecision.PolicyFallbackUsed;
             detail.DenialReasonCode = routingDecision.DenialReasonCode;
             detail.DenialReason = routingDecision.DenialReason;
             detail.ReservationGuid = routingDecision.ReservationId;

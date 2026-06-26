@@ -14,6 +14,8 @@ namespace Conductor.Server.Services
     public class OperationalMetricsService
     {
         private static readonly double[] _LatencyBucketsMs = new double[] { 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000 };
+        private static readonly double[] _AdaptiveSampleBuckets = new double[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        private static readonly double[] _AdaptiveScoreBuckets = new double[] { 0, 5, 10, 25, 50, 75, 90, 95, 100 };
         private readonly ConcurrentDictionary<string, CounterSeries> _Counters = new ConcurrentDictionary<string, CounterSeries>();
         private readonly ConcurrentDictionary<string, HistogramSeries> _Histograms = new ConcurrentDictionary<string, HistogramSeries>();
 
@@ -30,7 +32,14 @@ namespace Conductor.Server.Services
             string denialReasonCode,
             string sessionAffinityOutcome,
             bool policyFallbackUsed,
-            double routeDecisionDurationMs)
+            double routeDecisionDurationMs,
+            string selectionStrategy = null,
+            bool adaptiveModeUsed = false,
+            int adaptiveSampleCount = 0,
+            double? selectedAdaptiveScore = null,
+            string endpointGroupId = null,
+            string backoffReason = null,
+            string selectedEndpointId = null)
         {
             Dictionary<string, string> requestLabels = BuildScopedLabels(tenantId, vmrId, vmrName, apiFamily);
             requestLabels["outcome"] = String.IsNullOrEmpty(outcomeCode) ? (success ? "Routed" : "Denied") : outcomeCode;
@@ -61,6 +70,44 @@ namespace Conductor.Server.Services
             if (policyFallbackUsed)
             {
                 IncrementCounter("conductor_policy_fallbacks_total", BuildScopedLabels(tenantId, vmrId, vmrName, apiFamily), 1);
+            }
+
+            if (!String.IsNullOrWhiteSpace(selectionStrategy))
+            {
+                Dictionary<string, string> strategyLabels = BuildScopedLabels(tenantId, vmrId, vmrName, apiFamily);
+                strategyLabels["strategy"] = selectionStrategy;
+                if (!String.IsNullOrWhiteSpace(selectedEndpointId))
+                {
+                    strategyLabels["endpoint_id"] = selectedEndpointId;
+                }
+                IncrementCounter("conductor_load_balancing_selections_total", strategyLabels, 1);
+            }
+
+            if (!String.IsNullOrWhiteSpace(endpointGroupId))
+            {
+                Dictionary<string, string> groupLabels = BuildScopedLabels(tenantId, vmrId, vmrName, apiFamily);
+                groupLabels["endpoint_group_id"] = endpointGroupId;
+                IncrementCounter("conductor_endpoint_group_selections_total", groupLabels, 1);
+            }
+
+            if (adaptiveModeUsed)
+            {
+                Dictionary<string, string> adaptiveLabels = BuildScopedLabels(tenantId, vmrId, vmrName, apiFamily);
+                adaptiveLabels["strategy"] = String.IsNullOrWhiteSpace(selectionStrategy) ? "Adaptive" : selectionStrategy;
+                IncrementCounter("conductor_adaptive_selections_total", adaptiveLabels, 1);
+                ObserveHistogram("conductor_adaptive_sampled_candidates", adaptiveLabels, adaptiveSampleCount, _AdaptiveSampleBuckets);
+
+                if (selectedAdaptiveScore.HasValue)
+                {
+                    ObserveHistogram("conductor_adaptive_selected_score", adaptiveLabels, selectedAdaptiveScore.Value, _AdaptiveScoreBuckets);
+                }
+            }
+
+            if (!String.IsNullOrWhiteSpace(backoffReason))
+            {
+                Dictionary<string, string> backoffLabels = BuildScopedLabels(tenantId, vmrId, vmrName, apiFamily);
+                backoffLabels["reason"] = backoffReason;
+                IncrementCounter("conductor_runtime_backoffs_total", backoffLabels, 1);
             }
         }
 
@@ -152,12 +199,18 @@ namespace Conductor.Server.Services
             AppendCounterFamily(sb, "conductor_session_affinity_total", "Session-affinity outcomes observed by Conductor.");
             AppendCounterFamily(sb, "conductor_saturation_denials_total", "Requests denied because all eligible endpoints were at capacity.");
             AppendCounterFamily(sb, "conductor_telemetry_freshness_failures_total", "Policy evaluations that failed due to stale or missing telemetry.");
+            AppendCounterFamily(sb, "conductor_load_balancing_selections_total", "Endpoint selections grouped by load-balancing strategy.");
+            AppendCounterFamily(sb, "conductor_endpoint_group_selections_total", "Endpoint group selections.");
+            AppendCounterFamily(sb, "conductor_adaptive_selections_total", "Adaptive endpoint selections.");
+            AppendCounterFamily(sb, "conductor_runtime_backoffs_total", "Runtime backoff selections and denials.");
             AppendCounterFamily(sb, "conductor_model_load_requests_total", "Control-plane model load requests observed by Conductor.");
             AppendCounterFamily(sb, "conductor_model_load_endpoint_attempts_total", "Per-endpoint model load attempts observed by Conductor.");
 
             AppendHistogramFamily(sb, "conductor_route_decision_duration_ms", "Latency spent evaluating routing decisions in milliseconds.");
             AppendHistogramFamily(sb, "conductor_total_duration_ms", "End-to-end proxied request duration in milliseconds.");
             AppendHistogramFamily(sb, "conductor_first_token_time_ms", "Time to first token or first response byte in milliseconds.");
+            AppendHistogramFamily(sb, "conductor_adaptive_sampled_candidates", "Number of candidates sampled during adaptive selection.");
+            AppendHistogramFamily(sb, "conductor_adaptive_selected_score", "Selected adaptive endpoint score.");
             AppendHistogramFamily(sb, "conductor_model_load_duration_ms", "Control-plane model load request duration in milliseconds.");
             AppendHistogramFamily(sb, "conductor_model_load_endpoint_duration_ms", "Per-endpoint model load attempt duration in milliseconds.");
 
@@ -178,10 +231,17 @@ namespace Conductor.Server.Services
             AggregateSessionCounters(snapshot.Overall, vmrScopes);
             AggregateScalarCounter("conductor_saturation_denials_total", (aggregate, value) => aggregate.SaturationDenials += value, snapshot.Overall, vmrScopes);
             AggregateScalarCounter("conductor_telemetry_freshness_failures_total", (aggregate, value) => aggregate.TelemetryFreshnessFailures += value, snapshot.Overall, vmrScopes);
+            AggregateScalarCounter("conductor_adaptive_selections_total", (aggregate, value) => aggregate.AdaptiveSelections += value, snapshot.Overall, vmrScopes);
+            AggregateScalarCounter("conductor_runtime_backoffs_total", (aggregate, value) => aggregate.RuntimeBackoffSelections += value, snapshot.Overall, vmrScopes);
+            AggregateLabelCounters("conductor_load_balancing_selections_total", "strategy", (aggregate, key, value) => AddCount(aggregate.SelectionStrategies, key, value), snapshot.Overall, vmrScopes);
+            AggregateLabelCounters("conductor_endpoint_group_selections_total", "endpoint_group_id", (aggregate, key, value) => AddCount(aggregate.EndpointGroupSelections, key, value), snapshot.Overall, vmrScopes);
+            AggregateLabelCounters("conductor_runtime_backoffs_total", "reason", (aggregate, key, value) => AddCount(aggregate.BackoffReasons, key, value), snapshot.Overall, vmrScopes);
 
             snapshot.Overall.RouteDecisionDurationMs = AggregateHistogram("conductor_route_decision_duration_ms", null, null);
             snapshot.Overall.TotalDurationMs = AggregateHistogram("conductor_total_duration_ms", null, null);
             snapshot.Overall.FirstTokenTimeMs = AggregateHistogram("conductor_first_token_time_ms", null, null);
+            snapshot.Overall.AdaptiveSampledCandidates = AggregateHistogram("conductor_adaptive_sampled_candidates", null, null);
+            snapshot.Overall.AdaptiveSelectedScore = AggregateHistogram("conductor_adaptive_selected_score", null, null);
             snapshot.Overall.SessionAffinityHitRate = CalculateHitRate(snapshot.Overall.SessionAffinityHits, snapshot.Overall.SessionAffinityMisses);
 
             foreach (ObservabilityScopedMetrics scoped in vmrScopes.Values.OrderBy(item => item.VirtualModelRunnerName ?? item.VirtualModelRunnerId))
@@ -189,6 +249,8 @@ namespace Conductor.Server.Services
                 scoped.RouteDecisionDurationMs = AggregateHistogram("conductor_route_decision_duration_ms", scoped.TenantId, scoped.VirtualModelRunnerId);
                 scoped.TotalDurationMs = AggregateHistogram("conductor_total_duration_ms", scoped.TenantId, scoped.VirtualModelRunnerId);
                 scoped.FirstTokenTimeMs = AggregateHistogram("conductor_first_token_time_ms", scoped.TenantId, scoped.VirtualModelRunnerId);
+                scoped.AdaptiveSampledCandidates = AggregateHistogram("conductor_adaptive_sampled_candidates", scoped.TenantId, scoped.VirtualModelRunnerId);
+                scoped.AdaptiveSelectedScore = AggregateHistogram("conductor_adaptive_selected_score", scoped.TenantId, scoped.VirtualModelRunnerId);
                 scoped.SessionAffinityHitRate = CalculateHitRate(scoped.SessionAffinityHits, scoped.SessionAffinityMisses);
                 snapshot.VirtualModelRunners.Add(scoped);
             }
@@ -287,6 +349,33 @@ namespace Conductor.Server.Services
                 apply(overall, value);
                 apply(GetOrCreateScope(vmrScopes, series.Labels), value);
             }
+        }
+
+        private void AggregateLabelCounters(
+            string metricName,
+            string labelName,
+            Action<ObservabilityAggregateMetrics, string, long> apply,
+            ObservabilityAggregateMetrics overall,
+            Dictionary<string, ObservabilityScopedMetrics> vmrScopes)
+        {
+            foreach (CounterSeries series in _Counters.Values.Where(item => String.Equals(item.Name, metricName, StringComparison.Ordinal)))
+            {
+                long value = (long)series.Value;
+                string key = GetLabel(series.Labels, labelName) ?? "Unknown";
+                apply(overall, key, value);
+                apply(GetOrCreateScope(vmrScopes, series.Labels), key, value);
+            }
+        }
+
+        private static void AddCount(Dictionary<string, long> values, string key, long value)
+        {
+            string safeKey = String.IsNullOrWhiteSpace(key) ? "Unknown" : key;
+            if (!values.ContainsKey(safeKey))
+            {
+                values[safeKey] = 0;
+            }
+
+            values[safeKey] += value;
         }
 
         private ObservabilityScopedMetrics GetOrCreateScope(Dictionary<string, ObservabilityScopedMetrics> vmrScopes, Dictionary<string, string> labels)

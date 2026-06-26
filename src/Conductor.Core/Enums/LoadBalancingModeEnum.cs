@@ -25,6 +25,11 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// Select the eligible endpoint that was least recently assigned for this virtual model runner.
         /// </summary>
-        LeastRecentlyUsed = 3
+        LeastRecentlyUsed = 3,
+
+        /// <summary>
+        /// Select from eligible endpoints using runtime statistics, transient backoff, priority groups, and traffic splits.
+        /// </summary>
+        Adaptive = 4
     }
 }

@@ -377,6 +377,38 @@ class ConductorClientTests(unittest.TestCase):
         self.assertEqual(session.request.call_args.kwargs["method"], "POST")
         self.assertEqual(session.request.call_args.kwargs["json"], payload)
 
+    def test_virtual_model_runner_runtime_state_requests(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"Endpoints": []}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://localhost:9000", session=session)
+        client.get_virtual_model_runner_runtime_stats("vmr_123", {"tenantId": "ten_123", "endpointId": "mre_123"})
+        client.reset_virtual_model_runner_runtime_stats("vmr_123", {"tenantId": "ten_123", "endpointId": "mre_123"})
+        client.clear_virtual_model_runner_runtime_backoff("vmr_123", {"tenantId": "ten_123", "endpointId": "mre_123"})
+
+        calls = session.request.call_args_list
+        self.assertEqual(
+            calls[0].kwargs["url"],
+            "http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats?tenantId=ten_123&endpointId=mre_123",
+        )
+        self.assertEqual(calls[0].kwargs["method"], "GET")
+        self.assertEqual(
+            calls[1].kwargs["url"],
+            "http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats/reset?tenantId=ten_123&endpointId=mre_123",
+        )
+        self.assertEqual(calls[1].kwargs["method"], "POST")
+        self.assertEqual(calls[1].kwargs["json"], {})
+        self.assertEqual(
+            calls[2].kwargs["url"],
+            "http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-backoff/clear?tenantId=ten_123&endpointId=mre_123",
+        )
+        self.assertEqual(calls[2].kwargs["method"], "POST")
+        self.assertEqual(calls[2].kwargs["json"], {})
+
     def test_observability_metrics_text_returns_raw_body(self) -> None:
         session = MagicMock()
         response = MagicMock()

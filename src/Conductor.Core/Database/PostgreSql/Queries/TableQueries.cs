@@ -280,6 +280,8 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 apitype INTEGER NOT NULL DEFAULT 0,
                 loadbalancingmode INTEGER NOT NULL DEFAULT 0,
                 modelrunnerendpointids TEXT,
+                adaptiveloadbalancing TEXT,
+                endpointgroups TEXT,
                 modelconfigurationids TEXT,
                 modeldefinitionids TEXT,
                 modelconfigurationmappings TEXT,
@@ -406,6 +408,12 @@ namespace Conductor.Core.Database.PostgreSql.Queries
                 effectivemodel VARCHAR(255),
                 requesttype VARCHAR(128),
                 routingoutcomecode VARCHAR(128),
+                selectionstrategy VARCHAR(64),
+                endpointgroupguid VARCHAR(64),
+                endpointgroupname VARCHAR(255),
+                backoffreason VARCHAR(128),
+                adaptiveselection BOOLEAN NOT NULL DEFAULT FALSE,
+                policyfallbackused BOOLEAN NOT NULL DEFAULT FALSE,
                 denialreasoncode VARCHAR(128),
                 denialreason TEXT,
                 reservationguid VARCHAR(48),
@@ -589,6 +597,20 @@ namespace Conductor.Core.Database.PostgreSql.Queries
         /// </summary>
         public static readonly string AddModelAccessPolicyIdColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN modelaccesspolicyid VARCHAR(48);
+        ";
+
+        /// <summary>
+        /// Add adaptiveloadbalancing column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddAdaptiveLoadBalancingColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN adaptiveloadbalancing TEXT;
+        ";
+
+        /// <summary>
+        /// Add endpointgroups column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddEndpointGroupsColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN endpointgroups TEXT;
         ";
     }
 }

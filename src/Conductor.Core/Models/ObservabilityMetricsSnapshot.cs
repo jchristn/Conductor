@@ -75,9 +75,34 @@ namespace Conductor.Core.Models
         public long TelemetryFreshnessFailures { get; set; } = 0;
 
         /// <summary>
+        /// Adaptive endpoint selections.
+        /// </summary>
+        public long AdaptiveSelections { get; set; } = 0;
+
+        /// <summary>
+        /// Runtime backoff selections or denials.
+        /// </summary>
+        public long RuntimeBackoffSelections { get; set; } = 0;
+
+        /// <summary>
         /// Denial counts by reason code.
         /// </summary>
         public Dictionary<string, long> DenialReasons { get; set; } = new Dictionary<string, long>(StringComparer.InvariantCultureIgnoreCase);
+
+        /// <summary>
+        /// Selection counts grouped by stable strategy name.
+        /// </summary>
+        public Dictionary<string, long> SelectionStrategies { get; set; } = new Dictionary<string, long>(StringComparer.InvariantCultureIgnoreCase);
+
+        /// <summary>
+        /// Selection counts grouped by endpoint group identifier.
+        /// </summary>
+        public Dictionary<string, long> EndpointGroupSelections { get; set; } = new Dictionary<string, long>(StringComparer.InvariantCultureIgnoreCase);
+
+        /// <summary>
+        /// Backoff counts grouped by stable reason code.
+        /// </summary>
+        public Dictionary<string, long> BackoffReasons { get; set; } = new Dictionary<string, long>(StringComparer.InvariantCultureIgnoreCase);
 
         /// <summary>
         /// Route-decision latency summary.
@@ -93,6 +118,16 @@ namespace Conductor.Core.Models
         /// Time-to-first-token summary.
         /// </summary>
         public ObservabilityPercentileSummary FirstTokenTimeMs { get; set; } = new ObservabilityPercentileSummary();
+
+        /// <summary>
+        /// Adaptive sampled candidate count summary.
+        /// </summary>
+        public ObservabilityPercentileSummary AdaptiveSampledCandidates { get; set; } = new ObservabilityPercentileSummary();
+
+        /// <summary>
+        /// Selected adaptive score summary.
+        /// </summary>
+        public ObservabilityPercentileSummary AdaptiveSelectedScore { get; set; } = new ObservabilityPercentileSummary();
     }
 
     /// <summary>

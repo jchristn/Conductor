@@ -1,6 +1,6 @@
 # Conductor C# SDK
 
-This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover VMR reservations plus the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
+This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover VMR validation, effective configuration, routing explanation, runtime stats, runtime-state reset, transient-backoff clear, VMR reservations, and the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
 
 ```csharp
 using System.Collections.Generic;
@@ -12,6 +12,56 @@ using ConductorClient client = new ConductorClient(
     bearerToken: "your-token");
 
 using JsonDocument catalog = await client.GetAnalyticsCatalogAsync();
+
+AdaptiveLoadBalancingSettings adaptiveSettings = new AdaptiveLoadBalancingSettings
+{
+    SampleCount = 2,
+    ExcludeBackoffEndpoints = true,
+    BackoffBreaksSessionAffinity = true
+};
+
+using JsonDocument validation = await client.ValidateVirtualModelRunnerAsync(new
+{
+    TenantId = "tenant_123",
+    Name = "Adaptive production route",
+    BasePath = "/v1.0/api/adaptive-production/",
+    LoadBalancingMode = LoadBalancingMode.Adaptive.ToString(),
+    ModelRunnerEndpointIds = new[] { "mre_fast", "mre_fallback" },
+    AdaptiveLoadBalancing = adaptiveSettings,
+    EndpointGroups = new[]
+    {
+        new EndpointGroup
+        {
+            Id = "primary",
+            Name = "Primary",
+            Priority = 0,
+            TrafficWeight = 100,
+            EndpointIds = new List<string> { "mre_fast" }
+        },
+        new EndpointGroup
+        {
+            Id = "fallback",
+            Name = "Fallback",
+            Priority = 1,
+            TrafficWeight = 100,
+            EndpointIds = new List<string> { "mre_fallback" }
+        }
+    }
+});
+
+using JsonDocument runtimeStats = await client.GetVirtualModelRunnerRuntimeStatsAsync(
+    "vmr_123",
+    new Dictionary<string, string> { ["tenantId"] = "tenant_123" });
+using JsonDocument resetStats = await client.ResetVirtualModelRunnerRuntimeStatsAsync(
+    "vmr_123",
+    new Dictionary<string, string>
+    {
+        ["tenantId"] = "tenant_123",
+        ["endpointId"] = "mre_fallback"
+    });
+using JsonDocument clearBackoff = await client.ClearVirtualModelRunnerRuntimeBackoffAsync(
+    "vmr_123",
+    new Dictionary<string, string> { ["tenantId"] = "tenant_123" });
 
 using JsonDocument ttft = await client.GetAnalyticsTtftAsync(new Dictionary<string, string>
 {

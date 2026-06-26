@@ -28,6 +28,7 @@ namespace Conductor.Server.Controllers
         private readonly ConfigurationValidationService _ValidationService;
         private readonly RoutingDecisionService _RoutingDecisionService;
         private readonly ModelLoadService _ModelLoadService;
+        private readonly EndpointRuntimeStatsService _RuntimeStatsService;
 
         /// <summary>
         /// Instantiate the virtual model runner controller.
@@ -41,7 +42,8 @@ namespace Conductor.Server.Controllers
             SessionAffinityService sessionAffinityService = null,
             ConfigurationValidationService validationService = null,
             RoutingDecisionService routingDecisionService = null,
-            ModelLoadService modelLoadService = null)
+            ModelLoadService modelLoadService = null,
+            EndpointRuntimeStatsService runtimeStatsService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
@@ -49,6 +51,7 @@ namespace Conductor.Server.Controllers
             _ValidationService = validationService;
             _RoutingDecisionService = routingDecisionService;
             _ModelLoadService = modelLoadService;
+            _RuntimeStatsService = runtimeStatsService;
         }
 
         /// <summary>
@@ -339,6 +342,53 @@ namespace Conductor.Server.Controllers
             return await _ValidationService.BuildEffectiveVirtualModelRunnerConfigurationAsync(vmr).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Read runtime endpoint statistics for a virtual model runner.
+        /// </summary>
+        public async Task<EndpointRuntimeStatsCollection> GetRuntimeStats(string tenantId, string id, string endpointId = null)
+        {
+            if (_RuntimeStatsService == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "Runtime statistics are not available.");
+            }
+
+            VirtualModelRunner vmr = await Read(tenantId, id).ConfigureAwait(false);
+            List<ModelRunnerEndpoint> endpoints = await ResolveAttachedEndpointsAsync(vmr, endpointId).ConfigureAwait(false);
+            return _RuntimeStatsService.GetStats(vmr.TenantId, vmr.Id, endpoints);
+        }
+
+        /// <summary>
+        /// Reset runtime endpoint statistics for a virtual model runner.
+        /// </summary>
+        public async Task<EndpointRuntimeStatsCollection> ResetRuntimeStats(string tenantId, string id, string endpointId = null)
+        {
+            if (_RuntimeStatsService == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "Runtime statistics are not available.");
+            }
+
+            VirtualModelRunner vmr = await Read(tenantId, id).ConfigureAwait(false);
+            List<ModelRunnerEndpoint> endpoints = await ResolveAttachedEndpointsAsync(vmr, endpointId).ConfigureAwait(false);
+            _RuntimeStatsService.Reset(vmr.TenantId, vmr.Id, endpointId);
+            return _RuntimeStatsService.GetStats(vmr.TenantId, vmr.Id, endpoints);
+        }
+
+        /// <summary>
+        /// Clear transient runtime backoff for a virtual model runner.
+        /// </summary>
+        public async Task<EndpointRuntimeStatsCollection> ClearRuntimeBackoff(string tenantId, string id, string endpointId = null)
+        {
+            if (_RuntimeStatsService == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "Runtime statistics are not available.");
+            }
+
+            VirtualModelRunner vmr = await Read(tenantId, id).ConfigureAwait(false);
+            List<ModelRunnerEndpoint> endpoints = await ResolveAttachedEndpointsAsync(vmr, endpointId).ConfigureAwait(false);
+            _RuntimeStatsService.ClearBackoff(vmr.TenantId, vmr.Id, endpointId);
+            return _RuntimeStatsService.GetStats(vmr.TenantId, vmr.Id, endpoints);
+        }
+
         private async Task ValidateLoadBalancingPolicyAsync(string tenantId, string policyId)
         {
             if (String.IsNullOrWhiteSpace(policyId)) return;
@@ -425,6 +475,36 @@ namespace Conductor.Server.Controllers
             }
 
             return String.IsNullOrWhiteSpace(existingId) || !String.Equals(vmr.Id, existingId, StringComparison.Ordinal);
+        }
+
+        private async Task<List<ModelRunnerEndpoint>> ResolveAttachedEndpointsAsync(VirtualModelRunner vmr, string endpointId)
+        {
+            List<ModelRunnerEndpoint> endpoints = new List<ModelRunnerEndpoint>();
+            if (vmr == null)
+            {
+                return endpoints;
+            }
+
+            if (!String.IsNullOrWhiteSpace(endpointId) && (vmr.ModelRunnerEndpointIds == null || !vmr.ModelRunnerEndpointIds.Contains(endpointId)))
+            {
+                throw new WebserverException(ApiResultEnum.NotFound, "Endpoint is not attached to this virtual model runner.");
+            }
+
+            foreach (string attachedEndpointId in vmr.ModelRunnerEndpointIds ?? new List<string>())
+            {
+                if (!String.IsNullOrWhiteSpace(endpointId) && !String.Equals(endpointId, attachedEndpointId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.ReadAsync(vmr.TenantId, attachedEndpointId).ConfigureAwait(false);
+                if (endpoint != null)
+                {
+                    endpoints.Add(endpoint);
+                }
+            }
+
+            return endpoints;
         }
 
         private async Task ValidateAsync(string tenantId, VirtualModelRunner vmr, string existingId)
