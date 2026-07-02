@@ -2,6 +2,10 @@
 
 # Conductor
 
+Project version: `0.2.0`
+
+NOTE: Conductor is in ALPHA and is v0.2.0. APIs and functionality subject to change.
+
 Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
 ## Features
@@ -40,7 +44,7 @@ docker compose up -d
 ```
 
 The server will be available at `http://localhost:9000` and the dashboard at `http://localhost:9100`.
-The Compose file builds the server and dashboard from the local repository Dockerfiles, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
+The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.2.0` and `jchristn77/conductor-dashboard:v0.2.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
 
 The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` from `docker/compose.yaml`, so the login page points browsers at the host-exposed Conductor API by default.
 
@@ -733,19 +737,22 @@ Response includes:
 
 ## Docker
 
-The included Docker Compose setup uses local build contexts:
+The included Docker Compose setup uses named Docker Hub images:
 
-- **Server**: `src/Conductor.Server/Dockerfile`
-- **Dashboard**: `dashboard/Dockerfile`
+- **Server**: `jchristn77/conductor-server:v0.2.0`
+- **Dashboard**: `jchristn77/conductor-dashboard:v0.2.0`
 
 ### Building Docker Images
 
 ```bash
-# Build server
-./build-server.sh  # or build-server.bat on Windows
+# Build and push server with the specified tag and latest
+build-server.bat v0.2.0
 
-# Build dashboard
-./build-dashboard.sh  # or build-dashboard.bat on Windows
+# Build and push dashboard with the specified tag and latest
+build-dashboard.bat v0.2.0
+
+# Build and push both images with the specified tag and latest
+build-all.bat v0.2.0
 ```
 
 ## License

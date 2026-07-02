@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.2.0
 
+- Set .NET project versions to `0.2.0`.
 - Added `LeastRecentlyUsed` and `Adaptive` virtual model runner load-balancing modes, with route-scoped recency tracking, endpoint-group routing, traffic weights, adaptive runtime scoring, transient backoff, runtime stats management APIs, dashboard controls, SDK helpers, Postman coverage, REST documentation, and shared backend tests.
 - Updated .NET package dependencies across the main solution and C# SDK, including the SQLite native bundle remediation and the MCP dependency namespace migration.
 - Added tenant-scoped VMR reservations with time-window admission enforcement, user and credential participants, validation, reservation-denial logs, request-history/analytics denial attribution, dashboard management, VMR badges, backup/restore support, SDK helpers, and REST documentation.
