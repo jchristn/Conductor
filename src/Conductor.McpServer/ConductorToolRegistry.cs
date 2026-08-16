@@ -8,6 +8,7 @@ namespace Conductor.McpServer
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Models;
+    using Voltaic.Core;
     using Voltaic.Mcp;
 
     /// <summary>
@@ -69,19 +70,19 @@ namespace Conductor.McpServer
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _RegistrationCatalog = new ConductorToolRegistrationCatalog(new ConductorToolHandlers
             {
-                ListModels = ListModelsHandler,
-                GetModel = GetModelHandler,
-                ListEndpoints = ListEndpointsHandler,
-                GetEndpointHealth = GetEndpointHealthHandler,
-                GetEndpoint = GetEndpointHandler,
-                ListVmrs = ListVmrsHandler,
-                GetVmr = GetVmrHandler,
-                CreateVmr = CreateVmrHandler,
-                ListConfigs = ListConfigsHandler,
-                GetConfig = GetConfigHandler,
-                CreateConfig = CreateConfigHandler,
-                ListTenants = ListTenantsHandler,
-                GetTenant = GetTenantHandler
+                ListModels = parameters => ListModelsHandler(ToJsonElement(parameters)),
+                GetModel = parameters => GetModelHandler(ToJsonElement(parameters)),
+                ListEndpoints = parameters => ListEndpointsHandler(ToJsonElement(parameters)),
+                GetEndpointHealth = parameters => GetEndpointHealthHandler(ToJsonElement(parameters)),
+                GetEndpoint = parameters => GetEndpointHandler(ToJsonElement(parameters)),
+                ListVmrs = parameters => ListVmrsHandler(ToJsonElement(parameters)),
+                GetVmr = parameters => GetVmrHandler(ToJsonElement(parameters)),
+                CreateVmr = parameters => CreateVmrHandler(ToJsonElement(parameters)),
+                ListConfigs = parameters => ListConfigsHandler(ToJsonElement(parameters)),
+                GetConfig = parameters => GetConfigHandler(ToJsonElement(parameters)),
+                CreateConfig = parameters => CreateConfigHandler(ToJsonElement(parameters)),
+                ListTenants = parameters => ListTenantsHandler(ToJsonElement(parameters)),
+                GetTenant = parameters => GetTenantHandler(ToJsonElement(parameters))
             });
         }
 
@@ -778,6 +779,17 @@ namespace Conductor.McpServer
         private object CreateErrorResult(string message)
         {
             return new { error = true, message = message };
+        }
+
+        private static JsonElement? ToJsonElement(RpcParameters parameters)
+        {
+            if (parameters == null || !parameters.HasValue) return null;
+
+            string rawJson = parameters.RawJson;
+            if (String.IsNullOrWhiteSpace(rawJson)) return null;
+
+            using JsonDocument document = JsonDocument.Parse(rawJson);
+            return document.RootElement.Clone();
         }
 
         #endregion

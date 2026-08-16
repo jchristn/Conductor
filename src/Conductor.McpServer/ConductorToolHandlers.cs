@@ -1,22 +1,22 @@
 namespace Conductor.McpServer
 {
     using System;
-    using System.Text.Json;
+    using Voltaic.Core;
 
     internal sealed class ConductorToolHandlers
     {
-        internal Func<JsonElement?, object> ListModels { get; set; }
-        internal Func<JsonElement?, object> GetModel { get; set; }
-        internal Func<JsonElement?, object> ListEndpoints { get; set; }
-        internal Func<JsonElement?, object> GetEndpointHealth { get; set; }
-        internal Func<JsonElement?, object> GetEndpoint { get; set; }
-        internal Func<JsonElement?, object> ListVmrs { get; set; }
-        internal Func<JsonElement?, object> GetVmr { get; set; }
-        internal Func<JsonElement?, object> CreateVmr { get; set; }
-        internal Func<JsonElement?, object> ListConfigs { get; set; }
-        internal Func<JsonElement?, object> GetConfig { get; set; }
-        internal Func<JsonElement?, object> CreateConfig { get; set; }
-        internal Func<JsonElement?, object> ListTenants { get; set; }
-        internal Func<JsonElement?, object> GetTenant { get; set; }
+        internal Func<RpcParameters, object> ListModels { get; set; }
+        internal Func<RpcParameters, object> GetModel { get; set; }
+        internal Func<RpcParameters, object> ListEndpoints { get; set; }
+        internal Func<RpcParameters, object> GetEndpointHealth { get; set; }
+        internal Func<RpcParameters, object> GetEndpoint { get; set; }
+        internal Func<RpcParameters, object> ListVmrs { get; set; }
+        internal Func<RpcParameters, object> GetVmr { get; set; }
+        internal Func<RpcParameters, object> CreateVmr { get; set; }
+        internal Func<RpcParameters, object> ListConfigs { get; set; }
+        internal Func<RpcParameters, object> GetConfig { get; set; }
+        internal Func<RpcParameters, object> CreateConfig { get; set; }
+        internal Func<RpcParameters, object> ListTenants { get; set; }
+        internal Func<RpcParameters, object> GetTenant { get; set; }
     }
 }

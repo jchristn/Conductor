@@ -6,7 +6,9 @@
     <Nullable>disable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Conductor.McpServer.xml</DocumentationFile>
-    <Version>0.2.0</Version>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Version>0.3.0</Version>
     <Authors>Joel Christner</Authors>
     <Company>Joel Christner</Company>
     <Product>Conductor</Product>
@@ -19,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Voltaic" Version="0.4.0" />
+    <PackageReference Include="Voltaic" Version="0.6.0" />
   </ItemGroup>
 
   <ItemGroup>

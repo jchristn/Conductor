@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.3.0
+
+- Set .NET project versions to `0.3.0`.
+- Updated .NET dependencies across the main solution and C# SDK to their latest stable releases, including `MySql.Data` (9.7.0 to 26.7.0), `Voltaic` (0.4.0 to 0.6.0), `Watson` (7.0.14 to 7.1.0), `SyslogLogging` (2.1.0 to 2.2.1), `Microsoft.Data.Sqlite` (10.0.9 to 10.0.11), `SQLitePCLRaw.bundle_e_sqlite3` (3.0.3 to 3.0.5), `Microsoft.NET.Test.Sdk` (18.7.0 to 18.9.0), and `xunit.runner.visualstudio` (3.1.5 to 4.0.0).
+- Migrated the MCP tool registry to the Voltaic 0.6.0 handler contract, adapting Conductor tool handlers to the new `RpcParameters` request-parameter type.
+- Enabled symbol package (`snupkg`) generation for the `Conductor.Core` and `Conductor.McpServer` NuGet packages.
+- Updated the dashboard build tooling to Vite 8 and `@vitejs/plugin-react` 6, with React and React Router refreshed to their latest releases.
+- Added `DatabaseSettings` unit tests covering defaults, guarded property normalization, port clamping, and per-provider connection-string construction, plus positive and negative `ConductorClient` SDK tests for constructor guards, authentication modes, base-URL and query-string handling, HttpClient ownership, and error surfacing.
+
 ## v0.2.0
 
 - Set .NET project versions to `0.2.0`.
