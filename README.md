@@ -4,7 +4,7 @@
 
 Project version: `0.2.0`
 
-NOTE: Conductor is in ALPHA and is v0.2.0. APIs and functionality subject to change.
+NOTE: Conductor is in ALPHA and is v0.4.0. APIs and functionality subject to change.
 
 Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
@@ -29,6 +29,7 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Preflight Validation**: Validate endpoints, model definitions, model configurations, load-balancing policies, and VMRs before saving them
 - **Effective Configuration Preview**: Resolve the endpoint set, request permissions, policy attachment, model pinning, and session-affinity settings that a VMR will actually use
 - **Operational Metrics**: Export Prometheus-friendly latency, denial, fallback, session-affinity, saturation, and telemetry-freshness signals
+- **OpenTelemetry Observability**: Emit OTLP metrics and distributed traces across the HTTP, inference proxy, routing/load-balancing, database, health, and model-load subsystems, with a batteries-included Prometheus/Grafana/Loki/Tempo stack and per-subsystem Grafana dashboards
 - **Drain And Quarantine Controls**: Keep endpoints visible for health diagnostics while intentionally excluding them from new routing
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
 - **Request History and Analytics**: Optional per-VMR request/response capture with trace IDs, stage timings, provider request IDs, token counts, throughput, dashboard drill-down, configurable retention, redaction, metadata-only retention modes, and a tenant-scoped Analytics workspace for TTFT, token usage, user/credential breakdowns, estimated cost, and failed-request reporting
@@ -47,6 +48,8 @@ The server will be available at `http://localhost:9000` and the dashboard at `ht
 The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.2.0` and `jchristn77/conductor-dashboard:v0.2.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
 
 The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` from `docker/compose.yaml`, so the login page points browsers at the host-exposed Conductor API by default.
+
+The Compose file also brings up the observability stack (OpenTelemetry Collector, Prometheus, Tempo, Loki, and Grafana). Once running, open **Grafana at `http://localhost:3000`** (anonymous admin access is enabled) to view the pre-provisioned per-subsystem dashboards. See [Observability](#observability) for details.
 
 ### Building from Source
 
@@ -88,6 +91,7 @@ npm run preview -- --host 0.0.0.0
 ## Documentation
 
 - [REST_API.md](./REST_API.md): management API routes, resource shapes, proxy behavior, request history, analytics, and observability.
+- [TELEMETRY.md](./TELEMETRY.md): OpenTelemetry metrics and traces, the Prometheus/Grafana/Loki/Tempo stack, dashboards, and how to integrate telemetry into your environment.
 - [ANALYTICS.md](./ANALYTICS.md): product plan for the Analytics workspace.
 - [ANALYTICS_PLAN.md](./ANALYTICS_PLAN.md): implementation tracker for the Analytics workspace.
 - [ADR 0002](./docs/adr/0002-analytics-workspace.md): Analytics workspace API, retention, authorization, saved-report, and export decisions.
@@ -754,6 +758,57 @@ build-dashboard.bat v0.2.0
 # Build and push both images with the specified tag and latest
 build-all.bat v0.2.0
 ```
+
+## Observability
+
+Conductor is instrumented with [OpenTelemetry](https://opentelemetry.io/). Metrics and distributed traces are emitted through the .NET base class library primitives (`Meter`, `ActivitySource`) across the critical subsystems:
+
+| Subsystem | Metrics (Prometheus names) | Traces |
+| --- | --- | --- |
+| HTTP server | `conductor_http_server_request_duration_seconds`, `conductor_http_server_active_requests` | — |
+| Inference proxy | `conductor_inference_requests_total`, `conductor_inference_request_duration_seconds`, `conductor_inference_first_token_duration_seconds`, `conductor_inference_upstream_errors_total` | `inference.proxy`, `inference.forward` |
+| Routing / load balancing | `conductor_routing_decisions_total`, `conductor_routing_decision_duration_seconds`, `conductor_routing_denials_total` | `routing.evaluate` |
+| Model load | `conductor_model_load_requests_total`, `conductor_model_load_request_duration_seconds`, `conductor_model_load_endpoint_attempts_total` | — |
+| Database | `conductor_db_client_operations_total`, `conductor_db_client_operation_duration_seconds`, `conductor_db_client_errors_total` | `db <operation>` |
+| Health / endpoints | `conductor_health_endpoints_healthy`, `conductor_health_endpoints_unhealthy`, `conductor_health_inflight_requests` | — |
+| Process / runtime | `conductor_process_memory_usage_bytes`, `conductor_process_uptime_seconds`, `conductor_process_thread_count`, plus .NET runtime instrumentation | — |
+
+The existing in-app `GET /v1.0/observability/metrics` endpoint is unchanged and remains available for the built-in operational metrics snapshot.
+
+### Enabling telemetry
+
+Telemetry is off by default. Enable it via the `OpenTelemetry` block in `conductor.json`:
+
+```json
+"OpenTelemetry": {
+  "Enabled": true,
+  "OtlpEnabled": true,
+  "OtlpEndpoint": "http://otel-collector:4317",
+  "Protocol": "Grpc",
+  "MetricExportIntervalMs": 15000,
+  "TracesSamplingRatio": 1.0,
+  "IncludeRuntimeInstrumentation": true,
+  "PrometheusEnabled": false
+}
+```
+
+The OTLP endpoint and protocol can also be supplied through the standard `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_PROTOCOL` environment variables, which take precedence. Set `PrometheusEnabled` to `true` to additionally serve an in-process Prometheus scrape endpoint on `:9464/metrics`.
+
+### The observability stack
+
+`docker/compose.yaml` provisions a full stack that collects and visualizes the signals above:
+
+| Service | Purpose | URL |
+| --- | --- | --- |
+| OpenTelemetry Collector | Receives OTLP from Conductor; fans out to Prometheus/Tempo/Loki; tails server logs | `:4317` (gRPC), `:4318` (HTTP) |
+| Prometheus | Metrics storage (scrapes the collector) | `http://localhost:9090` |
+| Tempo | Trace storage | `http://localhost:3200` |
+| Loki | Log aggregation | `http://localhost:3100` |
+| Grafana | Dashboards and exploration (metrics ↔ traces ↔ logs correlation) | `http://localhost:3000` |
+
+Grafana datasources and dashboards are provisioned automatically. Dashboards are organized into meaningful folders — **HTTP and API**, **Inference**, **Routing and Load Balancing**, **Database**, **Runtime**, and **Health and Endpoints** — via `docker/grafana/dashboards/<folder>/*.json` (using `foldersFromFilesStructure`), so they are not piled into a single folder.
+
+> **Note:** The observability stack requires a Conductor server image built from this source (telemetry export was added in this release). Rebuild the server image with `build-server.bat` if you are running an older published tag.
 
 ## License
 

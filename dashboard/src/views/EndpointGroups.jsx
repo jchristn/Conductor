@@ -86,6 +86,24 @@ function EndpointGroups() {
     setShowForm(true);
   };
 
+  const handleDuplicate = (group) => {
+    setEditMode(false);
+    setSelectedGroup(null);
+    setValidationResult(null);
+    setFormData({
+      TenantId: group.TenantId || '',
+      Name: group.Name ? group.Name + ' (Copy)' : '',
+      Description: group.Description || '',
+      Priority: group.Priority ?? 0,
+      Active: group.Active !== false,
+      TrafficWeight: group.TrafficWeight ?? 100,
+      EndpointIds: group.EndpointIds || [],
+      Labels: labelsFromValue(group.Labels),
+      Tags: tagsFromValue(group.Tags)
+    });
+    setShowForm(true);
+  };
+
   const buildPayload = () => ({
     TenantId: formData.TenantId,
     Name: formData.Name,
@@ -225,6 +243,7 @@ function EndpointGroups() {
         <ActionMenu
           actions={[
             { label: 'Edit', onClick: () => handleEdit(group) },
+            { label: 'Duplicate', onClick: () => handleDuplicate(group) },
             { label: 'View Metadata', onClick: () => { setSelectedGroup(group); setShowMetadata(true); } },
             { label: 'Delete', onClick: () => handleDeleteClick(group), danger: true }
           ]}

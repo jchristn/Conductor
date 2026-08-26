@@ -108,6 +108,25 @@ function ModelDefinitions() {
     setShowForm(true);
   };
 
+  const handleDuplicate = (definition) => {
+    setEditMode(false);
+    setSelectedDefinition(null);
+    setFormData({
+      TenantId: definition.TenantId || '',
+      Name: definition.Name ? `${definition.Name} (Copy)` : '',
+      SourceUrl: definition.SourceUrl || '',
+      Family: definition.Family || '',
+      ParameterSize: definition.ParameterSize || '',
+      QuantizationLevel: definition.QuantizationLevel || '',
+      SupportsEmbeddings: definition.SupportsEmbeddings === true,
+      SupportsCompletions: definition.SupportsCompletions !== false,
+      Active: definition.Active !== false,
+      Labels: labelsFromValue(definition.Labels),
+      Tags: tagsFromValue(definition.Tags)
+    });
+    setShowForm(true);
+  };
+
   const handleViewMetadata = (definition) => {
     setSelectedDefinition(definition);
     setShowMetadata(true);
@@ -246,6 +265,7 @@ function ModelDefinitions() {
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
             { label: 'Evaluate Access', onClick: () => handleEvaluateAccess(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
+            { label: 'Duplicate', onClick: () => handleDuplicate(item) },
             { divider: true },
             { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
           ]}

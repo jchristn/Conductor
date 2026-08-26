@@ -253,6 +253,9 @@ namespace Conductor.Core.Database.SqlServer
             }
         }
 
+        /// <inheritdoc/>
+        protected override string TelemetryDatabaseSystem => "mssql";
+
         /// <summary>
         /// Execute a query and return results.
         /// </summary>
@@ -260,7 +263,7 @@ namespace Conductor.Core.Database.SqlServer
         /// <param name="isTransaction">Execute within a transaction.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>DataTable with results.</returns>
-        public override async Task<DataTable> ExecuteQueryAsync(string query, bool isTransaction = false, CancellationToken token = default)
+        protected override async Task<DataTable> ExecuteQueryCoreAsync(string query, bool isTransaction = false, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(query)) throw new ArgumentNullException(nameof(query));
 
@@ -318,7 +321,7 @@ namespace Conductor.Core.Database.SqlServer
         /// <param name="isTransaction">Execute within a transaction.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>DataTable with last query results.</returns>
-        public override async Task<DataTable> ExecuteQueriesAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default)
+        protected override async Task<DataTable> ExecuteQueriesCoreAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default)
         {
             if (queries == null) throw new ArgumentNullException(nameof(queries));
 

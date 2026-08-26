@@ -115,6 +115,28 @@ function ModelConfigurations() {
     setShowForm(true);
   };
 
+  const handleDuplicate = (configuration) => {
+    setEditMode(false);
+    setSelectedConfiguration(null);
+    setFormData({
+      TenantId: configuration.TenantId || '',
+      Name: configuration.Name ? configuration.Name + ' (Copy)' : '',
+      Model: configuration.Model || '',
+      ContextWindowSize: configuration.ContextWindowSize || 4096,
+      Temperature: configuration.Temperature || 0.7,
+      TopP: configuration.TopP || 0.9,
+      TopK: configuration.TopK || 40,
+      RepeatPenalty: configuration.RepeatPenalty || 1.1,
+      MaxTokens: configuration.MaxTokens || 2048,
+      PinnedEmbeddingsPropertiesJson: JSON.stringify(configuration.PinnedEmbeddingsProperties || {}, null, 2),
+      PinnedCompletionsPropertiesJson: JSON.stringify(configuration.PinnedCompletionsProperties || {}, null, 2),
+      Active: configuration.Active !== false,
+      Labels: labelsFromValue(configuration.Labels),
+      Tags: tagsFromValue(configuration.Tags)
+    });
+    setShowForm(true);
+  };
+
   const handleViewMetadata = (configuration) => {
     setSelectedConfiguration(configuration);
     setShowMetadata(true);
@@ -258,6 +280,7 @@ function ModelConfigurations() {
           actions={[
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
+            { label: 'Duplicate', onClick: () => handleDuplicate(item) },
             { divider: true },
             { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
           ]}

@@ -1,0 +1,19 @@
+# Grafana dashboard provisioning for Conductor.
+#
+# A single provider with foldersFromFilesStructure enabled turns each first-level
+# subdirectory under the dashboards path into its own Grafana folder, so the
+# dashboards are organized by subsystem (HTTP, Inference, Routing, Database,
+# Runtime, Health) instead of being piled into one folder.
+
+apiVersion: 1
+
+providers:
+  - name: Conductor
+    orgId: 1
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

@@ -1,0 +1,74 @@
+# OpenTelemetry Collector configuration for Conductor.
+#
+# Receives OTLP metrics and traces pushed by the Conductor server, tails the
+# server's rolling log files, and fans the three signals out to Prometheus
+# (metrics, pulled from :8889), Tempo (traces), and Loki (logs).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Tail Conductor's dated log files (mounted read-only from the server's ./logs
+  # volume) and forward them to Loki. Conductor logs via SyslogLogging, so lines
+  # are ingested as-is with a service label attached downstream.
+  filelog:
+    include:
+      - /logs/*.log*
+    start_at: end
+    include_file_name: false
+    include_file_path: true
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  batch:
+    timeout: 5s
+
+  # Stamp a service name on scraped log records so they carry a Loki label.
+  resource/logs:
+    attributes:
+      - key: service.name
+        value: conductor
+        action: upsert
+
+exporters:
+  # Exposed for Prometheus to scrape. resource_to_telemetry_conversion turns
+  # resource attributes (service.name, service.instance.id) into metric labels.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    enable_open_metrics: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+service:
+  telemetry:
+    logs:
+      level: info
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp, filelog]
+      processors: [memory_limiter, resource/logs, batch]
+      exporters: [otlphttp/loki]

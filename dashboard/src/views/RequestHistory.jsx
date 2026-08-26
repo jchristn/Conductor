@@ -779,7 +779,7 @@ function RequestHistory() {
 
         <div className="dashboard-section compact">
           <div className="request-history-chart-header">
-            <h2>Ledger Summary</h2>
+            <h2>Summary</h2>
             <RefreshButton onClick={fetchSummary} title="Refresh summary" disabled={summaryLoading} />
           </div>
           {summary && (

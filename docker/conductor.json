@@ -51,6 +51,17 @@
     "MaxRequestBodyBytes": 65536,
     "MaxResponseBodyBytes": 65536
   },
+  "OpenTelemetry": {
+    "Enabled": true,
+    "ServiceName": "conductor",
+    "OtlpEnabled": true,
+    "OtlpEndpoint": "http://otel-collector:4317",
+    "Protocol": "Grpc",
+    "MetricExportIntervalMs": 15000,
+    "TracesSamplingRatio": 1.0,
+    "IncludeRuntimeInstrumentation": true,
+    "PrometheusEnabled": false
+  },
   "AdminApiKeys": [
     "conductoradmin"
   ]

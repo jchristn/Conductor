@@ -333,6 +333,42 @@ function VirtualModelRunners() {
     setShowForm(true);
   };
 
+  const handleDuplicate = (vmr) => {
+    setEditMode(false);
+    setSelectedVmr(null);
+    setValidationResult(null);
+    setFormData({
+      TenantId: vmr.TenantId || '',
+      Name: vmr.Name ? vmr.Name + ' (Copy)' : '',
+      Hostname: vmr.Hostname || '',
+      BasePath: vmr.BasePath || '',
+      ApiType: vmr.ApiType || 'OpenAI',
+      LoadBalancingMode: vmr.LoadBalancingMode || 'RoundRobin',
+      LoadBalancingPolicyId: vmr.LoadBalancingPolicyId || '',
+      ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
+      ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
+      AdaptiveLoadBalancing: normalizeAdaptiveLoadBalancing(vmr.AdaptiveLoadBalancing),
+      EndpointGroupIds: vmr.EndpointGroupIds || [],
+      ModelConfigurationIds: vmr.ModelConfigurationIds || [],
+      ModelDefinitionIds: vmr.ModelDefinitionIds || [],
+      ModelConfigurationMappingsJson: JSON.stringify(vmr.ModelConfigurationMappings || {}, null, 2),
+      TimeoutMs: vmr.TimeoutMs || 300000,
+      AllowEmbeddings: vmr.AllowEmbeddings !== false,
+      AllowCompletions: vmr.AllowCompletions !== false,
+      AllowModelManagement: vmr.AllowModelManagement === true,
+      StrictMode: vmr.StrictMode === true,
+      RequestHistoryEnabled: vmr.RequestHistoryEnabled === true,
+      SessionAffinityMode: vmr.SessionAffinityMode || 'None',
+      SessionAffinityHeader: vmr.SessionAffinityHeader || '',
+      SessionTimeoutMs: vmr.SessionTimeoutMs || 600000,
+      SessionMaxEntries: vmr.SessionMaxEntries || 10000,
+      Active: vmr.Active !== false,
+      Labels: labelsFromValue(vmr.Labels),
+      Tags: tagsFromValue(vmr.Tags)
+    });
+    setShowForm(true);
+  };
+
   const handleViewMetadata = (vmr) => {
     setSelectedVmr(vmr);
     setShowMetadata(true);
@@ -831,6 +867,7 @@ function VirtualModelRunners() {
               { label: 'Reservations', onClick: () => handleViewReservations(item) },
               { label: 'Load Model', onClick: () => handleOpenLoadModel(item) },
               { label: 'Edit', onClick: () => handleEdit(item) },
+              { label: 'Duplicate', onClick: () => handleDuplicate(item) },
               { divider: true },
               { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
           ]}

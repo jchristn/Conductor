@@ -112,22 +112,62 @@ namespace Conductor.Core.Database
         public abstract Task InitializeAsync(CancellationToken token = default);
 
         /// <summary>
-        /// Execute a query and return results.
+        /// Database system label reported on database telemetry (for example "sqlite",
+        /// "postgresql", "mssql", "mysql"). Never null.
+        /// </summary>
+        protected abstract string TelemetryDatabaseSystem { get; }
+
+        /// <summary>
+        /// Execute a query and return results. Execution is wrapped with an OpenTelemetry client
+        /// span and database metrics; the provider-specific work is performed by
+        /// <see cref="ExecuteQueryCoreAsync"/>.
         /// </summary>
         /// <param name="query">SQL query.</param>
         /// <param name="isTransaction">Execute within a transaction.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>DataTable with results.</returns>
-        public abstract Task<DataTable> ExecuteQueryAsync(string query, bool isTransaction = false, CancellationToken token = default);
+        public Task<DataTable> ExecuteQueryAsync(string query, bool isTransaction = false, CancellationToken token = default)
+        {
+            return Conductor.Core.Telemetry.DatabaseTelemetry.ExecuteAsync(
+                TelemetryDatabaseSystem,
+                query,
+                () => ExecuteQueryCoreAsync(query, isTransaction, token));
+        }
 
         /// <summary>
-        /// Execute multiple queries.
+        /// Execute multiple queries. Execution is wrapped with an OpenTelemetry client span and
+        /// database metrics; the provider-specific work is performed by
+        /// <see cref="ExecuteQueriesCoreAsync"/>.
         /// </summary>
         /// <param name="queries">SQL queries.</param>
         /// <param name="isTransaction">Execute within a transaction.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>DataTable with last query results.</returns>
-        public abstract Task<DataTable> ExecuteQueriesAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default);
+        public Task<DataTable> ExecuteQueriesAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default)
+        {
+            return Conductor.Core.Telemetry.DatabaseTelemetry.ExecuteAsync(
+                TelemetryDatabaseSystem,
+                "batch",
+                () => ExecuteQueriesCoreAsync(queries, isTransaction, token));
+        }
+
+        /// <summary>
+        /// Provider-specific implementation of <see cref="ExecuteQueryAsync"/>.
+        /// </summary>
+        /// <param name="query">SQL query.</param>
+        /// <param name="isTransaction">Execute within a transaction.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>DataTable with results.</returns>
+        protected abstract Task<DataTable> ExecuteQueryCoreAsync(string query, bool isTransaction = false, CancellationToken token = default);
+
+        /// <summary>
+        /// Provider-specific implementation of <see cref="ExecuteQueriesAsync"/>.
+        /// </summary>
+        /// <param name="queries">SQL queries.</param>
+        /// <param name="isTransaction">Execute within a transaction.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>DataTable with last query results.</returns>
+        protected abstract Task<DataTable> ExecuteQueriesCoreAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default);
 
         /// <summary>
         /// Sanitize a string for SQL.

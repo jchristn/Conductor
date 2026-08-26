@@ -1,0 +1,100 @@
+{
+  "uid": "conductor-runtime",
+  "title": "Conductor - Runtime & Process",
+  "tags": ["conductor", "runtime"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Uptime",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max(conductor_process_uptime_seconds)", "legendFormat": "uptime" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Working set memory",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max(conductor_process_memory_usage_bytes)", "legendFormat": "working set" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "OS threads",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max(conductor_process_thread_count)", "legendFormat": "threads" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "GC heap size",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(process_runtime_dotnet_gc_heap_size_bytes)", "legendFormat": "heap" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Working set memory over time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 20 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max(conductor_process_memory_usage_bytes)", "legendFormat": "working set" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "OS threads over time",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "max(conductor_process_thread_count)", "legendFormat": "threads" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "GC collections rate (by generation)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (generation) (rate(process_runtime_dotnet_gc_collections_count_total[5m]))", "legendFormat": "gen {{generation}}" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": ".NET GC heap size (by generation)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (generation) (process_runtime_dotnet_gc_heap_size_bytes)", "legendFormat": "{{generation}}" }
+      ]
+    }
+  ]
+}

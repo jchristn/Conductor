@@ -3,10 +3,12 @@ namespace Conductor.Server.Services
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Globalization;
     using System.Linq;
     using System.Text;
     using Conductor.Core.Models;
+    using Conductor.Core.Telemetry;
 
     /// <summary>
     /// In-memory counter and histogram service for low-cardinality operational metrics.
@@ -109,6 +111,44 @@ namespace Conductor.Server.Services
                 backoffLabels["reason"] = backoffReason;
                 IncrementCounter("conductor_runtime_backoffs_total", backoffLabels, 1);
             }
+
+            // Bridge the same routing signals into the OpenTelemetry pipeline for Grafana.
+            TagList routingTags = new TagList
+            {
+                { ConductorTelemetry.TagApiFamily, TagOrUnknown(apiFamily) },
+                { ConductorTelemetry.TagOutcome, requestLabels["outcome"] },
+                { ConductorTelemetry.TagVmr, ResolveVmrTag(vmrName, vmrId) }
+            };
+            if (!String.IsNullOrWhiteSpace(selectionStrategy))
+            {
+                routingTags.Add(ConductorTelemetry.TagStrategy, selectionStrategy);
+            }
+
+            ConductorTelemetry.RoutingDecisions.Add(1, routingTags);
+            ConductorTelemetry.RoutingDecisionDuration.Record(routeDecisionDurationMs / 1000.0, routingTags);
+
+            if (!success)
+            {
+                TagList denialTags = new TagList
+                {
+                    { ConductorTelemetry.TagApiFamily, TagOrUnknown(apiFamily) },
+                    { ConductorTelemetry.TagReason, String.IsNullOrEmpty(denialReasonCode) ? "Unknown" : denialReasonCode },
+                    { ConductorTelemetry.TagVmr, ResolveVmrTag(vmrName, vmrId) }
+                };
+                ConductorTelemetry.RoutingDenials.Add(1, denialTags);
+            }
+        }
+
+        private static string TagOrUnknown(string value)
+        {
+            return String.IsNullOrWhiteSpace(value) ? "unknown" : value;
+        }
+
+        private static string ResolveVmrTag(string vmrName, string vmrId)
+        {
+            if (!String.IsNullOrWhiteSpace(vmrName)) return vmrName;
+            if (!String.IsNullOrWhiteSpace(vmrId)) return vmrId;
+            return "unknown";
         }
 
         /// <summary>
@@ -162,6 +202,15 @@ namespace Conductor.Server.Services
 
             IncrementCounter("conductor_model_load_requests_total", labels, 1);
             ObserveHistogram("conductor_model_load_duration_ms", labels, durationMs, _LatencyBucketsMs);
+
+            TagList otelTags = new TagList
+            {
+                { ConductorTelemetry.TagTargetType, TagOrUnknown(targetType) },
+                { ConductorTelemetry.TagSuccess, success ? "true" : "false" },
+                { ConductorTelemetry.TagOutcome, String.IsNullOrEmpty(outcomeCode) ? "Unknown" : outcomeCode }
+            };
+            ConductorTelemetry.ModelLoadRequests.Add(1, otelTags);
+            ConductorTelemetry.ModelLoadDuration.Record(durationMs / 1000.0, otelTags);
         }
 
         /// <summary>
@@ -184,6 +233,15 @@ namespace Conductor.Server.Services
 
             IncrementCounter("conductor_model_load_endpoint_attempts_total", labels, 1);
             ObserveHistogram("conductor_model_load_endpoint_duration_ms", labels, durationMs, _LatencyBucketsMs);
+
+            TagList otelTags = new TagList
+            {
+                { ConductorTelemetry.TagApiFamily, TagOrUnknown(apiFamily) },
+                { ConductorTelemetry.TagSuccess, success ? "true" : "false" },
+                { ConductorTelemetry.TagOutcome, String.IsNullOrEmpty(outcomeCode) ? "Unknown" : outcomeCode }
+            };
+            ConductorTelemetry.ModelLoadEndpointAttempts.Add(1, otelTags);
+            ConductorTelemetry.ModelLoadDuration.Record(durationMs / 1000.0, otelTags);
         }
 
         /// <summary>

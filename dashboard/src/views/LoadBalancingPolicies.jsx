@@ -567,8 +567,8 @@ function LoadBalancingPolicies() {
           actions={[
             { label: 'Diagnostics', onClick: () => handleOpenDiagnostics(item) },
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
-            { label: 'Clone', onClick: () => handleClone(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
+            { label: 'Duplicate', onClick: () => handleClone(item) },
             { divider: true },
             { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
           ]}

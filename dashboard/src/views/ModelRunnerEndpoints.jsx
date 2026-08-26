@@ -476,6 +476,48 @@ function ModelRunnerEndpoints() {
     setShowForm(true);
   };
 
+  const handleDuplicate = (endpoint) => {
+    setEditMode(false);
+    setSelectedEndpoint(null);
+    setValidationResult(null);
+    setFormData({
+      TenantId: endpoint.TenantId || '',
+      Name: endpoint.Name ? endpoint.Name + ' (Copy)' : '',
+      Hostname: endpoint.Hostname || '',
+      Port: endpoint.Port || 11434,
+      ApiKey: endpoint.ApiKey || '',
+      ApiType: endpoint.ApiType || 'Ollama',
+      UseSsl: endpoint.UseSsl || false,
+      TimeoutMs: endpoint.TimeoutMs || 300000,
+      Active: endpoint.Active !== false,
+      Labels: labelsFromValue(endpoint.Labels),
+      Tags: tagsFromValue(endpoint.Tags),
+      HealthCheckUrl: endpoint.HealthCheckUrl || '/',
+      HealthCheckMethod: endpoint.HealthCheckMethod || 'GET',
+      HealthCheckIntervalMs: endpoint.HealthCheckIntervalMs || 5000,
+      HealthCheckTimeoutMs: endpoint.HealthCheckTimeoutMs || 5000,
+      HealthCheckExpectedStatusCode: endpoint.HealthCheckExpectedStatusCode || 200,
+      UnhealthyThreshold: endpoint.UnhealthyThreshold || 2,
+      HealthyThreshold: endpoint.HealthyThreshold || 2,
+      HealthCheckUseAuth: endpoint.HealthCheckUseAuth || false,
+      MaxParallelRequests: endpoint.MaxParallelRequests ?? 4,
+      Weight: endpoint.Weight || 1,
+      RigMonitorEnabled: endpoint.RigMonitor?.Enabled === true,
+      RigMonitorHostnameOverride: endpoint.RigMonitor?.HostnameOverride || '',
+      RigMonitorPort: endpoint.RigMonitor?.Port || 9990,
+      RigMonitorUseSsl: endpoint.RigMonitor?.UseSsl === true,
+      RigMonitorTimeoutMs: endpoint.RigMonitor?.TimeoutMs || 5000,
+      RigMonitorCollectDuringHealthCheck: endpoint.RigMonitor?.CollectDuringHealthCheck !== false,
+      RigMonitorRequireReadyz: endpoint.RigMonitor?.RequireReadyz !== false,
+      RigMonitorHealthAffectedByRigMonitor: endpoint.RigMonitor?.HealthAffectedByRigMonitor === true,
+      RigMonitorMaxTelemetryAgeMs: endpoint.RigMonitor?.MaxTelemetryAgeMs || 30000,
+      RigMonitorCapabilitiesRefreshIntervalMs: endpoint.RigMonitor?.CapabilitiesRefreshIntervalMs || 60000,
+      RigMonitorTelemetryProfile: endpoint.RigMonitor?.TelemetryProfile || 'Full',
+      RigMonitorTelemetrySelectors: (endpoint.RigMonitor?.TelemetrySelectors || []).join(', ')
+    });
+    setShowForm(true);
+  };
+
   const handleViewMetadata = (endpoint) => {
     setSelectedEndpoint(endpoint);
     setShowMetadata(true);
@@ -790,6 +832,7 @@ function ModelRunnerEndpoints() {
                 { label: 'Manage Models', onClick: () => handleOpenManageOllamaModels(item) }
               ] : []),
               { label: 'Edit', onClick: () => handleEdit(item) },
+              { label: 'Duplicate', onClick: () => handleDuplicate(item) },
               { divider: true },
               {
                 label: serviceStateActionLoading === `drain:${item.Id}` ? 'Draining...' : 'Drain',

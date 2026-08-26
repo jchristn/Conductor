@@ -8,7 +8,7 @@
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Conductor.McpServer.xml</DocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Joel Christner</Authors>
     <Company>Joel Christner</Company>
     <Product>Conductor</Product>
@@ -21,6 +21,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Voltaic is intentionally held at 0.6.0. Version 1.0.0 renames core types
+         (RpcParameters, McpHttpServer, McpTcpServer, ClientConnection) and requires a
+         source migration of the MCP server that is out of scope for this change. -->
     <PackageReference Include="Voltaic" Version="0.6.0" />
   </ItemGroup>
 

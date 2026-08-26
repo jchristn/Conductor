@@ -208,6 +208,29 @@ function ModelAccessPolicies() {
     }
   };
 
+  const handleDuplicate = async (policy) => {
+    try {
+      const fullPolicy = await api.getModelAccessPolicy(policy.Id, policy.TenantId);
+      setEditMode(false);
+      setSelectedPolicy(null);
+      setFormData({
+        TenantId: fullPolicy.TenantId || '',
+        Name: fullPolicy.Name ? `${fullPolicy.Name} (Copy)` : '',
+        Description: fullPolicy.Description || '',
+        DefaultDecision: fullPolicy.DefaultDecision || 'Deny',
+        Active: fullPolicy.Active !== false,
+        Labels: labelsFromValue(fullPolicy.Labels),
+        Tags: tagsFromValue(fullPolicy.Tags),
+        MetadataJson: JSON.stringify(fullPolicy.Metadata ?? null, null, 2),
+        Rules: (fullPolicy.Rules || []).map(apiRuleToForm)
+      });
+      setValidationResult(null);
+      setShowForm(true);
+    } catch (err) {
+      setError('Failed to load policy: ' + err.message);
+    }
+  };
+
   const handleDeleteClick = (policy) => {
     setSelectedPolicy(policy);
     setForceDetach(false);
@@ -403,6 +426,7 @@ function ModelAccessPolicies() {
         <ActionMenu
           actions={[
             { label: 'Edit', onClick: () => handleEdit(item) },
+            { label: 'Duplicate', onClick: () => handleDuplicate(item) },
             { label: 'Simulate', onClick: () => { setSelectedPolicy(item); setSimulationResult(null); } },
             { label: 'View Details', onClick: () => { setSelectedPolicy(item); setShowMetadata(true); } },
             { divider: true },
@@ -426,7 +450,7 @@ function ModelAccessPolicies() {
         </div>
       </div>
 
-      <div className="stats-grid">
+      <div className="stats-grid stats-grid-compact">
         <div className="stat-card">
           <div className="stat-label">Policies</div>
           <div className="stat-value">{policies.length}</div>

@@ -49,6 +49,7 @@ namespace Conductor.Server
         private static Serializer _Serializer;
         private static Webserver _App;
         private static Controllers.ProxyController _ProxyController;
+        private static Telemetry.ConductorTelemetryHost _TelemetryHost;
         private static CancellationTokenSource _TokenSource;
 
         /// <summary>
@@ -121,6 +122,10 @@ namespace Conductor.Server
             }
 
             _Logging.Debug(_Header + "logging initialized");
+
+            // Initialize telemetry (OpenTelemetry metrics and traces). A null host means telemetry
+            // is disabled or unavailable; instrumentation then degrades to cheap no-ops.
+            _TelemetryHost = Telemetry.ConductorTelemetryHost.Start(_Settings.OpenTelemetry, _Logging);
 
             // Initialize database
             _Logging.Info(_Header + "initializing database");
@@ -291,6 +296,13 @@ namespace Conductor.Server
             {
                 _OllamaModelManagementService.Dispose();
                 _Logging.Info(_Header + "ollama model management service stopped");
+            }
+
+            // Flush and dispose telemetry pipelines
+            if (_TelemetryHost != null)
+            {
+                _TelemetryHost.Dispose();
+                _Logging.Info(_Header + "telemetry pipelines flushed and stopped");
             }
 
             // Dispose cancellation token source

@@ -4,6 +4,7 @@ namespace Conductor.Server.Services
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Diagnostics.Metrics;
     using System.Linq;
     using System.Net.Http;
     using System.Security.Cryptography;
@@ -13,6 +14,7 @@ namespace Conductor.Server.Services
     using Conductor.Core.Database;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Telemetry;
     using SyslogLogging;
 
     /// <summary>
@@ -52,6 +54,39 @@ namespace Conductor.Server.Services
             _RunningTasks = new ConcurrentDictionary<string, Task>();
             _ActiveEndpoints = new ConcurrentDictionary<string, ModelRunnerEndpoint>();
             _EndpointHealthCheckKeys = new ConcurrentDictionary<string, string>();
+
+            RegisterTelemetry();
+        }
+
+        /// <summary>
+        /// Register observable gauges reporting live endpoint-health state to OpenTelemetry.
+        /// The gauge callbacks take a point-in-time snapshot of the health-state map.
+        /// </summary>
+        private void RegisterTelemetry()
+        {
+            ConductorTelemetry.HealthMeter.CreateObservableGauge<int>(
+                "conductor.health.endpoints.healthy",
+                () => new Measurement<int>(_HealthStates.Values.Count(state => state.IsHealthy)),
+                "{endpoint}",
+                "Number of model runner endpoints currently reporting healthy.");
+
+            ConductorTelemetry.HealthMeter.CreateObservableGauge<int>(
+                "conductor.health.endpoints.unhealthy",
+                () => new Measurement<int>(_HealthStates.Values.Count(state => !state.IsHealthy)),
+                "{endpoint}",
+                "Number of model runner endpoints currently reporting unhealthy.");
+
+            ConductorTelemetry.HealthMeter.CreateObservableGauge<int>(
+                "conductor.health.endpoints.total",
+                () => new Measurement<int>(_HealthStates.Count),
+                "{endpoint}",
+                "Total number of monitored model runner endpoints.");
+
+            ConductorTelemetry.HealthMeter.CreateObservableGauge<long>(
+                "conductor.health.inflight.requests",
+                () => new Measurement<long>(_HealthStates.Values.Sum(state => (long)state.InFlightRequests)),
+                "{request}",
+                "Total number of in-flight proxied requests across all endpoints.");
         }
 
         /// <summary>

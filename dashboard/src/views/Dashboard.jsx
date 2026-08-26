@@ -42,6 +42,41 @@ function Dashboard() {
     { label: 'Virtual Model Runners', count: counts.virtualModelRunners, path: '/vmr', color: '#f97316', tooltip: 'Virtualized API endpoints exposed to clients' }
   ];
 
+  // Subordinate observability services shipped with the Docker Compose stack. The URLs are
+  // built from the host the dashboard is served from so links work for remote access too;
+  // ports match docker/compose.yaml. Override any entry if you deploy behind different hosts.
+  const serviceHost = (typeof window !== 'undefined' && window.location && window.location.hostname) || 'localhost';
+  const observabilityServices = [
+    {
+      name: 'Grafana',
+      description: 'Dashboards for metrics, traces, and logs — the primary observability UI.',
+      url: `http://${serviceHost}:3000`,
+      credentials: 'No login required (anonymous Admin). Default account: admin / admin.',
+      color: '#f97316'
+    },
+    {
+      name: 'Prometheus',
+      description: 'Metrics storage and PromQL query explorer.',
+      url: `http://${serviceHost}:9090`,
+      credentials: 'No authentication required.',
+      color: '#e11d48'
+    },
+    {
+      name: 'Tempo',
+      description: 'Distributed trace storage. Best explored through Grafana.',
+      url: `http://${serviceHost}:3200`,
+      credentials: 'No authentication required.',
+      color: '#8b5cf6'
+    },
+    {
+      name: 'Loki',
+      description: 'Log aggregation. Best explored through Grafana.',
+      url: `http://${serviceHost}:3100`,
+      credentials: 'No authentication required.',
+      color: '#22c55e'
+    }
+  ];
+
   return (
     <div className="dashboard-view">
       <div className="view-header">
@@ -124,6 +159,42 @@ function Dashboard() {
           </Link>
         ))}
       </div>
+
+      <section className="dashboard-section">
+        <div className="request-history-chart-header">
+          <h2>Observability &amp; Tooling</h2>
+        </div>
+        <p className="view-subtitle service-grid-subtitle">
+          Companion services from the Conductor observability stack. Links use the current host and the default Docker Compose ports.
+        </p>
+        <div className="service-grid">
+          {observabilityServices.map((service) => (
+            <a
+              key={service.name}
+              href={service.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="service-card"
+              title={`Open ${service.name} in a new tab`}
+            >
+              <div className="service-card-header">
+                <span className="service-card-dot" style={{ backgroundColor: service.color }} />
+                <h3>{service.name}</h3>
+                <span className="service-card-external" aria-hidden="true">&#8599;</span>
+              </div>
+              <p className="service-card-desc">{service.description}</p>
+              <div className="service-card-meta">
+                <span className="service-card-meta-label">URL</span>
+                <span className="service-card-url">{service.url}</span>
+              </div>
+              <div className="service-card-meta">
+                <span className="service-card-meta-label">Credentials</span>
+                <span className="service-card-cred">{service.credentials}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

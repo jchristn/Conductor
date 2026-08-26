@@ -262,7 +262,7 @@ function RequestHistoryChart() {
                     x={chartPaddingLeft - 8}
                     y={y + 4}
                     textAnchor="end"
-                    fontSize="11"
+                    fontSize="9"
                     fill="var(--text-secondary)"
                   >
                     {tick}
@@ -342,7 +342,7 @@ function RequestHistoryChart() {
                         x={chartPaddingLeft + i * barGroupWidth + barGroupWidth / 2}
                         y={chartHeight - 6}
                         textAnchor="middle"
-                        fontSize="10"
+                        fontSize="8"
                         fill="var(--text-secondary)"
                       >
                         {formatBucketLabel(bucket.TimestampUtc)}

@@ -80,6 +80,9 @@ namespace Conductor.Core.Database.Sqlite
             await RunMigrationsAsync(token).ConfigureAwait(false);
         }
 
+        /// <inheritdoc/>
+        protected override string TelemetryDatabaseSystem => "sqlite";
+
         /// <summary>
         /// Execute a query and return results.
         /// </summary>
@@ -87,7 +90,7 @@ namespace Conductor.Core.Database.Sqlite
         /// <param name="isTransaction">Execute within a transaction.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>DataTable with results.</returns>
-        public override async Task<DataTable> ExecuteQueryAsync(string query, bool isTransaction = false, CancellationToken token = default)
+        protected override async Task<DataTable> ExecuteQueryCoreAsync(string query, bool isTransaction = false, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(query)) throw new ArgumentNullException(nameof(query));
 
@@ -153,7 +156,7 @@ namespace Conductor.Core.Database.Sqlite
         /// <param name="isTransaction">Execute within a transaction.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>DataTable with last query results.</returns>
-        public override async Task<DataTable> ExecuteQueriesAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default)
+        protected override async Task<DataTable> ExecuteQueriesCoreAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default)
         {
             if (queries == null) throw new ArgumentNullException(nameof(queries));
 

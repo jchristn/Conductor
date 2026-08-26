@@ -14,6 +14,7 @@ namespace Conductor.Server.Controllers
     using Conductor.Core.Models;
     using Conductor.Core.Serialization;
     using Conductor.Core.Settings;
+    using Conductor.Core.Telemetry;
     using Conductor.Server.Services;
     using SyslogLogging;
     using WatsonWebserver.Core;
@@ -96,6 +97,7 @@ namespace Conductor.Server.Controllers
         public async Task HandleRequest(HttpContextBase ctx, RequestContext requestContext, CancellationToken cancellationToken = default)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
+            Activity proxyActivity = ConductorTelemetry.InferenceSource.StartActivity("inference.proxy", ActivityKind.Server);
             RequestHistoryDetail historyDetail = null;
             RoutingExecutionResult routingResult = null;
             ModelRunnerEndpoint endpoint = null;
@@ -129,6 +131,17 @@ namespace Conductor.Server.Controllers
                 PopulateRequestContext(ctx, requestContext, urlContext, vmr);
                 analyticsCapture.RequestBytes = requestContext?.Data?.LongLength;
 
+                if (proxyActivity != null)
+                {
+                    proxyActivity.SetTag("conductor.vmr", vmr.Name);
+                    proxyActivity.SetTag("conductor.vmr_id", vmr.Id);
+                    proxyActivity.SetTag("conductor.tenant_id", vmr.TenantId);
+                    proxyActivity.SetTag("conductor.api_family", GetApiFamily(requestContext.RequestType));
+                    proxyActivity.SetTag("conductor.request_type", requestContext.RequestType.ToString());
+                    proxyActivity.SetTag("conductor.model", requestContext.ModelName);
+                    proxyActivity.SetTag("http.request.method", ctx.Request.Method.ToString());
+                }
+
                 if (_RequestHistoryService != null && _RequestHistoryService.IsEnabled && vmr.RequestHistoryEnabled)
                 {
                     Dictionary<string, string> requestHeaders = GetRequestHeaders(ctx);
@@ -143,7 +156,18 @@ namespace Conductor.Server.Controllers
                         cancellationToken).ConfigureAwait(false);
                 }
 
-                routingResult = await _RoutingDecisionService.EvaluateAsync(vmr, urlContext, requestContext, true, cancellationToken).ConfigureAwait(false);
+                using (Activity routingActivity = ConductorTelemetry.RoutingSource.StartActivity("routing.evaluate", ActivityKind.Internal))
+                {
+                    routingResult = await _RoutingDecisionService.EvaluateAsync(vmr, urlContext, requestContext, true, cancellationToken).ConfigureAwait(false);
+                    if (routingActivity != null)
+                    {
+                        bool routed = routingResult?.Decision != null && routingResult.Decision.Success;
+                        routingActivity.SetTag("conductor.outcome", routed ? "Routed" : "Denied");
+                        if (routingResult?.Endpoint != null) routingActivity.SetTag("conductor.endpoint_id", routingResult.Endpoint.Id);
+                        if (!routed && routingResult?.Decision != null) routingActivity.SetTag("conductor.denial_reason", routingResult.Decision.DenialReasonCode);
+                    }
+                }
+
                 analyticsCapture.RoutingDurationMs = (int)stopwatch.ElapsedMilliseconds;
                 endpoint = routingResult.Endpoint;
 
@@ -242,6 +266,21 @@ namespace Conductor.Server.Controllers
                 Logging.Warn(_Header + "proxy exception:" + Environment.NewLine + ex.ToString());
                 analyticsCapture.ErrorType = ex.GetType().Name;
                 analyticsCapture.ErrorMessage = ex.Message;
+
+                TagList errorTags = new TagList
+                {
+                    { ConductorTelemetry.TagApiFamily, GetApiFamily(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown) },
+                    { ConductorTelemetry.TagVmr, vmr != null ? vmr.Name : "unknown" },
+                    { "exception_type", ex.GetType().Name }
+                };
+                ConductorTelemetry.InferenceUpstreamErrors.Add(1, errorTags);
+
+                if (proxyActivity != null)
+                {
+                    proxyActivity.SetTag("exception.type", ex.GetType().FullName);
+                    proxyActivity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                }
+
                 await SendBadGateway(ctx, "Proxy error: " + ex.Message);
 
                 if (historyDetail != null && _RequestHistoryService != null)
@@ -278,6 +317,8 @@ namespace Conductor.Server.Controllers
                 {
                     _HealthCheckService.DecrementInFlight(endpoint.Id);
                 }
+
+                proxyActivity?.Dispose();
             }
         }
 
@@ -389,18 +430,41 @@ namespace Conductor.Server.Controllers
             // Create a cancellation token with timeout
             using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeoutMs)))
             using (CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
+            using (Activity forwardActivity = ConductorTelemetry.InferenceSource.StartActivity("inference.forward", ActivityKind.Client))
             {
+                if (forwardActivity != null)
+                {
+                    forwardActivity.SetTag("http.request.method", request.Method.Method);
+                    forwardActivity.SetTag("server.address", endpoint.Hostname);
+                    forwardActivity.SetTag("server.port", endpoint.Port);
+                    forwardActivity.SetTag("conductor.endpoint_id", endpoint.Id);
+                }
+
                 try
                 {
                     // Use ResponseHeadersRead to enable streaming - we get the response as soon as headers arrive
                     // rather than waiting for the entire response body
-                    return await httpClient.SendAsync(
+                    HttpResponseMessage response = await httpClient.SendAsync(
                         request,
                         HttpCompletionOption.ResponseHeadersRead,
                         linkedCts.Token).ConfigureAwait(false);
+
+                    if (forwardActivity != null)
+                    {
+                        forwardActivity.SetTag("http.response.status_code", (int)response.StatusCode);
+                        if ((int)response.StatusCode >= 500) forwardActivity.SetStatus(ActivityStatusCode.Error);
+                        else forwardActivity.SetStatus(ActivityStatusCode.Ok);
+                    }
+
+                    return response;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    if (forwardActivity != null)
+                    {
+                        forwardActivity.SetTag("exception.type", ex.GetType().FullName);
+                        forwardActivity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    }
                     request.Dispose();
                     throw;
                 }
@@ -564,6 +628,34 @@ namespace Conductor.Server.Controllers
                     GetApiFamily(requestContext.RequestType),
                     stopwatch.Elapsed.TotalMilliseconds,
                     firstTokenTimeMs);
+            }
+
+            // Emit OpenTelemetry inference metrics and annotate the active proxy span.
+            string apiFamily = GetApiFamily(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown);
+            string vmrTag = vmr != null ? vmr.Name : "unknown";
+            int statusCode = (int)response.StatusCode;
+            TagList inferenceTags = new TagList
+            {
+                { ConductorTelemetry.TagApiFamily, apiFamily },
+                { ConductorTelemetry.TagVmr, vmrTag },
+                { ConductorTelemetry.TagHttpStatus, statusCode },
+                { ConductorTelemetry.TagStreaming, isStreaming ? "true" : "false" }
+            };
+
+            ConductorTelemetry.InferenceRequests.Add(1, inferenceTags);
+            ConductorTelemetry.InferenceRequestDuration.Record(stopwatch.Elapsed.TotalSeconds, inferenceTags);
+            if (firstTokenTimeMs.HasValue)
+            {
+                ConductorTelemetry.InferenceFirstTokenDuration.Record(firstTokenTimeMs.Value / 1000.0, inferenceTags);
+            }
+
+            Activity activeSpan = Activity.Current;
+            if (activeSpan != null)
+            {
+                activeSpan.SetTag("http.response.status_code", statusCode);
+                activeSpan.SetTag("conductor.streaming", isStreaming);
+                if (statusCode >= 500) activeSpan.SetStatus(ActivityStatusCode.Error);
+                else activeSpan.SetStatus(ActivityStatusCode.Ok);
             }
         }
 

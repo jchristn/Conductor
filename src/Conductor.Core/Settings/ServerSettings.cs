@@ -63,6 +63,15 @@ namespace Conductor.Core.Settings
         }
 
         /// <summary>
+        /// OpenTelemetry / observability settings.
+        /// </summary>
+        public OpenTelemetrySettings OpenTelemetry
+        {
+            get => _OpenTelemetry;
+            set => _OpenTelemetry = (value != null ? value : new OpenTelemetrySettings());
+        }
+
+        /// <summary>
         /// Administrator API keys for initial access.
         /// </summary>
         public List<string> AdminApiKeys
@@ -77,6 +86,7 @@ namespace Conductor.Core.Settings
         private DebugSettings _Debug = new DebugSettings();
         private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
         private ModelAccessControlSettings _ModelAccessControl = new ModelAccessControlSettings();
+        private OpenTelemetrySettings _OpenTelemetry = new OpenTelemetrySettings();
 
         private List<string> _AdminApiKeys = new List<string> { "conductoradmin" };
 

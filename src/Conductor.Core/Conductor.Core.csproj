@@ -8,7 +8,7 @@
     <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Conductor.Core.xml</DocumentationFile>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>Joel Christner</Authors>
     <Company>Joel Christner</Company>
     <Product>Conductor</Product>
@@ -19,8 +19,8 @@
   <ItemGroup>
     <PackageReference Include="JsonMerge" Version="1.0.1" />
     <PackageReference Include="PrettyId" Version="2.0.1" />
-    <PackageReference Include="RestWrapper" Version="3.2.0" />
-    <PackageReference Include="SyslogLogging" Version="2.2.1" />
+    <PackageReference Include="RestWrapper" Version="3.3.0" />
+    <PackageReference Include="SyslogLogging" Version="2.2.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
     <PackageReference Include="Npgsql" Version="10.0.3" />

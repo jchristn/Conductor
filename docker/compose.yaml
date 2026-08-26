@@ -46,9 +46,15 @@ services:
       - ./logs:/app/logs
     environment:
       - DOTNET_RUNNING_IN_CONTAINER=true
+      # Push OpenTelemetry metrics and traces to the collector. Telemetry must also be
+      # enabled in conductor.json (OpenTelemetry.Enabled = true).
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
     depends_on:
       conductor-db-init:
         condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/"]
@@ -69,5 +75,85 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ----------------------------------------------------------------------------
+  # Observability stack: OpenTelemetry Collector -> Prometheus / Tempo / Loki,
+  # visualized in Grafana. The Conductor server pushes OTLP metrics and traces
+  # to the collector; the collector also tails the server's log files to Loki.
+  # ----------------------------------------------------------------------------
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    container_name: conductor-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+      # Read-only access to the server's rolling log files for the filelog receiver.
+      - ./logs:/logs:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter (scraped by Prometheus)
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: conductor-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--enable-feature=exemplar-storage"
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - conductor-prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: conductor-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - conductor-tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo query API
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: conductor-loki
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - conductor-loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: conductor-grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_USERS_DEFAULT_THEME=dark
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - conductor-grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    restart: unless-stopped
+
 volumes:
   conductor-postgres-data:
+  conductor-prometheus-data:
+  conductor-tempo-data:
+  conductor-loki-data:
+  conductor-grafana-data:

@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <RootNamespace>Test.McpServer</RootNamespace>
@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Held at 0.6.0 to match Conductor.McpServer; see that project for details. -->
     <PackageReference Include="Voltaic" Version="0.6.0" />
   </ItemGroup>
 

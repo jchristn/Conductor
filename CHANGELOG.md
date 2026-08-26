@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.0
+
+- Set .NET project versions to `0.4.0`.
+- Added end-to-end OpenTelemetry instrumentation across the critical subsystems — HTTP server, inference proxy, routing and load balancing, model load, database, endpoint health, and process/runtime — emitting metrics and distributed traces through the .NET base class library primitives with no OpenTelemetry dependency in `Conductor.Core`.
+- Added an OpenTelemetry export pipeline in the server (`ConductorTelemetryHost`) with OTLP metric/trace export, an optional in-process Prometheus scrape endpoint, explicit histogram bucket views, .NET runtime instrumentation, and process gauges, driven by a new `OpenTelemetrySettings` block in `conductor.json` and the standard `OTEL_EXPORTER_OTLP_*` environment variables.
+- Added a batteries-included observability stack to Docker Compose (OpenTelemetry Collector, Prometheus, Tempo, Loki, and Grafana) with provisioned datasources wired for metrics/traces/logs correlation and per-subsystem Grafana dashboards organized into folders (HTTP, Inference, Routing, Database, Runtime, Health).
+- Added `TELEMETRY.md` describing the telemetry surface, metric and trace reference, the observability stack, and how to integrate the data into external environments.
+- Updated .NET dependencies to their latest stable releases: `Watson` (7.1.0 to 7.1.1), `SyslogLogging` (2.2.1 to 2.2.2), and `RestWrapper` (3.2.0 to 3.3.0), plus new `OpenTelemetry` 1.18.0 packages. `Voltaic` is intentionally held at 0.6.0 pending a separate MCP server migration to its 1.0.0 contract.
+- Added dashboard cards on the Dashboard page linking to the companion observability services (Grafana, Prometheus, Tempo, Loki) with their URLs and default credentials.
+- Reworked table row action menus to render in a portal with viewport-aware positioning so they open above the row and are never clipped by the table's scroll container.
+- Added a "Select Columns" control to every data table for choosing which columns to display.
+- Added a "Duplicate" row action across the model definition, model configuration, load-balancing policy, model access policy, endpoint group, model runner endpoint, and virtual model runner tables that opens a pre-filled create form.
+- Reduced the Dashboard request-history chart axis label sizes, made the Model Access Policies KPI cards more compact, widened the Backup & Restore cards to full width, and renamed the Request History "Ledger Summary" heading to "Summary".
+
 ## v0.3.0
 
 - Set .NET project versions to `0.3.0`.
