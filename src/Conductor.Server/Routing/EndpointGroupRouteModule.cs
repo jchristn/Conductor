@@ -35,7 +35,8 @@ namespace Conductor.Server.Routing
             {
                 EndpointGroup group = req.Data as EndpointGroup;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, group?.TenantId);
-                return await endpointGroupController.Validate(tenantId, group, group?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await endpointGroupController.Validate(tenantId, group, !string.IsNullOrEmpty(existingId) ? existingId : group?.Id);
             },
             api => api
                 .WithTag("Endpoint Groups")

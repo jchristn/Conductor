@@ -40,7 +40,8 @@ namespace Conductor.Server.Routing
             {
                 VirtualModelRunnerReservation reservation = req.Data as VirtualModelRunnerReservation;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, reservation?.TenantId);
-                return await vmrReservationController.Validate(tenantId, reservation, reservation?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await vmrReservationController.Validate(tenantId, reservation, !String.IsNullOrEmpty(existingId) ? existingId : reservation?.Id);
             },
             api => api
                 .WithTag("VMR Reservations")

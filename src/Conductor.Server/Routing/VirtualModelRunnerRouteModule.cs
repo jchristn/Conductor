@@ -44,7 +44,8 @@ namespace Conductor.Server.Routing
             {
                 VirtualModelRunner vmr = req.Data as VirtualModelRunner;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
-                return await vmrController.Validate(tenantId, vmr, vmr?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await vmrController.Validate(tenantId, vmr, !String.IsNullOrEmpty(existingId) ? existingId : vmr?.Id);
             },
             api => api
                 .WithTag("Virtual Model Runners")

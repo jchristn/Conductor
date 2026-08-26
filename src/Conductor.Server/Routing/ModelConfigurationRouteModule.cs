@@ -42,7 +42,8 @@ namespace Conductor.Server.Routing
             {
                 ModelConfiguration mc = req.Data as ModelConfiguration;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
-                return await mcController.Validate(tenantId, mc, mc?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await mcController.Validate(tenantId, mc, !String.IsNullOrEmpty(existingId) ? existingId : mc?.Id);
             },
             api => api
                 .WithTag("Model Configurations")

@@ -44,7 +44,8 @@ namespace Conductor.Server.Routing
             {
                 ModelRunnerEndpoint mre = req.Data as ModelRunnerEndpoint;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
-                return await mreController.Validate(tenantId, mre, mre?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await mreController.Validate(tenantId, mre, !String.IsNullOrEmpty(existingId) ? existingId : mre?.Id);
             },
             api => api
                 .WithTag("Model Runner Endpoints")

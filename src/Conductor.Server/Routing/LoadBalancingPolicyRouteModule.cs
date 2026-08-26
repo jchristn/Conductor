@@ -55,7 +55,8 @@ namespace Conductor.Server.Routing
             {
                 LoadBalancingPolicy policy = req.Data as LoadBalancingPolicy;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
-                return await lbpController.Validate(tenantId, policy, policy?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await lbpController.Validate(tenantId, policy, !String.IsNullOrEmpty(existingId) ? existingId : policy?.Id);
             },
             api => api
                 .WithTag("Load Balancing Policies")

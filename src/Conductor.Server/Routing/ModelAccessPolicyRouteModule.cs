@@ -37,7 +37,8 @@ namespace Conductor.Server.Routing
             {
                 ModelAccessPolicy policy = req.Data as ModelAccessPolicy;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
-                return await mapController.Validate(tenantId, policy, policy?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await mapController.Validate(tenantId, policy, !String.IsNullOrEmpty(existingId) ? existingId : policy?.Id);
             },
             api => api
                 .WithTag("Model Access Policies")

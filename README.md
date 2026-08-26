@@ -98,7 +98,7 @@ npm run preview -- --host 0.0.0.0
 - [ADR 0003](./docs/adr/0003-virtual-model-runner-reservations.md): VMR reservation admission, observability, API, and backup/restore decisions.
 - [MANAGING_RESERVATIONS.md](./MANAGING_RESERVATIONS.md): VMR reservation operations, enforcement order, troubleshooting, and internals.
 - [ACCESS_POLICIES.md](./ACCESS_POLICIES.md): practical model access policy authoring guide with real-world examples.
-- [TESTING.md](./TESTING.md): test architecture and commands.
+- [TESTING.md](./archive/TESTING.md): test architecture and commands.
 - [Conductor.postman_collection.json](./Conductor.postman_collection.json): Postman collection covering management, validation, model access, routing, analytics, and observability routes.
 - [CHANGELOG.md](./CHANGELOG.md): unreleased and historical change notes.
 
@@ -121,7 +121,7 @@ dotnet test src/Conductor.sln
 dotnet run --project src/Test.Automated/Test.Automated.csproj
 ```
 
-See [TESTING.md](./TESTING.md) for the full testing guide.
+See [TESTING.md](./archive/TESTING.md) for the full testing guide.
 
 ## SDKs
 
@@ -757,6 +757,16 @@ build-dashboard.bat v0.2.0
 
 # Build and push both images with the specified tag and latest
 build-all.bat v0.2.0
+```
+
+### Updating a Deployment
+
+To refresh a running deployment with the latest published images, run `update.bat` from the
+`docker` directory. It stops the stack, pulls the newest images (`docker compose pull`), and
+brings everything back up:
+
+```bash
+update.bat
 ```
 
 ## Observability

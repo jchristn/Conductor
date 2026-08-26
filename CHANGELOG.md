@@ -13,6 +13,8 @@
 - Added a "Select Columns" control to every data table for choosing which columns to display.
 - Added a "Duplicate" row action across the model definition, model configuration, load-balancing policy, model access policy, endpoint group, model runner endpoint, and virtual model runner tables that opens a pre-filled create form.
 - Reduced the Dashboard request-history chart axis label sizes, made the Model Access Policies KPI cards more compact, widened the Backup & Restore cards to full width, and renamed the Request History "Ledger Summary" heading to "Summary".
+- Fixed the draft validation routes to honor the `existingId` query parameter so updating an existing resource no longer reports a false uniqueness collision against itself (for example a virtual model runner's BasePath colliding with its own record); applied across the virtual model runner, model runner endpoint, endpoint group, model definition, model configuration, load-balancing policy, model access policy, and VMR reservation validation endpoints.
+- Changed `docker/update.bat` to pull the published images (`docker compose pull`) instead of building them locally.
 
 ## v0.3.0
 

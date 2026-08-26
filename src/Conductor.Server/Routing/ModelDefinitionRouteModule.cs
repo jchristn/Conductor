@@ -42,7 +42,8 @@ namespace Conductor.Server.Routing
             {
                 ModelDefinition md = req.Data as ModelDefinition;
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
-                return await mdController.Validate(tenantId, md, md?.Id);
+                string existingId = req.Http.Request.Query.Elements.Get("existingId");
+                return await mdController.Validate(tenantId, md, !String.IsNullOrEmpty(existingId) ? existingId : md?.Id);
             },
             api => api
                 .WithTag("Model Definitions")
