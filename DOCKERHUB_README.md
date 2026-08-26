@@ -15,7 +15,7 @@ This page covers running Conductor from the published Docker images. The full so
 | [`jchristn77/conductor-server`](https://hub.docker.com/r/jchristn77/conductor-server) | REST API, inference proxy, routing engine | 9000 |
 | [`jchristn77/conductor-dashboard`](https://hub.docker.com/r/jchristn77/conductor-dashboard) | React management UI | 9100 |
 
-Both images publish versioned tags (for example `v0.4.0`) alongside `latest`.
+Both images publish versioned tags (the current published tag is `v0.2.0`) alongside `latest`.
 
 ## What you can do with it
 
