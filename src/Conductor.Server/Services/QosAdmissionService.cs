@@ -2,9 +2,11 @@ namespace Conductor.Server.Services
 {
     using System;
     using System.Collections.Concurrent;
+    using System.Diagnostics;
     using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Models;
+    using Conductor.Core.Telemetry;
     using SyslogLogging;
 
     /// <summary>
@@ -85,9 +87,12 @@ namespace Conductor.Server.Services
             };
 
             if (runtime.MaxTotalDepth > 0 && Volatile.Read(ref state.ParkedCount) >= runtime.MaxTotalDepth)
-                return Reject(runtime, className, QosAdmissionOutcomeEnum.Rejected, "total_depth");
+                return RejectAndEmit(state, runtime, className, QosAdmissionOutcomeEnum.Rejected, "total_depth");
 
             Interlocked.Increment(ref state.ParkedCount);
+            ConductorTelemetry.QosQueueDepth.Add(1, DepthTags(state));
+            ticket.EnqueuedTicks = Stopwatch.GetTimestamp();
+
             bool enqueued;
             try { enqueued = runtime.Enqueue(ticket); }
             catch { enqueued = false; }
@@ -95,7 +100,8 @@ namespace Conductor.Server.Services
             if (!enqueued)
             {
                 Interlocked.Decrement(ref state.ParkedCount);
-                return Reject(runtime, className, QosAdmissionOutcomeEnum.Rejected, "queue_full");
+                ConductorTelemetry.QosQueueDepth.Add(-1, DepthTags(state));
+                return RejectAndEmit(state, runtime, className, QosAdmissionOutcomeEnum.Rejected, "queue_full");
             }
 
             using (CancellationTokenSource waitCts = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, _ServiceCts.Token))
@@ -108,19 +114,21 @@ namespace Conductor.Server.Services
                 Task completed = await Task.WhenAny(releaseTask, delayTask).ConfigureAwait(false);
                 if (completed == releaseTask)
                 {
+                    EmitAdmitted(state, ticket, className);
                     return QosAdmissionResult.ForAdmitted(className, MakeComplete(sem));
                 }
 
                 int prior = Interlocked.CompareExchange(ref ticket.Settled, 2, 0);
                 if (prior == 1)
                 {
+                    EmitAdmitted(state, ticket, className);
                     return QosAdmissionResult.ForAdmitted(className, MakeComplete(sem));
                 }
 
                 QosAdmissionOutcomeEnum outcome = requestAborted.IsCancellationRequested
                     ? QosAdmissionOutcomeEnum.Aborted
                     : QosAdmissionOutcomeEnum.TimedOut;
-                return Reject(runtime, className, outcome, outcome == QosAdmissionOutcomeEnum.Aborted ? "aborted" : "wait_timeout");
+                return RejectAndEmit(state, runtime, className, outcome, outcome == QosAdmissionOutcomeEnum.Aborted ? "aborted" : "wait_timeout");
             }
         }
 
@@ -156,6 +164,47 @@ namespace Conductor.Server.Services
                 _Logging?.Warn(_Header + "classifier threw for profile=" + runtime.ProfileId + ": " + ex.Message);
                 return "default";
             }
+        }
+
+        private static TagList DepthTags(QosVmrState state)
+        {
+            return new TagList { { ConductorTelemetry.TagVmr, state.VmrName ?? state.VmrId } };
+        }
+
+        private static void EmitAdmitted(QosVmrState state, QosAdmissionTicket ticket, string className)
+        {
+            string vmr = state.VmrName ?? state.VmrId;
+            ConductorTelemetry.QosAdmissions.Add(1, new TagList
+            {
+                { ConductorTelemetry.TagVmr, vmr },
+                { ConductorTelemetry.TagQosClass, className },
+                { ConductorTelemetry.TagOutcome, "admitted" }
+            });
+
+            double waitSeconds = (Stopwatch.GetTimestamp() - ticket.EnqueuedTicks) / (double)Stopwatch.Frequency;
+            if (waitSeconds < 0) waitSeconds = 0;
+            ConductorTelemetry.QosQueueWaitDuration.Record(waitSeconds, new TagList
+            {
+                { ConductorTelemetry.TagVmr, vmr },
+                { ConductorTelemetry.TagQosClass, className }
+            });
+        }
+
+        private static QosAdmissionResult RejectAndEmit(QosVmrState state, QosRuntime runtime, string className, QosAdmissionOutcomeEnum outcome, string reason)
+        {
+            string vmr = state.VmrName ?? state.VmrId;
+            ConductorTelemetry.QosAdmissions.Add(1, new TagList
+            {
+                { ConductorTelemetry.TagVmr, vmr },
+                { ConductorTelemetry.TagQosClass, className },
+                { ConductorTelemetry.TagOutcome, outcome.ToString().ToLowerInvariant() }
+            });
+            ConductorTelemetry.QosRejections.Add(1, new TagList
+            {
+                { ConductorTelemetry.TagVmr, vmr },
+                { ConductorTelemetry.TagReason, reason }
+            });
+            return Reject(runtime, className, outcome, reason);
         }
 
         private static QosAdmissionResult Reject(QosRuntime runtime, string className, QosAdmissionOutcomeEnum outcome, string reason)
@@ -239,6 +288,7 @@ namespace Conductor.Server.Services
                 state.SchedulerCts = schedCts;
                 state.ParkedCount = 0;
                 state.Runtime = runtime;
+                state.VmrName = vmr.Name;
                 state.SchedulerTask = Task.Run(() => RunSchedulerAsync(state, runtime, sem, schedCts.Token));
 
                 return state;
@@ -257,6 +307,7 @@ namespace Conductor.Server.Services
                 {
                     QosAdmissionTicket ticket = await runtime.Tail.DequeueAsync(ct).ConfigureAwait(false);
                     Interlocked.Decrement(ref state.ParkedCount);
+                    ConductorTelemetry.QosQueueDepth.Add(-1, DepthTags(state));
 
                     if (Volatile.Read(ref ticket.Settled) == 2) continue;
                     if (ticket.RequestAborted.IsCancellationRequested)

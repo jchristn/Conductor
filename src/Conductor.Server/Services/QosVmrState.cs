@@ -13,6 +13,9 @@ namespace Conductor.Server.Services
         /// <summary>The virtual model runner id. Never null.</summary>
         public string VmrId { get; }
 
+        /// <summary>The virtual model runner display name, used in metric tags. Nullable.</summary>
+        public string VmrName { get; set; }
+
         /// <summary>Guards (re)build of the runtime and scheduler.</summary>
         public SemaphoreSlim BuildLock { get; } = new SemaphoreSlim(1, 1);
 

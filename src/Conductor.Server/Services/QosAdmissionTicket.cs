@@ -29,6 +29,9 @@ namespace Conductor.Server.Services
         /// <summary>Scheduling cost; default 1.</summary>
         public int Cost { get; set; } = 1;
 
+        /// <summary>Monotonic timestamp (Stopwatch ticks) captured at enqueue, for wait-time metrics.</summary>
+        public long EnqueuedTicks { get; set; }
+
         /// <summary>Token when the client aborts the request.</summary>
         public CancellationToken RequestAborted { get; set; }
 

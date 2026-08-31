@@ -45,6 +45,12 @@ namespace Conductor.Core.Telemetry
         /// <summary>Instrumentation scope name for process and runtime gauges.</summary>
         public const string ProcessScope = "Conductor.Process";
 
+        /// <summary>Instrumentation scope name for QoS admission metrics and traces.</summary>
+        public const string QosScope = "Conductor.Qos";
+
+        /// <summary>Meter and activity-source name exposed by the embedded QoSKit library.</summary>
+        public const string QoSKitScope = "QoSKit";
+
         #endregion
 
         #region Tag-Keys
@@ -90,6 +96,9 @@ namespace Conductor.Core.Telemetry
 
         /// <summary>Tag key: success boolean rendered as a string.</summary>
         public const string TagSuccess = "success";
+
+        /// <summary>Tag key: QoS traffic class.</summary>
+        public const string TagQosClass = "qos_class";
 
         #endregion
 
@@ -140,6 +149,18 @@ namespace Conductor.Core.Telemetry
         /// <summary>Metric name: database client error counter.</summary>
         public const string MetricDbErrors = "conductor.db.client.errors";
 
+        /// <summary>Metric name: QoS admission decision counter.</summary>
+        public const string MetricQosAdmissions = "conductor.qos.admissions";
+
+        /// <summary>Metric name: QoS queue wait duration histogram (seconds).</summary>
+        public const string MetricQosQueueWaitDuration = "conductor.qos.queue.wait.duration";
+
+        /// <summary>Metric name: QoS rejection counter.</summary>
+        public const string MetricQosRejections = "conductor.qos.rejections";
+
+        /// <summary>Metric name: QoS current parked-request depth up/down counter.</summary>
+        public const string MetricQosQueueDepth = "conductor.qos.queue.depth";
+
         #endregion
 
         #region Meters
@@ -149,6 +170,7 @@ namespace Conductor.Core.Telemetry
         private static readonly Meter _RoutingMeter = new Meter(RoutingScope);
         private static readonly Meter _ModelLoadMeter = new Meter(ModelLoadScope);
         private static readonly Meter _DatabaseMeter = new Meter(DatabaseScope);
+        private static readonly Meter _QosMeter = new Meter(QosScope);
 
         /// <summary>
         /// Meter used for endpoint-health observable gauges. Consumers register their own
@@ -244,6 +266,22 @@ namespace Conductor.Core.Telemetry
         public static Counter<long> DbErrors { get; } =
             _DatabaseMeter.CreateCounter<long>(MetricDbErrors, "{error}", "Database client operations that threw an exception.");
 
+        /// <summary>QoS admission decision counter. Never null.</summary>
+        public static Counter<long> QosAdmissions { get; } =
+            _QosMeter.CreateCounter<long>(MetricQosAdmissions, "{decision}", "QoS admission decisions at the virtual model runner boundary.");
+
+        /// <summary>QoS queue wait duration in seconds. Never null.</summary>
+        public static Histogram<double> QosQueueWaitDuration { get; } =
+            _QosMeter.CreateHistogram<double>(MetricQosQueueWaitDuration, "s", "Time a request waited in the QoS queue before admission.");
+
+        /// <summary>QoS rejection counter. Never null.</summary>
+        public static Counter<long> QosRejections { get; } =
+            _QosMeter.CreateCounter<long>(MetricQosRejections, "{rejection}", "Requests turned away by QoS admission (queue full or wait timeout).");
+
+        /// <summary>QoS current parked-request depth. Never null.</summary>
+        public static UpDownCounter<long> QosQueueDepth { get; } =
+            _QosMeter.CreateUpDownCounter<long>(MetricQosQueueDepth, "{request}", "Requests currently parked in QoS queues.");
+
         #endregion
 
         #region Subscriptions
@@ -254,7 +292,7 @@ namespace Conductor.Core.Telemetry
         /// </summary>
         public static IReadOnlyList<string> MeterNames { get; } = new List<string>
         {
-            HttpScope, InferenceScope, RoutingScope, ModelLoadScope, DatabaseScope, HealthScope, ProcessScope
+            HttpScope, InferenceScope, RoutingScope, ModelLoadScope, DatabaseScope, HealthScope, ProcessScope, QosScope, QoSKitScope
         };
 
         /// <summary>
@@ -263,7 +301,7 @@ namespace Conductor.Core.Telemetry
         /// </summary>
         public static IReadOnlyList<string> ActivitySourceNames { get; } = new List<string>
         {
-            HttpScope, InferenceScope, RoutingScope, ModelLoadScope, DatabaseScope, HealthScope
+            HttpScope, InferenceScope, RoutingScope, ModelLoadScope, DatabaseScope, HealthScope, QoSKitScope
         };
 
         /// <summary>
@@ -278,7 +316,9 @@ namespace Conductor.Core.Telemetry
             { MetricInferenceFirstTokenDuration, LatencyBuckets.Network },
             { MetricRoutingDecisionDuration, LatencyBuckets.Fast },
             { MetricModelLoadDuration, LatencyBuckets.Network },
-            { MetricDbOperationDuration, LatencyBuckets.Fast }
+            { MetricDbOperationDuration, LatencyBuckets.Fast },
+            { MetricQosQueueWaitDuration, LatencyBuckets.Network },
+            { "qoskit.queue.wait.duration", new double[] { 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000, 120000 } }
         };
 
         #endregion
