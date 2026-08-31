@@ -175,7 +175,7 @@ namespace Test.McpServer
             ModelRunnerEndpoint endpoint1 = new ModelRunnerEndpoint
             {
                 TenantId = _TenantId,
-                Hostname = "localhost",
+                Hostname = "127.0.0.1",
                 Port = 11434,
                 ApiType = ApiTypeEnum.Ollama,
                 MaxParallelRequests = 4,
@@ -252,7 +252,10 @@ namespace Test.McpServer
             McpSettings settings = new McpSettings
             {
                 EnableHttpServer = true,
-                HttpHostname = "localhost",
+                // Bind the loopback interface explicitly as 127.0.0.1 rather than "localhost". On Windows
+                // "localhost" resolves IPv6 ::1 first and stalls before falling back to IPv4, which slows
+                // every call and can hang the harness; 127.0.0.1 targets IPv4 directly with no DNS lookup.
+                HttpHostname = "127.0.0.1",
                 HttpPort = 9001,
                 EnableTcpServer = false  // Use HTTP for testing
             };
@@ -262,7 +265,7 @@ namespace Test.McpServer
 
             await _McpServer.StartAsync().ConfigureAwait(false);
 
-            Console.WriteLine("      MCP server started on http://localhost:9001");
+            Console.WriteLine("      MCP server started on http://127.0.0.1:9001");
             Console.WriteLine();
         }
 
@@ -271,7 +274,7 @@ namespace Test.McpServer
             Console.WriteLine("[4/6] Connecting MCP client...");
 
             _McpClient = new McpHttpClient();
-            bool connected = await _McpClient.ConnectAsync("http://localhost:9001/mcp/rpc").ConfigureAwait(false);
+            bool connected = await _McpClient.ConnectAsync("http://127.0.0.1:9001/mcp/rpc").ConfigureAwait(false);
 
             if (!connected)
             {
@@ -579,8 +582,8 @@ namespace Test.McpServer
             Console.WriteLine("[6/6] Interactive mode");
             Console.WriteLine();
             Console.WriteLine("The MCP server is running. You can:");
-            Console.WriteLine("  - Connect with an MCP client to http://localhost:9001/mcp/rpc");
-            Console.WriteLine("  - SSE events available at http://localhost:9001/mcp/events");
+            Console.WriteLine("  - Connect with an MCP client to http://127.0.0.1:9001/mcp/rpc");
+            Console.WriteLine("  - SSE events available at http://127.0.0.1:9001/mcp/events");
             Console.WriteLine();
             Console.WriteLine("Press 'q' to quit, 'l' to list tools, or 't' to run a tool...");
             Console.WriteLine();

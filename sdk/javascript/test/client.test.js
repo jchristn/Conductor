@@ -14,7 +14,7 @@ function createJsonResponse(payload, status = 200) {
 test('builds validation request with existingId query', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     bearerToken: 'token',
     fetchImpl: async (url) => {
       capturedUrl = url;
@@ -25,14 +25,14 @@ test('builds validation request with existingId query', async () => {
   const result = await client.validateVirtualModelRunner({ Name: 'Test' }, 'vmr_123');
 
   assert.equal(result.IsValid, true);
-  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/virtualmodelrunners/validate?existingId=vmr_123');
+  assert.equal(capturedUrl, 'http://127.0.0.1:9000/v1.0/virtualmodelrunners/validate?existingId=vmr_123');
 });
 
 test('endpoint group methods use expected routes', async () => {
   const captured = [];
   const group = { Name: 'Primary', EndpointIds: ['mre_123'] };
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options = {}) => {
       captured.push({ url, method: options.method || 'GET', body: options.body });
       return createJsonResponse({ ok: true });
@@ -46,21 +46,21 @@ test('endpoint group methods use expected routes', async () => {
   await client.deleteEndpointGroup('egp_123', 'ten_123');
   await client.validateEndpointGroup(group, 'egp_123');
 
-  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/endpointgroups?tenantId=ten_123&activeFilter=true');
-  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123');
+  assert.equal(captured[0].url, 'http://127.0.0.1:9000/v1.0/endpointgroups?tenantId=ten_123&activeFilter=true');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123');
   assert.equal(captured[2].method, 'POST');
-  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/endpointgroups');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/endpointgroups');
   assert.equal(captured[3].method, 'PUT');
-  assert.equal(captured[3].url, 'http://localhost:9000/v1.0/endpointgroups/egp_123');
+  assert.equal(captured[3].url, 'http://127.0.0.1:9000/v1.0/endpointgroups/egp_123');
   assert.equal(captured[4].method, 'DELETE');
-  assert.equal(captured[4].url, 'http://localhost:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123');
-  assert.equal(captured[5].url, 'http://localhost:9000/v1.0/endpointgroups/validate?existingId=egp_123');
+  assert.equal(captured[4].url, 'http://127.0.0.1:9000/v1.0/endpointgroups/egp_123?tenantId=ten_123');
+  assert.equal(captured[5].url, 'http://127.0.0.1:9000/v1.0/endpointgroups/validate?existingId=egp_123');
 });
 
 test('builds request-history search query string', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url) => {
       capturedUrl = url;
       return createJsonResponse({ Data: [] });
@@ -76,14 +76,14 @@ test('builds request-history search query string', async () => {
 
   assert.equal(
     capturedUrl,
-    'http://localhost:9000/v1.0/requesthistory?vmrGuid=vmr_1&statusClass=5xx&modelName=gpt-4o-mini&reservationGuid=vmrr_1'
+    'http://127.0.0.1:9000/v1.0/requesthistory?vmrGuid=vmr_1&statusClass=5xx&modelName=gpt-4o-mini&reservationGuid=vmrr_1'
   );
 });
 
 test('builds request analytics overview query string', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url) => {
       capturedUrl = url;
       return createJsonResponse({ TotalRequests: 0 });
@@ -99,14 +99,14 @@ test('builds request analytics overview query string', async () => {
 
   assert.equal(
     capturedUrl,
-    'http://localhost:9000/v1.0/requesthistory/analytics/overview?range=lastWeek&vmrGuid=vmr_1&providerName=Ollama&reservationReasonCode=ReservationDenied'
+    'http://127.0.0.1:9000/v1.0/requesthistory/analytics/overview?range=lastWeek&vmrGuid=vmr_1&providerName=Ollama&reservationReasonCode=ReservationDenied'
   );
 });
 
 test('builds analytics workspace GET query string', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url) => {
       capturedUrl = url;
       return createJsonResponse({ TotalRequests: 0 });
@@ -125,7 +125,7 @@ test('builds analytics workspace GET query string', async () => {
 
   assert.equal(
     capturedUrl,
-    'http://localhost:9000/v1.0/analytics/summary?range=lastDay&groupBy=RequestorUserId&requestorUserGuid=usr_1&reservationGuid=vmrr_1&reservationReasonCode=ReservationDenied&tokenUnitCost=0.000001&costCurrency=USD'
+    'http://127.0.0.1:9000/v1.0/analytics/summary?range=lastDay&groupBy=RequestorUserId&requestorUserGuid=usr_1&reservationGuid=vmrr_1&reservationReasonCode=ReservationDenied&tokenUnitCost=0.000001&costCurrency=USD'
   );
 });
 
@@ -133,7 +133,7 @@ test('builds analytics workspace POST query request', async () => {
   let capturedUrl = '';
   let capturedOptions = null;
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       capturedUrl = url;
       capturedOptions = options;
@@ -155,7 +155,7 @@ test('builds analytics workspace POST query request', async () => {
 
   await client.queryAnalytics(query);
 
-  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/analytics/query');
+  assert.equal(capturedUrl, 'http://127.0.0.1:9000/v1.0/analytics/query');
   assert.equal(capturedOptions.method, 'POST');
   assert.equal(capturedOptions.body, JSON.stringify(query));
 });
@@ -163,7 +163,7 @@ test('builds analytics workspace POST query request', async () => {
 test('builds analytics saved report CRUD requests', async () => {
   const captured = [];
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       captured.push({ url, options });
       if (options.method === 'DELETE') {
@@ -191,24 +191,24 @@ test('builds analytics saved report CRUD requests', async () => {
   const deleteResult = await client.deleteAnalyticsSavedReport('asr_123', 'ten_123');
 
   assert.equal(deleteResult, null);
-  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/analytics/reports?tenantId=ten_123&maxResults=25&nameFilter=daily');
+  assert.equal(captured[0].url, 'http://127.0.0.1:9000/v1.0/analytics/reports?tenantId=ten_123&maxResults=25&nameFilter=daily');
   assert.equal(captured[0].options.method, 'GET');
-  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/analytics/reports');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/analytics/reports');
   assert.equal(captured[1].options.method, 'POST');
   assert.equal(captured[1].options.body, JSON.stringify(report));
-  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123');
   assert.equal(captured[2].options.method, 'GET');
-  assert.equal(captured[3].url, 'http://localhost:9000/v1.0/analytics/reports/asr_123');
+  assert.equal(captured[3].url, 'http://127.0.0.1:9000/v1.0/analytics/reports/asr_123');
   assert.equal(captured[3].options.method, 'PUT');
   assert.equal(captured[3].options.body, JSON.stringify(report));
-  assert.equal(captured[4].url, 'http://localhost:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123');
+  assert.equal(captured[4].url, 'http://127.0.0.1:9000/v1.0/analytics/reports/asr_123?tenantId=ten_123');
   assert.equal(captured[4].options.method, 'DELETE');
 });
 
 test('builds model access policy management requests', async () => {
   const captured = [];
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       captured.push({ url, options });
       if (options.method === 'DELETE') {
@@ -259,28 +259,28 @@ test('builds model access policy management requests', async () => {
   assert.equal(deleteResult, null);
   assert.equal(
     captured[0].url,
-    'http://localhost:9000/v1.0/modelaccesspolicies?tenantId=ten_123&maxResults=25&continuationToken=next+page&nameFilter=prod&activeFilter=true'
+    'http://127.0.0.1:9000/v1.0/modelaccesspolicies?tenantId=ten_123&maxResults=25&continuationToken=next+page&nameFilter=prod&activeFilter=true'
   );
   assert.equal(captured[0].options.method, 'GET');
-  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123');
   assert.equal(captured[1].options.method, 'GET');
-  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/modelaccesspolicies');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/modelaccesspolicies');
   assert.equal(captured[2].options.method, 'POST');
   assert.equal(captured[2].options.body, JSON.stringify(policy));
-  assert.equal(captured[3].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123');
+  assert.equal(captured[3].url, 'http://127.0.0.1:9000/v1.0/modelaccesspolicies/map_123');
   assert.equal(captured[3].options.method, 'PUT');
   assert.equal(captured[3].options.body, JSON.stringify(policy));
-  assert.equal(captured[4].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123&forceDetach=true');
+  assert.equal(captured[4].url, 'http://127.0.0.1:9000/v1.0/modelaccesspolicies/map_123?tenantId=ten_123&forceDetach=true');
   assert.equal(captured[4].options.method, 'DELETE');
-  assert.equal(captured[5].url, 'http://localhost:9000/v1.0/modelaccesspolicies/validate');
+  assert.equal(captured[5].url, 'http://127.0.0.1:9000/v1.0/modelaccesspolicies/validate');
   assert.equal(captured[5].options.method, 'POST');
   assert.equal(captured[5].options.body, JSON.stringify(policy));
-  assert.equal(captured[6].url, 'http://localhost:9000/v1.0/modelaccesspolicies/map_123/evaluate?tenantId=ten_123');
+  assert.equal(captured[6].url, 'http://127.0.0.1:9000/v1.0/modelaccesspolicies/map_123/evaluate?tenantId=ten_123');
   assert.equal(captured[6].options.method, 'POST');
   assert.equal(captured[6].options.body, JSON.stringify(context));
   assert.equal(
     captured[7].url,
-    'http://localhost:9000/v1.0/modelaccesspolicies/effective?tenantId=ten_123&credentialId=cred_123&userId=usr_123&vmrId=vmr_123&modelDefinitionId=mod_123&modelName=gpt-4o-mini&action=Completions'
+    'http://127.0.0.1:9000/v1.0/modelaccesspolicies/effective?tenantId=ten_123&credentialId=cred_123&userId=usr_123&vmrId=vmr_123&modelDefinitionId=mod_123&modelName=gpt-4o-mini&action=Completions'
   );
   assert.equal(captured[7].options.method, 'GET');
 });
@@ -288,7 +288,7 @@ test('builds model access policy management requests', async () => {
 test('builds virtual model runner reservation management requests', async () => {
   const captured = [];
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       captured.push({ url, options });
       if (options.method === 'DELETE') {
@@ -334,30 +334,30 @@ test('builds virtual model runner reservation management requests', async () => 
   assert.equal(deleteResult, null);
   assert.equal(
     captured[0].url,
-    'http://localhost:9000/v1.0/vmrreservations?tenantId=ten_123&vmrId=vmr_123&state=upcoming&subjectType=User&subjectId=usr_123&startsBeforeUtc=2026-06-16T12%3A00%3A00Z&endsAfterUtc=2026-06-16T09%3A00%3A00Z&maxResults=25'
+    'http://127.0.0.1:9000/v1.0/vmrreservations?tenantId=ten_123&vmrId=vmr_123&state=upcoming&subjectType=User&subjectId=usr_123&startsBeforeUtc=2026-06-16T12%3A00%3A00Z&endsAfterUtc=2026-06-16T09%3A00%3A00Z&maxResults=25'
   );
   assert.equal(captured[0].options.method, 'GET');
-  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/vmrreservations/vmrr_123?tenantId=ten_123');
-  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/vmrreservations');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/vmrreservations/vmrr_123?tenantId=ten_123');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/vmrreservations');
   assert.equal(captured[2].options.method, 'POST');
   assert.equal(captured[2].options.body, JSON.stringify(reservation));
-  assert.equal(captured[3].url, 'http://localhost:9000/v1.0/vmrreservations/vmrr_123');
+  assert.equal(captured[3].url, 'http://127.0.0.1:9000/v1.0/vmrreservations/vmrr_123');
   assert.equal(captured[3].options.method, 'PUT');
-  assert.equal(captured[4].url, 'http://localhost:9000/v1.0/vmrreservations/vmrr_123?tenantId=ten_123');
+  assert.equal(captured[4].url, 'http://127.0.0.1:9000/v1.0/vmrreservations/vmrr_123?tenantId=ten_123');
   assert.equal(captured[4].options.method, 'DELETE');
-  assert.equal(captured[5].url, 'http://localhost:9000/v1.0/vmrreservations/validate');
+  assert.equal(captured[5].url, 'http://127.0.0.1:9000/v1.0/vmrreservations/validate');
   assert.equal(captured[5].options.method, 'POST');
-  assert.equal(captured[6].url, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/reservations?tenantId=ten_123&state=active');
+  assert.equal(captured[6].url, 'http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_123/reservations?tenantId=ten_123&state=active');
   assert.equal(
     captured[7].url,
-    'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/reservation-effective?tenantId=ten_123&userId=usr_123&credentialId=cred_123&atUtc=2026-06-16T10%3A30%3A00Z'
+    'http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_123/reservation-effective?tenantId=ten_123&userId=usr_123&credentialId=cred_123&atUtc=2026-06-16T10%3A30%3A00Z'
   );
 });
 
 test('builds request history analytics detail URL', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url) => {
       capturedUrl = url;
       return createJsonResponse({ Events: [] });
@@ -366,14 +366,14 @@ test('builds request history analytics detail URL', async () => {
 
   await client.getRequestHistoryAnalytics('req_123');
 
-  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/requesthistory/req_123/analytics');
+  assert.equal(capturedUrl, 'http://127.0.0.1:9000/v1.0/requesthistory/req_123/analytics');
 });
 
 test('builds endpoint model load request with tenant query and body', async () => {
   let capturedUrl = '';
   let capturedOptions = null;
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       capturedUrl = url;
       capturedOptions = options;
@@ -385,7 +385,7 @@ test('builds endpoint model load request with tenant query and body', async () =
   const result = await client.loadModelRunnerEndpointModel('mre_123', payload, 'ten_123');
 
   assert.equal(result.OutcomeCode, 'Loaded');
-  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/load-model?tenantId=ten_123');
+  assert.equal(capturedUrl, 'http://127.0.0.1:9000/v1.0/modelrunnerendpoints/mre_123/load-model?tenantId=ten_123');
   assert.equal(capturedOptions.method, 'POST');
   assert.equal(capturedOptions.body, JSON.stringify(payload));
 });
@@ -393,7 +393,7 @@ test('builds endpoint model load request with tenant query and body', async () =
 test('builds ollama endpoint model management requests', async () => {
   const captured = [];
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       captured.push({ url, options });
       return createJsonResponse({ Success: true, Models: [] });
@@ -407,12 +407,12 @@ test('builds ollama endpoint model management requests', async () => {
   await client.pullOllamaEndpointModel('mre_123', pullPayload, 'ten_123');
   await client.deleteOllamaEndpointModel('mre_123', deletePayload, 'ten_123');
 
-  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models?tenantId=ten_123');
+  assert.equal(captured[0].url, 'http://127.0.0.1:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models?tenantId=ten_123');
   assert.equal(captured[0].options.method, 'GET');
-  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models/pull?tenantId=ten_123');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models/pull?tenantId=ten_123');
   assert.equal(captured[1].options.method, 'POST');
   assert.equal(captured[1].options.body, JSON.stringify(pullPayload));
-  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models/delete?tenantId=ten_123');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/modelrunnerendpoints/mre_123/ollama/models/delete?tenantId=ten_123');
   assert.equal(captured[2].options.method, 'POST');
   assert.equal(captured[2].options.body, JSON.stringify(deletePayload));
 });
@@ -421,7 +421,7 @@ test('builds virtual model runner model load request with target mode', async ()
   let capturedUrl = '';
   let capturedOptions = null;
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       capturedUrl = url;
       capturedOptions = options;
@@ -437,7 +437,7 @@ test('builds virtual model runner model load request with target mode', async ()
   const result = await client.loadVirtualModelRunnerModel('vmr_123', payload, 'ten_123');
 
   assert.equal(result.OutcomeCode, 'Verified');
-  assert.equal(capturedUrl, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/load-model?tenantId=ten_123');
+  assert.equal(capturedUrl, 'http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_123/load-model?tenantId=ten_123');
   assert.equal(capturedOptions.method, 'POST');
   assert.equal(capturedOptions.body, JSON.stringify(payload));
 });
@@ -445,7 +445,7 @@ test('builds virtual model runner model load request with target mode', async ()
 test('builds virtual model runner runtime state requests', async () => {
   const captured = [];
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async (url, options) => {
       captured.push({ url, options });
       return createJsonResponse({ Endpoints: [] });
@@ -465,19 +465,19 @@ test('builds virtual model runner runtime state requests', async () => {
     endpointId: 'mre_123'
   });
 
-  assert.equal(captured[0].url, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats?tenantId=ten_123&endpointId=mre_123');
+  assert.equal(captured[0].url, 'http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats?tenantId=ten_123&endpointId=mre_123');
   assert.equal(captured[0].options.method, 'GET');
-  assert.equal(captured[1].url, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats/reset?tenantId=ten_123&endpointId=mre_123');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_123/runtime-stats/reset?tenantId=ten_123&endpointId=mre_123');
   assert.equal(captured[1].options.method, 'POST');
   assert.equal(captured[1].options.body, '{}');
-  assert.equal(captured[2].url, 'http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/runtime-backoff/clear?tenantId=ten_123&endpointId=mre_123');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_123/runtime-backoff/clear?tenantId=ten_123&endpointId=mre_123');
   assert.equal(captured[2].options.method, 'POST');
   assert.equal(captured[2].options.body, '{}');
 });
 
 test('returns raw text for the observability metrics endpoint', async () => {
   const client = new ConductorClient({
-    baseUrl: 'http://localhost:9000',
+    baseUrl: 'http://127.0.0.1:9000',
     fetchImpl: async () => ({
       ok: true,
       status: 200,
