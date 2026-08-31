@@ -36,7 +36,7 @@ services:
     restart: "no"
 
   conductor:
-    image: jchristn77/conductor-server:v0.2.0
+    image: jchristn77/conductor-server:v0.5.0
     container_name: conductor
     ports:
       - "9000:9000"
@@ -64,7 +64,7 @@ services:
       start_period: 5s
 
   conductor-ui:
-    image: jchristn77/conductor-dashboard:v0.2.0
+    image: jchristn77/conductor-dashboard:v0.5.0
     container_name: conductor-ui
     ports:
       - "9100:9100"

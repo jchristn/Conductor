@@ -99,6 +99,21 @@ namespace Conductor.Core.Helpers
         public const string TracePrefix = "trc_";
 
         /// <summary>
+        /// QoS profile ID prefix.
+        /// </summary>
+        public const string QosProfilePrefix = "qos_";
+
+        /// <summary>
+        /// QoS profile child-row (rule, node, class, link, ingress route) ID prefix.
+        /// </summary>
+        public const string QosProfileChildPrefix = "qc_";
+
+        /// <summary>
+        /// QoS traffic class ID prefix.
+        /// </summary>
+        public const string QosTrafficClassPrefix = "qtc_";
+
+        /// <summary>
         /// Default ID length including prefix.
         /// </summary>
         public const int DefaultIdLength = 48;
@@ -265,6 +280,33 @@ namespace Conductor.Core.Helpers
         public static string NewTraceId()
         {
             return _Generator.GenerateKSortable(TracePrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new QoS profile ID.
+        /// </summary>
+        /// <returns>K-sortable QoS profile ID.</returns>
+        public static string NewQosProfileId()
+        {
+            return _Generator.GenerateKSortable(QosProfilePrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new QoS profile child-row ID.
+        /// </summary>
+        /// <returns>K-sortable QoS profile child-row ID.</returns>
+        public static string NewQosProfileChildId()
+        {
+            return _Generator.GenerateKSortable(QosProfileChildPrefix, DefaultIdLength);
+        }
+
+        /// <summary>
+        /// Generate a new QoS traffic class ID.
+        /// </summary>
+        /// <returns>K-sortable QoS traffic class ID.</returns>
+        public static string NewQosTrafficClassId()
+        {
+            return _Generator.GenerateKSortable(QosTrafficClassPrefix, DefaultIdLength);
         }
 
         /// <summary>
