@@ -56,6 +56,7 @@ namespace Conductor.Server.Controllers
         /// <param name="modelAccessControlSettings">Model access control settings (optional).</param>
         /// <param name="modelAccessControlService">Model access control service (optional).</param>
         /// <param name="runtimeStatsService">Runtime stats service (optional).</param>
+        /// <param name="qosAdmissionService">QoS admission service (optional); when null, requests bypass QoS admission control.</param>
         public ProxyController(
             DatabaseDriverBase database,
             AuthenticationService authService,
