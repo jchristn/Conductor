@@ -74,6 +74,7 @@ namespace Conductor.Server.Controllers
             await ExpandEndpointGroupsAsync(vmr).ConfigureAwait(false);
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
             await ValidateModelAccessPolicyAsync(tenantId, vmr.ModelAccessPolicyId).ConfigureAwait(false);
+            await ValidateAndAssignQosProfileAsync(tenantId, vmr).ConfigureAwait(false);
             await ValidateAsync(tenantId, vmr, null).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.CreateAsync(vmr);
 
@@ -129,6 +130,7 @@ namespace Conductor.Server.Controllers
             await ExpandEndpointGroupsAsync(vmr).ConfigureAwait(false);
             await ValidateLoadBalancingPolicyAsync(tenantId, vmr.LoadBalancingPolicyId).ConfigureAwait(false);
             await ValidateModelAccessPolicyAsync(tenantId, vmr.ModelAccessPolicyId).ConfigureAwait(false);
+            await ValidateAndAssignQosProfileAsync(tenantId, vmr).ConfigureAwait(false);
             await ValidateAsync(tenantId, vmr, id).ConfigureAwait(false);
             vmr = await Database.VirtualModelRunner.UpdateAsync(vmr);
 
@@ -389,6 +391,30 @@ namespace Conductor.Server.Controllers
             List<ModelRunnerEndpoint> endpoints = await ResolveAttachedEndpointsAsync(vmr, endpointId).ConfigureAwait(false);
             _RuntimeStatsService.ClearBackoff(vmr.TenantId, vmr.Id, endpointId);
             return _RuntimeStatsService.GetStats(vmr.TenantId, vmr.Id, endpoints);
+        }
+
+        private async Task ValidateAndAssignQosProfileAsync(string tenantId, VirtualModelRunner vmr)
+        {
+            if (vmr == null) return;
+
+            if (String.IsNullOrWhiteSpace(vmr.QosProfileId))
+            {
+                if (!String.IsNullOrEmpty(tenantId))
+                {
+                    Conductor.Core.Models.QosProfile defaultProfile = await Database.QosProfile.ReadDefaultAsync(tenantId).ConfigureAwait(false);
+                    if (defaultProfile != null) vmr.QosProfileId = defaultProfile.Id;
+                }
+                return;
+            }
+
+            Conductor.Core.Models.QosProfile profile = String.IsNullOrEmpty(tenantId)
+                ? await Database.QosProfile.ReadByIdAsync(vmr.QosProfileId).ConfigureAwait(false)
+                : await Database.QosProfile.ReadAsync(tenantId, vmr.QosProfileId).ConfigureAwait(false);
+
+            if (profile == null)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "QosProfileId must reference an existing QoS profile in the same tenant.");
+            }
         }
 
         private async Task ValidateLoadBalancingPolicyAsync(string tenantId, string policyId)

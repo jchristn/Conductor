@@ -38,6 +38,7 @@ namespace Conductor.Server
         private static SessionAffinityService _SessionAffinityService;
         private static OperationalMetricsService _OperationalMetricsService;
         private static EndpointRuntimeStatsService _RuntimeStatsService;
+        private static QosAdmissionService _QosAdmissionService;
         private static ModelAccessControlService _ModelAccessControlService;
         private static RoutingDecisionService _RoutingDecisionService;
         private static ConfigurationValidationService _ConfigurationValidationService;
@@ -136,6 +137,10 @@ namespace Conductor.Server
             // First-run initialization - create default tenant, user, and credential
             await InitializeFirstRunAsync(_TokenSource.Token).ConfigureAwait(false);
 
+            // Ensure every tenant has its default FIFO profile, standard traffic classes, the Standard
+            // Workloads profile, and that existing runners are backfilled to the default profile.
+            await EnsureTenantQosDefaultsAsync(_TokenSource.Token).ConfigureAwait(false);
+
             // Initialize authentication service
             _AuthService = new AuthenticationService(_Database, _Logging, _Settings.AdminApiKeys);
             _Logging.Debug(_Header + "authentication service initialized");
@@ -189,11 +194,19 @@ namespace Conductor.Server
             // Initialize webserver
             _Logging.Info(_Header + "initializing webserver");
 
+            // QoS admission service (per-VMR queueing in front of the endpoint capacity gate).
+            _QosAdmissionService = new QosAdmissionService(
+                new QosProfileCompiler(),
+                new QosCapacityResolver(_Database),
+                (profileId, token) => _Database.QosProfile.ReadByIdAsync(profileId, token),
+                _Logging);
+            _Logging.Info(_Header + "QoS admission service initialized");
+
             // Proxy controller must be constructed before the Webserver because Watson 7 requires
             // a default route at construction time; the default route is the proxy handler.
             _ProxyController = new Controllers.ProxyController(
                 _Database, _AuthService, _Serializer, _Logging,
-                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService, _RuntimeStatsService);
+                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService, _RuntimeStatsService, _QosAdmissionService);
 
             WatsonWebserver.Core.WebserverSettings webSettings = new WatsonWebserver.Core.WebserverSettings(
                 _Settings.Webserver.Hostname,
@@ -271,6 +284,13 @@ namespace Conductor.Server
                 _Logging.Info(_Header + "health check service stopped");
             }
 
+            // Dispose QoS admission service (cancels schedulers, releases parked waiters)
+            if (_QosAdmissionService != null)
+            {
+                await _QosAdmissionService.DisposeAsync().ConfigureAwait(false);
+                _Logging.Info(_Header + "QoS admission service stopped");
+            }
+
             // Dispose session affinity service
             if (_SessionAffinityService != null)
             {
@@ -309,6 +329,87 @@ namespace Conductor.Server
             _TokenSource?.Dispose();
         }
 
+        private static async Task EnsureTenantQosDefaultsAsync(CancellationToken token)
+        {
+            try
+            {
+                string continuation = null;
+                do
+                {
+                    EnumerationResult<TenantMetadata> page = await _Database.Tenant.EnumerateAsync(
+                        new EnumerationRequest { MaxResults = 100, ContinuationToken = continuation }, token).ConfigureAwait(false);
+
+                    if (page?.Data != null)
+                    {
+                        foreach (TenantMetadata tenant in page.Data)
+                        {
+                            await EnsureTenantQosDefaultsForTenantAsync(tenant, token).ConfigureAwait(false);
+                        }
+                    }
+
+                    continuation = (page != null && page.HasMore) ? page.ContinuationToken : null;
+                }
+                while (!String.IsNullOrEmpty(continuation));
+            }
+            catch (Exception ex)
+            {
+                _Logging.Warn(_Header + "failed to seed QoS defaults: " + ex.Message);
+            }
+        }
+
+        private static async Task EnsureTenantQosDefaultsForTenantAsync(TenantMetadata tenant, CancellationToken token)
+        {
+            if (tenant == null || String.IsNullOrEmpty(tenant.Id)) return;
+            string tenantId = tenant.Id;
+
+            QosProfile defaultProfile = await _Database.QosProfile.ReadDefaultAsync(tenantId, token).ConfigureAwait(false);
+            if (defaultProfile == null)
+            {
+                defaultProfile = QosProfileFactory.BuildDefaultFifo(tenantId);
+                await _Database.QosProfile.CreateAsync(defaultProfile, token).ConfigureAwait(false);
+                _Logging.Info(_Header + "seeded default QoS profile for tenant " + tenantId);
+            }
+
+            bool seeded = tenant.Tags != null
+                && tenant.Tags.TryGetValue("qosStandardSeeded", out string marker)
+                && String.Equals(marker, "true", StringComparison.OrdinalIgnoreCase);
+
+            if (!seeded)
+            {
+                foreach (QosTrafficClass trafficClass in QosProfileFactory.StandardTrafficClasses(tenantId))
+                {
+                    QosTrafficClass existing = await _Database.QosTrafficClass.ReadByNameAsync(tenantId, trafficClass.Name, token).ConfigureAwait(false);
+                    if (existing == null) await _Database.QosTrafficClass.CreateAsync(trafficClass, token).ConfigureAwait(false);
+                }
+
+                QosProfile standard = QosProfileFactory.BuildStandardWorkloads(tenantId);
+                await _Database.QosProfile.CreateAsync(standard, token).ConfigureAwait(false);
+
+                if (tenant.Tags == null) tenant.Tags = new Dictionary<string, string>();
+                tenant.Tags["qosStandardSeeded"] = "true";
+                await _Database.Tenant.UpdateAsync(tenant, token).ConfigureAwait(false);
+                _Logging.Info(_Header + "seeded standard QoS classes and profile for tenant " + tenantId);
+            }
+
+            if (defaultProfile != null)
+            {
+                EnumerationResult<VirtualModelRunner> vmrs = await _Database.VirtualModelRunner.EnumerateAsync(
+                    tenantId, new EnumerationRequest { MaxResults = 10000 }, token).ConfigureAwait(false);
+
+                if (vmrs?.Data != null)
+                {
+                    foreach (VirtualModelRunner vmr in vmrs.Data)
+                    {
+                        if (String.IsNullOrEmpty(vmr.QosProfileId))
+                        {
+                            vmr.QosProfileId = defaultProfile.Id;
+                            await _Database.VirtualModelRunner.UpdateAsync(vmr, token).ConfigureAwait(false);
+                        }
+                    }
+                }
+            }
+        }
+
         private static DatabaseDriverBase CreateDatabaseDriver(DatabaseSettings settings)
         {
             switch (settings.Type)
@@ -345,7 +446,8 @@ namespace Conductor.Server
                 _ModelLoadService,
                 _OllamaModelManagementService,
                 _RequestHistoryService,
-                _VirtualModelRunnerReservationService);
+                _VirtualModelRunnerReservationService,
+                _QosAdmissionService);
             Routing.ConductorRouteRegistry routeRegistry = new Routing.ConductorRouteRegistry(routeContext);
             routeRegistry.RegisterRoutes();
         }

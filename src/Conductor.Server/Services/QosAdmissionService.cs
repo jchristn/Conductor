@@ -230,7 +230,7 @@ namespace Conductor.Server.Services
                     return state;
                 }
 
-                int capacity = _CapacityResolver.GetTotalCapacity(vmr);
+                int capacity = await _CapacityResolver.GetTotalCapacityAsync(vmr, _ServiceCts.Token).ConfigureAwait(false);
                 SemaphoreSlim sem = capacity > 0 ? new SemaphoreSlim(capacity, capacity) : null;
                 CancellationTokenSource schedCts = CancellationTokenSource.CreateLinkedTokenSource(_ServiceCts.Token);
 

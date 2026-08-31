@@ -39,6 +39,8 @@ namespace Conductor.Server.Controllers
         /// </summary>
         public int StreamingBufferSize { get; set; } = 8192;
 
+        private readonly Services.QosAdmissionService _QosAdmissionService;
+
         /// <summary>
         /// Instantiate the proxy controller.
         /// </summary>
@@ -66,9 +68,11 @@ namespace Conductor.Server.Controllers
             OperationalMetricsService metrics = null,
             ModelAccessControlSettings modelAccessControlSettings = null,
             IModelAccessControlService modelAccessControlService = null,
-            EndpointRuntimeStatsService runtimeStatsService = null)
+            EndpointRuntimeStatsService runtimeStatsService = null,
+            Services.QosAdmissionService qosAdmissionService = null)
             : base(database, authService, serializer, logging)
         {
+            _QosAdmissionService = qosAdmissionService;
             _HealthCheckService = healthCheckService;
             _RequestHistoryService = requestHistoryService;
             _RoutingDecisionService = routingDecisionService;
@@ -106,6 +110,7 @@ namespace Conductor.Server.Controllers
             bool runtimeStatsAdmitted = false;
             bool runtimeStatsCompleted = false;
             RequestAnalyticsCapture analyticsCapture = new RequestAnalyticsCapture();
+            Services.QosAdmissionResult qosAdmission = null;
 
             try
             {
@@ -193,6 +198,28 @@ namespace Conductor.Server.Controllers
                             analyticsCapture).ConfigureAwait(false);
                     }
                     return;
+                }
+
+                if (_QosAdmissionService != null)
+                {
+                    Services.QosClassificationContext qosContext = BuildQosContext(ctx, requestContext, vmr);
+                    using (Activity qosActivity = ConductorTelemetry.InferenceSource.StartActivity("inference.qos.admit", ActivityKind.Internal))
+                    {
+                        qosAdmission = await _QosAdmissionService.AdmitAsync(vmr, qosContext, cancellationToken).ConfigureAwait(false);
+                        if (qosActivity != null && qosAdmission != null)
+                        {
+                            qosActivity.SetTag("conductor.qos_class", qosAdmission.ClassKey);
+                            qosActivity.SetTag("conductor.qos_outcome", qosAdmission.Outcome.ToString());
+                        }
+                    }
+
+                    if (qosAdmission != null && !qosAdmission.Admitted)
+                    {
+                        analyticsCapture.ErrorType = "QosRejected";
+                        analyticsCapture.ErrorMessage = qosAdmission.Reason;
+                        await SendQosRejection(ctx, qosAdmission).ConfigureAwait(false);
+                        return;
+                    }
                 }
 
                 if (_HealthCheckService != null)
@@ -313,12 +340,122 @@ namespace Conductor.Server.Controllers
             }
             finally
             {
+                if (qosAdmission != null)
+                {
+                    try { qosAdmission.Complete(); } catch { /* best effort */ }
+                }
+
                 if (incrementedInFlight && _HealthCheckService != null && endpoint != null)
                 {
                     _HealthCheckService.DecrementInFlight(endpoint.Id);
                 }
 
                 proxyActivity?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Build a QoS classification context from the resolved request context.
+        /// </summary>
+        /// <param name="ctx">HTTP context.</param>
+        /// <param name="rc">Resolved request context.</param>
+        /// <param name="vmr">Resolved virtual model runner.</param>
+        /// <returns>Classification context.</returns>
+        private Services.QosClassificationContext BuildQosContext(HttpContextBase ctx, RequestContext rc, VirtualModelRunner vmr)
+        {
+            Services.QosClassificationContext qosContext = new Services.QosClassificationContext
+            {
+                Headers = rc?.Headers,
+                Model = rc?.ModelName,
+                ApiFamily = GetApiFamily(rc != null ? rc.RequestType : RequestTypeEnum.Unknown),
+                RequestType = rc != null ? rc.RequestType.ToString() : null,
+                TenantId = rc?.TenantId ?? vmr?.TenantId,
+                CredentialId = rc?.CredentialId,
+                UserId = rc?.UserId,
+                ClientIp = rc?.ClientIpAddress,
+                Vmr = vmr?.Name,
+                BodyValues = ExtractBodyValues(rc?.Data),
+                QueryValues = ExtractQueryValues(ctx)
+            };
+            return qosContext;
+        }
+
+        private Dictionary<string, string> ExtractBodyValues(byte[] data)
+        {
+            Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (data == null || data.Length < 1) return values;
+
+            try
+            {
+                Dictionary<string, object> parsed = Serializer.DeserializeJson<Dictionary<string, object>>(Encoding.UTF8.GetString(data));
+                if (parsed != null)
+                {
+                    foreach (KeyValuePair<string, object> kvp in parsed)
+                    {
+                        if (kvp.Value != null) values[kvp.Key] = kvp.Value.ToString();
+                    }
+                }
+            }
+            catch
+            {
+                // Non-JSON body; no body attributes to classify on.
+            }
+
+            return values;
+        }
+
+        private Dictionary<string, string> ExtractQueryValues(HttpContextBase ctx)
+        {
+            Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                System.Collections.Specialized.NameValueCollection elements = ctx?.Request?.Query?.Elements;
+                if (elements != null)
+                {
+                    foreach (string key in elements.AllKeys)
+                    {
+                        if (!String.IsNullOrEmpty(key)) values[key] = elements.Get(key);
+                    }
+                }
+            }
+            catch
+            {
+                // Query not enumerable; ignore.
+            }
+
+            return values;
+        }
+
+        private async Task SendQosRejection(HttpContextBase ctx, Services.QosAdmissionResult admission)
+        {
+            try
+            {
+                if (admission.IncludeRetryAfter)
+                {
+                    ctx.Response.Headers.Add("Retry-After", admission.RetryAfterSeconds.ToString());
+                }
+
+                string message;
+                switch (admission.Outcome)
+                {
+                    case Services.QosAdmissionOutcomeEnum.TimedOut:
+                        message = "The request exceeded the QoS queue wait deadline.";
+                        break;
+                    case Services.QosAdmissionOutcomeEnum.Aborted:
+                        message = "The client disconnected while the request was queued.";
+                        break;
+                    default:
+                        message = "The QoS queue is full; the request was not admitted.";
+                        break;
+                }
+
+                Conductor.Core.Models.ApiErrorResponse error = Conductor.Core.Models.ApiErrorResponse.TooManyRequests(message);
+                error.StatusCode = admission.StatusCode;
+                await SendErrorResponse(ctx, error).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The client may have disconnected; nothing more to do.
             }
         }
 

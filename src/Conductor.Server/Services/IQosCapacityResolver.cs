@@ -1,5 +1,7 @@
 namespace Conductor.Server.Services
 {
+    using System.Threading;
+    using System.Threading.Tasks;
     using Conductor.Core.Models;
 
     /// <summary>
@@ -14,7 +16,8 @@ namespace Conductor.Server.Services
         /// is a transparent pass-through.
         /// </summary>
         /// <param name="vmr">The virtual model runner. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
         /// <returns>The total capacity, or 0 for unbounded.</returns>
-        int GetTotalCapacity(VirtualModelRunner vmr);
+        Task<int> GetTotalCapacityAsync(VirtualModelRunner vmr, CancellationToken token = default);
     }
 }
