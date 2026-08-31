@@ -18,6 +18,7 @@ import ModelDefinitions from './views/ModelDefinitions';
 import ModelConfigurations from './views/ModelConfigurations';
 import LoadBalancingPolicies from './views/LoadBalancingPolicies';
 import QosProfiles from './views/QosProfiles';
+import QosTrafficClasses from './views/QosTrafficClasses';
 import ModelAccessPolicies from './views/ModelAccessPolicies';
 import VirtualModelRunners from './views/VirtualModelRunners';
 import Reservations from './views/Reservations';
@@ -57,6 +58,7 @@ function App() {
             <Route path="/configurations" element={<ModelConfigurations />} />
             <Route path="/policies" element={<LoadBalancingPolicies />} />
             <Route path="/qos-profiles" element={<QosProfiles />} />
+            <Route path="/qos-traffic-classes" element={<QosTrafficClasses />} />
             <Route path="/model-access-policies" element={<ModelAccessPolicies />} />
             <Route path="/vmr" element={<VirtualModelRunners />} />
             <Route path="/reservations" element={<Reservations />} />

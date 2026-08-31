@@ -159,6 +159,60 @@ export class ConductorClient {
     return this.#request('POST', `/v1.0/loadbalancingpolicies/validate${this.#existingIdQuery(existingId)}`, draft);
   }
 
+  async listQosProfiles(filters = {}) {
+    return this.#request('GET', `/v1.0/qosprofiles${this.#queryString(filters)}`);
+  }
+
+  async getQosProfile(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/qosprofiles/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createQosProfile(profile) {
+    return this.#request('POST', '/v1.0/qosprofiles', profile);
+  }
+
+  async updateQosProfile(id, profile) {
+    return this.#request('PUT', `/v1.0/qosprofiles/${encodeURIComponent(id)}`, profile);
+  }
+
+  async deleteQosProfile(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/qosprofiles/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async validateQosProfile(draft, existingId = null) {
+    return this.#request('POST', `/v1.0/qosprofiles/validate${this.#existingIdQuery(existingId)}`, draft);
+  }
+
+  async getQosProfileClassifierCatalog(tenantId = null) {
+    return this.#request('GET', `/v1.0/qosprofiles/classifier-catalog${this.#tenantQuery(tenantId)}`);
+  }
+
+  async listQosTrafficClasses(filters = {}) {
+    return this.#request('GET', `/v1.0/qostrafficclasses${this.#queryString(filters)}`);
+  }
+
+  async getQosTrafficClass(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/qostrafficclasses/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createQosTrafficClass(trafficClass) {
+    return this.#request('POST', '/v1.0/qostrafficclasses', trafficClass);
+  }
+
+  async updateQosTrafficClass(id, trafficClass) {
+    return this.#request('PUT', `/v1.0/qostrafficclasses/${encodeURIComponent(id)}`, trafficClass);
+  }
+
+  async deleteQosTrafficClass(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/qostrafficclasses/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async purgeTenant(id, confirmTenantId = null) {
+    return this.#request('POST', `/v1.0/tenants/${encodeURIComponent(id)}/purge`, {
+      ConfirmTenantId: confirmTenantId != null ? confirmTenantId : id
+    });
+  }
+
   async listModelAccessPolicies(filters = {}) {
     return this.#request('GET', `/v1.0/modelaccesspolicies${this.#queryString(filters)}`);
   }

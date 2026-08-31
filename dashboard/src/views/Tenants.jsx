@@ -9,9 +9,10 @@ import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
+import NukeTenantModal from '../components/NukeTenantModal';
 
 function Tenants() {
-  const { api, setError } = useApp();
+  const { api, setError, isAdmin } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,7 @@ function Tenants() {
   const [showMetadata, setShowMetadata] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showNuke, setShowNuke] = useState(false);
   const [formData, setFormData] = useState({
     Name: '',
     Active: true,
@@ -77,6 +79,11 @@ function Tenants() {
   const handleDeleteClick = (tenant) => {
     setSelectedTenant(tenant);
     setShowDeleteConfirm(true);
+  };
+
+  const handleNukeClick = (tenant) => {
+    setSelectedTenant(tenant);
+    setShowNuke(true);
   };
 
   const handleDelete = async () => {
@@ -162,7 +169,13 @@ function Tenants() {
             { label: 'View Details', onClick: () => handleViewMetadata(item) },
             { label: 'Edit', onClick: () => handleEdit(item) },
             { divider: true },
-            { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) }
+            { label: 'Delete', danger: true, onClick: () => handleDeleteClick(item) },
+            ...(isAdmin ? [{
+              label: 'Nuke Tenant',
+              danger: true,
+              disabled: String(item.Id).toLowerCase() === 'default' || String(item.Name).toLowerCase() === 'default',
+              onClick: () => handleNukeClick(item)
+            }] : [])
           ]}
         />
       )
@@ -248,6 +261,15 @@ function Tenants() {
         entityType="tenant"
         loading={deleteLoading}
       />
+
+      {isAdmin && (
+        <NukeTenantModal
+          isOpen={showNuke}
+          tenant={selectedTenant}
+          onClose={() => setShowNuke(false)}
+          onPurged={() => { setSelectedTenant(null); fetchTenants(); }}
+        />
+      )}
     </div>
   );
 }

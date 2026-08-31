@@ -117,6 +117,46 @@ class ConductorClient:
     def validate_load_balancing_policy(self, draft: dict[str, Any], existing_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/loadbalancingpolicies/validate{self._existing_id_query(existing_id)}", draft)
 
+    def list_qos_profiles(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/qosprofiles{self._query_string(filters)}")
+
+    def get_qos_profile(self, profile_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/qosprofiles/{profile_id}{self._tenant_query(tenant_id)}")
+
+    def create_qos_profile(self, profile: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/qosprofiles", profile)
+
+    def update_qos_profile(self, profile_id: str, profile: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PUT", f"/v1.0/qosprofiles/{profile_id}", profile)
+
+    def delete_qos_profile(self, profile_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+        return self._request("DELETE", f"/v1.0/qosprofiles/{profile_id}{self._tenant_query(tenant_id)}")
+
+    def validate_qos_profile(self, draft: dict[str, Any], existing_id: str | None = None) -> dict[str, Any]:
+        return self._request("POST", f"/v1.0/qosprofiles/validate{self._existing_id_query(existing_id)}", draft)
+
+    def get_qos_profile_classifier_catalog(self, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/qosprofiles/classifier-catalog{self._tenant_query(tenant_id)}")
+
+    def list_qos_traffic_classes(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/qostrafficclasses{self._query_string(filters)}")
+
+    def get_qos_traffic_class(self, class_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/qostrafficclasses/{class_id}{self._tenant_query(tenant_id)}")
+
+    def create_qos_traffic_class(self, traffic_class: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/qostrafficclasses", traffic_class)
+
+    def update_qos_traffic_class(self, class_id: str, traffic_class: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PUT", f"/v1.0/qostrafficclasses/{class_id}", traffic_class)
+
+    def delete_qos_traffic_class(self, class_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+        return self._request("DELETE", f"/v1.0/qostrafficclasses/{class_id}{self._tenant_query(tenant_id)}")
+
+    def purge_tenant(self, tenant_id: str, confirm_tenant_id: str | None = None) -> dict[str, Any]:
+        body = {"ConfirmTenantId": confirm_tenant_id if confirm_tenant_id is not None else tenant_id}
+        return self._request("POST", f"/v1.0/tenants/{tenant_id}/purge", body)
+
     def list_model_access_policies(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/modelaccesspolicies{self._query_string(filters)}")
 

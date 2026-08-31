@@ -142,6 +142,159 @@ namespace Conductor.Sdk
         }
 
         /// <summary>
+        /// List QoS profiles.
+        /// </summary>
+        /// <param name="filters">Query-string filters such as maxResults, continuationToken, nameFilter, activeFilter, and tenantId.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ListQosProfilesAsync(IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qosprofiles" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get a QoS profile.
+        /// </summary>
+        /// <param name="id">QoS profile ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetQosProfileAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qosprofiles/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Create a QoS profile.
+        /// </summary>
+        /// <param name="profile">QoS profile payload.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> CreateQosProfileAsync(object profile, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/qosprofiles", profile ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Update a QoS profile.
+        /// </summary>
+        /// <param name="id">QoS profile ID.</param>
+        /// <param name="profile">QoS profile payload.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> UpdateQosProfileAsync(string id, object profile, CancellationToken token = default)
+        {
+            return await PutJsonAsync("/v1.0/qosprofiles/" + Uri.EscapeDataString(id), profile ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete a QoS profile.
+        /// </summary>
+        /// <param name="id">QoS profile ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        public async Task DeleteQosProfileAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            await DeleteAsync("/v1.0/qosprofiles/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Validate a QoS profile draft without saving it.
+        /// </summary>
+        /// <param name="draft">QoS profile draft.</param>
+        /// <param name="existingId">Optional existing QoS profile ID for update validation.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ValidateQosProfileAsync(object draft, string existingId = null, CancellationToken token = default)
+        {
+            Dictionary<string, string> query = new Dictionary<string, string> { ["existingId"] = existingId };
+            return await PostJsonAsync("/v1.0/qosprofiles/validate" + QueryString(query), draft ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get the QoS profile classifier catalog.
+        /// </summary>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetQosProfileClassifierCatalogAsync(string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qosprofiles/classifier-catalog" + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// List QoS traffic classes.
+        /// </summary>
+        /// <param name="filters">Query-string filters such as maxResults, continuationToken, nameFilter, and tenantId.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ListQosTrafficClassesAsync(IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qostrafficclasses" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get a QoS traffic class.
+        /// </summary>
+        /// <param name="id">QoS traffic class ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetQosTrafficClassAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qostrafficclasses/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Create a QoS traffic class.
+        /// </summary>
+        /// <param name="trafficClass">QoS traffic class payload.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> CreateQosTrafficClassAsync(object trafficClass, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/qostrafficclasses", trafficClass ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Update a QoS traffic class.
+        /// </summary>
+        /// <param name="id">QoS traffic class ID.</param>
+        /// <param name="trafficClass">QoS traffic class payload.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> UpdateQosTrafficClassAsync(string id, object trafficClass, CancellationToken token = default)
+        {
+            return await PutJsonAsync("/v1.0/qostrafficclasses/" + Uri.EscapeDataString(id), trafficClass ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete a QoS traffic class.
+        /// </summary>
+        /// <param name="id">QoS traffic class ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        public async Task DeleteQosTrafficClassAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            await DeleteAsync("/v1.0/qostrafficclasses/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Purge (nuke) a tenant and all of its data. System-admin only; the reserved <c>default</c> tenant cannot be purged.
+        /// </summary>
+        /// <param name="id">Tenant ID to purge.</param>
+        /// <param name="confirmTenantId">Confirmation tenant ID that must echo <paramref name="id"/>. When null, <paramref name="id"/> is used.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response containing the itemized purge report.</returns>
+        public async Task<JsonDocument> PurgeTenantAsync(string id, string confirmTenantId = null, CancellationToken token = default)
+        {
+            object body = new { ConfirmTenantId = confirmTenantId ?? id };
+            return await PostJsonAsync("/v1.0/tenants/" + Uri.EscapeDataString(id) + "/purge", body, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Get effective virtual model runner configuration.
         /// </summary>
         /// <param name="id">Virtual model runner ID.</param>

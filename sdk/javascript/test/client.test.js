@@ -57,6 +57,125 @@ test('endpoint group methods use expected routes', async () => {
   assert.equal(captured[5].url, 'http://127.0.0.1:9000/v1.0/endpointgroups/validate?existingId=egp_123');
 });
 
+test('qos profile methods use expected routes', async () => {
+  const captured = [];
+  const profile = { Name: 'Latency first', DefaultClass: 'Interactive' };
+  const client = new ConductorClient({
+    baseUrl: 'http://127.0.0.1:9000',
+    fetchImpl: async (url, options = {}) => {
+      captured.push({ url, options });
+      if (options.method === 'DELETE') {
+        return createJsonResponse({}, 204);
+      }
+
+      return createJsonResponse({ ok: true });
+    }
+  });
+
+  await client.listQosProfiles({
+    tenantId: 'ten_123',
+    maxResults: 25,
+    continuationToken: 'next page',
+    nameFilter: 'latency',
+    activeFilter: true
+  });
+  await client.getQosProfile('qos_123', 'ten_123');
+  await client.createQosProfile(profile);
+  await client.updateQosProfile('qos_123', profile);
+  const deleteResult = await client.deleteQosProfile('qos_123', 'ten_123');
+  await client.validateQosProfile(profile, 'qos_123');
+  await client.getQosProfileClassifierCatalog('ten_123');
+
+  assert.equal(deleteResult, null);
+  assert.equal(
+    captured[0].url,
+    'http://127.0.0.1:9000/v1.0/qosprofiles?tenantId=ten_123&maxResults=25&continuationToken=next+page&nameFilter=latency&activeFilter=true'
+  );
+  assert.equal(captured[0].options.method, 'GET');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/qosprofiles/qos_123?tenantId=ten_123');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/qosprofiles');
+  assert.equal(captured[2].options.method, 'POST');
+  assert.equal(captured[2].options.body, JSON.stringify(profile));
+  assert.equal(captured[3].url, 'http://127.0.0.1:9000/v1.0/qosprofiles/qos_123');
+  assert.equal(captured[3].options.method, 'PUT');
+  assert.equal(captured[3].options.body, JSON.stringify(profile));
+  assert.equal(captured[4].url, 'http://127.0.0.1:9000/v1.0/qosprofiles/qos_123?tenantId=ten_123');
+  assert.equal(captured[4].options.method, 'DELETE');
+  assert.equal(captured[5].url, 'http://127.0.0.1:9000/v1.0/qosprofiles/validate?existingId=qos_123');
+  assert.equal(captured[5].options.method, 'POST');
+  assert.equal(captured[6].url, 'http://127.0.0.1:9000/v1.0/qosprofiles/classifier-catalog?tenantId=ten_123');
+  assert.equal(captured[6].options.method, 'GET');
+});
+
+test('validates qos profile draft without existingId', async () => {
+  let capturedUrl = '';
+  const client = new ConductorClient({
+    baseUrl: 'http://127.0.0.1:9000',
+    fetchImpl: async (url) => {
+      capturedUrl = url;
+      return createJsonResponse({ IsValid: true });
+    }
+  });
+
+  const result = await client.validateQosProfile({ Name: 'Draft' });
+
+  assert.equal(result.IsValid, true);
+  assert.equal(capturedUrl, 'http://127.0.0.1:9000/v1.0/qosprofiles/validate');
+});
+
+test('qos traffic class methods use expected routes', async () => {
+  const captured = [];
+  const trafficClass = { Name: 'Realtime', Tier: 'Realtime' };
+  const client = new ConductorClient({
+    baseUrl: 'http://127.0.0.1:9000',
+    fetchImpl: async (url, options = {}) => {
+      captured.push({ url, options });
+      if (options.method === 'DELETE') {
+        return createJsonResponse({}, 204);
+      }
+
+      return createJsonResponse({ ok: true });
+    }
+  });
+
+  await client.listQosTrafficClasses({ tenantId: 'ten_123', nameFilter: 'real' });
+  await client.getQosTrafficClass('qtc_123', 'ten_123');
+  await client.createQosTrafficClass(trafficClass);
+  await client.updateQosTrafficClass('qtc_123', trafficClass);
+  const deleteResult = await client.deleteQosTrafficClass('qtc_123', 'ten_123');
+
+  assert.equal(deleteResult, null);
+  assert.equal(captured[0].url, 'http://127.0.0.1:9000/v1.0/qostrafficclasses?tenantId=ten_123&nameFilter=real');
+  assert.equal(captured[0].options.method, 'GET');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/qostrafficclasses/qtc_123?tenantId=ten_123');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/qostrafficclasses');
+  assert.equal(captured[2].options.method, 'POST');
+  assert.equal(captured[2].options.body, JSON.stringify(trafficClass));
+  assert.equal(captured[3].url, 'http://127.0.0.1:9000/v1.0/qostrafficclasses/qtc_123');
+  assert.equal(captured[3].options.method, 'PUT');
+  assert.equal(captured[4].url, 'http://127.0.0.1:9000/v1.0/qostrafficclasses/qtc_123?tenantId=ten_123');
+  assert.equal(captured[4].options.method, 'DELETE');
+});
+
+test('purges a tenant with confirmation body', async () => {
+  const captured = [];
+  const client = new ConductorClient({
+    baseUrl: 'http://127.0.0.1:9000',
+    fetchImpl: async (url, options) => {
+      captured.push({ url, options });
+      return createJsonResponse({ Purged: true });
+    }
+  });
+
+  await client.purgeTenant('ten_123');
+  await client.purgeTenant('ten_123', 'wrong');
+
+  assert.equal(captured[0].url, 'http://127.0.0.1:9000/v1.0/tenants/ten_123/purge');
+  assert.equal(captured[0].options.method, 'POST');
+  assert.equal(captured[0].options.body, JSON.stringify({ ConfirmTenantId: 'ten_123' }));
+  assert.equal(captured[1].options.body, JSON.stringify({ ConfirmTenantId: 'wrong' }));
+});
+
 test('builds request-history search query string', async () => {
   let capturedUrl = '';
   const client = new ConductorClient({

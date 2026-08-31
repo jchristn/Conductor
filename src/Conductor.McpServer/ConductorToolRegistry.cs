@@ -82,7 +82,11 @@ namespace Conductor.McpServer
                 GetConfig = parameters => GetConfigHandler(ToJsonElement(parameters)),
                 CreateConfig = parameters => CreateConfigHandler(ToJsonElement(parameters)),
                 ListTenants = parameters => ListTenantsHandler(ToJsonElement(parameters)),
-                GetTenant = parameters => GetTenantHandler(ToJsonElement(parameters))
+                GetTenant = parameters => GetTenantHandler(ToJsonElement(parameters)),
+                ListQosProfiles = parameters => ListQosProfilesHandler(ToJsonElement(parameters)),
+                GetQosProfile = parameters => GetQosProfileHandler(ToJsonElement(parameters)),
+                ListQosTrafficClasses = parameters => ListQosTrafficClassesHandler(ToJsonElement(parameters)),
+                GetQosTrafficClass = parameters => GetQosTrafficClassHandler(ToJsonElement(parameters))
             });
         }
 
@@ -729,6 +733,165 @@ namespace Conductor.McpServer
             catch (Exception ex)
             {
                 return CreateErrorResult("Failed to get tenant: " + ex.Message);
+            }
+        }
+
+        private object ListQosProfilesHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            if (String.IsNullOrEmpty(tenantId))
+                return CreateErrorResult("tenant_id is required");
+
+            bool activeOnly = GetBoolProperty(args, "active_only", false);
+
+            try
+            {
+                EnumerationResult<QosProfile> result = _Database.QosProfile
+                    .EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 1000 })
+                    .GetAwaiter().GetResult();
+
+                if (result?.Data == null)
+                    return new { profiles = new object[0], count = 0 };
+
+                IEnumerable<QosProfile> profiles = result.Data;
+                if (activeOnly) profiles = profiles.Where(p => p.Active);
+
+                List<object> list = profiles.Select(p => new
+                {
+                    id = p.Id,
+                    name = p.Name,
+                    isDefault = p.IsDefault,
+                    active = p.Active,
+                    tailNode = p.TailNode,
+                    ingressMode = p.IngressMode.ToString()
+                }).ToList<object>();
+
+                return new { profiles = list, count = list.Count };
+            }
+            catch (Exception ex)
+            {
+                return CreateErrorResult("Failed to list QoS profiles: " + ex.Message);
+            }
+        }
+
+        private object GetQosProfileHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string profileId = GetStringProperty(args, "profile_id");
+
+            if (String.IsNullOrEmpty(tenantId))
+                return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(profileId))
+                return CreateErrorResult("profile_id is required");
+
+            try
+            {
+                QosProfile profile = _Database.QosProfile
+                    .ReadAsync(tenantId, profileId)
+                    .GetAwaiter().GetResult();
+
+                if (profile == null)
+                    return CreateErrorResult("QoS profile not found: " + profileId);
+
+                List<object> nodes = profile.Nodes.Select(n => (object)new
+                {
+                    name = n.Name,
+                    discipline = n.Discipline.ToString(),
+                    maxDepth = n.MaxDepth,
+                    overflowPolicy = n.OverflowPolicy.ToString(),
+                    classes = n.Classes.Select(c => new { c.ClassName, kind = c.Kind.ToString(), c.Weight, c.Band, c.RatePerSecond, c.Burst }).ToList<object>()
+                }).ToList();
+
+                return new
+                {
+                    id = profile.Id,
+                    tenantId = profile.TenantId,
+                    name = profile.Name,
+                    description = profile.Description,
+                    isDefault = profile.IsDefault,
+                    active = profile.Active,
+                    defaultClass = profile.DefaultClass,
+                    ingressMode = profile.IngressMode.ToString(),
+                    ingressDefaultNode = profile.IngressDefaultNode,
+                    tailNode = profile.TailNode,
+                    maxTotalDepth = profile.MaxTotalDepth,
+                    maxQueueWaitMs = profile.MaxQueueWaitMs,
+                    rejectionStatusCode = profile.RejectionStatusCode,
+                    ruleCount = profile.Rules.Count,
+                    nodes = nodes,
+                    links = profile.Links.Select(l => new { l.FromNode, l.ToNode }).ToList<object>()
+                };
+            }
+            catch (Exception ex)
+            {
+                return CreateErrorResult("Failed to get QoS profile: " + ex.Message);
+            }
+        }
+
+        private object ListQosTrafficClassesHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            if (String.IsNullOrEmpty(tenantId))
+                return CreateErrorResult("tenant_id is required");
+
+            try
+            {
+                EnumerationResult<QosTrafficClass> result = _Database.QosTrafficClass
+                    .EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 1000 })
+                    .GetAwaiter().GetResult();
+
+                if (result?.Data == null)
+                    return new { trafficClasses = new object[0], count = 0 };
+
+                List<object> list = result.Data.Select(c => (object)new
+                {
+                    id = c.Id,
+                    name = c.Name,
+                    tier = c.Tier.ToString(),
+                    isSystem = c.IsSystem,
+                    description = c.Description
+                }).ToList();
+
+                return new { trafficClasses = list, count = list.Count };
+            }
+            catch (Exception ex)
+            {
+                return CreateErrorResult("Failed to list QoS traffic classes: " + ex.Message);
+            }
+        }
+
+        private object GetQosTrafficClassHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string classId = GetStringProperty(args, "class_id");
+
+            if (String.IsNullOrEmpty(tenantId))
+                return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(classId))
+                return CreateErrorResult("class_id is required");
+
+            try
+            {
+                QosTrafficClass trafficClass = _Database.QosTrafficClass
+                    .ReadAsync(tenantId, classId)
+                    .GetAwaiter().GetResult();
+
+                if (trafficClass == null)
+                    return CreateErrorResult("QoS traffic class not found: " + classId);
+
+                return new
+                {
+                    id = trafficClass.Id,
+                    tenantId = trafficClass.TenantId,
+                    name = trafficClass.Name,
+                    description = trafficClass.Description,
+                    tier = trafficClass.Tier.ToString(),
+                    isSystem = trafficClass.IsSystem
+                };
+            }
+            catch (Exception ex)
+            {
+                return CreateErrorResult("Failed to get QoS traffic class: " + ex.Message);
             }
         }
 

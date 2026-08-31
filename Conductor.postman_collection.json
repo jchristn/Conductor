@@ -189,6 +189,16 @@
       "key": "reservationAtUtc",
       "value": "2026-06-16T17:30:00Z",
       "type": "string"
+    },
+    {
+      "key": "qosProfileId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "qosTrafficClassId",
+      "value": "",
+      "type": "string"
     }
   ],
   "auth": {
@@ -395,6 +405,35 @@
                 "{{tenantId}}"
               ]
             }
+          }
+        },
+        {
+          "name": "Purge Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ConfirmTenantId\": \"{{tenantId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/tenants/{{tenantId}}/purge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "tenants",
+                "{{tenantId}}",
+                "purge"
+              ]
+            },
+            "description": "System-administrator only, destructive nuke. Permanently and irreversibly deletes the tenant and ALL of its associated data (users, credentials, virtual model runners, endpoints, load-balancing and model-access policies, reservations, QoS profiles, request history, and analytics). The request body must include ConfirmTenantId, and its value MUST exactly match the tenant id in the URL path; if they do not match the request is rejected without deleting anything. The default tenant cannot be purged: the endpoint refuses the request. This action cannot be undone."
           }
         }
       ]
@@ -1342,6 +1381,312 @@
                 "metrics"
               ]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "QoS Profiles",
+      "description": "Manage Quality-of-Service (QoS) profiles: named queueing topologies of nodes, disciplines, traffic classes, rules, links, and ingress routes that shape how requests are admitted, prioritized, and drained. Endpoints support listing with pagination and filtering, create, validate-before-save, class-selector catalog lookup, read, update, and delete. All requests inherit the collection-level bearer auth; supply the tenant scope via the tenantId variable where applicable.",
+      "item": [
+        {
+          "name": "List QoS Profiles",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosprofiles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosprofiles"
+              ],
+              "query": [
+                {
+                  "key": "maxResults",
+                  "value": "100",
+                  "disabled": true,
+                  "description": "Maximum number of profiles to return in one page. Optional."
+                },
+                {
+                  "key": "continuationToken",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Opaque token from a previous page used to fetch the next page of results. Optional."
+                },
+                {
+                  "key": "nameFilter",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Case-insensitive substring filter applied to the profile name. Optional."
+                },
+                {
+                  "key": "activeFilter",
+                  "value": "true",
+                  "disabled": true,
+                  "description": "Filter by active state: 'true' returns only active profiles, 'false' only inactive. Optional; omit to return all."
+                },
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true,
+                  "description": "Scope the listing to a specific tenant. Optional; system administrators may enumerate across tenants."
+                }
+              ]
+            },
+            "description": "List QoS profiles with optional pagination and filtering. Enable the query parameters as needed to page through results or narrow by name, active state, or tenant."
+          }
+        },
+        {
+          "name": "Create QoS Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 0,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosprofiles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosprofiles"
+              ]
+            },
+            "description": "Create a QoS profile. The example body defines a minimal single-node FIFO topology: one node named 'root' using the Fifo discipline, unbounded depth (MaxDepth 0), a Reject overflow policy, no per-node classes, and empty Rules, Links, and IngressRoutes. IngressMode 'Single' with IngressDefaultNode and TailNode both pointing at the single node."
+          }
+        },
+        {
+          "name": "Validate QoS Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 0,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosprofiles/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosprofiles",
+                "validate"
+              ]
+            },
+            "description": "Validate a QoS profile definition without saving it. Returns validation results describing any structural or referential errors (unknown node references, missing default class, invalid disciplines, dangling links or ingress routes) so the topology can be corrected before create or update. Uses the same body shape as Create."
+          }
+        },
+        {
+          "name": "Get QoS Classifier Catalog",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosprofiles/classifier-catalog",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosprofiles",
+                "classifier-catalog"
+              ]
+            },
+            "description": "Return the catalog of classifier fields and operators available for building QoS rules and class selectors. Use this to discover which request attributes can be matched and how, when authoring profile rules."
+          }
+        },
+        {
+          "name": "Get QoS Profile",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosprofiles/{{qosProfileId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosprofiles",
+                "{{qosProfileId}}"
+              ]
+            },
+            "description": "Read a single QoS profile by its identifier. Set the qosProfileId collection variable to the profile id."
+          }
+        },
+        {
+          "name": "Update QoS Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 250,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosprofiles/{{qosProfileId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosprofiles",
+                "{{qosProfileId}}"
+              ]
+            },
+            "description": "Update an existing QoS profile by its identifier, replacing its topology definition. Set the qosProfileId collection variable to the profile id. The example body mirrors Create with an adjusted MaxQueueWaitMs."
+          }
+        },
+        {
+          "name": "Delete QoS Profile",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosprofiles/{{qosProfileId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosprofiles",
+                "{{qosProfileId}}"
+              ]
+            },
+            "description": "Delete a QoS profile by its identifier. Set the qosProfileId collection variable to the profile id."
+          }
+        }
+      ]
+    },
+    {
+      "name": "QoS Traffic Classes",
+      "description": "Manage QoS traffic classes: named service tiers (for example Interactive, Batch, or Bulk) that requests are mapped to and that QoS profiles reference when prioritizing and shaping traffic. Endpoints support listing, create, read, update, and delete. All requests inherit the collection-level bearer auth.",
+      "item": [
+        {
+          "name": "List QoS Traffic Classes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qostrafficclasses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qostrafficclasses"
+              ]
+            },
+            "description": "List all QoS traffic classes."
+          }
+        },
+        {
+          "name": "Create QoS Traffic Class",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"my-class\",\n  \"Description\": \"Interactive traffic that requires low-latency handling.\",\n  \"Tier\": \"Interactive\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qostrafficclasses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qostrafficclasses"
+              ]
+            },
+            "description": "Create a QoS traffic class. Provide a Name, an optional human-readable Description, and a Tier (for example 'Interactive', 'Batch', or 'Bulk') that determines how the class is prioritized by QoS profiles."
+          }
+        },
+        {
+          "name": "Get QoS Traffic Class",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qostrafficclasses/{{qosTrafficClassId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qostrafficclasses",
+                "{{qosTrafficClassId}}"
+              ]
+            },
+            "description": "Read a single QoS traffic class by its identifier. Set the qosTrafficClassId collection variable to the class id."
+          }
+        },
+        {
+          "name": "Update QoS Traffic Class",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"my-class\",\n  \"Description\": \"Updated description for the interactive traffic class.\",\n  \"Tier\": \"Interactive\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qostrafficclasses/{{qosTrafficClassId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qostrafficclasses",
+                "{{qosTrafficClassId}}"
+              ]
+            },
+            "description": "Update an existing QoS traffic class by its identifier. Set the qosTrafficClassId collection variable to the class id."
+          }
+        },
+        {
+          "name": "Delete QoS Traffic Class",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qostrafficclasses/{{qosTrafficClassId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qostrafficclasses",
+                "{{qosTrafficClassId}}"
+              ]
+            },
+            "description": "Delete a QoS traffic class by its identifier. Set the qosTrafficClassId collection variable to the class id."
           }
         }
       ]

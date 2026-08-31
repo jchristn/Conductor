@@ -11,10 +11,13 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - VMR adaptive load-balancing configuration helpers through the VMR payload plus runtime stats, stats reset, and transient-backoff clear routes
 - Ollama endpoint model list, pull, and delete requests
 - model access policy CRUD, validation, evaluation, and effective-access queries
+- QoS profile CRUD, draft validation, and classifier-catalog lookup
+- QoS traffic class CRUD
 - VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - analytics workspace catalog, query, saved reports, summary, TTFT, token usage, estimate-only cost, user, and access/reliability helpers
 - observability summary and raw Prometheus metrics
+- system-admin tenant purge
 
 ## Install
 
@@ -215,6 +218,32 @@ effective_access = client.get_effective_model_access({
     "modelName": "gpt-4o-mini",
     "action": "Completions",
 })
+
+traffic_class = client.create_qos_traffic_class({
+    "TenantId": "tenant_123",
+    "Name": "Realtime",
+    "Tier": "Realtime",
+})
+client.list_qos_traffic_classes({"tenantId": "tenant_123", "nameFilter": "real"})
+
+classifier_catalog = client.get_qos_profile_classifier_catalog("tenant_123")
+qos_profile = client.create_qos_profile({
+    "TenantId": "tenant_123",
+    "Name": "Latency first",
+    "DefaultClass": "Interactive",
+    "IngressMode": "Fifo",
+    "Rules": [],
+    "Nodes": [],
+    "Links": [],
+    "IngressRoutes": [],
+})
+client.validate_qos_profile(qos_profile, existing_id=qos_profile["Id"])
+client.list_qos_profiles({"tenantId": "tenant_123", "activeFilter": "true"})
+client.update_qos_profile(qos_profile["Id"], qos_profile)
+client.delete_qos_profile(qos_profile["Id"], tenant_id="tenant_123")
+
+# System-admin only. The reserved "default" tenant cannot be purged.
+purge_report = client.purge_tenant("tenant_123")
 ```
 
 For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.

@@ -6,6 +6,7 @@ import Modal from '../components/Modal';
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import QueueHierarchyDiagram from '../components/QueueHierarchyDiagram';
 
 // Starter templates for the structural (classification + topology + limits) portion of a profile.
 const QOS_TEMPLATES = {
@@ -98,6 +99,7 @@ export default function QosProfiles() {
   const [validation, setValidation] = useState(null);
   const [selected, setSelected] = useState(null);
   const [showDelete, setShowDelete] = useState(false);
+  const [topologyView, setTopologyView] = useState('json');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -135,6 +137,7 @@ export default function QosProfiles() {
     setSelected(null);
     setError(null);
     setValidation(null);
+    setTopologyView('json');
     setFormData({ ...defaultForm(), TenantId: tenants[0]?.Id || '' });
     setShowForm(true);
   };
@@ -144,6 +147,7 @@ export default function QosProfiles() {
     setSelected(profile);
     setError(null);
     setValidation(null);
+    setTopologyView('json');
     const definition = {
       DefaultClass: profile.DefaultClass, IngressMode: profile.IngressMode, IngressDefaultNode: profile.IngressDefaultNode,
       TailNode: profile.TailNode, MaxTotalDepth: profile.MaxTotalDepth, MaxQueueWaitMs: profile.MaxQueueWaitMs,
@@ -161,6 +165,36 @@ export default function QosProfiles() {
     setFormData((prev) => ({ ...prev, DefinitionJson: JSON.stringify(QOS_TEMPLATES[key], null, 2) }));
     setValidation(null);
   };
+
+  // Parse the current definition JSON so the diagram can render the topology. When the JSON is
+  // malformed we return an error instead so the diagram view can show a message rather than crash.
+  const parsedTopology = useMemo(() => {
+    try {
+      const parsed = JSON.parse(formData.DefinitionJson);
+      return { value: parsed, error: null };
+    } catch (err) {
+      return { value: null, error: err.message };
+    }
+  }, [formData.DefinitionJson]);
+
+  // When the diagram edits nodes/links/ingress/tail, merge them back into the definition JSON so
+  // the JSON remains the single source of truth for Validate/Save.
+  const handleTopologyChange = useCallback((nextTopology) => {
+    setFormData((prev) => {
+      let current;
+      try {
+        current = JSON.parse(prev.DefinitionJson);
+      } catch {
+        current = {};
+      }
+      const merged = {
+        ...current,
+        ...nextTopology,
+      };
+      return { ...prev, DefinitionJson: JSON.stringify(merged, null, 2) };
+    });
+    setValidation(null);
+  }, []);
 
   const handleValidate = async () => {
     setError(null);
@@ -276,9 +310,28 @@ export default function QosProfiles() {
             </div>
 
             <div className="form-group">
-              <label>Profile definition (classification, topology, limits)</label>
-              <textarea className="code-input" value={formData.DefinitionJson} onChange={(e) => setFormData({ ...formData, DefinitionJson: e.target.value })} rows={20} spellCheck={false} />
-              <small>Edit the classifier rules, queue nodes, links, ingress routes, and limits. Use <strong>Validate</strong> to compile-check the draft before saving.</small>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ marginBottom: 0 }}>Profile definition (classification, topology, limits)</label>
+                <div className="template-buttons">
+                  <button type="button" className={`btn${topologyView === 'json' ? ' btn-primary' : ''}`} onClick={() => setTopologyView('json')}>JSON</button>
+                  <button type="button" className={`btn${topologyView === 'diagram' ? ' btn-primary' : ''}`} onClick={() => setTopologyView('diagram')}>Diagram</button>
+                </div>
+              </div>
+              {topologyView === 'json' ? (
+                <>
+                  <textarea className="code-input" value={formData.DefinitionJson} onChange={(e) => setFormData({ ...formData, DefinitionJson: e.target.value })} rows={20} spellCheck={false} />
+                  <small>Edit the classifier rules, queue nodes, links, ingress routes, and limits. Use <strong>Validate</strong> to compile-check the draft before saving.</small>
+                </>
+              ) : (
+                <>
+                  {parsedTopology.error ? (
+                    <div className="error-text">The definition JSON is not valid, so the diagram is disabled: {parsedTopology.error}. Switch to JSON to fix it.</div>
+                  ) : (
+                    <QueueHierarchyDiagram topology={parsedTopology.value} onChange={handleTopologyChange} />
+                  )}
+                  <small>Drag between nodes to add a link, select a node/edge and press Delete to remove it, or use <strong>Add node</strong>. Edits are written back into the JSON, which remains the source of truth for Validate and Save. Fine-tune disciplines, classes, and limits in the JSON view.</small>
+                </>
+              )}
             </div>
 
             {validation && (

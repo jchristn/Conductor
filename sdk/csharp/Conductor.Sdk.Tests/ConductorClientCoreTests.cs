@@ -240,6 +240,126 @@ namespace Conductor.Sdk.Tests
         }
         #endregion
 
+        #region QoS-Tests
+        [Fact]
+        public async Task QosProfileMethods_UseExpectedRoutes()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            Dictionary<string, string> filters = new Dictionary<string, string>
+            {
+                ["tenantId"] = "ten_1",
+                ["nameFilter"] = "latency"
+            };
+
+            using JsonDocument list = await client.ListQosProfilesAsync(filters);
+            using JsonDocument read = await client.GetQosProfileAsync("qos_1", "ten_1");
+            using JsonDocument created = await client.CreateQosProfileAsync(new { Name = "Latency first" });
+            using JsonDocument updated = await client.UpdateQosProfileAsync("qos_1", new { Name = "Latency first" });
+            await client.DeleteQosProfileAsync("qos_1", "ten_1");
+            using JsonDocument validated = await client.ValidateQosProfileAsync(new { Name = "Draft" }, existingId: "qos_1");
+            using JsonDocument catalog = await client.GetQosProfileClassifierCatalogAsync("ten_1");
+
+            Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles?tenantId=ten_1&nameFilter=latency", handler.Requests[0].Uri.ToString());
+            Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles/qos_1?tenantId=ten_1", handler.Requests[1].Uri.ToString());
+            Assert.Equal(HttpMethod.Post, handler.Requests[2].Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles", handler.Requests[2].Uri.ToString());
+            Assert.Contains("\"Name\":\"Latency first\"", handler.Requests[2].Body);
+            Assert.Equal(HttpMethod.Put, handler.Requests[3].Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles/qos_1", handler.Requests[3].Uri.ToString());
+            Assert.Equal(HttpMethod.Delete, handler.Requests[4].Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles/qos_1?tenantId=ten_1", handler.Requests[4].Uri.ToString());
+            Assert.Equal(HttpMethod.Post, handler.Requests[5].Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles/validate?existingId=qos_1", handler.Requests[5].Uri.ToString());
+            Assert.Equal(HttpMethod.Get, handler.Requests[6].Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles/classifier-catalog?tenantId=ten_1", handler.Requests[6].Uri.ToString());
+        }
+
+        [Fact]
+        public async Task ValidateQosProfileAsync_WithoutExistingId_OmitsQuery()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            using JsonDocument response = await client.ValidateQosProfileAsync(new { Name = "Draft" });
+
+            RecordedRequest request = Assert.Single(handler.Requests);
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("https://conductor.local/v1.0/qosprofiles/validate", request.Uri.ToString());
+        }
+
+        [Fact]
+        public async Task QosTrafficClassMethods_UseExpectedRoutes()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            Dictionary<string, string> filters = new Dictionary<string, string>
+            {
+                ["tenantId"] = "ten_1",
+                ["nameFilter"] = "real"
+            };
+
+            using JsonDocument list = await client.ListQosTrafficClassesAsync(filters);
+            using JsonDocument read = await client.GetQosTrafficClassAsync("qtc_1", "ten_1");
+            using JsonDocument created = await client.CreateQosTrafficClassAsync(new { Name = "Realtime", Tier = "Realtime" });
+            using JsonDocument updated = await client.UpdateQosTrafficClassAsync("qtc_1", new { Name = "Realtime", Tier = "Realtime" });
+            await client.DeleteQosTrafficClassAsync("qtc_1", "ten_1");
+
+            Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+            Assert.Equal("https://conductor.local/v1.0/qostrafficclasses?tenantId=ten_1&nameFilter=real", handler.Requests[0].Uri.ToString());
+            Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
+            Assert.Equal("https://conductor.local/v1.0/qostrafficclasses/qtc_1?tenantId=ten_1", handler.Requests[1].Uri.ToString());
+            Assert.Equal(HttpMethod.Post, handler.Requests[2].Method);
+            Assert.Equal("https://conductor.local/v1.0/qostrafficclasses", handler.Requests[2].Uri.ToString());
+            Assert.Contains("\"Tier\":\"Realtime\"", handler.Requests[2].Body);
+            Assert.Equal(HttpMethod.Put, handler.Requests[3].Method);
+            Assert.Equal("https://conductor.local/v1.0/qostrafficclasses/qtc_1", handler.Requests[3].Uri.ToString());
+            Assert.Equal(HttpMethod.Delete, handler.Requests[4].Method);
+            Assert.Equal("https://conductor.local/v1.0/qostrafficclasses/qtc_1?tenantId=ten_1", handler.Requests[4].Uri.ToString());
+        }
+
+        [Fact]
+        public async Task PurgeTenantAsync_PostsConfirmationBody()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            using JsonDocument confirmed = await client.PurgeTenantAsync("ten_1");
+            using JsonDocument mismatched = await client.PurgeTenantAsync("ten_1", confirmTenantId: "wrong");
+
+            Assert.Equal(HttpMethod.Post, handler.Requests[0].Method);
+            Assert.Equal("https://conductor.local/v1.0/tenants/ten_1/purge", handler.Requests[0].Uri.ToString());
+            Assert.Contains("\"ConfirmTenantId\":\"ten_1\"", handler.Requests[0].Body);
+            Assert.Contains("\"ConfirmTenantId\":\"wrong\"", handler.Requests[1].Body);
+        }
+
+        [Fact]
+        public async Task DeleteQosProfileAsync_OnApiError_ThrowsConductorApiException()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("{\"error\":\"default profile\"}", Encoding.UTF8, "application/json")
+            });
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            ConductorApiException exception = await Assert.ThrowsAsync<ConductorApiException>(
+                async () => await client.DeleteQosProfileAsync("qos_1", "ten_1"));
+
+            Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+            Assert.Equal("/v1.0/qosprofiles/qos_1?tenantId=ten_1", exception.Endpoint);
+            Assert.Contains("default profile", exception.ResponseBody);
+        }
+        #endregion
+
         #region Error-Handling-Tests
         [Fact]
         public async Task DeleteAsync_OnApiError_ThrowsConductorApiException()

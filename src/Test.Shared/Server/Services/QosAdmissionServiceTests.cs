@@ -1,5 +1,6 @@
 namespace Test.Shared.Server.Services
 {
+    using System.Diagnostics.Metrics;
     using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
@@ -70,6 +71,37 @@ namespace Test.Shared.Server.Services
             {
                 await service.DisposeAsync();
             }
+        }
+
+        public async Task Admit_EmitsAdmissionMetric()
+        {
+            long admissions = 0;
+            using (MeterListener listener = new MeterListener())
+            {
+                listener.InstrumentPublished = (instrument, l) =>
+                {
+                    if (instrument.Meter.Name == "Conductor.Qos") l.EnableMeasurementEvents(instrument);
+                };
+                listener.SetMeasurementEventCallback<long>((instrument, value, tags, state) =>
+                {
+                    if (instrument.Name == "conductor.qos.admissions") Interlocked.Add(ref admissions, value);
+                });
+                listener.Start();
+
+                QosProfile profile = FifoProfile(30000);
+                QosAdmissionService service = Service(profile, capacity: 0);
+                try
+                {
+                    QosAdmissionResult result = await service.AdmitAsync(Vmr(profile), Ctx(), CancellationToken.None);
+                    result.Admitted.Should().BeTrue();
+                }
+                finally
+                {
+                    await service.DisposeAsync();
+                }
+            }
+
+            admissions.Should().BeGreaterThan(0);
         }
 
         private static QosAdmissionService Service(QosProfile profile, int capacity)

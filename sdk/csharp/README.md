@@ -1,6 +1,6 @@
 # Conductor C# SDK
 
-This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover endpoint groups, VMR validation, effective configuration, routing explanation, runtime stats, runtime-state reset, transient-backoff clear, VMR reservations, and the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
+This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover endpoint groups, VMR validation, effective configuration, routing explanation, runtime stats, runtime-state reset, transient-backoff clear, VMR reservations, QoS profiles (CRUD, draft validation, and classifier catalog), QoS traffic classes (CRUD), system-admin tenant purge, and the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
 
 ```csharp
 using System.Collections.Generic;
@@ -132,6 +132,41 @@ using JsonDocument effective = await client.GetVirtualModelRunnerReservationEffe
     ["credentialId"] = "cred_123",
     ["atUtc"] = "2026-06-16T17:30:00Z"
 });
+
+using JsonDocument trafficClass = await client.CreateQosTrafficClassAsync(new
+{
+    TenantId = "tenant_123",
+    Name = "Realtime",
+    Tier = "Realtime"
+});
+using JsonDocument trafficClasses = await client.ListQosTrafficClassesAsync(new Dictionary<string, string>
+{
+    ["tenantId"] = "tenant_123",
+    ["nameFilter"] = "real"
+});
+
+using JsonDocument classifierCatalog = await client.GetQosProfileClassifierCatalogAsync("tenant_123");
+using JsonDocument qosProfile = await client.CreateQosProfileAsync(new
+{
+    TenantId = "tenant_123",
+    Name = "Latency first",
+    DefaultClass = "Interactive",
+    IngressMode = "Fifo",
+    Rules = Array.Empty<object>(),
+    Nodes = Array.Empty<object>(),
+    Links = Array.Empty<object>(),
+    IngressRoutes = Array.Empty<object>()
+});
+using JsonDocument qosValidation = await client.ValidateQosProfileAsync(new { Name = "Draft" });
+using JsonDocument qosProfiles = await client.ListQosProfilesAsync(new Dictionary<string, string>
+{
+    ["tenantId"] = "tenant_123",
+    ["activeFilter"] = "true"
+});
+await client.DeleteQosProfileAsync("qos_123", "tenant_123");
+
+// System-admin only. The reserved "default" tenant cannot be purged.
+using JsonDocument purgeReport = await client.PurgeTenantAsync("tenant_123");
 ```
 
 Cost returned by Analytics is estimate-only. It is calculated from successful reported tokens multiplied by the supplied token unit cost.

@@ -21,6 +21,7 @@ namespace Conductor.McpServer
             RegisterVmrTools(server);
             RegisterConfigurationTools(server);
             RegisterTenantTools(server);
+            RegisterQosTools(server);
         }
 
         internal void RegisterTools(McpTcpServer server)
@@ -32,6 +33,7 @@ namespace Conductor.McpServer
             RegisterVmrToolsTcp(server);
             RegisterConfigurationToolsTcp(server);
             RegisterTenantToolsTcp(server);
+            RegisterQosToolsTcp(server);
         }
 
         private void RegisterModelDiscoveryTools(McpHttpServer server)
@@ -255,10 +257,80 @@ namespace Conductor.McpServer
                 _Handlers.GetTenant);
         }
 
+        private void RegisterQosTools(McpHttpServer server)
+        {
+            server.RegisterTool(
+                "conductor_list_qos_profiles",
+                "List the QoS profiles for a tenant. QoS profiles classify and queue traffic for virtual model runners.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID to query (required)" },
+                        active_only = new { type = "boolean", description = "Only return active profiles (default: false)" }
+                    },
+                    required = new[] { "tenant_id" }
+                },
+                _Handlers.ListQosProfiles);
+
+            server.RegisterTool(
+                "conductor_get_qos_profile",
+                "Get a QoS profile's full definition (classification rules, queue nodes and classes, links, and limits) by ID.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        profile_id = new { type = "string", description = "QoS profile ID (qos_xxx)" }
+                    },
+                    required = new[] { "tenant_id", "profile_id" }
+                },
+                _Handlers.GetQosProfile);
+
+            server.RegisterTool(
+                "conductor_list_qos_traffic_classes",
+                "List the tenant's QoS traffic class catalog (the named classes profiles classify traffic into).",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID to query (required)" }
+                    },
+                    required = new[] { "tenant_id" }
+                },
+                _Handlers.ListQosTrafficClasses);
+
+            server.RegisterTool(
+                "conductor_get_qos_traffic_class",
+                "Get a QoS traffic class by ID.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        class_id = new { type = "string", description = "Traffic class ID (qtc_xxx)" }
+                    },
+                    required = new[] { "tenant_id", "class_id" }
+                },
+                _Handlers.GetQosTrafficClass);
+        }
+
         private void RegisterModelDiscoveryToolsTcp(McpTcpServer server)
         {
             server.RegisterMethod("conductor_list_models", _Handlers.ListModels);
             server.RegisterMethod("conductor_get_model", _Handlers.GetModel);
+        }
+
+        private void RegisterQosToolsTcp(McpTcpServer server)
+        {
+            server.RegisterMethod("conductor_list_qos_profiles", _Handlers.ListQosProfiles);
+            server.RegisterMethod("conductor_get_qos_profile", _Handlers.GetQosProfile);
+            server.RegisterMethod("conductor_list_qos_traffic_classes", _Handlers.ListQosTrafficClasses);
+            server.RegisterMethod("conductor_get_qos_traffic_class", _Handlers.GetQosTrafficClass);
         }
 
         private void RegisterEndpointToolsTcp(McpTcpServer server)

@@ -18,5 +18,9 @@ namespace Conductor.McpServer
         internal Func<RpcParameters, object> CreateConfig { get; set; }
         internal Func<RpcParameters, object> ListTenants { get; set; }
         internal Func<RpcParameters, object> GetTenant { get; set; }
+        internal Func<RpcParameters, object> ListQosProfiles { get; set; }
+        internal Func<RpcParameters, object> GetQosProfile { get; set; }
+        internal Func<RpcParameters, object> ListQosTrafficClasses { get; set; }
+        internal Func<RpcParameters, object> GetQosTrafficClass { get; set; }
     }
 }

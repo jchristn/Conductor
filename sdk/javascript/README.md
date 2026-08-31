@@ -11,10 +11,13 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - VMR adaptive load-balancing configuration helpers through the VMR payload plus runtime stats, stats reset, and transient-backoff clear routes
 - Ollama endpoint model list, pull, and delete requests
 - model access policy CRUD, validation, evaluation, and effective-access queries
+- QoS profile CRUD, draft validation, and classifier-catalog lookup
+- QoS traffic class CRUD
 - VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - analytics workspace catalog, query, saved reports, summary, TTFT, token usage, estimate-only cost, user, and access/reliability helpers
 - observability summary and raw Prometheus metrics
+- system-admin tenant purge
 
 ## Install
 
@@ -191,6 +194,32 @@ const effectiveAccess = await client.getEffectiveModelAccess({
   modelName: 'gpt-4o-mini',
   action: 'Completions'
 });
+
+const trafficClass = await client.createQosTrafficClass({
+  TenantId: 'tenant_123',
+  Name: 'Realtime',
+  Tier: 'Realtime'
+});
+await client.listQosTrafficClasses({ tenantId: 'tenant_123', nameFilter: 'real' });
+
+const classifierCatalog = await client.getQosProfileClassifierCatalog('tenant_123');
+const qosProfile = await client.createQosProfile({
+  TenantId: 'tenant_123',
+  Name: 'Latency first',
+  DefaultClass: 'Interactive',
+  IngressMode: 'Fifo',
+  Rules: [],
+  Nodes: [],
+  Links: [],
+  IngressRoutes: []
+});
+await client.validateQosProfile(qosProfile, qosProfile.Id);
+await client.listQosProfiles({ tenantId: 'tenant_123', activeFilter: true });
+await client.updateQosProfile(qosProfile.Id, qosProfile);
+await client.deleteQosProfile(qosProfile.Id, 'tenant_123');
+
+// System-admin only. The reserved "default" tenant cannot be purged.
+const purgeReport = await client.purgeTenant('tenant_123');
 ```
 
 For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.

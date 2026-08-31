@@ -51,6 +51,125 @@ class ConductorClientTests(unittest.TestCase):
         self.assertEqual(urls[5], "http://127.0.0.1:9000/v1.0/endpointgroups/validate?existingId=egp_123")
         self.assertEqual(methods, ["GET", "GET", "POST", "PUT", "DELETE", "POST"])
 
+    def test_qos_profile_methods_use_expected_routes(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"ok": True}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://127.0.0.1:9000", session=session)
+        profile = {"Name": "Latency first", "DefaultClass": "Interactive"}
+
+        client.list_qos_profiles({
+            "tenantId": "ten_123",
+            "maxResults": 25,
+            "continuationToken": "next page",
+            "nameFilter": "latency",
+            "activeFilter": "true",
+        })
+        client.get_qos_profile("qos_123", "ten_123")
+        client.create_qos_profile(profile)
+        client.update_qos_profile("qos_123", profile)
+        client.delete_qos_profile("qos_123", "ten_123")
+        client.validate_qos_profile(profile, "qos_123")
+        client.get_qos_profile_classifier_catalog("ten_123")
+
+        calls = session.request.call_args_list
+        methods = [call.kwargs["method"] for call in calls]
+        self.assertEqual(
+            calls[0].kwargs["url"],
+            "http://127.0.0.1:9000/v1.0/qosprofiles?tenantId=ten_123&maxResults=25&continuationToken=next+page&nameFilter=latency&activeFilter=true",
+        )
+        self.assertEqual(calls[1].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosprofiles/qos_123?tenantId=ten_123")
+        self.assertEqual(calls[2].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosprofiles")
+        self.assertEqual(calls[2].kwargs["json"], profile)
+        self.assertEqual(calls[3].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosprofiles/qos_123")
+        self.assertEqual(calls[3].kwargs["json"], profile)
+        self.assertEqual(calls[4].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosprofiles/qos_123?tenantId=ten_123")
+        self.assertEqual(calls[5].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosprofiles/validate?existingId=qos_123")
+        self.assertEqual(calls[6].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosprofiles/classifier-catalog?tenantId=ten_123")
+        self.assertEqual(methods, ["GET", "GET", "POST", "PUT", "DELETE", "POST", "GET"])
+
+    def test_qos_profile_validate_without_existing_id_omits_query(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"IsValid": True}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://127.0.0.1:9000", session=session)
+        client.validate_qos_profile({"Name": "Draft"})
+
+        self.assertEqual(
+            session.request.call_args.kwargs["url"],
+            "http://127.0.0.1:9000/v1.0/qosprofiles/validate",
+        )
+        self.assertEqual(session.request.call_args.kwargs["method"], "POST")
+
+    def test_qos_traffic_class_methods_use_expected_routes(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"ok": True}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://127.0.0.1:9000", session=session)
+        traffic_class = {"Name": "Realtime", "Tier": "Realtime"}
+
+        client.list_qos_traffic_classes({"tenantId": "ten_123", "nameFilter": "real"})
+        client.get_qos_traffic_class("qtc_123", "ten_123")
+        client.create_qos_traffic_class(traffic_class)
+        client.update_qos_traffic_class("qtc_123", traffic_class)
+        client.delete_qos_traffic_class("qtc_123", "ten_123")
+
+        calls = session.request.call_args_list
+        methods = [call.kwargs["method"] for call in calls]
+        self.assertEqual(
+            calls[0].kwargs["url"],
+            "http://127.0.0.1:9000/v1.0/qostrafficclasses?tenantId=ten_123&nameFilter=real",
+        )
+        self.assertEqual(calls[1].kwargs["url"], "http://127.0.0.1:9000/v1.0/qostrafficclasses/qtc_123?tenantId=ten_123")
+        self.assertEqual(calls[2].kwargs["url"], "http://127.0.0.1:9000/v1.0/qostrafficclasses")
+        self.assertEqual(calls[2].kwargs["json"], traffic_class)
+        self.assertEqual(calls[3].kwargs["url"], "http://127.0.0.1:9000/v1.0/qostrafficclasses/qtc_123")
+        self.assertEqual(calls[4].kwargs["url"], "http://127.0.0.1:9000/v1.0/qostrafficclasses/qtc_123?tenantId=ten_123")
+        self.assertEqual(methods, ["GET", "GET", "POST", "PUT", "DELETE"])
+
+    def test_purge_tenant_posts_confirmation_body(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"Purged": True}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://127.0.0.1:9000", session=session)
+        client.purge_tenant("ten_123")
+
+        self.assertEqual(
+            session.request.call_args.kwargs["url"],
+            "http://127.0.0.1:9000/v1.0/tenants/ten_123/purge",
+        )
+        self.assertEqual(session.request.call_args.kwargs["method"], "POST")
+        self.assertEqual(session.request.call_args.kwargs["json"], {"ConfirmTenantId": "ten_123"})
+
+    def test_purge_tenant_allows_mismatched_confirmation(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"Purged": False}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://127.0.0.1:9000", session=session)
+        client.purge_tenant("ten_123", confirm_tenant_id="wrong")
+
+        self.assertEqual(session.request.call_args.kwargs["json"], {"ConfirmTenantId": "wrong"})
+
     def test_request_history_search_serializes_filters(self) -> None:
         session = MagicMock()
         response = MagicMock()

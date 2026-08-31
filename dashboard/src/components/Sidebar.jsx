@@ -124,6 +124,17 @@ function Sidebar() {
       )
     },
     {
+      path: '/qos-traffic-classes',
+      label: 'Traffic Classes',
+      tourId: 'nav-qos-traffic-classes',
+      tooltip: 'Manage the per-tenant QoS traffic class catalog used by classifier rules and profiles',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 16a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 7.723V15h2a1 1 0 110 2H7a1 1 0 110-2h2V7.723L6.237 8.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 16a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.616a1 1 0 01.894-1.79l1.599.8L9 4.323V3a1 1 0 011-1z" clipRule="evenodd" />
+        </svg>
+      )
+    },
+    {
       path: '/model-access-policies',
       label: 'Model Access Policies',
       tourId: 'nav-model-access-policies',
