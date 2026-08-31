@@ -303,8 +303,10 @@ cards on the dashboard's **Dashboard** page.
 ## Grafana dashboards
 
 Dashboards are provisioned automatically under a single top-level **Conductor** folder, organized
-into per-subsystem subfolders (via `foldersFromFilesStructure` with Grafana 11 nested folders), so
-they are grouped rather than piled into a single folder:
+into per-subsystem subfolders. File-based provisioning in Grafana 11 cannot build a nested folder
+hierarchy by itself, so a one-shot `conductor-grafana-folders` init container creates the nested
+folders through the Grafana Folder API and one dashboard provider per subsystem binds its dashboard
+to the matching subfolder by `folderUid`:
 
 | Subfolder (under Conductor) | Dashboard | Highlights |
 | --- | --- | --- |

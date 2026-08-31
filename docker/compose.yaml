@@ -151,6 +151,23 @@ services:
       - loki
     restart: unless-stopped
 
+  # One-shot init that creates the nested Grafana folder hierarchy (a top-level "Conductor"
+  # folder with one subfolder per subsystem) via the Folder API, since file-based dashboard
+  # provisioning in Grafana 11.x cannot build nested folders on its own. Runs on every
+  # `docker compose up` and is idempotent; exits when done.
+  grafana-folders:
+    image: curlimages/curl:8.11.0
+    container_name: conductor-grafana-folders
+    depends_on:
+      - grafana
+    environment:
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_AUTH=admin:admin
+    volumes:
+      - ./grafana/init:/init:ro
+    entrypoint: ["sh", "/init/grafana-folders.sh"]
+    restart: "no"
+
 volumes:
   conductor-postgres-data:
   conductor-prometheus-data:
