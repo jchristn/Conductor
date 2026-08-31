@@ -42,6 +42,17 @@ namespace Conductor.Server.Controllers
             tenant.Id = IdGenerator.NewTenantId();
             tenant = await Database.Tenant.CreateAsync(tenant);
 
+            // Seed the new tenant's QoS defaults (default FIFO profile, standard traffic classes, and the
+            // Standard Workloads profile). Best-effort: a seeding failure must not fail tenant creation.
+            try
+            {
+                await new QosSeeder(Database).EnsureTenantAsync(tenant).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logging.Warn(_Header + "failed to seed QoS defaults for tenant " + tenant.Id + ": " + ex.Message);
+            }
+
             return tenant;
         }
 

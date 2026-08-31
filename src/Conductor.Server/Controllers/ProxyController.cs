@@ -205,6 +205,11 @@ namespace Conductor.Server.Controllers
                     Services.QosClassificationContext qosContext = BuildQosContext(ctx, requestContext, vmr);
                     using (Activity qosActivity = ConductorTelemetry.InferenceSource.StartActivity("inference.qos.admit", ActivityKind.Internal))
                     {
+                        // WatsonWebserver 7.1 does not surface a per-request client-abort CancellationToken to
+                        // the handler, so the admission wait cannot observe a client disconnect while the request
+                        // is parked (a disconnect only surfaces later, as a write failure while streaming the
+                        // response). The wait is therefore bounded by the profile's MaxQueueWaitMs deadline, and
+                        // parked waiters are released on server shutdown via the admission service's own token.
                         qosAdmission = await _QosAdmissionService.AdmitAsync(vmr, qosContext, cancellationToken).ConfigureAwait(false);
                         if (qosActivity != null && qosAdmission != null)
                         {

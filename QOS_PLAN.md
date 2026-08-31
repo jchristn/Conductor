@@ -1,7 +1,17 @@
 # QoS & Queueing for Virtual Model Runners — Implementation Plan
 
-**Status:** Proposed · **Target version:** `0.4.0` → **`0.5.0`** (minor) · **Branch:** `feature/qos`
+**Status:** Implemented on `feature/qos` · **Target version:** `0.4.0` → **`0.5.0`** (minor)
 **Library:** [QoSKit](https://github.com/jchristn/qoskit) `0.2.0` (`QoSKit` NuGet) — alpha, multi-targets `netstandard2.0;net8.0;net10.0`, drops directly into a net10.0 project.
+
+> **Implementation status.** All steps below are implemented and committed on `feature/qos`. The full
+> solution builds with 0 errors; the backend test suite (engine, four-dialect persistence, seeding,
+> tenant purge, VMR-requires-profile, telemetry) passes; the three SDKs and the dashboard build and
+> their tests pass. Remaining work is human-in-the-loop only: running the containerized stack end to
+> end under induced saturation, dashboard visual QA (themes/viewports, the React Flow diagram, the nuke
+> flow), and runtime verification of the PostgreSQL/SQL Server/MySQL dialects (compile-verified here,
+> SQLite runtime-verified). One framework limitation is documented in code: WatsonWebserver 7.1 exposes
+> no per-request client-abort token, so admission wait is bounded by the profile deadline rather than
+> client disconnect.
 
 ---
 

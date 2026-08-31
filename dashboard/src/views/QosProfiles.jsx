@@ -7,6 +7,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import QueueHierarchyDiagram from '../components/QueueHierarchyDiagram';
+import QosClassifierRulesEditor from '../components/QosClassifierRulesEditor';
 
 // Starter templates for the structural (classification + topology + limits) portion of a profile.
 const QOS_TEMPLATES = {
@@ -196,6 +197,44 @@ export default function QosProfiles() {
     setValidation(null);
   }, []);
 
+  // Class names offered to the classifier ClassName field, gathered from the topology's node classes
+  // plus the profile's DefaultClass so operators can assign any class already modeled in the profile.
+  const classNameOptions = useMemo(() => {
+    const value = parsedTopology.value;
+    if (!value || typeof value !== 'object') return [];
+    const names = new Set();
+    if (value.DefaultClass) names.add(value.DefaultClass);
+    (Array.isArray(value.Nodes) ? value.Nodes : []).forEach((node) => {
+      (Array.isArray(node?.Classes) ? node.Classes : []).forEach((cls) => {
+        if (cls?.ClassName) names.add(cls.ClassName);
+      });
+    });
+    return Array.from(names);
+  }, [parsedTopology.value]);
+
+  // The classification rules parsed out of the definition JSON. When the JSON is malformed there is
+  // nothing to render structurally, so callers fall back to the raw JSON editor below.
+  const parsedRules = useMemo(() => {
+    const value = parsedTopology.value;
+    return value && Array.isArray(value.Rules) ? value.Rules : [];
+  }, [parsedTopology.value]);
+
+  // When the structured editor changes the rules, merge them back into the definition JSON so the
+  // JSON remains the single source of truth for Validate/Save.
+  const handleRulesChange = useCallback((nextRules) => {
+    setFormData((prev) => {
+      let current;
+      try {
+        current = JSON.parse(prev.DefinitionJson);
+      } catch {
+        return prev;
+      }
+      const merged = { ...current, Rules: nextRules };
+      return { ...prev, DefinitionJson: JSON.stringify(merged, null, 2) };
+    });
+    setValidation(null);
+  }, []);
+
   const handleValidate = async () => {
     setError(null);
     try {
@@ -307,6 +346,18 @@ export default function QosProfiles() {
                 <button type="button" className="btn" onClick={() => applyTemplate('standard')}>Standard Workloads</button>
                 <button type="button" className="btn" onClick={() => applyTemplate('priority')}>Two-tier priority</button>
               </div>
+            </div>
+
+            <div className="form-group">
+              <label>Classification rules</label>
+              {parsedTopology.error ? (
+                <div className="error-text">The definition JSON is not valid, so the rule editor is disabled: {parsedTopology.error}. Fix it in the profile definition below.</div>
+              ) : (
+                <>
+                  <QosClassifierRulesEditor rules={parsedRules} classes={classNameOptions} onChange={handleRulesChange} />
+                  <small>Rules are evaluated top to bottom; the first match assigns the request's class. Unmatched requests use <strong>{parsedTopology.value?.DefaultClass || 'the default class'}</strong>. Edits are written back into the definition JSON below, which stays authoritative for Validate and Save.</small>
+                </>
+              )}
             </div>
 
             <div className="form-group">

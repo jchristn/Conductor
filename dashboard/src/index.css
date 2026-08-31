@@ -4940,3 +4940,78 @@ body {
     text-align: left;
   }
 }
+
+/* QoS classifier rules editor */
+.qos-rules-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qos-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.qos-rule-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-secondary, var(--card-bg));
+}
+
+.qos-rule-ordinal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.qos-rule-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.qos-rule-fields .form-group {
+  margin-bottom: 0;
+}
+
+.qos-rule-fields .form-group small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.qos-rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-top: 24px;
+}
+
+.qos-rule-delete:hover {
+  color: var(--danger-color);
+}
+
+.qos-rules-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+
+.qos-rules-footer {
+  display: flex;
+}
+
+.qos-rules-footer .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

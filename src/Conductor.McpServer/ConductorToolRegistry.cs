@@ -4,9 +4,12 @@ namespace Conductor.McpServer
     using System.Collections.Generic;
     using System.Linq;
     using System.Text.Json;
+    using System.Text.Json.Serialization;
     using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
+    using Conductor.Core.Enums;
+    using Conductor.Core.Helpers;
     using Conductor.Core.Models;
     using Voltaic.Core;
     using Voltaic.Mcp;
@@ -51,6 +54,8 @@ namespace Conductor.McpServer
 
         #region Private-Members
 
+        private static readonly JsonSerializerOptions _JsonOptions = BuildJsonOptions();
+
         private readonly DatabaseDriverBase _Database;
         private readonly ConductorToolRegistrationCatalog _RegistrationCatalog;
         private Func<string, EndpointHealthState> _GetHealthStateFunc;
@@ -85,8 +90,15 @@ namespace Conductor.McpServer
                 GetTenant = parameters => GetTenantHandler(ToJsonElement(parameters)),
                 ListQosProfiles = parameters => ListQosProfilesHandler(ToJsonElement(parameters)),
                 GetQosProfile = parameters => GetQosProfileHandler(ToJsonElement(parameters)),
+                CreateQosProfile = parameters => CreateQosProfileHandler(ToJsonElement(parameters)),
+                UpdateQosProfile = parameters => UpdateQosProfileHandler(ToJsonElement(parameters)),
+                DeleteQosProfile = parameters => DeleteQosProfileHandler(ToJsonElement(parameters)),
+                ValidateQosProfile = parameters => ValidateQosProfileHandler(ToJsonElement(parameters)),
                 ListQosTrafficClasses = parameters => ListQosTrafficClassesHandler(ToJsonElement(parameters)),
-                GetQosTrafficClass = parameters => GetQosTrafficClassHandler(ToJsonElement(parameters))
+                GetQosTrafficClass = parameters => GetQosTrafficClassHandler(ToJsonElement(parameters)),
+                CreateQosTrafficClass = parameters => CreateQosTrafficClassHandler(ToJsonElement(parameters)),
+                UpdateQosTrafficClass = parameters => UpdateQosTrafficClassHandler(ToJsonElement(parameters)),
+                DeleteQosTrafficClass = parameters => DeleteQosTrafficClassHandler(ToJsonElement(parameters))
             });
         }
 
@@ -893,6 +905,230 @@ namespace Conductor.McpServer
             {
                 return CreateErrorResult("Failed to get QoS traffic class: " + ex.Message);
             }
+        }
+
+        private object CreateQosProfileHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string profileJson = GetStringProperty(args, "profile_json");
+            if (String.IsNullOrEmpty(tenantId)) return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(profileJson)) return CreateErrorResult("profile_json is required");
+
+            QosProfile profile;
+            try { profile = JsonSerializer.Deserialize<QosProfile>(profileJson, _JsonOptions); }
+            catch (Exception ex) { return CreateErrorResult("profile_json is not a valid QoS profile: " + ex.Message); }
+            if (profile == null) return CreateErrorResult("profile_json is empty");
+
+            profile.TenantId = tenantId;
+            profile.Id = IdGenerator.NewQosProfileId();
+            profile.IsDefault = false;
+
+            List<string> errors = ValidateProfileStructure(profile);
+            if (errors.Count > 0) return CreateErrorResult("Invalid QoS profile: " + String.Join(" ", errors));
+
+            try
+            {
+                QosProfile created = _Database.QosProfile.CreateAsync(profile).GetAwaiter().GetResult();
+                return new { id = created.Id, name = created.Name, tenantId = created.TenantId };
+            }
+            catch (Exception ex) { return CreateErrorResult("Failed to create QoS profile: " + ex.Message); }
+        }
+
+        private object UpdateQosProfileHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string profileId = GetStringProperty(args, "profile_id");
+            string profileJson = GetStringProperty(args, "profile_json");
+            if (String.IsNullOrEmpty(tenantId)) return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(profileId)) return CreateErrorResult("profile_id is required");
+            if (String.IsNullOrEmpty(profileJson)) return CreateErrorResult("profile_json is required");
+
+            QosProfile existing = _Database.QosProfile.ReadAsync(tenantId, profileId).GetAwaiter().GetResult();
+            if (existing == null) return CreateErrorResult("QoS profile not found: " + profileId);
+
+            QosProfile profile;
+            try { profile = JsonSerializer.Deserialize<QosProfile>(profileJson, _JsonOptions); }
+            catch (Exception ex) { return CreateErrorResult("profile_json is not a valid QoS profile: " + ex.Message); }
+            if (profile == null) return CreateErrorResult("profile_json is empty");
+
+            profile.Id = profileId;
+            profile.TenantId = tenantId;
+            profile.IsDefault = existing.IsDefault;
+
+            List<string> errors = ValidateProfileStructure(profile);
+            if (errors.Count > 0) return CreateErrorResult("Invalid QoS profile: " + String.Join(" ", errors));
+
+            try
+            {
+                _Database.QosProfile.UpdateAsync(profile).GetAwaiter().GetResult();
+                return new { id = profile.Id, name = profile.Name, updated = true };
+            }
+            catch (Exception ex) { return CreateErrorResult("Failed to update QoS profile: " + ex.Message); }
+        }
+
+        private object DeleteQosProfileHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string profileId = GetStringProperty(args, "profile_id");
+            if (String.IsNullOrEmpty(tenantId)) return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(profileId)) return CreateErrorResult("profile_id is required");
+
+            try
+            {
+                QosProfile existing = _Database.QosProfile.ReadAsync(tenantId, profileId).GetAwaiter().GetResult();
+                if (existing == null) return CreateErrorResult("QoS profile not found: " + profileId);
+                if (existing.IsDefault) return CreateErrorResult("Cannot delete the default QoS profile");
+
+                QosProfile defaultProfile = _Database.QosProfile.ReadDefaultAsync(tenantId).GetAwaiter().GetResult();
+                string reassignTo = defaultProfile != null ? defaultProfile.Id : null;
+
+                EnumerationResult<VirtualModelRunner> vmrs = _Database.VirtualModelRunner
+                    .EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 }).GetAwaiter().GetResult();
+                if (vmrs?.Data != null)
+                {
+                    foreach (VirtualModelRunner vmr in vmrs.Data)
+                    {
+                        if (String.Equals(vmr.QosProfileId, profileId, StringComparison.Ordinal))
+                        {
+                            vmr.QosProfileId = reassignTo;
+                            _Database.VirtualModelRunner.UpdateAsync(vmr).GetAwaiter().GetResult();
+                        }
+                    }
+                }
+
+                _Database.QosProfile.DeleteAsync(tenantId, profileId).GetAwaiter().GetResult();
+                return new { deleted = true, id = profileId };
+            }
+            catch (Exception ex) { return CreateErrorResult("Failed to delete QoS profile: " + ex.Message); }
+        }
+
+        private object ValidateQosProfileHandler(JsonElement? args)
+        {
+            string profileJson = GetStringProperty(args, "profile_json");
+            if (String.IsNullOrEmpty(profileJson)) return CreateErrorResult("profile_json is required");
+
+            QosProfile profile;
+            try { profile = JsonSerializer.Deserialize<QosProfile>(profileJson, _JsonOptions); }
+            catch (Exception ex) { return new { valid = false, errors = new[] { "profile_json is not valid JSON: " + ex.Message } }; }
+            if (profile == null) return new { valid = false, errors = new[] { "profile_json is empty" } };
+
+            List<string> errors = ValidateProfileStructure(profile);
+            return new { valid = errors.Count == 0, errors = errors };
+        }
+
+        private object CreateQosTrafficClassHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string name = GetStringProperty(args, "name");
+            if (String.IsNullOrEmpty(tenantId)) return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(name)) return CreateErrorResult("name is required");
+
+            try
+            {
+                QosTrafficClass conflict = _Database.QosTrafficClass.ReadByNameAsync(tenantId, name).GetAwaiter().GetResult();
+                if (conflict != null) return CreateErrorResult("A traffic class with that name already exists");
+
+                QosTrafficClass trafficClass = new QosTrafficClass
+                {
+                    TenantId = tenantId,
+                    Name = name,
+                    Description = GetStringProperty(args, "description"),
+                    Tier = ParseTier(GetStringProperty(args, "tier"), QosClassTierEnum.Default),
+                    IsSystem = false
+                };
+
+                QosTrafficClass created = _Database.QosTrafficClass.CreateAsync(trafficClass).GetAwaiter().GetResult();
+                return new { id = created.Id, name = created.Name, tier = created.Tier.ToString() };
+            }
+            catch (Exception ex) { return CreateErrorResult("Failed to create QoS traffic class: " + ex.Message); }
+        }
+
+        private object UpdateQosTrafficClassHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string classId = GetStringProperty(args, "class_id");
+            if (String.IsNullOrEmpty(tenantId)) return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(classId)) return CreateErrorResult("class_id is required");
+
+            try
+            {
+                QosTrafficClass existing = _Database.QosTrafficClass.ReadAsync(tenantId, classId).GetAwaiter().GetResult();
+                if (existing == null) return CreateErrorResult("QoS traffic class not found: " + classId);
+
+                string name = GetStringProperty(args, "name");
+                if (!String.IsNullOrEmpty(name)) existing.Name = name;
+                string description = GetStringProperty(args, "description");
+                if (description != null) existing.Description = description;
+                string tier = GetStringProperty(args, "tier");
+                if (!String.IsNullOrEmpty(tier)) existing.Tier = ParseTier(tier, existing.Tier);
+
+                _Database.QosTrafficClass.UpdateAsync(existing).GetAwaiter().GetResult();
+                return new { id = existing.Id, name = existing.Name, tier = existing.Tier.ToString(), updated = true };
+            }
+            catch (Exception ex) { return CreateErrorResult("Failed to update QoS traffic class: " + ex.Message); }
+        }
+
+        private object DeleteQosTrafficClassHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string classId = GetStringProperty(args, "class_id");
+            if (String.IsNullOrEmpty(tenantId)) return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(classId)) return CreateErrorResult("class_id is required");
+
+            try
+            {
+                bool exists = _Database.QosTrafficClass.ExistsAsync(tenantId, classId).GetAwaiter().GetResult();
+                if (!exists) return CreateErrorResult("QoS traffic class not found: " + classId);
+
+                _Database.QosTrafficClass.DeleteAsync(tenantId, classId).GetAwaiter().GetResult();
+                return new { deleted = true, id = classId };
+            }
+            catch (Exception ex) { return CreateErrorResult("Failed to delete QoS traffic class: " + ex.Message); }
+        }
+
+        private static List<string> ValidateProfileStructure(QosProfile profile)
+        {
+            List<string> errors = new List<string>();
+            if (profile.Nodes == null || profile.Nodes.Count < 1)
+            {
+                errors.Add("A profile must define at least one queue node.");
+                return errors;
+            }
+
+            HashSet<string> nodeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (QosQueueNode node in profile.Nodes)
+            {
+                if (String.IsNullOrEmpty(node.Name)) errors.Add("Every queue node must have a name.");
+                else if (!nodeNames.Add(node.Name)) errors.Add("Duplicate queue node name '" + node.Name + "'.");
+            }
+
+            if (!String.IsNullOrEmpty(profile.TailNode) && !nodeNames.Contains(profile.TailNode))
+                errors.Add("Tail node '" + profile.TailNode + "' is not defined.");
+            if (!String.IsNullOrEmpty(profile.IngressDefaultNode) && !nodeNames.Contains(profile.IngressDefaultNode))
+                errors.Add("Ingress default node '" + profile.IngressDefaultNode + "' is not defined.");
+            if (profile.Links != null)
+            {
+                foreach (QosQueueLink link in profile.Links)
+                {
+                    if (!String.IsNullOrEmpty(link.FromNode) && !nodeNames.Contains(link.FromNode)) errors.Add("Link references undefined node '" + link.FromNode + "'.");
+                    if (!String.IsNullOrEmpty(link.ToNode) && !nodeNames.Contains(link.ToNode)) errors.Add("Link references undefined node '" + link.ToNode + "'.");
+                }
+            }
+
+            return errors;
+        }
+
+        private static QosClassTierEnum ParseTier(string value, QosClassTierEnum fallback)
+        {
+            if (String.IsNullOrEmpty(value)) return fallback;
+            return Enum.TryParse<QosClassTierEnum>(value, true, out QosClassTierEnum tier) ? tier : fallback;
+        }
+
+        private static JsonSerializerOptions BuildJsonOptions()
+        {
+            JsonSerializerOptions options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            options.Converters.Add(new JsonStringEnumConverter());
+            return options;
         }
 
         #endregion

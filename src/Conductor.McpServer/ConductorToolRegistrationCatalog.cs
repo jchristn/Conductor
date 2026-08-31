@@ -317,6 +317,116 @@ namespace Conductor.McpServer
                     required = new[] { "tenant_id", "class_id" }
                 },
                 _Handlers.GetQosTrafficClass);
+
+            server.RegisterTool(
+                "conductor_create_qos_profile",
+                "Create a QoS profile from a full JSON definition (classifier rules, queue nodes and classes, links, ingress, and limits).",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        profile_json = new { type = "string", description = "The full QoS profile as a JSON object string (enum values as names, e.g. Discipline \"Fifo\")" }
+                    },
+                    required = new[] { "tenant_id", "profile_json" }
+                },
+                _Handlers.CreateQosProfile);
+
+            server.RegisterTool(
+                "conductor_update_qos_profile",
+                "Update an existing QoS profile from a full JSON definition (replaces its rules, nodes, links, and ingress routes).",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        profile_id = new { type = "string", description = "QoS profile ID (qos_xxx)" },
+                        profile_json = new { type = "string", description = "The full updated QoS profile as a JSON object string" }
+                    },
+                    required = new[] { "tenant_id", "profile_id", "profile_json" }
+                },
+                _Handlers.UpdateQosProfile);
+
+            server.RegisterTool(
+                "conductor_delete_qos_profile",
+                "Delete a QoS profile. The default profile cannot be deleted; referencing runners are reassigned to the tenant default.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        profile_id = new { type = "string", description = "QoS profile ID (qos_xxx)" }
+                    },
+                    required = new[] { "tenant_id", "profile_id" }
+                },
+                _Handlers.DeleteQosProfile);
+
+            server.RegisterTool(
+                "conductor_validate_qos_profile",
+                "Structurally validate a QoS profile JSON definition (node names, tail/ingress references, link targets) without saving it.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        profile_json = new { type = "string", description = "The QoS profile as a JSON object string" }
+                    },
+                    required = new[] { "profile_json" }
+                },
+                _Handlers.ValidateQosProfile);
+
+            server.RegisterTool(
+                "conductor_create_qos_traffic_class",
+                "Create a QoS traffic class in the tenant catalog.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        name = new { type = "string", description = "Class name (unique per tenant)" },
+                        description = new { type = "string", description = "Optional description" },
+                        tier = new { type = "string", description = "Scheduling tier: Realtime, Interactive, AgentInteractive, BatchTimebound, BatchBackground, or Default" }
+                    },
+                    required = new[] { "tenant_id", "name" }
+                },
+                _Handlers.CreateQosTrafficClass);
+
+            server.RegisterTool(
+                "conductor_update_qos_traffic_class",
+                "Update a QoS traffic class.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        class_id = new { type = "string", description = "Traffic class ID (qtc_xxx)" },
+                        name = new { type = "string", description = "New name (optional)" },
+                        description = new { type = "string", description = "New description (optional)" },
+                        tier = new { type = "string", description = "New tier (optional)" }
+                    },
+                    required = new[] { "tenant_id", "class_id" }
+                },
+                _Handlers.UpdateQosTrafficClass);
+
+            server.RegisterTool(
+                "conductor_delete_qos_traffic_class",
+                "Delete a QoS traffic class.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        class_id = new { type = "string", description = "Traffic class ID (qtc_xxx)" }
+                    },
+                    required = new[] { "tenant_id", "class_id" }
+                },
+                _Handlers.DeleteQosTrafficClass);
         }
 
         private void RegisterModelDiscoveryToolsTcp(McpTcpServer server)
@@ -329,8 +439,15 @@ namespace Conductor.McpServer
         {
             server.RegisterMethod("conductor_list_qos_profiles", _Handlers.ListQosProfiles);
             server.RegisterMethod("conductor_get_qos_profile", _Handlers.GetQosProfile);
+            server.RegisterMethod("conductor_create_qos_profile", _Handlers.CreateQosProfile);
+            server.RegisterMethod("conductor_update_qos_profile", _Handlers.UpdateQosProfile);
+            server.RegisterMethod("conductor_delete_qos_profile", _Handlers.DeleteQosProfile);
+            server.RegisterMethod("conductor_validate_qos_profile", _Handlers.ValidateQosProfile);
             server.RegisterMethod("conductor_list_qos_traffic_classes", _Handlers.ListQosTrafficClasses);
             server.RegisterMethod("conductor_get_qos_traffic_class", _Handlers.GetQosTrafficClass);
+            server.RegisterMethod("conductor_create_qos_traffic_class", _Handlers.CreateQosTrafficClass);
+            server.RegisterMethod("conductor_update_qos_traffic_class", _Handlers.UpdateQosTrafficClass);
+            server.RegisterMethod("conductor_delete_qos_traffic_class", _Handlers.DeleteQosTrafficClass);
         }
 
         private void RegisterEndpointToolsTcp(McpTcpServer server)

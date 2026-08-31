@@ -101,3 +101,31 @@ List the tenant's QoS traffic class catalog. Params: `tenant_id` (req). Returns 
 
 ### `conductor_get_qos_traffic_class`
 Get a traffic class by ID. Params: `tenant_id` (req), `class_id` (req, `qtc_xxx`).
+
+### `conductor_create_qos_profile`
+Create a QoS profile from a full JSON definition.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `tenant_id` | string | yes | Tenant. |
+| `profile_json` | string | yes | The full profile as a JSON object string — scalar fields plus `Rules`, `Nodes` (each with `Classes`), `Links`, `IngressRoutes`. Enum values are names (e.g. `Discipline: "Fifo"`, `Operator: "Equals"`). |
+
+The server assigns the id, forces `IsDefault=false`, structurally validates (node names, tail/ingress/link references), and persists it. Returns `{ id, name, tenantId }`.
+
+### `conductor_update_qos_profile`
+Update a profile (replaces its child rows). Params: `tenant_id` (req), `profile_id` (req), `profile_json` (req).
+
+### `conductor_delete_qos_profile`
+Delete a profile. Params: `tenant_id` (req), `profile_id` (req). The **default profile cannot be deleted**; referencing VMRs are reassigned to the tenant default.
+
+### `conductor_validate_qos_profile`
+Structurally validate a profile JSON (node names, tail/ingress/link references) without saving. Params: `profile_json` (req). Returns `{ valid, errors }`. Note: this is a structural check; full discipline/topology compilation happens server-side when the profile is used.
+
+### `conductor_create_qos_traffic_class`
+Create a traffic class. Params: `tenant_id` (req), `name` (req), `description`, `tier` (`Realtime`/`Interactive`/`AgentInteractive`/`BatchTimebound`/`BatchBackground`/`Default`).
+
+### `conductor_update_qos_traffic_class`
+Update a traffic class. Params: `tenant_id` (req), `class_id` (req), `name`, `description`, `tier` (all optional).
+
+### `conductor_delete_qos_traffic_class`
+Delete a traffic class. Params: `tenant_id` (req), `class_id` (req).
