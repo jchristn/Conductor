@@ -17,6 +17,7 @@ import EndpointGroups from './views/EndpointGroups';
 import ModelDefinitions from './views/ModelDefinitions';
 import ModelConfigurations from './views/ModelConfigurations';
 import LoadBalancingPolicies from './views/LoadBalancingPolicies';
+import QosProfiles from './views/QosProfiles';
 import ModelAccessPolicies from './views/ModelAccessPolicies';
 import VirtualModelRunners from './views/VirtualModelRunners';
 import Reservations from './views/Reservations';
@@ -55,6 +56,7 @@ function App() {
             <Route path="/definitions" element={<ModelDefinitions />} />
             <Route path="/configurations" element={<ModelConfigurations />} />
             <Route path="/policies" element={<LoadBalancingPolicies />} />
+            <Route path="/qos-profiles" element={<QosProfiles />} />
             <Route path="/model-access-policies" element={<ModelAccessPolicies />} />
             <Route path="/vmr" element={<VirtualModelRunners />} />
             <Route path="/reservations" element={<Reservations />} />

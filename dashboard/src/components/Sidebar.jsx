@@ -113,6 +113,17 @@ function Sidebar() {
       )
     },
     {
+      path: '/qos-profiles',
+      label: 'QoS Profiles',
+      tourId: 'nav-qos-profiles',
+      tooltip: 'Classify and queue traffic per virtual model runner (QoS profiles and traffic classes)',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 5a1 1 0 011-1h8a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V9zm0 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z" />
+        </svg>
+      )
+    },
+    {
       path: '/model-access-policies',
       label: 'Model Access Policies',
       tourId: 'nav-model-access-policies',

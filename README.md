@@ -31,6 +31,7 @@ Conductor is a platform for managing models, model runners, model configurations
 - **Operational Metrics**: Export Prometheus-friendly latency, denial, fallback, session-affinity, saturation, and telemetry-freshness signals
 - **OpenTelemetry Observability**: Emit OTLP metrics and distributed traces across the HTTP, inference proxy, routing/load-balancing, database, health, and model-load subsystems, with a batteries-included Prometheus/Grafana/Loki/Tempo stack and per-subsystem Grafana dashboards
 - **Drain And Quarantine Controls**: Keep endpoints visible for health diagnostics while intentionally excluding them from new routing
+- **QoS & Queueing**: Link a per-VMR QoS profile that classifies incoming traffic (by custom header, credential, model, body attribute, tenant, user, and more) and queues it — FIFO, priority, weighted-fair, low-latency, or weighted round robin, chainable into a hierarchy — releasing requests in scheduled order as endpoint capacity frees instead of rejecting immediately, with per-class metrics and traces through the existing OpenTelemetry pipeline
 - **Rate Limiting**: Per-endpoint maximum parallel request limits with automatic capacity management
 - **Request History and Analytics**: Optional per-VMR request/response capture with trace IDs, stage timings, provider request IDs, token counts, throughput, dashboard drill-down, configurable retention, redaction, metadata-only retention modes, and a tenant-scoped Analytics workspace for TTFT, token usage, user/credential breakdowns, estimated cost, and failed-request reporting
 - **React Dashboard**: Full-featured UI for managing all entities including real-time health status
@@ -92,6 +93,7 @@ npm run preview -- --host 0.0.0.0
 
 - [REST_API.md](./REST_API.md): management API routes, resource shapes, proxy behavior, request history, analytics, and observability.
 - [TELEMETRY.md](./TELEMETRY.md): OpenTelemetry metrics and traces, the Prometheus/Grafana/Loki/Tempo stack, dashboards, and how to integrate telemetry into your environment.
+- [QOS_OVERVIEW.md](./QOS_OVERVIEW.md): per-VMR QoS queueing — concepts, traffic classes, disciplines, how to classify and configure profiles, and how to monitor them.
 - [ANALYTICS.md](./ANALYTICS.md): product plan for the Analytics workspace.
 - [ANALYTICS_PLAN.md](./ANALYTICS_PLAN.md): implementation tracker for the Analytics workspace.
 - [ADR 0002](./docs/adr/0002-analytics-workspace.md): Analytics workspace API, retention, authorization, saved-report, and export decisions.
@@ -382,6 +384,27 @@ Virtual model runners expose an API at their configured base path. For example, 
 - **vLLM API**: `/v1.0/api/my-vmr/v1/chat/completions`, `/v1.0/api/my-vmr/v1/embeddings`
 - **Gemini API**: `/v1.0/api/my-vmr/v1beta/models/gemini-2.5-flash:generateContent`, `/v1.0/api/my-vmr/v1beta/models/text-embedding-004:embedContent`
 - **Ollama API**: `/v1.0/api/my-vmr/api/generate`, `/v1.0/api/my-vmr/api/chat`
+
+## QoS & Queueing
+
+Every virtual model runner is linked to a **QoS profile** that governs how its traffic is queued under load. When a VMR's endpoints are all busy, a profiled VMR no longer bounces requests with an immediate `429` — it parks them in the discipline you configured and releases them in scheduled order as capacity frees. When there is spare capacity the layer is invisible: requests admit instantly and a priority queue behaves just like FIFO. Queueing is built on the [QoSKit](https://github.com/jchristn/qoskit) library; Conductor owns the configuration, the request path, seeding, and telemetry.
+
+A profile has three parts. **Classification** maps a request to a named traffic class using whatever the operator chooses — a custom header, a specific credential, the requested model, a request-body attribute, the tenant, the user, the client IP, or the API family. **Topology** places each class into a queue discipline (FIFO, LIFO, priority, weighted-fair, class-based weighted-fair, low-latency, or weighted round robin) and chains nodes into a hierarchy ending at one tail. **Admission** gates against the VMR's existing endpoint capacity — the sum of its endpoints' `MaxParallelRequests` — and returns `429` with a `Retry-After` header when a queue is full or a request waits past its deadline.
+
+Sensible defaults are seeded per tenant on startup and on tenant creation, so nothing is required to get started:
+
+- A non-deletable **Default (FIFO)** profile that every VMR uses unless linked to another. Creating a VMR without a profile auto-assigns this default.
+- A catalog of **standard traffic classes** — `realtime`, `human-interactive`, `agent-interactive`, `batch-time-bound`, `batch-background`, and `default` — that you can edit and extend.
+- A ready-to-use **Standard Workloads** profile (a low-latency queue keyed on the `X-Conductor-Class` header) to link or clone.
+
+Manage profiles and classes over REST at `/v1.0/qosprofiles` and `/v1.0/qostrafficclasses` (with `validate` and `classifier-catalog` helpers), or from the dashboard. A client can select its class with a header:
+
+```
+POST /v1.0/api/{vmr}/v1/chat/completions
+X-Conductor-Class: human-interactive
+```
+
+QoS emits through the same OpenTelemetry pipeline as the rest of Conductor: QoSKit's per-class metrics and hop-by-hop traces are joined by `conductor.qos.*` instruments (admissions, rejections, per-class wait duration, queue depth) and an `inference.qos.admit` trace span, all Prometheus-scrapable and surfaced in the bundled "Conductor — QoS & Queueing" Grafana dashboard. All QoS configuration lives in the database; nothing about it is stored in `conductor.json`. See **[QOS_OVERVIEW.md](./QOS_OVERVIEW.md)** for the full guide.
 
 ## Configuration
 

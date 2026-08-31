@@ -167,6 +167,7 @@ function VirtualModelRunners() {
   const [configurations, setConfigurations] = useState([]);
   const [definitions, setDefinitions] = useState([]);
   const [loadBalancingPolicies, setLoadBalancingPolicies] = useState([]);
+  const [qosProfiles, setQosProfiles] = useState([]);
   const [modelAccessPolicies, setModelAccessPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -199,6 +200,7 @@ function VirtualModelRunners() {
     ApiType: 'OpenAI',
     LoadBalancingMode: 'RoundRobin',
     LoadBalancingPolicyId: '',
+    QosProfileId: '',
     ModelAccessPolicyId: '',
     ModelRunnerEndpointIds: [],
     AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
@@ -244,6 +246,10 @@ function VirtualModelRunners() {
       setDefinitions(definitionsResult.Data || []);
       setLoadBalancingPolicies(policiesResult.Data || []);
       setModelAccessPolicies(modelAccessPolicyResult.Data || []);
+      try {
+        const qosResult = await api.listQosProfiles({ maxResults: 500 });
+        setQosProfiles(qosResult?.Data || []);
+      } catch { /* QoS profiles are optional in the selector */ }
     } catch (err) {
       setError('Failed to fetch data: ' + err.message);
     } finally {
@@ -273,6 +279,7 @@ function VirtualModelRunners() {
       ApiType: 'OpenAI',
       LoadBalancingMode: 'RoundRobin',
       LoadBalancingPolicyId: '',
+    QosProfileId: '',
       ModelAccessPolicyId: '',
       ModelRunnerEndpointIds: [],
       AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
@@ -309,6 +316,7 @@ function VirtualModelRunners() {
       ApiType: vmr.ApiType || 'OpenAI',
       LoadBalancingMode: vmr.LoadBalancingMode || 'RoundRobin',
       LoadBalancingPolicyId: vmr.LoadBalancingPolicyId || '',
+      QosProfileId: vmr.QosProfileId || '',
       ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
       AdaptiveLoadBalancing: normalizeAdaptiveLoadBalancing(vmr.AdaptiveLoadBalancing),
@@ -345,6 +353,7 @@ function VirtualModelRunners() {
       ApiType: vmr.ApiType || 'OpenAI',
       LoadBalancingMode: vmr.LoadBalancingMode || 'RoundRobin',
       LoadBalancingPolicyId: vmr.LoadBalancingPolicyId || '',
+      QosProfileId: vmr.QosProfileId || '',
       ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
       AdaptiveLoadBalancing: normalizeAdaptiveLoadBalancing(vmr.AdaptiveLoadBalancing),
@@ -419,6 +428,7 @@ function VirtualModelRunners() {
       ApiType: formData.ApiType,
       LoadBalancingMode: formData.LoadBalancingMode,
       LoadBalancingPolicyId: formData.LoadBalancingPolicyId || null,
+      QosProfileId: formData.QosProfileId || null,
       ModelAccessPolicyId: formData.ModelAccessPolicyId || null,
       ModelRunnerEndpointIds: formData.ModelRunnerEndpointIds,
       AdaptiveLoadBalancing: {
@@ -934,6 +944,7 @@ function VirtualModelRunners() {
                 ...formData,
                 TenantId: e.target.value,
                 LoadBalancingPolicyId: '',
+    QosProfileId: '',
                 ModelAccessPolicyId: '',
                 ModelRunnerEndpointIds: [],
                 EndpointGroupIds: [],
@@ -1031,6 +1042,23 @@ function VirtualModelRunners() {
                   .map((policy) => (
                     <option key={policy.Id} value={policy.Id}>
                       {policy.Name} ({policy.Id})
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="qosProfileId" title="Link a QoS profile that classifies and queues traffic for this VMR. Leave as Default (FIFO) unless you need class-aware scheduling.">QoS Profile</label>
+              <select
+                id="qosProfileId"
+                value={formData.QosProfileId || ''}
+                onChange={(e) => setFormData({ ...formData, QosProfileId: e.target.value })}
+              >
+                <option value="">Default (FIFO)</option>
+                {qosProfiles
+                  .filter((profile) => !formData.TenantId || profile.TenantId === formData.TenantId)
+                  .map((profile) => (
+                    <option key={profile.Id} value={profile.Id}>
+                      {profile.Name} ({profile.Id})
                     </option>
                   ))}
               </select>

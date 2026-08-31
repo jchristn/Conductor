@@ -55,6 +55,13 @@ function Dashboard() {
       color: '#f97316'
     },
     {
+      name: 'Grafana — QoS & Queueing',
+      description: 'Per-class queue wait, admissions, rejections, drops, and policer health for QoS.',
+      url: `http://${serviceHost}:3000/d/conductor-qos`,
+      credentials: 'No login required (anonymous Admin). Default account: admin / admin.',
+      color: '#0ea5e9'
+    },
+    {
       name: 'Prometheus',
       description: 'Metrics storage and PromQL query explorer.',
       url: `http://${serviceHost}:9090`,

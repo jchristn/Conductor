@@ -520,6 +520,63 @@ class ConductorApi {
     return this.request('GET', '/v1.0/loadbalancingpolicies/metrics');
   }
 
+  // QoS Profile APIs
+  async listQosProfiles(params = {}) {
+    const query = this.buildQueryString(params);
+    return this.dedupedRequest(`listQosProfiles:${query}`, 'GET', `/v1.0/qosprofiles${query}`);
+  }
+
+  async getQosProfile(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/qosprofiles/${id}${query}`);
+  }
+
+  async createQosProfile(profile) {
+    return this.request('POST', '/v1.0/qosprofiles', profile);
+  }
+
+  async validateQosProfile(profile) {
+    return this.request('POST', '/v1.0/qosprofiles/validate', profile);
+  }
+
+  async updateQosProfile(id, profile) {
+    return this.request('PUT', `/v1.0/qosprofiles/${id}`, profile);
+  }
+
+  async deleteQosProfile(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('DELETE', `/v1.0/qosprofiles/${id}${query}`);
+  }
+
+  async getQosClassifierCatalog(tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/qosprofiles/classifier-catalog${query}`);
+  }
+
+  // QoS Traffic Class APIs
+  async listQosTrafficClasses(params = {}) {
+    const query = this.buildQueryString(params);
+    return this.dedupedRequest(`listQosTrafficClasses:${query}`, 'GET', `/v1.0/qostrafficclasses${query}`);
+  }
+
+  async createQosTrafficClass(trafficClass) {
+    return this.request('POST', '/v1.0/qostrafficclasses', trafficClass);
+  }
+
+  async updateQosTrafficClass(id, trafficClass) {
+    return this.request('PUT', `/v1.0/qostrafficclasses/${id}`, trafficClass);
+  }
+
+  async deleteQosTrafficClass(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('DELETE', `/v1.0/qostrafficclasses/${id}${query}`);
+  }
+
+  // Tenant purge (nuke) - system admin only
+  async purgeTenant(id, confirmTenantId) {
+    return this.request('POST', `/v1.0/tenants/${id}/purge`, { ConfirmTenantId: confirmTenantId });
+  }
+
   // Model Access Policy APIs
   async listModelAccessPolicies(params = {}) {
     const query = this.buildQueryString(params);
