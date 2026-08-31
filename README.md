@@ -404,7 +404,7 @@ POST /v1.0/api/{vmr}/v1/chat/completions
 X-Conductor-Class: human-interactive
 ```
 
-QoS emits through the same OpenTelemetry pipeline as the rest of Conductor: QoSKit's per-class metrics and hop-by-hop traces are joined by `conductor.qos.*` instruments (admissions, rejections, per-class wait duration, queue depth) and an `inference.qos.admit` trace span, all Prometheus-scrapable and surfaced in the bundled "Conductor — QoS & Queueing" Grafana dashboard. All QoS configuration lives in the database; nothing about it is stored in `conductor.json`. See **[QOS_OVERVIEW.md](./QOS_OVERVIEW.md)** for the full guide.
+QoS emits through the same OpenTelemetry pipeline as the rest of Conductor: QoSKit's per-class metrics and hop-by-hop traces are joined by `conductor.qos.*` instruments (admissions, rejections, per-class wait duration, queue depth) and an `inference.qos.admit` trace span, all Prometheus-scrapable and surfaced by the bundled **QoS & Queueing** dashboard in the **Conductor** Grafana folder. All QoS configuration lives in the database; nothing about it is stored in `conductor.json`. See **[QOS_OVERVIEW.md](./QOS_OVERVIEW.md)** for the full guide.
 
 ## Configuration
 
@@ -839,7 +839,7 @@ The OTLP endpoint and protocol can also be supplied through the standard `OTEL_E
 | Loki | Log aggregation | `http://localhost:3100` |
 | Grafana | Dashboards and exploration (metrics ↔ traces ↔ logs correlation) | `http://localhost:3000` |
 
-Grafana datasources and dashboards are provisioned automatically. Every dashboard lives under a single top-level **Conductor** folder, organized into per-subsystem subfolders — **Database**, **HTTP and API**, **Inference**, **Routing and Load Balancing**, **QoS and Queueing**, **Runtime**, and **Health and Endpoints**. Because file-based dashboard provisioning in Grafana 11 cannot build a nested folder hierarchy on its own, a one-shot `conductor-grafana-folders` init container creates the nested folders through the Grafana Folder API, and one dashboard provider per subsystem (in `docker/grafana/provisioning/dashboards/dashboards.yaml`) binds its dashboard — from `docker/grafana/dashboards/Conductor/<subsystem>/*.json` — to the matching subfolder by `folderUid`. The init step is idempotent and runs on every `docker compose up`.
+Grafana datasources and dashboards are provisioned automatically. Every dashboard lives directly under a single top-level **Conductor** folder — **Database**, **HTTP & API**, **Inference & Proxy**, **Routing & Load Balancing**, **QoS & Queueing**, **Runtime & Process**, and **Health & Endpoints** — provisioned by a single file provider (`docker/grafana/provisioning/dashboards/dashboards.yaml`, `folder: Conductor`) from `docker/grafana/dashboards/Conductor/*.json`.
 
 > **Note:** The observability stack requires a Conductor server image built from this source (telemetry export was added in this release). Rebuild the server image with `build-server.bat` if you are running an older published tag.
 

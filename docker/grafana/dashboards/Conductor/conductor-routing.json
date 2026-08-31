@@ -1,6 +1,6 @@
 {
   "uid": "conductor-routing",
-  "title": "Conductor - Routing & Load Balancing",
+  "title": "Routing & Load Balancing",
   "tags": ["conductor", "routing"],
   "schemaVersion": 39,
   "version": 1,

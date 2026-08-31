@@ -1,6 +1,6 @@
 {
   "uid": "conductor-health",
-  "title": "Conductor - Health & Endpoints",
+  "title": "Health & Endpoints",
   "tags": ["conductor", "health"],
   "schemaVersion": 39,
   "version": 1,

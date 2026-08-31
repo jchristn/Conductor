@@ -1,6 +1,6 @@
 {
   "uid": "conductor-inference",
-  "title": "Conductor - Inference & Proxy",
+  "title": "Inference & Proxy",
   "tags": ["conductor", "inference"],
   "schemaVersion": 39,
   "version": 1,

@@ -208,7 +208,7 @@ the same pipeline.
 `qos_class` is a closed set defined by the profile; on a weighted-fair node with dynamic flows the
 profile can drop the per-class tag to bound cardinality. QoS metrics reach Prometheus by the same two
 paths as the rest of Conductor (OTLP → collector `:8889`, or the in-process scrape endpoint); nothing
-extra is required. They are provisioned in the **Conductor — QoS & Queueing** Grafana folder.
+extra is required. They are surfaced by the **QoS & Queueing** dashboard in the **Conductor** Grafana folder.
 
 ### Health & endpoints
 
@@ -302,26 +302,23 @@ cards on the dashboard's **Dashboard** page.
 
 ## Grafana dashboards
 
-Dashboards are provisioned automatically under a single top-level **Conductor** folder, organized
-into per-subsystem subfolders. File-based provisioning in Grafana 11 cannot build a nested folder
-hierarchy by itself, so a one-shot `conductor-grafana-folders` init container creates the nested
-folders through the Grafana Folder API and one dashboard provider per subsystem binds its dashboard
-to the matching subfolder by `folderUid`:
+Dashboards are provisioned automatically directly under a single top-level **Conductor** folder (a
+single file provider with `folder: Conductor`, no subfolders):
 
-| Subfolder (under Conductor) | Dashboard | Highlights |
-| --- | --- | --- |
-| Database | Conductor - Database | Query rate & latency by operation and system, errors |
-| HTTP and API | Conductor - HTTP & API | Request rate, latency percentiles, status classes, active requests, by route |
-| Inference | Conductor - Inference & Proxy | Request rate & latency by API family / VMR, time-to-first-token, upstream errors, by status |
-| QoS and Queueing | Conductor - QoS & Queueing | Admissions & rejections, per-class wait duration, queue depth, admit spans |
-| Routing and Load Balancing | Conductor - Routing & Load Balancing | Decisions by outcome & strategy, denials by reason, decision latency, model-load |
-| Runtime | Conductor - Runtime & Process | Memory, threads, uptime, GC |
-| Health and Endpoints | Conductor - Health & Endpoints | Healthy/unhealthy endpoints, in-flight requests |
+| Dashboard (under Conductor) | Highlights |
+| --- | --- |
+| Database | Query rate & latency by operation and system, errors |
+| HTTP & API | Request rate, latency percentiles, status classes, active requests, by route |
+| Inference & Proxy | Request rate & latency by API family / VMR, time-to-first-token, upstream errors, by status |
+| QoS & Queueing | Admissions & rejections, per-class wait duration, queue depth, admit spans |
+| Routing & Load Balancing | Decisions by outcome & strategy, denials by reason, decision latency, model-load |
+| Runtime & Process | Memory, threads, uptime, GC |
+| Health & Endpoints | Healthy/unhealthy endpoints, in-flight requests |
 
 Datasources are provisioned with cross-correlation: Prometheus exemplars link to Tempo, Tempo
 traces link to Loki logs, and Loki log lines link back to Tempo traces.
 
-The dashboard JSON lives in `docker/grafana/dashboards/Conductor/<subsystem>/*.json` and can be
+The dashboard JSON lives in `docker/grafana/dashboards/Conductor/*.json` and can be
 imported into any Grafana instance.
 
 ---

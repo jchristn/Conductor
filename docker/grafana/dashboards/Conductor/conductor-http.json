@@ -1,6 +1,6 @@
 {
   "uid": "conductor-http",
-  "title": "Conductor - HTTP & API",
+  "title": "HTTP & API",
   "tags": ["conductor", "http"],
   "schemaVersion": 39,
   "version": 1,

@@ -1,93 +1,18 @@
 # Grafana dashboard provisioning for Conductor.
 #
-# Goal: a single top-level "Conductor" folder with one subfolder per subsystem.
-#
-# File-based dashboard provisioning in Grafana 11.x CANNOT build a nested folder
-# hierarchy on its own: `foldersFromFilesStructure: true` only ever creates one
-# flat level (it drops the parent directory), and a provider's `folder:` value is
-# treated as a literal name, not a path. So the nested folders are pre-created
-# through the Grafana Folder API by the one-shot `grafana-folders` init container
-# (see docker/grafana/init/grafana-folders.sh), and each provider below binds its
-# dashboards to the matching subfolder by `folderUid`. If the init container has
-# not created a folder yet, the provider creates it at root and the init container
-# reparents it under "Conductor" — the result is the same either way.
+# A single provider places every Conductor dashboard directly into one top-level
+# "Conductor" folder (no subfolders). Grafana creates the folder from the `folder`
+# option; the dashboards in the mounted directory each land inside it.
 
 apiVersion: 1
 
 providers:
-  - name: Conductor-Database
+  - name: Conductor
     orgId: 1
     type: file
-    folder: Database
-    folderUid: conductor-folder-database
+    folder: Conductor
     disableDeletion: false
     updateIntervalSeconds: 30
     allowUiUpdates: true
     options:
-      path: /var/lib/grafana/dashboards/Conductor/Database
-
-  - name: Conductor-HTTP
-    orgId: 1
-    type: file
-    folder: HTTP and API
-    folderUid: conductor-folder-http
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /var/lib/grafana/dashboards/Conductor/HTTP and API
-
-  - name: Conductor-Inference
-    orgId: 1
-    type: file
-    folder: Inference
-    folderUid: conductor-folder-inference
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /var/lib/grafana/dashboards/Conductor/Inference
-
-  - name: Conductor-QoS
-    orgId: 1
-    type: file
-    folder: QoS and Queueing
-    folderUid: conductor-folder-qos
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /var/lib/grafana/dashboards/Conductor/QoS and Queueing
-
-  - name: Conductor-Routing
-    orgId: 1
-    type: file
-    folder: Routing and Load Balancing
-    folderUid: conductor-folder-routing
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /var/lib/grafana/dashboards/Conductor/Routing and Load Balancing
-
-  - name: Conductor-Runtime
-    orgId: 1
-    type: file
-    folder: Runtime
-    folderUid: conductor-folder-runtime
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /var/lib/grafana/dashboards/Conductor/Runtime
-
-  - name: Conductor-Health
-    orgId: 1
-    type: file
-    folder: Health and Endpoints
-    folderUid: conductor-folder-health
-    disableDeletion: false
-    updateIntervalSeconds: 30
-    allowUiUpdates: true
-    options:
-      path: /var/lib/grafana/dashboards/Conductor/Health and Endpoints
+      path: /var/lib/grafana/dashboards/Conductor

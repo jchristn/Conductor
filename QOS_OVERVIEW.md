@@ -113,7 +113,7 @@ sum by (outcome) (rate(conductor_qos_admissions_total{vmr="my-runner"}[5m]))
 
 **Traces.** A proxied request gains an `inference.qos.admit` span (a sibling of `inference.forward` under the `inference.proxy` root), so the time a request spent waiting is a visible segment in Tempo. QoSKit's `queue.enqueue` / `queue.dequeue` / `link.move` spans decompose a multi-node hierarchy underneath it.
 
-**Grafana.** The bundled stack ships a "Conductor — QoS & Queueing" dashboard folder with admission, throughput, backpressure/drops, per-class latency, and policer rows. The home page links to it.
+**Grafana.** The bundled stack ships a **QoS & Queueing** dashboard (in the **Conductor** Grafana folder) with admission, throughput, backpressure/drops, per-class latency, and policer rows. The home page links to it.
 
 ## Operations: purging a tenant
 

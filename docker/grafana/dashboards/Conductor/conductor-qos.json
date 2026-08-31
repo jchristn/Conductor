@@ -1,6 +1,6 @@
 {
   "uid": "conductor-qos",
-  "title": "Conductor - QoS & Queueing",
+  "title": "QoS & Queueing",
   "tags": ["conductor", "qos", "queueing"],
   "schemaVersion": 39,
   "version": 1,
