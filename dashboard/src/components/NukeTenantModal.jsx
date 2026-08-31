@@ -106,7 +106,7 @@ export default function NukeTenantModal({ isOpen, tenant, onClose, onPurged }) {
       ) : (
         <div>
           {report.Completed && (
-            <div className="success-text" style={{ marginBottom: 16, fontWeight: 600 }}>
+            <div className="success-banner" style={{ marginBottom: 16, fontWeight: 600 }}>
               Tenant purge completed{report.CompletedUtc ? ` at ${new Date(report.CompletedUtc).toLocaleString()}` : ''}.
             </div>
           )}

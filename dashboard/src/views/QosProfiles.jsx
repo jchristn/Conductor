@@ -6,6 +6,7 @@ import Modal from '../components/Modal';
 import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
+import RefreshButton from '../components/RefreshButton';
 import QueueHierarchyDiagram from '../components/QueueHierarchyDiagram';
 import QosClassifierRulesEditor from '../components/QosClassifierRulesEditor';
 
@@ -100,6 +101,8 @@ export default function QosProfiles() {
   const [validation, setValidation] = useState(null);
   const [selected, setSelected] = useState(null);
   const [showDelete, setShowDelete] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [topologyView, setTopologyView] = useState('json');
 
   const fetchData = useCallback(async () => {
@@ -160,6 +163,14 @@ export default function QosProfiles() {
       Active: profile.Active, DefinitionJson: JSON.stringify(definition, null, 2),
     });
     setShowForm(true);
+  };
+
+  // Open the editor in create mode pre-filled from an existing profile's definition.
+  const handleDuplicate = (profile) => {
+    handleEdit(profile);
+    setEditMode(false);
+    setSelected(null);
+    setFormData((prev) => ({ ...prev, Name: (profile.Name || '') + ' (Copy)' }));
   };
 
   const applyTemplate = (key) => {
@@ -256,6 +267,7 @@ export default function QosProfiles() {
       return;
     }
     try {
+      setSaving(true);
       if (editMode && selected) {
         await api.updateQosProfile(selected.Id, payload);
       } else {
@@ -265,33 +277,38 @@ export default function QosProfiles() {
       await fetchData();
     } catch (e2) {
       setError(e2?.message || 'Failed to save QoS profile');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async () => {
     if (!selected) return;
     try {
+      setDeleteLoading(true);
       await api.deleteQosProfile(selected.Id, selected.TenantId);
       setShowDelete(false);
       setSelected(null);
       await fetchData();
     } catch (e) {
       setError(e?.message || 'Failed to delete QoS profile');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
   const columns = useMemo(() => ([
     { key: 'Name', label: 'Name', render: (row) => (
-      <span>{row.Name}{row.IsDefault ? <span className="badge" style={{ marginLeft: 8 }}>default</span> : null}</span>
+      <span>{row.Name}{row.IsDefault ? <span className="status-badge" style={{ marginLeft: 8 }}>default</span> : null}</span>
     ) },
-    { key: 'Id', label: 'ID', render: (row) => <CopyableId id={row.Id} /> },
-    { key: 'TenantId', label: 'Tenant', render: (row) => tenantName(row.TenantId) },
-    { key: 'TailNode', label: 'Tail', render: (row) => row.TailNode },
-    { key: 'Active', label: 'Active', render: (row) => <StatusIndicator active={row.Active} /> },
-    { key: 'actions', label: '', render: (row) => (
+    { key: 'Id', label: 'ID', width: '300px', render: (row) => <CopyableId value={row.Id} /> },
+    { key: 'TenantId', label: 'Tenant', width: '180px', render: (row) => tenantName(row.TenantId) },
+    { key: 'TailNode', label: 'Tail', width: '160px', render: (row) => row.TailNode },
+    { key: 'Active', label: 'Active', width: '120px', render: (row) => <StatusIndicator active={row.Active} /> },
+    { key: 'actions', label: 'Actions', width: '80px', sortable: false, filterable: false, isAction: true, render: (row) => (
       <ActionMenu actions={[
         { label: 'Edit', onClick: () => handleEdit(row) },
-        { label: 'Duplicate', onClick: () => { handleEdit(row); setEditMode(false); setSelected(null); setFormData((p) => ({ ...p, Name: (row.Name || '') + ' (Copy)' })); } },
+        { label: 'Duplicate', onClick: () => handleDuplicate(row) },
         { divider: true },
         { label: 'Delete', danger: true, disabled: row.IsDefault, onClick: () => { setSelected(row); setShowDelete(true); } },
       ]} />
@@ -305,9 +322,9 @@ export default function QosProfiles() {
           <h1>QoS Profiles</h1>
           <p className="view-subtitle">Classify and queue traffic per virtual model runner. The default FIFO profile is seeded per tenant and cannot be deleted.</p>
         </div>
-        <div className="view-header-actions">
-          <button className="btn" onClick={fetchData}>Refresh</button>
-          <button className="btn btn-primary" onClick={handleCreate}>Create Profile</button>
+        <div className="view-actions">
+          <RefreshButton onClick={fetchData} title="Refresh QoS profiles" disabled={loading} />
+          <button className="btn-primary" onClick={handleCreate}>Create Profile</button>
         </div>
       </div>
 
@@ -315,103 +332,107 @@ export default function QosProfiles() {
 
       <DataTable data={profiles} columns={columns} loading={loading} onRowClick={handleEdit} />
 
-      {showForm && (
-        <Modal wide title={editMode ? 'Edit QoS Profile' : 'Create QoS Profile'} onClose={() => setShowForm(false)}>
-          <form onSubmit={handleSubmit}>
-            {error && <div className="error-text" style={{ marginBottom: 12 }}>{error}</div>}
+      <Modal
+        isOpen={showForm}
+        onClose={() => setShowForm(false)}
+        title={editMode ? 'Edit QoS Profile' : 'Create QoS Profile'}
+        extraWide
+      >
+        <form onSubmit={handleSubmit}>
+          {error && <div className="error-text" style={{ marginBottom: 12 }}>{error}</div>}
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Tenant</label>
-                <select value={formData.TenantId} onChange={(e) => setFormData({ ...formData, TenantId: e.target.value })} disabled={editMode} required>
-                  <option value="">Select a tenant</option>
-                  {tenants.map((t) => <option key={t.Id} value={t.Id}>{t.Name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Name</label>
-                <input type="text" value={formData.Name} onChange={(e) => setFormData({ ...formData, Name: e.target.value })} required />
-              </div>
-            </div>
-
+          <div className="form-row">
             <div className="form-group">
-              <label>Description</label>
-              <textarea value={formData.Description} onChange={(e) => setFormData({ ...formData, Description: e.target.value })} rows={2} />
+              <label htmlFor="qos-tenant" title="Tenant that owns this profile">Tenant</label>
+              <select id="qos-tenant" value={formData.TenantId} onChange={(e) => setFormData({ ...formData, TenantId: e.target.value })} disabled={editMode} required>
+                <option value="">Select a tenant</option>
+                {tenants.map((t) => <option key={t.Id} value={t.Id}>{t.Name}</option>)}
+              </select>
             </div>
-
             <div className="form-group">
-              <label>Templates</label>
-              <div className="template-buttons">
-                <button type="button" className="btn" onClick={() => applyTemplate('fifo')}>FIFO</button>
-                <button type="button" className="btn" onClick={() => applyTemplate('standard')}>Standard Workloads</button>
-                <button type="button" className="btn" onClick={() => applyTemplate('priority')}>Two-tier priority</button>
-              </div>
+              <label htmlFor="qos-name" title="Profile name, unique per tenant">Name</label>
+              <input id="qos-name" type="text" value={formData.Name} onChange={(e) => setFormData({ ...formData, Name: e.target.value })} required />
             </div>
+          </div>
 
-            <div className="form-group">
-              <label>Classification rules</label>
-              {parsedTopology.error ? (
-                <div className="error-text">The definition JSON is not valid, so the rule editor is disabled: {parsedTopology.error}. Fix it in the profile definition below.</div>
-              ) : (
-                <>
-                  <QosClassifierRulesEditor rules={parsedRules} classes={classNameOptions} onChange={handleRulesChange} />
-                  <small>Rules are evaluated top to bottom; the first match assigns the request's class. Unmatched requests use <strong>{parsedTopology.value?.DefaultClass || 'the default class'}</strong>. Edits are written back into the definition JSON below, which stays authoritative for Validate and Save.</small>
-                </>
-              )}
+          <div className="form-group">
+            <label htmlFor="qos-description" title="Optional description">Description</label>
+            <textarea id="qos-description" value={formData.Description} onChange={(e) => setFormData({ ...formData, Description: e.target.value })} rows={2} />
+          </div>
+
+          <div className="form-group">
+            <label>Start from a template</label>
+            <div className="button-group">
+              <button type="button" className="btn-secondary btn-small" onClick={() => applyTemplate('fifo')}>FIFO</button>
+              <button type="button" className="btn-secondary btn-small" onClick={() => applyTemplate('standard')}>Standard Workloads</button>
+              <button type="button" className="btn-secondary btn-small" onClick={() => applyTemplate('priority')}>Two-tier priority</button>
             </div>
+          </div>
 
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ marginBottom: 0 }}>Profile definition (classification, topology, limits)</label>
-                <div className="template-buttons">
-                  <button type="button" className={`btn${topologyView === 'json' ? ' btn-primary' : ''}`} onClick={() => setTopologyView('json')}>JSON</button>
-                  <button type="button" className={`btn${topologyView === 'diagram' ? ' btn-primary' : ''}`} onClick={() => setTopologyView('diagram')}>Diagram</button>
-                </div>
-              </div>
-              {topologyView === 'json' ? (
-                <>
-                  <textarea className="code-input" value={formData.DefinitionJson} onChange={(e) => setFormData({ ...formData, DefinitionJson: e.target.value })} rows={20} spellCheck={false} />
-                  <small>Edit the classifier rules, queue nodes, links, ingress routes, and limits. Use <strong>Validate</strong> to compile-check the draft before saving.</small>
-                </>
-              ) : (
-                <>
-                  {parsedTopology.error ? (
-                    <div className="error-text">The definition JSON is not valid, so the diagram is disabled: {parsedTopology.error}. Switch to JSON to fix it.</div>
-                  ) : (
-                    <QueueHierarchyDiagram topology={parsedTopology.value} onChange={handleTopologyChange} />
-                  )}
-                  <small>Drag between nodes to add a link, select a node/edge and press Delete to remove it, or use <strong>Add node</strong>. Edits are written back into the JSON, which remains the source of truth for Validate and Save. Fine-tune disciplines, classes, and limits in the JSON view.</small>
-                </>
-              )}
-            </div>
-
-            {validation && (
-              <div className={validation.IsValid ? 'success-text' : 'error-text'} style={{ marginBottom: 12 }}>
-                {validation.IsValid ? 'Profile is valid.' : ('Invalid: ' + (validation.Errors || []).map((x) => x.Message).join(' '))}
-              </div>
+          <div className="form-group">
+            <label>Classification rules</label>
+            {parsedTopology.error ? (
+              <div className="error-text">The definition JSON is not valid, so the rule editor is disabled: {parsedTopology.error}. Fix it in the profile definition below.</div>
+            ) : (
+              <>
+                <QosClassifierRulesEditor rules={parsedRules} classes={classNameOptions} onChange={handleRulesChange} />
+                <small>Rules are evaluated top to bottom; the first match assigns the request's class. Unmatched requests use <strong>{parsedTopology.value?.DefaultClass || 'the default class'}</strong>. Edits are written back into the definition JSON below, which stays authoritative for Validate and Save.</small>
+              </>
             )}
+          </div>
 
-            <div className="form-group">
-              <label><input type="checkbox" checked={formData.Active} onChange={(e) => setFormData({ ...formData, Active: e.target.checked })} /> Active</label>
+          <div className="form-group">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <label style={{ marginBottom: 0 }}>Profile definition (classification, topology, limits)</label>
+              <div className="button-group">
+                <button type="button" className={topologyView === 'json' ? 'btn-primary btn-small' : 'btn-secondary btn-small'} onClick={() => setTopologyView('json')}>JSON</button>
+                <button type="button" className={topologyView === 'diagram' ? 'btn-primary btn-small' : 'btn-secondary btn-small'} onClick={() => setTopologyView('diagram')}>Diagram</button>
+              </div>
             </div>
+            {topologyView === 'json' ? (
+              <>
+                <textarea className="code-input" value={formData.DefinitionJson} onChange={(e) => setFormData({ ...formData, DefinitionJson: e.target.value })} rows={20} spellCheck={false} />
+                <small>Edit the classifier rules, queue nodes, links, ingress routes, and limits. Use <strong>Validate</strong> to compile-check the draft before saving.</small>
+              </>
+            ) : (
+              <>
+                {parsedTopology.error ? (
+                  <div className="error-text">The definition JSON is not valid, so the diagram is disabled: {parsedTopology.error}. Switch to JSON to fix it.</div>
+                ) : (
+                  <QueueHierarchyDiagram topology={parsedTopology.value} onChange={handleTopologyChange} />
+                )}
+                <small>Drag between nodes to add a link, select a node/edge and press Delete to remove it, or use <strong>Add node</strong>. Edits are written back into the JSON, which remains the source of truth for Validate and Save. Fine-tune disciplines, classes, and limits in the JSON view.</small>
+              </>
+            )}
+          </div>
 
-            <div className="form-actions">
-              <button type="button" className="btn" onClick={handleValidate}>Validate</button>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>
-              <button type="submit" className="btn btn-primary">{editMode ? 'Save' : 'Create'}</button>
+          {validation && (
+            <div className={validation.IsValid ? 'success-banner' : 'error-text'} style={{ marginBottom: 12 }}>
+              {validation.IsValid ? 'Profile is valid.' : ('Invalid: ' + (validation.Errors || []).map((x) => x.Message).join(' '))}
             </div>
-          </form>
-        </Modal>
-      )}
+          )}
 
-      {showDelete && selected && (
-        <DeleteConfirmModal
-          title="Delete QoS Profile"
-          message={`Delete "${selected.Name}"? Referencing runners will be reassigned to the tenant default profile.`}
-          onConfirm={handleDelete}
-          onCancel={() => setShowDelete(false)}
-        />
-      )}
+          <div className="form-group">
+            <label className="checkbox-label"><input type="checkbox" checked={formData.Active} onChange={(e) => setFormData({ ...formData, Active: e.target.checked })} /> Active</label>
+          </div>
+
+          <div className="form-actions">
+            <button type="button" className="btn-secondary" onClick={handleValidate} disabled={saving}>Validate</button>
+            <button type="button" className="btn-secondary" onClick={() => setShowForm(false)} disabled={saving}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving...' : (editMode ? 'Update' : 'Create')}</button>
+          </div>
+        </form>
+      </Modal>
+
+      <DeleteConfirmModal
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={handleDelete}
+        entityName={selected?.Name}
+        entityType="QoS profile"
+        message="Referencing runners will be reassigned to the tenant default profile."
+        loading={deleteLoading}
+      />
     </div>
   );
 }

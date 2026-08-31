@@ -1353,6 +1353,24 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
+/* Inline row of related buttons (templates, segmented toggles) that should wrap rather than stretch. */
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Inline success message, mirroring .error-text but in the success color. */
+.success-banner {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid var(--success-color);
+  color: var(--success-color);
+  font-size: 0.9rem;
+}
+
 .detail-panel {
   background: var(--card-bg);
   border: 1px solid var(--border-color);
@@ -5008,10 +5026,4 @@ body {
 
 .qos-rules-footer {
   display: flex;
-}
-
-.qos-rules-footer .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }

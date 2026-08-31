@@ -127,7 +127,7 @@ export default function QosTrafficClasses() {
       label: 'System',
       width: '120px',
       render: (row) => (row.IsSystem
-        ? <span className="badge">system</span>
+        ? <span className="status-badge">system</span>
         : <span style={{ color: 'var(--text-secondary)' }}>custom</span>),
       filterValue: (row) => (row.IsSystem ? 'system' : 'custom'),
     },

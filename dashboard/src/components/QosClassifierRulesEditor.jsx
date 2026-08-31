@@ -221,7 +221,7 @@ function QosClassifierRulesEditor({ rules, classes, onChange }) {
       )}
 
       <div className="qos-rules-footer">
-        <button type="button" className="btn" onClick={addRow}>
+        <button type="button" className="btn-secondary btn-small" onClick={addRow}>
           <PlusIcon /> Add rule
         </button>
       </div>

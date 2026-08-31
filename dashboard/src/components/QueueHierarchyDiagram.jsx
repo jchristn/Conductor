@@ -190,7 +190,7 @@ export default function QueueHierarchyDiagram({ topology, onChange }) {
   return (
     <div style={{ position: 'relative', height: 380, border: '1px solid var(--border-color, #cbd5e1)', borderRadius: 8, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 5 }}>
-        <button type="button" className="btn" onClick={handleAddNode}>Add node</button>
+        <button type="button" className="btn-secondary btn-small" onClick={handleAddNode}>Add node</button>
       </div>
       <ReactFlow
         nodes={nodes}
