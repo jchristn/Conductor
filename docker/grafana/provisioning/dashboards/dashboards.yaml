@@ -1,9 +1,10 @@
 # Grafana dashboard provisioning for Conductor.
 #
-# A single provider with foldersFromFilesStructure enabled turns each first-level
-# subdirectory under the dashboards path into its own Grafana folder, so the
-# dashboards are organized by subsystem (HTTP, Inference, Routing, Database,
-# Runtime, Health) instead of being piled into one folder.
+# A single provider with foldersFromFilesStructure enabled maps the dashboards
+# directory tree onto Grafana's (nested) folder hierarchy. Everything lives under
+# a top-level "Conductor" folder, with one subfolder per subsystem (Database,
+# HTTP and API, Inference, Routing and Load Balancing, QoS and Queueing, Runtime,
+# Health and Endpoints). Nested folders are GA in the Grafana 11.x image used here.
 
 apiVersion: 1
 

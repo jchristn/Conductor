@@ -2,9 +2,9 @@
 
 # Conductor
 
-Project version: `0.2.0`
+Project version: `0.5.0`
 
-NOTE: Conductor is in ALPHA and is v0.4.0. APIs and functionality subject to change.
+NOTE: Conductor is in ALPHA and is v0.5.0. APIs and functionality subject to change.
 
 Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
@@ -46,7 +46,7 @@ docker compose up -d
 ```
 
 The server will be available at `http://localhost:9000` and the dashboard at `http://localhost:9100`.
-The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.2.0` and `jchristn77/conductor-dashboard:v0.2.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
+The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.5.0` and `jchristn77/conductor-dashboard:v0.5.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
 
 The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` from `docker/compose.yaml`, so the login page points browsers at the host-exposed Conductor API by default.
 
@@ -766,20 +766,20 @@ Response includes:
 
 The included Docker Compose setup uses named Docker Hub images:
 
-- **Server**: `jchristn77/conductor-server:v0.2.0`
-- **Dashboard**: `jchristn77/conductor-dashboard:v0.2.0`
+- **Server**: `jchristn77/conductor-server:v0.5.0`
+- **Dashboard**: `jchristn77/conductor-dashboard:v0.5.0`
 
 ### Building Docker Images
 
 ```bash
 # Build and push server with the specified tag and latest
-build-server.bat v0.2.0
+build-server.bat v0.5.0
 
 # Build and push dashboard with the specified tag and latest
-build-dashboard.bat v0.2.0
+build-dashboard.bat v0.5.0
 
 # Build and push both images with the specified tag and latest
-build-all.bat v0.2.0
+build-all.bat v0.5.0
 ```
 
 ### Updating a Deployment
@@ -839,7 +839,7 @@ The OTLP endpoint and protocol can also be supplied through the standard `OTEL_E
 | Loki | Log aggregation | `http://localhost:3100` |
 | Grafana | Dashboards and exploration (metrics ↔ traces ↔ logs correlation) | `http://localhost:3000` |
 
-Grafana datasources and dashboards are provisioned automatically. Dashboards are organized into meaningful folders — **HTTP and API**, **Inference**, **Routing and Load Balancing**, **Database**, **Runtime**, and **Health and Endpoints** — via `docker/grafana/dashboards/<folder>/*.json` (using `foldersFromFilesStructure`), so they are not piled into a single folder.
+Grafana datasources and dashboards are provisioned automatically. Every dashboard lives under a single top-level **Conductor** folder, organized into per-subsystem subfolders — **Database**, **HTTP and API**, **Inference**, **Routing and Load Balancing**, **QoS and Queueing**, **Runtime**, and **Health and Endpoints** — via `docker/grafana/dashboards/Conductor/<subsystem>/*.json` (using `foldersFromFilesStructure` with the Grafana 11 nested-folders support), so they are grouped rather than piled into a single folder.
 
 > **Note:** The observability stack requires a Conductor server image built from this source (telemetry export was added in this release). Rebuild the server image with `build-server.bat` if you are running an older published tag.
 

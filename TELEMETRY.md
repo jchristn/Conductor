@@ -302,23 +302,25 @@ cards on the dashboard's **Dashboard** page.
 
 ## Grafana dashboards
 
-Dashboards are provisioned automatically and organized into per-subsystem folders (via
-`foldersFromFilesStructure`), so they are not piled into a single folder:
+Dashboards are provisioned automatically under a single top-level **Conductor** folder, organized
+into per-subsystem subfolders (via `foldersFromFilesStructure` with Grafana 11 nested folders), so
+they are grouped rather than piled into a single folder:
 
-| Folder | Dashboard | Highlights |
+| Subfolder (under Conductor) | Dashboard | Highlights |
 | --- | --- | --- |
+| Database | Conductor - Database | Query rate & latency by operation and system, errors |
 | HTTP and API | Conductor - HTTP & API | Request rate, latency percentiles, status classes, active requests, by route |
 | Inference | Conductor - Inference & Proxy | Request rate & latency by API family / VMR, time-to-first-token, upstream errors, by status |
+| QoS and Queueing | Conductor - QoS & Queueing | Admissions & rejections, per-class wait duration, queue depth, admit spans |
 | Routing and Load Balancing | Conductor - Routing & Load Balancing | Decisions by outcome & strategy, denials by reason, decision latency, model-load |
-| Database | Conductor - Database | Query rate & latency by operation and system, errors |
 | Runtime | Conductor - Runtime & Process | Memory, threads, uptime, GC |
 | Health and Endpoints | Conductor - Health & Endpoints | Healthy/unhealthy endpoints, in-flight requests |
 
 Datasources are provisioned with cross-correlation: Prometheus exemplars link to Tempo, Tempo
 traces link to Loki logs, and Loki log lines link back to Tempo traces.
 
-The dashboard JSON lives in `docker/grafana/dashboards/<folder>/*.json` and can be imported into
-any Grafana instance.
+The dashboard JSON lives in `docker/grafana/dashboards/Conductor/<subsystem>/*.json` and can be
+imported into any Grafana instance.
 
 ---
 
