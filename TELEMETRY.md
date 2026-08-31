@@ -186,6 +186,30 @@ Scope `Conductor.Database`. Instrumented once at the driver chokepoint, so every
 `db_system` is `sqlite`/`postgresql`/`mssql`/`mysql`; `db_operation` is the SQL verb
 (`select`/`insert`/`update`/`delete`/…).
 
+### QoS & queueing
+
+Two sources. Conductor's own admission-boundary instruments live on scope `Conductor.Qos`; the
+embedded [QoSKit](https://github.com/jchristn/qoskit) library emits per-class queue internals on a
+meter and activity source named `QoSKit`, both of which Conductor subscribes so they export through
+the same pipeline.
+
+| Metric | Type | Unit | Labels | Represents |
+| --- | --- | --- | --- | --- |
+| `conductor_qos_admissions_total` | counter | — | `vmr`, `qos_class`, `outcome` | Admission decisions (`admitted`/`rejected`/`timed_out`/`aborted`). |
+| `conductor_qos_rejections_total` | counter | — | `vmr`, `reason` | Requests turned away (`queue_full`/`total_depth`/`wait_timeout`/`aborted`). |
+| `conductor_qos_queue_wait_duration_seconds` | histogram | s | `vmr`, `qos_class` | Time a request waited before admission. |
+| `conductor_qos_queue_depth` | gauge | — | `vmr` | Requests currently parked in QoS queues. |
+| `qoskit_queue_enqueued_total` / `_dequeued_total` | counter | — | `queue_name`, `queue_type`, `queue_class` | Admitted / serviced items per class. |
+| `qoskit_queue_dropped_total` | counter | — | `queue_class`, `drop_reason` | Drops, split by reason (`newest`/`oldest`/`unknown_class`/`unroutable`). |
+| `qoskit_queue_wait_duration_milliseconds` | histogram | ms | `queue_name`, `queue_class` | Per-class wait time (millisecond buckets applied as a view). |
+| `qoskit_policer_conformed_total` / `_exceeded_total` | counter | — | `queue_class` | LLQ token-bucket conform vs. throttle. |
+| `qoskit_queue_capacity` / `qoskit_queue_peak_depth` / `qoskit_queue_resident_bytes` | gauge | — | `queue_name` | Configured limit, high-water mark, resident cost (pull-based). |
+
+`qos_class` is a closed set defined by the profile; on a weighted-fair node with dynamic flows the
+profile can drop the per-class tag to bound cardinality. QoS metrics reach Prometheus by the same two
+paths as the rest of Conductor (OTLP → collector `:8889`, or the in-process scrape endpoint); nothing
+extra is required. They are provisioned in the **Conductor — QoS & Queueing** Grafana folder.
+
 ### Health & endpoints
 
 Scope `Conductor.Health`. Observable gauges sampled from the live health-check state.
@@ -232,10 +256,13 @@ activity sources and exported over OTLP to Tempo.
 | `inference.proxy` | Server | `Conductor.Inference` | `conductor.vmr`, `conductor.api_family`, `conductor.model`, `http.request.method`, `http.response.status_code`, `conductor.streaming` |
 | `inference.forward` | Client | `Conductor.Inference` | `server.address`, `server.port`, `conductor.endpoint_id`, `http.response.status_code` |
 | `routing.evaluate` | Internal | `Conductor.Routing` | `conductor.outcome`, `conductor.endpoint_id`, `conductor.denial_reason` |
+| `inference.qos.admit` | Internal | `Conductor.Inference` | `conductor.qos_class`, `conductor.qos_outcome` |
+| `queue.enqueue` / `queue.dequeue` / `link.move` | Internal | `QoSKit` | `queue.name`, `queue.class`, `qoskit.outcome`, `qoskit.wait_ms` |
 | `db <operation>` | Client | `Conductor.Database` | `db.system`, `db.operation` |
 
-Within a proxied request the spans nest: `inference.proxy` → `routing.evaluate` and
-`inference.forward`. Database spans nest under whatever operation triggers them (and appear as
+Within a proxied request the spans nest: `inference.proxy` → `routing.evaluate`, `inference.qos.admit`,
+and `inference.forward`. The `inference.qos.admit` segment shows the time a request spent waiting in the
+QoS queue, and QoSKit's `link.move` spans decompose a multi-node hierarchy underneath it. Database spans nest under whatever operation triggers them (and appear as
 standalone traces for management-plane calls). Sampling is parent-based and controlled by
 `TracesSamplingRatio`.
 

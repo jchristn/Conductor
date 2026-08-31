@@ -4,7 +4,7 @@
 
 Conductor puts a single, controllable front door in front of all of your model runners. You register your backends — OpenAI, vLLM, Gemini, or Ollama — and Conductor virtualizes them into stable endpoints that speak the OpenAI, vLLM, Gemini, and Ollama APIs your clients already use. Load balancing, health checking, session affinity, access policies, and request analytics happen in between, without your applications having to know which backend actually served a request.
 
-> **Alpha.** Conductor is v0.4.0 and under active development. APIs and behavior can change between releases.
+> **Alpha.** Conductor is v0.5.0 and under active development. APIs and behavior can change between releases.
 
 This page covers running Conductor from the published Docker images. The full source, SDKs, and reference documentation live at [github.com/jchristn/Conductor](https://github.com/jchristn/Conductor).
 
@@ -15,13 +15,15 @@ This page covers running Conductor from the published Docker images. The full so
 | [`jchristn77/conductor-server`](https://hub.docker.com/r/jchristn77/conductor-server) | REST API, inference proxy, routing engine | 9000 |
 | [`jchristn77/conductor-dashboard`](https://hub.docker.com/r/jchristn77/conductor-dashboard) | React management UI | 9100 |
 
-Both images publish versioned tags (the current published tag is `v0.2.0`) alongside `latest`.
+Both images publish versioned tags (the current published tag is `v0.5.0`) alongside `latest`.
 
 ## What you can do with it
 
 The point of Conductor is to stop wiring individual model backends directly into applications. A virtual model runner (VMR) is the unit clients talk to: it bundles a set of endpoints, optional endpoint groups, and model configurations behind one address, then decides at request time where traffic should go.
 
 That decision is where most of the interesting behavior lives. You can spread load across endpoints with round-robin, random, first-available, least-recently-used, or adaptive strategies, and weight the distribution when some hardware is faster than others. You can pin a client to the backend it started on — by IP, API key, or a header you choose — so a long conversation does not bounce between machines and pay the model-swap cost on every turn. When an endpoint stops answering health checks, it drops out of rotation on its own and rejoins when it recovers; you can also drain or quarantine one deliberately while keeping its health visible.
+
+Under load you decide who waits and who goes first. Each VMR can be linked to a **QoS profile** that classifies incoming traffic — by a custom header, a specific credential, the model, a request-body attribute, and more — and queues it with the scheduling discipline you choose (FIFO, priority, weighted-fair, low-latency, or weighted round robin), releasing requests in order as endpoint capacity frees instead of rejecting them outright. Every tenant is seeded with a default FIFO profile and a catalog of standard traffic classes, and the per-class queue metrics and traces flow into the same Grafana stack. See `QOS_OVERVIEW.md` in the repository.
 
 Access is governed rather than assumed. Tenants isolate data, users and credentials authenticate against the proxy, and model access policies decide — per credential, user, label, model, action, or VMR — what is allowed, denied, or merely monitored. When you need to guarantee capacity for a launch or a demo, VMR reservations carve out exclusive windows for specific users without disturbing on-demand traffic the rest of the time.
 

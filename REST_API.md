@@ -606,7 +606,8 @@ Auth:
 | `POST` | `/v1.0/tenants` | Create tenant. |
 | `GET` | `/v1.0/tenants/{id}` | Read tenant. |
 | `PUT` | `/v1.0/tenants/{id}` | Update tenant. |
-| `DELETE` | `/v1.0/tenants/{id}` | Delete tenant and all subordinate tenant data. |
+| `DELETE` | `/v1.0/tenants/{id}` | Delete tenant and all subordinate tenant data (now including QoS profiles and traffic classes). |
+| `POST` | `/v1.0/tenants/{id}/purge` | Purge (nuke) a tenant and all of its data; returns an itemized `TenantPurgeReport`. **System-admin only** (returns `403` for tenant-scoped callers). The body must echo the id as `{"ConfirmTenantId":"<id>"}` (mismatch → `400`); the reserved `default` tenant cannot be purged. |
 
 ### Users
 
@@ -810,6 +811,41 @@ The `metrics` response shape is:
   ]
 }
 ```
+
+### QoS Profiles
+
+Auth level: `Authenticated`
+
+A QoS profile classifies and queues traffic for a virtual model runner. It is an aggregate: the body
+carries scalar fields (`DefaultClass`, `IngressMode`, `IngressDefaultNode`, `TailNode`, `MaxTotalDepth`,
+`MaxQueueWaitMs`, `RejectionStatusCode`, `IncludeRetryAfter`, `RetryAfterSeconds`, `Active`) plus the
+child collections `Rules`, `Nodes` (each with `Classes`), `Links`, and `IngressRoutes`. The seeded
+`Default (FIFO)` profile (`IsDefault: true`) cannot be deleted.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/qosprofiles` | List profiles. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
+| `POST` | `/v1.0/qosprofiles` | Create profile. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/qosprofiles/validate` | Compile-validate a profile draft without saving; returns a `ResourceValidationResult`. |
+| `GET` | `/v1.0/qosprofiles/classifier-catalog` | Return the available classifier sources, operators, disciplines, and the tenant's traffic classes. |
+| `GET` | `/v1.0/qosprofiles/{id}` | Read a fully-assembled profile. Optional `tenantId` query. |
+| `PUT` | `/v1.0/qosprofiles/{id}` | Update profile (replaces child rows). |
+| `DELETE` | `/v1.0/qosprofiles/{id}` | Delete profile. The default profile returns `400`; referencing VMRs are reassigned to the tenant default. |
+
+### QoS Traffic Classes
+
+Auth level: `Authenticated`
+
+The tenant class catalog. Fields: `Name` (unique per tenant), `Description`, `Tier`
+(`Realtime`/`Interactive`/`AgentInteractive`/`BatchTimebound`/`BatchBackground`/`Default`), `IsSystem`.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/qostrafficclasses` | List classes. Query: `maxResults`, `continuationToken`, `nameFilter`, optional `tenantId`. |
+| `POST` | `/v1.0/qostrafficclasses` | Create a traffic class. |
+| `GET` | `/v1.0/qostrafficclasses/{id}` | Read a traffic class. |
+| `PUT` | `/v1.0/qostrafficclasses/{id}` | Update a traffic class. |
+| `DELETE` | `/v1.0/qostrafficclasses/{id}` | Delete a traffic class. |
 
 ### Model Access Policies
 
