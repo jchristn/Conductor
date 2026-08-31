@@ -39,6 +39,8 @@ namespace Conductor.Core.Database.Sqlite
             VirtualModelRunner = new VirtualModelRunnerMethods(this);
             VirtualModelRunnerReservation = new Conductor.Core.Database.VirtualModelRunnerReservationMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.Sqlite);
             LoadBalancingPolicy = new LoadBalancingPolicyMethods(this);
+            QosProfile = new QosProfileMethods(this);
+            QosTrafficClass = new QosTrafficClassMethods(this);
             ModelAccessPolicy = new Conductor.Core.Database.ModelAccessPolicyMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.Sqlite);
             Administrator = new AdministratorMethods(this);
             RequestHistory = new RequestHistoryMethods(this);
@@ -63,6 +65,13 @@ namespace Conductor.Core.Database.Sqlite
                 TableQueries.CreateModelDefinitionsTable,
                 TableQueries.CreateModelConfigurationsTable,
                 TableQueries.CreateLoadBalancingPoliciesTable,
+                TableQueries.CreateQosProfilesTable,
+                TableQueries.CreateQosClassifierRulesTable,
+                TableQueries.CreateQosQueueNodesTable,
+                TableQueries.CreateQosQueueClassesTable,
+                TableQueries.CreateQosQueueLinksTable,
+                TableQueries.CreateQosIngressRoutesTable,
+                TableQueries.CreateQosTrafficClassesTable,
                 TableQueries.CreateModelAccessPoliciesTable,
                 TableQueries.CreateModelAccessRulesTable,
                 TableQueries.CreateVirtualModelRunnersTable,
@@ -231,6 +240,7 @@ namespace Conductor.Core.Database.Sqlite
             await EnsureColumnAsync("virtualmodelrunners", "requesthistoryenabled", TableQueries.AddRequestHistoryEnabledColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "loadbalancingpolicyid", TableQueries.AddLoadBalancingPolicyIdColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "modelaccesspolicyid", TableQueries.AddModelAccessPolicyIdColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "qosprofileid", TableQueries.AddQosProfileIdColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "modelconfigurationmappings", "ALTER TABLE virtualmodelrunners ADD COLUMN modelconfigurationmappings TEXT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "adaptiveloadbalancing", TableQueries.AddAdaptiveLoadBalancingColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);

@@ -231,6 +231,154 @@ namespace Conductor.Core.Database.Sqlite.Queries
         ";
 
         /// <summary>
+        /// Create QoS profiles table.
+        /// </summary>
+        public static readonly string CreateQosProfilesTable = @"
+            CREATE TABLE IF NOT EXISTS qosprofiles (
+                id TEXT PRIMARY KEY,
+                tenantid TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                isdefault INTEGER NOT NULL DEFAULT 0,
+                active INTEGER NOT NULL DEFAULT 1,
+                defaultclass TEXT,
+                ingressmode INTEGER NOT NULL DEFAULT 0,
+                ingressdefaultnode TEXT,
+                tailnode TEXT,
+                maxtotaldepth INTEGER NOT NULL DEFAULT 0,
+                maxqueuewaitms INTEGER NOT NULL DEFAULT 30000,
+                rejectionstatuscode INTEGER NOT NULL DEFAULT 429,
+                includeretryafter INTEGER NOT NULL DEFAULT 1,
+                retryafterseconds INTEGER NOT NULL DEFAULT 5,
+                createdutc TEXT NOT NULL,
+                lastupdateutc TEXT NOT NULL,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qos_tenantid ON qosprofiles(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_qos_active ON qosprofiles(active);
+            CREATE INDEX IF NOT EXISTS idx_qos_name ON qosprofiles(name);
+            CREATE INDEX IF NOT EXISTS idx_qos_isdefault ON qosprofiles(isdefault);
+        ";
+
+        /// <summary>
+        /// Create QoS classifier rules table.
+        /// </summary>
+        public static readonly string CreateQosClassifierRulesTable = @"
+            CREATE TABLE IF NOT EXISTS qosclassifierrules (
+                id TEXT PRIMARY KEY,
+                profileid TEXT NOT NULL,
+                ordinal INTEGER NOT NULL DEFAULT 0,
+                source INTEGER NOT NULL DEFAULT 0,
+                matchkey TEXT,
+                operator INTEGER NOT NULL DEFAULT 0,
+                matchvalue TEXT,
+                classname TEXT,
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qcr_profileid ON qosclassifierrules(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS queue nodes table.
+        /// </summary>
+        public static readonly string CreateQosQueueNodesTable = @"
+            CREATE TABLE IF NOT EXISTS qosqueuenodes (
+                id TEXT PRIMARY KEY,
+                profileid TEXT NOT NULL,
+                name TEXT NOT NULL,
+                discipline INTEGER NOT NULL DEFAULT 0,
+                maxdepth INTEGER NOT NULL DEFAULT 0,
+                overflowpolicy INTEGER NOT NULL DEFAULT 0,
+                agingthresholdms INTEGER NOT NULL DEFAULT 0,
+                flowsource INTEGER,
+                flowkey TEXT,
+                unknownkeypolicy INTEGER NOT NULL DEFAULT 0,
+                defaultkey TEXT,
+                defaultweight INTEGER NOT NULL DEFAULT 1,
+                wrrclassifiermode INTEGER NOT NULL DEFAULT 0,
+                enableperclassmetrics INTEGER NOT NULL DEFAULT 1,
+                enabletracing INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qqn_profileid ON qosqueuenodes(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS queue classes table (bands, flows, classes, sub-queues).
+        /// </summary>
+        public static readonly string CreateQosQueueClassesTable = @"
+            CREATE TABLE IF NOT EXISTS qosqueueclasses (
+                id TEXT PRIMARY KEY,
+                nodeid TEXT NOT NULL,
+                ordinal INTEGER NOT NULL DEFAULT 0,
+                kind INTEGER NOT NULL DEFAULT 2,
+                classname TEXT,
+                weight INTEGER,
+                band INTEGER,
+                rateperssecond REAL,
+                burst REAL,
+                FOREIGN KEY (nodeid) REFERENCES qosqueuenodes(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qqc_nodeid ON qosqueueclasses(nodeid);
+        ";
+
+        /// <summary>
+        /// Create QoS queue links table.
+        /// </summary>
+        public static readonly string CreateQosQueueLinksTable = @"
+            CREATE TABLE IF NOT EXISTS qosqueuelinks (
+                id TEXT PRIMARY KEY,
+                profileid TEXT NOT NULL,
+                fromnode TEXT,
+                tonode TEXT,
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qql_profileid ON qosqueuelinks(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS ingress routes table.
+        /// </summary>
+        public static readonly string CreateQosIngressRoutesTable = @"
+            CREATE TABLE IF NOT EXISTS qosingressroutes (
+                id TEXT PRIMARY KEY,
+                profileid TEXT NOT NULL,
+                ordinal INTEGER NOT NULL DEFAULT 0,
+                classname TEXT,
+                node TEXT,
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qir_profileid ON qosingressroutes(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS traffic classes table (tenant class catalog).
+        /// </summary>
+        public static readonly string CreateQosTrafficClassesTable = @"
+            CREATE TABLE IF NOT EXISTS qostrafficclasses (
+                id TEXT PRIMARY KEY,
+                tenantid TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                tier INTEGER NOT NULL DEFAULT 5,
+                issystem INTEGER NOT NULL DEFAULT 0,
+                createdutc TEXT NOT NULL,
+                lastupdateutc TEXT NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_qtc_tenantid ON qostrafficclasses(tenantid);
+            CREATE INDEX IF NOT EXISTS idx_qtc_name ON qostrafficclasses(name);
+        ";
+
+        /// <summary>
+        /// Migration: add the QoS profile id column to virtual model runners.
+        /// </summary>
+        public static readonly string AddQosProfileIdColumn = "ALTER TABLE virtualmodelrunners ADD COLUMN qosprofileid TEXT;";
+
+        /// <summary>
         /// Create model access policies table.
         /// </summary>
         public static readonly string CreateModelAccessPoliciesTable = @"
@@ -324,6 +472,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 requesthistoryenabled INTEGER NOT NULL DEFAULT 1,
                 loadbalancingpolicyid TEXT,
                 modelaccesspolicyid TEXT,
+                qosprofileid TEXT,
                 active INTEGER NOT NULL DEFAULT 1,
                 createdutc TEXT NOT NULL,
                 lastupdateutc TEXT NOT NULL,

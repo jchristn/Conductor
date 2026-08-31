@@ -63,6 +63,16 @@ namespace Conductor.Core.Database
         public ILoadBalancingPolicyMethods LoadBalancingPolicy { get; protected set; }
 
         /// <summary>
+        /// QoS profile methods.
+        /// </summary>
+        public IQosProfileMethods QosProfile { get; protected set; }
+
+        /// <summary>
+        /// QoS traffic class methods.
+        /// </summary>
+        public IQosTrafficClassMethods QosTrafficClass { get; protected set; }
+
+        /// <summary>
         /// Model access policy methods.
         /// </summary>
         public IModelAccessPolicyMethods ModelAccessPolicy { get; protected set; }

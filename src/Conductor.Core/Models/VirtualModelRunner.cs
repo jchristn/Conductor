@@ -73,6 +73,12 @@ namespace Conductor.Core.Models
         public string ModelAccessPolicyId { get; set; } = null;
 
         /// <summary>
+        /// QoS profile ID. Required in application logic on create/update; nullable at the storage layer
+        /// so existing rows can be backfilled to the tenant default at startup.
+        /// </summary>
+        public string QosProfileId { get; set; } = null;
+
+        /// <summary>
         /// List of model runner endpoint identifiers.
         /// </summary>
         public List<string> ModelRunnerEndpointIds
@@ -465,6 +471,7 @@ namespace Conductor.Core.Models
                 LoadBalancingMode = DataTableHelper.GetEnumValue<LoadBalancingModeEnum>(row, "loadbalancingmode", LoadBalancingModeEnum.RoundRobin),
                 LoadBalancingPolicyId = DataTableHelper.GetStringValue(row, "loadbalancingpolicyid"),
                 ModelAccessPolicyId = DataTableHelper.GetStringValue(row, "modelaccesspolicyid"),
+                QosProfileId = DataTableHelper.GetStringValue(row, "qosprofileid"),
                 TimeoutMs = DataTableHelper.GetIntValue(row, "timeoutms"),
                 AllowEmbeddings = DataTableHelper.GetBooleanValue(row, "allowembeddings"),
                 AllowCompletions = DataTableHelper.GetBooleanValue(row, "allowcompletions"),
