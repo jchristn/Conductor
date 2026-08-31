@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.5.0
+
+- Set .NET project versions to `0.5.0` and bumped the Docker Compose image tags to `v0.5.0`.
+- Added per-virtual-model-runner **QoS queueing**: a VMR can be linked to a reusable, tenant-scoped **QoS profile** that classifies incoming traffic and queues it — FIFO, priority, weighted-fair, class-based weighted-fair, low-latency, or weighted round robin, chainable into a hierarchy — releasing requests in scheduled order as endpoint capacity frees instead of rejecting immediately. Built on the [QoSKit](https://github.com/jchristn/qoskit) library.
+- Classification is operator-defined: a request maps to a traffic class by a custom header, a specific credential, the requested model, a request-body attribute, the tenant, the user, the client IP, the API family, or the request type.
+- Admission gates against the runner's existing endpoint capacity (the sum of endpoint `MaxParallelRequests`); a full queue or an expired wait deadline returns `429` with a `Retry-After` header. Queues are in-memory; only profile configuration is persisted.
+- Seeded per tenant on startup and on tenant creation: a non-deletable **Default (FIFO)** profile that every VMR uses unless otherwise specified, a catalog of standard traffic classes (`realtime`, `human-interactive`, `agent-interactive`, `batch-time-bound`, `batch-background`, `default`), and a ready-to-use **Standard Workloads** low-latency profile. Existing VMRs are backfilled to the default; seeding does not resurrect deletions.
+- Linking a QoS profile is required on VMR create/update (an unset profile is auto-assigned the tenant default; an unknown id is rejected).
+- Added REST endpoints `/v1.0/qosprofiles` (CRUD, `validate`, `classifier-catalog`) and `/v1.0/qostrafficclasses` (CRUD), and a system-admin-only tenant purge (nuke) endpoint `POST /v1.0/tenants/{id}/purge` that requires the caller to echo the tenant id, refuses the reserved `default` tenant, and returns an itemized deletion report. Deleting a tenant now also removes its QoS configuration.
+- All QoS configuration lives in the database across normalized tables (`qosprofiles` and its child tables plus `qostrafficclasses`), created by on-startup migrations across SQLite, PostgreSQL, SQL Server, and MySQL; nothing QoS-related is stored in `conductor.json`.
+- QoS telemetry flows through the existing OpenTelemetry pipeline and is Prometheus-scrapable: QoSKit's per-class metrics and hop-by-hop traces are subscribed alongside new `conductor.qos.*` instruments (admissions, rejections, per-class wait duration, queue depth), and a proxied request gains an `inference.qos.admit` trace span.
+- Added `QOS_OVERVIEW.md` documenting what QoS does, how to configure it, and how to monitor it.
+
 ## v0.4.0
 
 - Set .NET project versions to `0.4.0`.

@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.PostgreSql.Implementations
             vmr.CreatedUtc = DateTime.UtcNow;
             vmr.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelaccesspolicyid, modelrunnerendpointids, adaptiveloadbalancing, endpointgroups, endpointgroupids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelaccesspolicyid, qosprofileid, modelrunnerendpointids, adaptiveloadbalancing, endpointgroups, endpointgroupids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(vmr.Id) + "', " +
                            "'" + _Driver.Sanitize(vmr.TenantId) + "', " +
                            "'" + _Driver.Sanitize(vmr.Name) + "', " +
@@ -45,6 +45,7 @@ namespace Conductor.Core.Database.PostgreSql.Implementations
                            (int)vmr.LoadBalancingMode + ", " +
                            _Driver.FormatNullableString(vmr.LoadBalancingPolicyId) + ", " +
                            _Driver.FormatNullableString(vmr.ModelAccessPolicyId) + ", " +
+                           _Driver.FormatNullableString(vmr.QosProfileId) + ", " +
                            _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            _Driver.FormatNullableString(vmr.AdaptiveLoadBalancingJson) + ", " +
                            _Driver.FormatNullableString(vmr.EndpointGroupsJson) + ", " +
@@ -137,6 +138,7 @@ namespace Conductor.Core.Database.PostgreSql.Implementations
                            "loadbalancingmode = " + (int)vmr.LoadBalancingMode + ", " +
                            "loadbalancingpolicyid = " + _Driver.FormatNullableString(vmr.LoadBalancingPolicyId) + ", " +
                            "modelaccesspolicyid = " + _Driver.FormatNullableString(vmr.ModelAccessPolicyId) + ", " +
+                           "qosprofileid = " + _Driver.FormatNullableString(vmr.QosProfileId) + ", " +
                            "modelrunnerendpointids = " + _Driver.FormatNullableString(vmr.ModelRunnerEndpointIdsJson) + ", " +
                            "adaptiveloadbalancing = " + _Driver.FormatNullableString(vmr.AdaptiveLoadBalancingJson) + ", " +
                            "endpointgroups = " + _Driver.FormatNullableString(vmr.EndpointGroupsJson) + ", " +

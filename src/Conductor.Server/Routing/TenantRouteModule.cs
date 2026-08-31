@@ -68,6 +68,44 @@ namespace Conductor.Server.Routing
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()));
 
+            _App.Post<TenantPurgeRequest>("/v1.0/tenants/{id}/purge", async (req) =>
+            {
+                if (!(req.Http.Metadata is Services.AdminAuthenticationResult))
+                {
+                    req.Http.Response.StatusCode = 403;
+                    return new { error = "System administrator authentication is required to purge a tenant." };
+                }
+
+                string id = req.Parameters["id"];
+                if (String.Equals(id, "default", StringComparison.OrdinalIgnoreCase))
+                {
+                    req.Http.Response.StatusCode = 400;
+                    return new { error = "The default tenant cannot be purged." };
+                }
+
+                TenantPurgeRequest body = req.Data as TenantPurgeRequest;
+                if (body == null || !String.Equals(body.ConfirmTenantId, id, StringComparison.Ordinal))
+                {
+                    req.Http.Response.StatusCode = 400;
+                    return new { error = "confirmTenantId must match the tenant id in the path." };
+                }
+
+                return await tenantController.Purge(id);
+            },
+            api => api
+                .WithTag("Tenants")
+                .WithSummary("Purge (nuke) tenant")
+                .WithDescription("Delete a tenant and all of its data. System-admin only; requires confirmTenantId in the body to match the path id. The default tenant cannot be purged.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The tenant ID"))
+                .WithRequestBody(Api.JsonRequestBody<TenantPurgeRequest>("Confirmation body echoing the tenant id", true))
+                .WithResponse(200, Api.JsonResponse<TenantPurgeReport>("Purge report"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(403, Api.JsonResponse<object>("System administrator authentication required"))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
             _App.Get("/v1.0/tenants", async (req) =>
             {
                 int? maxResults = null;

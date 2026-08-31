@@ -268,6 +268,172 @@ namespace Conductor.Core.Database.SqlServer.Queries
         ";
 
         /// <summary>
+        /// Create QoS profiles table.
+        /// </summary>
+        public static readonly string CreateQosProfilesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='qosprofiles' AND xtype='U')
+            CREATE TABLE qosprofiles (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                isdefault BIT NOT NULL DEFAULT 0,
+                active BIT NOT NULL DEFAULT 1,
+                defaultclass NVARCHAR(255),
+                ingressmode INT NOT NULL DEFAULT 0,
+                ingressdefaultnode NVARCHAR(255),
+                tailnode NVARCHAR(255),
+                maxtotaldepth INT NOT NULL DEFAULT 0,
+                maxqueuewaitms INT NOT NULL DEFAULT 30000,
+                rejectionstatuscode INT NOT NULL DEFAULT 429,
+                includeretryafter BIT NOT NULL DEFAULT 1,
+                retryafterseconds INT NOT NULL DEFAULT 5,
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL,
+                labels NVARCHAR(MAX),
+                tags NVARCHAR(MAX),
+                metadata NVARCHAR(MAX),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qos_tenantid')
+            CREATE INDEX idx_qos_tenantid ON qosprofiles(tenantid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qos_active')
+            CREATE INDEX idx_qos_active ON qosprofiles(active);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qos_name')
+            CREATE INDEX idx_qos_name ON qosprofiles(name);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qos_isdefault')
+            CREATE INDEX idx_qos_isdefault ON qosprofiles(isdefault);
+        ";
+
+        /// <summary>
+        /// Create QoS classifier rules table.
+        /// </summary>
+        public static readonly string CreateQosClassifierRulesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='qosclassifierrules' AND xtype='U')
+            CREATE TABLE qosclassifierrules (
+                id NVARCHAR(48) PRIMARY KEY,
+                profileid NVARCHAR(48) NOT NULL,
+                ordinal INT NOT NULL DEFAULT 0,
+                source INT NOT NULL DEFAULT 0,
+                matchkey NVARCHAR(255),
+                [operator] INT NOT NULL DEFAULT 0,
+                matchvalue NVARCHAR(MAX),
+                classname NVARCHAR(255),
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qcr_profileid')
+            CREATE INDEX idx_qcr_profileid ON qosclassifierrules(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS queue nodes table.
+        /// </summary>
+        public static readonly string CreateQosQueueNodesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='qosqueuenodes' AND xtype='U')
+            CREATE TABLE qosqueuenodes (
+                id NVARCHAR(48) PRIMARY KEY,
+                profileid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                discipline INT NOT NULL DEFAULT 0,
+                maxdepth INT NOT NULL DEFAULT 0,
+                overflowpolicy INT NOT NULL DEFAULT 0,
+                agingthresholdms INT NOT NULL DEFAULT 0,
+                flowsource INT,
+                flowkey NVARCHAR(255),
+                unknownkeypolicy INT NOT NULL DEFAULT 0,
+                defaultkey NVARCHAR(255),
+                defaultweight INT NOT NULL DEFAULT 1,
+                wrrclassifiermode BIT NOT NULL DEFAULT 0,
+                enableperclassmetrics BIT NOT NULL DEFAULT 1,
+                enabletracing BIT NOT NULL DEFAULT 1,
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qqn_profileid')
+            CREATE INDEX idx_qqn_profileid ON qosqueuenodes(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS queue classes table (bands, flows, classes, sub-queues).
+        /// </summary>
+        public static readonly string CreateQosQueueClassesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='qosqueueclasses' AND xtype='U')
+            CREATE TABLE qosqueueclasses (
+                id NVARCHAR(48) PRIMARY KEY,
+                nodeid NVARCHAR(48) NOT NULL,
+                ordinal INT NOT NULL DEFAULT 0,
+                kind INT NOT NULL DEFAULT 2,
+                classname NVARCHAR(255),
+                weight INT,
+                band INT,
+                rateperssecond FLOAT,
+                burst FLOAT,
+                FOREIGN KEY (nodeid) REFERENCES qosqueuenodes(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qqc_nodeid')
+            CREATE INDEX idx_qqc_nodeid ON qosqueueclasses(nodeid);
+        ";
+
+        /// <summary>
+        /// Create QoS queue links table.
+        /// </summary>
+        public static readonly string CreateQosQueueLinksTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='qosqueuelinks' AND xtype='U')
+            CREATE TABLE qosqueuelinks (
+                id NVARCHAR(48) PRIMARY KEY,
+                profileid NVARCHAR(48) NOT NULL,
+                fromnode NVARCHAR(255),
+                tonode NVARCHAR(255),
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qql_profileid')
+            CREATE INDEX idx_qql_profileid ON qosqueuelinks(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS ingress routes table.
+        /// </summary>
+        public static readonly string CreateQosIngressRoutesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='qosingressroutes' AND xtype='U')
+            CREATE TABLE qosingressroutes (
+                id NVARCHAR(48) PRIMARY KEY,
+                profileid NVARCHAR(48) NOT NULL,
+                ordinal INT NOT NULL DEFAULT 0,
+                classname NVARCHAR(255),
+                node NVARCHAR(255),
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qir_profileid')
+            CREATE INDEX idx_qir_profileid ON qosingressroutes(profileid);
+        ";
+
+        /// <summary>
+        /// Create QoS traffic classes table (tenant class catalog).
+        /// </summary>
+        public static readonly string CreateQosTrafficClassesTable = @"
+            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='qostrafficclasses' AND xtype='U')
+            CREATE TABLE qostrafficclasses (
+                id NVARCHAR(48) PRIMARY KEY,
+                tenantid NVARCHAR(48) NOT NULL,
+                name NVARCHAR(255) NOT NULL,
+                description NVARCHAR(MAX),
+                tier INT NOT NULL DEFAULT 5,
+                issystem BIT NOT NULL DEFAULT 0,
+                createdutc DATETIME2 NOT NULL,
+                lastupdateutc DATETIME2 NOT NULL,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            );
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qtc_tenantid')
+            CREATE INDEX idx_qtc_tenantid ON qostrafficclasses(tenantid);
+            IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_qtc_name')
+            CREATE INDEX idx_qtc_name ON qostrafficclasses(name);
+        ";
+
+        /// <summary>
+        /// Migration: add the QoS profile id column to virtual model runners.
+        /// </summary>
+        public static readonly string AddQosProfileIdColumn = "ALTER TABLE virtualmodelrunners ADD qosprofileid NVARCHAR(48);";
+
+        /// <summary>
         /// Create model access policies table.
         /// </summary>
         public static readonly string CreateModelAccessPoliciesTable = @"
@@ -379,6 +545,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 requesthistoryenabled BIT NOT NULL DEFAULT 1,
                 loadbalancingpolicyid NVARCHAR(48),
                 modelaccesspolicyid NVARCHAR(48),
+                qosprofileid NVARCHAR(48),
                 active BIT NOT NULL DEFAULT 1,
                 createdutc DATETIME2 NOT NULL,
                 lastupdateutc DATETIME2 NOT NULL,

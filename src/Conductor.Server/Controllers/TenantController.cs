@@ -156,7 +156,87 @@ namespace Conductor.Server.Controllers
                 await Database.User.DeleteAsync(tenantId, user.Id);
             }
 
+            // Delete load-balancing policies
+            EnumerationResult<LoadBalancingPolicy> lbPolicies = await Database.LoadBalancingPolicy.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });
+            foreach (LoadBalancingPolicy policy in lbPolicies.Data)
+            {
+                await Database.LoadBalancingPolicy.DeleteAsync(tenantId, policy.Id);
+            }
+
+            // Delete model access policies
+            EnumerationResult<ModelAccessPolicy> accessPolicies = await Database.ModelAccessPolicy.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });
+            foreach (ModelAccessPolicy policy in accessPolicies.Data)
+            {
+                await Database.ModelAccessPolicy.DeleteAsync(tenantId, policy.Id);
+            }
+
+            // Delete QoS profiles
+            EnumerationResult<QosProfile> qosProfiles = await Database.QosProfile.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });
+            foreach (QosProfile profile in qosProfiles.Data)
+            {
+                await Database.QosProfile.DeleteAsync(tenantId, profile.Id);
+            }
+
+            // Delete QoS traffic classes
+            EnumerationResult<QosTrafficClass> trafficClasses = await Database.QosTrafficClass.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });
+            foreach (QosTrafficClass trafficClass in trafficClasses.Data)
+            {
+                await Database.QosTrafficClass.DeleteAsync(tenantId, trafficClass.Id);
+            }
+
             Logging.Info(_Header + "completed deletion of subordinate data for tenant " + tenantId);
+        }
+
+        /// <summary>
+        /// Purge (nuke) a tenant and all of its data, returning an itemized report of what was deleted.
+        /// System-admin only (enforced at the route layer).
+        /// </summary>
+        /// <param name="id">Tenant id.</param>
+        /// <returns>The purge report.</returns>
+        /// <exception cref="WebserverException">The id is missing or the tenant does not exist.</exception>
+        public async Task<TenantPurgeReport> Purge(string id)
+        {
+            if (String.IsNullOrEmpty(id))
+                throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
+
+            bool exists = await Database.Tenant.ExistsAsync(id);
+            if (!exists)
+                throw new WebserverException(ApiResultEnum.NotFound);
+
+            TenantPurgeReport report = new TenantPurgeReport { TenantId = id };
+            report.Items.Add(await CountAsync("QoS Profiles", () => Database.QosProfile.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("QoS Traffic Classes", () => Database.QosTrafficClass.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Virtual Model Runners", () => Database.VirtualModelRunner.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Model Configurations", () => Database.ModelConfiguration.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Model Definitions", () => Database.ModelDefinition.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Model Runner Endpoints", () => Database.ModelRunnerEndpoint.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Load Balancing Policies", () => Database.LoadBalancingPolicy.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Model Access Policies", () => Database.ModelAccessPolicy.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Credentials", () => Database.Credential.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+            report.Items.Add(await CountAsync("Users", () => Database.User.EnumerateAsync(id, new EnumerationRequest { MaxResults = 1 })));
+
+            await DeleteAssociatedDataAsync(id);
+            await Database.Tenant.DeleteAsync(id);
+
+            report.Completed = true;
+            report.CompletedUtc = DateTime.UtcNow;
+            Logging.Info(_Header + "purged tenant " + id);
+            return report;
+        }
+
+        private static async Task<TenantPurgeReportItem> CountAsync<T>(string category, Func<Task<EnumerationResult<T>>> query)
+        {
+            TenantPurgeReportItem item = new TenantPurgeReportItem { Category = category };
+            try
+            {
+                EnumerationResult<T> result = await query().ConfigureAwait(false);
+                item.DeletedCount = (result != null && result.TotalCount.HasValue) ? result.TotalCount.Value : 0;
+            }
+            catch (Exception ex)
+            {
+                item.Error = ex.Message;
+            }
+            return item;
         }
 
         /// <summary>

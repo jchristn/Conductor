@@ -1,0 +1,144 @@
+{
+  "uid": "conductor-qos",
+  "title": "Conductor - QoS & Queueing",
+  "tags": ["conductor", "qos", "queueing"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "vmr", "type": "query", "datasource": { "type": "prometheus", "uid": "prometheus" }, "query": "label_values(conductor_qos_admissions_total, vmr)", "refresh": 2, "includeAll": true, "multi": true, "current": { "text": "All", "value": "$__all" } },
+      { "name": "queue_class", "type": "query", "datasource": { "type": "prometheus", "uid": "prometheus" }, "query": "label_values(qoskit_queue_wait_duration_milliseconds_bucket, queue_class)", "refresh": 2, "includeAll": true, "multi": true, "current": { "text": "All", "value": "$__all" } }
+    ]
+  },
+  "panels": [
+    { "id": 100, "type": "row", "title": "Admission", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Admission rate",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(conductor_qos_admissions_total{vmr=~\"$vmr\"}[5m]))", "legendFormat": "decisions/s" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Rejection rate",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.01 } ] } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(conductor_qos_rejections_total{vmr=~\"$vmr\"}[5m]))", "legendFormat": "rejections/s" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Parked requests (depth)",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(conductor_qos_queue_depth{vmr=~\"$vmr\"})", "legendFormat": "parked" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "p95 queue wait",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.95, sum by (le) (rate(conductor_qos_queue_wait_duration_seconds_bucket{vmr=~\"$vmr\"}[5m])))", "legendFormat": "p95" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Admissions by outcome",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (outcome) (rate(conductor_qos_admissions_total{vmr=~\"$vmr\"}[5m]))", "legendFormat": "{{outcome}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Rejections by reason",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (reason) (rate(conductor_qos_rejections_total{vmr=~\"$vmr\"}[5m]))", "legendFormat": "{{reason}}" }
+      ]
+    },
+    { "id": 101, "type": "row", "title": "Per-class latency & throughput", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 } },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "p95 wait by class (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "fillOpacity": 0 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.95, sum by (le, queue_class) (rate(qoskit_queue_wait_duration_milliseconds_bucket{queue_class=~\"$queue_class\"}[5m])))", "legendFormat": "{{queue_class}}" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Serviced throughput by class",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (queue_class) (rate(qoskit_queue_dequeued_total{queue_class=~\"$queue_class\"}[5m]))", "legendFormat": "{{queue_class}}" }
+      ]
+    },
+    { "id": 102, "type": "row", "title": "Backpressure & drops", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 } },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Drops by reason",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (drop_reason) (rate(qoskit_queue_dropped_total[5m]))", "legendFormat": "{{drop_reason}}" }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Resident depth vs capacity",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (queue_name) (qoskit_queue_depth)", "legendFormat": "depth {{queue_name}}" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (queue_name) (qoskit_queue_capacity)", "legendFormat": "capacity {{queue_name}}" }
+      ]
+    },
+    { "id": 103, "type": "row", "title": "Low-latency policer", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 } },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Policer conformed vs exceeded by class",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 34 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (queue_class) (rate(qoskit_policer_conformed_total[5m]))", "legendFormat": "conformed {{queue_class}}" },
+        { "refId": "B", "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum by (queue_class) (rate(qoskit_policer_exceeded_total[5m]))", "legendFormat": "exceeded {{queue_class}}" }
+      ]
+    }
+  ]
+}

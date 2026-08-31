@@ -231,6 +231,154 @@ namespace Conductor.Core.Database.MySql.Queries
         ";
 
         /// <summary>
+        /// Create QoS profiles table.
+        /// </summary>
+        public static readonly string CreateQosProfilesTable = @"
+            CREATE TABLE IF NOT EXISTS qosprofiles (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                isdefault TINYINT(1) NOT NULL DEFAULT 0,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                defaultclass VARCHAR(255),
+                ingressmode INT NOT NULL DEFAULT 0,
+                ingressdefaultnode VARCHAR(255),
+                tailnode VARCHAR(255),
+                maxtotaldepth INT NOT NULL DEFAULT 0,
+                maxqueuewaitms INT NOT NULL DEFAULT 30000,
+                rejectionstatuscode INT NOT NULL DEFAULT 429,
+                includeretryafter TINYINT(1) NOT NULL DEFAULT 1,
+                retryafterseconds INT NOT NULL DEFAULT 5,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                labels TEXT,
+                tags TEXT,
+                metadata TEXT,
+                INDEX idx_qos_tenantid (tenantid),
+                INDEX idx_qos_active (active),
+                INDEX idx_qos_name (name),
+                INDEX idx_qos_isdefault (isdefault),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create QoS classifier rules table.
+        /// </summary>
+        public static readonly string CreateQosClassifierRulesTable = @"
+            CREATE TABLE IF NOT EXISTS qosclassifierrules (
+                id VARCHAR(48) PRIMARY KEY,
+                profileid VARCHAR(48) NOT NULL,
+                ordinal INT NOT NULL DEFAULT 0,
+                source INT NOT NULL DEFAULT 0,
+                matchkey VARCHAR(255),
+                `operator` INT NOT NULL DEFAULT 0,
+                matchvalue VARCHAR(255),
+                classname VARCHAR(255),
+                INDEX idx_qcr_profileid (profileid),
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create QoS queue nodes table.
+        /// </summary>
+        public static readonly string CreateQosQueueNodesTable = @"
+            CREATE TABLE IF NOT EXISTS qosqueuenodes (
+                id VARCHAR(48) PRIMARY KEY,
+                profileid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                discipline INT NOT NULL DEFAULT 0,
+                maxdepth INT NOT NULL DEFAULT 0,
+                overflowpolicy INT NOT NULL DEFAULT 0,
+                agingthresholdms INT NOT NULL DEFAULT 0,
+                flowsource INT,
+                flowkey VARCHAR(255),
+                unknownkeypolicy INT NOT NULL DEFAULT 0,
+                defaultkey VARCHAR(255),
+                defaultweight INT NOT NULL DEFAULT 1,
+                wrrclassifiermode TINYINT(1) NOT NULL DEFAULT 0,
+                enableperclassmetrics TINYINT(1) NOT NULL DEFAULT 1,
+                enabletracing TINYINT(1) NOT NULL DEFAULT 1,
+                INDEX idx_qqn_profileid (profileid),
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create QoS queue classes table (bands, flows, classes, sub-queues).
+        /// </summary>
+        public static readonly string CreateQosQueueClassesTable = @"
+            CREATE TABLE IF NOT EXISTS qosqueueclasses (
+                id VARCHAR(48) PRIMARY KEY,
+                nodeid VARCHAR(48) NOT NULL,
+                ordinal INT NOT NULL DEFAULT 0,
+                kind INT NOT NULL DEFAULT 2,
+                classname VARCHAR(255),
+                weight INT,
+                band INT,
+                rateperssecond DOUBLE,
+                burst DOUBLE,
+                INDEX idx_qqc_nodeid (nodeid),
+                FOREIGN KEY (nodeid) REFERENCES qosqueuenodes(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create QoS queue links table.
+        /// </summary>
+        public static readonly string CreateQosQueueLinksTable = @"
+            CREATE TABLE IF NOT EXISTS qosqueuelinks (
+                id VARCHAR(48) PRIMARY KEY,
+                profileid VARCHAR(48) NOT NULL,
+                fromnode VARCHAR(255),
+                tonode VARCHAR(255),
+                INDEX idx_qql_profileid (profileid),
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create QoS ingress routes table.
+        /// </summary>
+        public static readonly string CreateQosIngressRoutesTable = @"
+            CREATE TABLE IF NOT EXISTS qosingressroutes (
+                id VARCHAR(48) PRIMARY KEY,
+                profileid VARCHAR(48) NOT NULL,
+                ordinal INT NOT NULL DEFAULT 0,
+                classname VARCHAR(255),
+                node VARCHAR(255),
+                INDEX idx_qir_profileid (profileid),
+                FOREIGN KEY (profileid) REFERENCES qosprofiles(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Create QoS traffic classes table (tenant class catalog).
+        /// </summary>
+        public static readonly string CreateQosTrafficClassesTable = @"
+            CREATE TABLE IF NOT EXISTS qostrafficclasses (
+                id VARCHAR(48) PRIMARY KEY,
+                tenantid VARCHAR(48) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                tier INT NOT NULL DEFAULT 5,
+                issystem TINYINT(1) NOT NULL DEFAULT 0,
+                createdutc DATETIME(3) NOT NULL,
+                lastupdateutc DATETIME(3) NOT NULL,
+                INDEX idx_qtc_tenantid (tenantid),
+                INDEX idx_qtc_name (name),
+                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ";
+
+        /// <summary>
+        /// Migration: add the QoS profile id column to virtual model runners.
+        /// </summary>
+        public static readonly string AddQosProfileIdColumn = "ALTER TABLE virtualmodelrunners ADD COLUMN qosprofileid VARCHAR(48);";
+
+        /// <summary>
         /// Create model access policies table.
         /// </summary>
         public static readonly string CreateModelAccessPoliciesTable = @"
@@ -324,6 +472,7 @@ namespace Conductor.Core.Database.MySql.Queries
                 requesthistoryenabled TINYINT(1) NOT NULL DEFAULT 1,
                 loadbalancingpolicyid VARCHAR(48),
                 modelaccesspolicyid VARCHAR(48),
+                qosprofileid VARCHAR(48),
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 createdutc DATETIME(3) NOT NULL,
                 lastupdateutc DATETIME(3) NOT NULL,
