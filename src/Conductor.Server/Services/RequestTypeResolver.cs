@@ -137,6 +137,25 @@ namespace Conductor.Server.Services
             { new RouteKey("DELETE", "/v1.0/loadbalancingpolicies/{id}"), RequestTypeEnum.DeleteLoadBalancingPolicy },
             { new RouteKey("GET", "/v1.0/loadbalancingpolicies"), RequestTypeEnum.ListLoadBalancingPolicies },
 
+            // QoS Profiles
+            { new RouteKey("POST", "/v1.0/qosprofiles"), RequestTypeEnum.CreateQosProfile },
+            { new RouteKey("GET", "/v1.0/qosprofiles/classifier-catalog"), RequestTypeEnum.ReadQosClassifierCatalog },
+            { new RouteKey("POST", "/v1.0/qosprofiles/validate"), RequestTypeEnum.ValidateQosProfile },
+            { new RouteKey("GET", "/v1.0/qosprofiles/{id}"), RequestTypeEnum.ReadQosProfile },
+            { new RouteKey("PUT", "/v1.0/qosprofiles/{id}"), RequestTypeEnum.UpdateQosProfile },
+            { new RouteKey("DELETE", "/v1.0/qosprofiles/{id}"), RequestTypeEnum.DeleteQosProfile },
+            { new RouteKey("GET", "/v1.0/qosprofiles"), RequestTypeEnum.ListQosProfiles },
+
+            // QoS Traffic Classes
+            { new RouteKey("POST", "/v1.0/qostrafficclasses"), RequestTypeEnum.CreateQosTrafficClass },
+            { new RouteKey("GET", "/v1.0/qostrafficclasses/{id}"), RequestTypeEnum.ReadQosTrafficClass },
+            { new RouteKey("PUT", "/v1.0/qostrafficclasses/{id}"), RequestTypeEnum.UpdateQosTrafficClass },
+            { new RouteKey("DELETE", "/v1.0/qostrafficclasses/{id}"), RequestTypeEnum.DeleteQosTrafficClass },
+            { new RouteKey("GET", "/v1.0/qostrafficclasses"), RequestTypeEnum.ListQosTrafficClasses },
+
+            // Tenant purge (system-admin only)
+            { new RouteKey("POST", "/v1.0/tenants/{id}/purge"), RequestTypeEnum.PurgeTenant },
+
             // Model Access Policies
             { new RouteKey("POST", "/v1.0/modelaccesspolicies"), RequestTypeEnum.CreateModelAccessPolicy },
             { new RouteKey("POST", "/v1.0/modelaccesspolicies/validate"), RequestTypeEnum.ValidateModelAccessPolicy },

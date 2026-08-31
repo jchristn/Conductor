@@ -27,9 +27,11 @@ namespace Conductor.Server.Routing
             ModelLoadService modelLoadService,
             OllamaModelManagementService ollamaModelManagementService,
             RequestHistoryService requestHistoryService,
-            VirtualModelRunnerReservationService virtualModelRunnerReservationService)
+            VirtualModelRunnerReservationService virtualModelRunnerReservationService,
+            QosAdmissionService qosAdmissionService = null)
         {
             App = app;
+            QosAdmissionService = qosAdmissionService;
             Settings = settings;
             Logging = logging;
             Database = database;
@@ -55,6 +57,8 @@ namespace Conductor.Server.Routing
             ModelDefinitionController = new ModelDefinitionController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             ModelConfigurationController = new ModelConfigurationController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             LoadBalancingPolicyController = new LoadBalancingPolicyController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
+            QosProfileController = new QosProfileController(Database, AuthService, Serializer, Logging, QosAdmissionService);
+            QosTrafficClassController = new QosTrafficClassController(Database, AuthService, Serializer, Logging);
             ModelAccessPolicyController = new ModelAccessPolicyController(Database, AuthService, Serializer, Logging, ModelAccessControlService);
             VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService, RuntimeStatsService);
             VirtualModelRunnerReservationController = new VirtualModelRunnerReservationController(Database, AuthService, Serializer, Logging, VirtualModelRunnerReservationService);
@@ -117,6 +121,12 @@ namespace Conductor.Server.Routing
         internal ModelConfigurationController ModelConfigurationController { get; }
 
         internal LoadBalancingPolicyController LoadBalancingPolicyController { get; }
+
+        internal QosProfileController QosProfileController { get; }
+
+        internal QosTrafficClassController QosTrafficClassController { get; }
+
+        internal QosAdmissionService QosAdmissionService { get; }
 
         internal ModelAccessPolicyController ModelAccessPolicyController { get; }
 

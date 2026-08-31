@@ -40,7 +40,8 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.CreateTenant,
             RequestTypeEnum.UpdateTenant,
             RequestTypeEnum.DeleteTenant,
-            RequestTypeEnum.ListTenants
+            RequestTypeEnum.ListTenants,
+            RequestTypeEnum.PurgeTenant
         };
 
         /// <summary>
@@ -159,6 +160,18 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.ListLoadBalancingPolicies,
             RequestTypeEnum.ListLoadBalancingPolicyMetrics,
             RequestTypeEnum.ValidateLoadBalancingPolicy,
+            RequestTypeEnum.CreateQosProfile,
+            RequestTypeEnum.ReadQosProfile,
+            RequestTypeEnum.UpdateQosProfile,
+            RequestTypeEnum.DeleteQosProfile,
+            RequestTypeEnum.ListQosProfiles,
+            RequestTypeEnum.ValidateQosProfile,
+            RequestTypeEnum.ReadQosClassifierCatalog,
+            RequestTypeEnum.CreateQosTrafficClass,
+            RequestTypeEnum.ReadQosTrafficClass,
+            RequestTypeEnum.UpdateQosTrafficClass,
+            RequestTypeEnum.DeleteQosTrafficClass,
+            RequestTypeEnum.ListQosTrafficClasses,
             RequestTypeEnum.ListRequestHistory,
             RequestTypeEnum.ReadRequestHistory,
             RequestTypeEnum.ReadRequestHistoryDetail,

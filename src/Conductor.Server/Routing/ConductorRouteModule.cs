@@ -30,6 +30,9 @@ namespace Conductor.Server.Routing
         protected readonly ModelDefinitionController mdController;
         protected readonly ModelConfigurationController mcController;
         protected readonly LoadBalancingPolicyController lbpController;
+        protected readonly QosProfileController qosProfileController;
+        protected readonly QosTrafficClassController qosTrafficClassController;
+        protected readonly QosAdmissionService qosAdmissionService;
         protected readonly ModelAccessPolicyController mapController;
         protected readonly VirtualModelRunnerController vmrController;
         protected readonly VirtualModelRunnerReservationController vmrReservationController;
@@ -54,6 +57,9 @@ namespace Conductor.Server.Routing
             mdController = context.ModelDefinitionController;
             mcController = context.ModelConfigurationController;
             lbpController = context.LoadBalancingPolicyController;
+            qosProfileController = context.QosProfileController;
+            qosTrafficClassController = context.QosTrafficClassController;
+            qosAdmissionService = context.QosAdmissionService;
             mapController = context.ModelAccessPolicyController;
             vmrController = context.VirtualModelRunnerController;
             vmrReservationController = context.VirtualModelRunnerReservationController;

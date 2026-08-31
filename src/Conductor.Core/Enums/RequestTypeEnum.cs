@@ -463,6 +463,51 @@ namespace Conductor.Core.Enums
         /// </summary>
         ValidateLoadBalancingPolicy,
 
+        // ==================== QoS Profile Operations ====================
+
+        /// <summary>Create QoS profile.</summary>
+        CreateQosProfile,
+
+        /// <summary>Read QoS profile.</summary>
+        ReadQosProfile,
+
+        /// <summary>Update QoS profile.</summary>
+        UpdateQosProfile,
+
+        /// <summary>Delete QoS profile.</summary>
+        DeleteQosProfile,
+
+        /// <summary>List QoS profiles.</summary>
+        ListQosProfiles,
+
+        /// <summary>Validate a QoS profile draft.</summary>
+        ValidateQosProfile,
+
+        /// <summary>Read the QoS classifier catalog.</summary>
+        ReadQosClassifierCatalog,
+
+        // ==================== QoS Traffic Class Operations ====================
+
+        /// <summary>Create QoS traffic class.</summary>
+        CreateQosTrafficClass,
+
+        /// <summary>Read QoS traffic class.</summary>
+        ReadQosTrafficClass,
+
+        /// <summary>Update QoS traffic class.</summary>
+        UpdateQosTrafficClass,
+
+        /// <summary>Delete QoS traffic class.</summary>
+        DeleteQosTrafficClass,
+
+        /// <summary>List QoS traffic classes.</summary>
+        ListQosTrafficClasses,
+
+        // ==================== Tenant Purge Operation ====================
+
+        /// <summary>Purge (nuke) a tenant and all of its data. System-admin only.</summary>
+        PurgeTenant,
+
         // ==================== Model Access Policy Operations ====================
 
         /// <summary>
