@@ -433,6 +433,11 @@ body {
   z-index: 2000;
 }
 
+.column-selector-dropdown--left {
+  right: auto;
+  left: 0;
+}
+
 .column-selector-header {
   display: flex;
   align-items: center;

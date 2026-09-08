@@ -18,14 +18,18 @@ function DataTable({
   loading = false,
   pageSize: defaultPageSize = 10,
   onRowClick = null,
-  hidePagination = false
+  hidePagination = false,
+  columnsAlign = 'right'
 }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [filters, setFilters] = useState({});
   const [pageInput, setPageInput] = useState('1');
-  const [hiddenColumns, setHiddenColumns] = useState(() => new Set());
+  // Columns flagged `defaultHidden` start hidden but remain toggleable in the Columns selector.
+  const [hiddenColumns, setHiddenColumns] = useState(
+    () => new Set(columns.filter((col) => col.defaultHidden && !col.isAction).map((col) => col.key))
+  );
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
   const columnsMenuRef = useRef(null);
 
@@ -200,7 +204,7 @@ function DataTable({
 
   return (
     <div className="data-table-wrapper">
-      <div className="data-table-toolbar">
+      <div className="data-table-toolbar" style={{ justifyContent: columnsAlign === 'left' ? 'flex-start' : 'flex-end' }}>
         {selectableColumns.length > 0 && (
           <div className="column-selector" ref={columnsMenuRef}>
             <button
@@ -219,7 +223,7 @@ function DataTable({
               Columns{hiddenCount > 0 ? ` (${selectableColumns.length - hiddenCount}/${selectableColumns.length})` : ''}
             </button>
             {columnsMenuOpen && (
-              <div className="column-selector-dropdown">
+              <div className={`column-selector-dropdown${columnsAlign === 'left' ? ' column-selector-dropdown--left' : ''}`}>
                 <div className="column-selector-header">
                   <span>Show columns</span>
                   <button type="button" className="column-selector-reset" onClick={showAllColumns} disabled={hiddenCount === 0}>

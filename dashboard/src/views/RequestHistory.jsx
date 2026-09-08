@@ -8,6 +8,7 @@ import ViewMetadataModal from '../components/ViewMetadataModal';
 import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 import RefreshButton from '../components/RefreshButton';
+import RequestHistorySummaryChart from '../components/RequestHistorySummaryChart';
 import { copyToClipboard } from '../utils/clipboard';
 
 function CollapsibleSection({ title, meta, content, defaultExpanded = false, showFormatJson = false, tooltip }) {
@@ -644,6 +645,7 @@ function RequestHistory() {
         label: 'Transfer',
         tooltip: 'Response transfer type (Normal, Chunked, or SSE)',
         width: '90px',
+        defaultHidden: true,
         render: (item) => getTransferTypeBadge(item.ResponseTransferType) || <span className="text-muted">Normal</span>
       },
     {
@@ -677,6 +679,7 @@ function RequestHistory() {
       label: 'Routing',
       tooltip: 'Endpoint selection strategy, endpoint group, and adaptive routing evidence recorded for this request',
       width: '190px',
+      defaultHidden: true,
       render: (item) => (
         <div className="stacked-cell">
           <span>{item.SelectionStrategy || '-'}</span>
@@ -702,6 +705,7 @@ function RequestHistory() {
       label: 'Reservation',
       tooltip: 'VMR reservation gate that applied to this request, when one was active or in drain.',
       width: '180px',
+      defaultHidden: true,
       render: (item) => item.ReservationGuid
         ? (
           <div className="stacked-cell">
@@ -805,6 +809,8 @@ function RequestHistory() {
             </div>
           )}
         </div>
+
+        <RequestHistorySummaryChart filters={filters} />
 
         <div className="filter-bar">
         <div className="filter-group">
@@ -1135,7 +1141,7 @@ function RequestHistory() {
         </div>
       </div>
 
-      <DataTable data={entries} columns={columns} loading={loading} pageSize={pageSize} hidePagination={true} onRowClick={handleViewDetail} />
+      <DataTable data={entries} columns={columns} loading={loading} pageSize={pageSize} hidePagination={true} onRowClick={handleViewDetail} columnsAlign="left" />
 
       <Modal
         isOpen={Boolean(requestHistoryIssue)}
