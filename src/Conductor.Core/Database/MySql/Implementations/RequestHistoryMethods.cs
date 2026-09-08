@@ -383,7 +383,7 @@ namespace Conductor.Core.Database.MySql.Implementations
 
             string query = "SELECT " + dateTrunc + " AS bucket_time, " +
                            "SUM(CASE WHEN httpstatus IS NOT NULL AND httpstatus >= 100 AND httpstatus < 400 THEN 1 ELSE 0 END) AS success_count, " +
-                           "SUM(CASE WHEN httpstatus IS NULL OR httpstatus >= 400 THEN 1 ELSE 0 END) AS failure_count " +
+                           "SUM(CASE WHEN completedutc IS NOT NULL AND (httpstatus IS NULL OR httpstatus >= 400) THEN 1 ELSE 0 END) AS failure_count " +
                            "FROM requesthistory " + whereClause + " " +
                            "GROUP BY bucket_time " +
                            "ORDER BY bucket_time ASC;";
