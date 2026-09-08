@@ -20,7 +20,7 @@ set "ROOT_DIR=%~dp0"
 pushd "%ROOT_DIR%" || exit /b 1
 
 echo Building %IMAGE_NAME%:%IMAGE_TAG% and %IMAGE_NAME%:latest...
-docker build --builder cloud-jchristn77-jchristn77 -f dashboard\Dockerfile -t "%IMAGE_NAME%:%IMAGE_TAG%" -t "%IMAGE_NAME%:latest" dashboard
+docker build --builder cloud-jchristn77-jchristn77 --load -f dashboard\Dockerfile -t "%IMAGE_NAME%:%IMAGE_TAG%" -t "%IMAGE_NAME%:latest" dashboard
 if errorlevel 1 goto :fail
 
 echo Pushing %IMAGE_NAME%:%IMAGE_TAG%...
