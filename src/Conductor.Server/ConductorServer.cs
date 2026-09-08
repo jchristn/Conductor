@@ -390,7 +390,9 @@ namespace Conductor.Server
                 _Logging.Debug(_Header + logMessage);
             }
 
-            await _ProxyController.HandleRequest(ctx, req).ConfigureAwait(false);
+            // Pass the Watson per-request cancellation token so a client disconnect/abort cancels the
+            // upstream model-runner request instead of leaving it running until the configured timeout.
+            await _ProxyController.HandleRequest(ctx, req, ctx.Token).ConfigureAwait(false);
             double elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
             _Logging.Debug(

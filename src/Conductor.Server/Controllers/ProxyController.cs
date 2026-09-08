@@ -206,11 +206,11 @@ namespace Conductor.Server.Controllers
                     Services.QosClassificationContext qosContext = BuildQosContext(ctx, requestContext, vmr);
                     using (Activity qosActivity = ConductorTelemetry.InferenceSource.StartActivity("inference.qos.admit", ActivityKind.Internal))
                     {
-                        // WatsonWebserver 7.1 does not surface a per-request client-abort CancellationToken to
-                        // the handler, so the admission wait cannot observe a client disconnect while the request
-                        // is parked (a disconnect only surfaces later, as a write failure while streaming the
-                        // response). The wait is therefore bounded by the profile's MaxQueueWaitMs deadline, and
-                        // parked waiters are released on server shutdown via the admission service's own token.
+                        // The cancellation token is the Watson per-request token, which is cancelled on client
+                        // disconnect/abort (WatsonWebserver 7.1). A client that gives up while parked in admission
+                        // therefore releases its slot promptly rather than occupying capacity until the profile's
+                        // MaxQueueWaitMs deadline. Parked waiters are still released on server shutdown via the
+                        // admission service's own token.
                         qosAdmission = await _QosAdmissionService.AdmitAsync(vmr, qosContext, cancellationToken).ConfigureAwait(false);
                         if (qosActivity != null && qosAdmission != null)
                         {
@@ -292,6 +292,49 @@ namespace Conductor.Server.Controllers
                         analyticsCapture,
                         () => runtimeStatsCompleted = true,
                         cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The client disconnected/aborted before the upstream response completed, cancelling the
+                // per-request token (distinct from a timeout, where only the linked timeout token fires and
+                // cancellationToken.IsCancellationRequested stays false). The upstream HttpClient call was
+                // already cancelled by the linked token, so capacity is released promptly. The client is gone,
+                // so no response is written, and this is not an endpoint fault, so endpoint health is not
+                // penalized. In-flight/limiter accounting is released in the finally block below.
+                Logging.Debug(_Header + "client disconnected; upstream request cancelled");
+                analyticsCapture.ErrorType = "ClientCancelled";
+                analyticsCapture.ErrorMessage = "Client disconnected before the response completed.";
+
+                if (proxyActivity != null)
+                {
+                    proxyActivity.SetTag("conductor.client_cancelled", true);
+                    proxyActivity.SetStatus(ActivityStatusCode.Error, "Client disconnected");
+                }
+
+                if (historyDetail != null && _RequestHistoryService != null)
+                {
+                    // Use a fresh token: the request token is already cancelled and would abort the write.
+                    // 499 (client closed request) distinguishes an abandoned request from a 504 timeout.
+                    await _RequestHistoryService.UpdateWithResponseAsync(
+                        historyDetail,
+                        routingResult?.Decision,
+                        endpoint,
+                        routingResult?.ModelDefinition,
+                        routingResult?.ModelConfiguration,
+                        499,
+                        null,
+                        "Client disconnected before the response completed.",
+                        stopwatch,
+                        CancellationToken.None,
+                        null,
+                        analyticsCapture).ConfigureAwait(false);
+                }
+
+                if (runtimeStatsAdmitted && !runtimeStatsCompleted && _RuntimeStatsService != null && vmr != null && endpoint != null)
+                {
+                    _RuntimeStatsService.RecordCancellation(vmr, endpoint);
+                    runtimeStatsCompleted = true;
                 }
             }
             catch (Exception ex)

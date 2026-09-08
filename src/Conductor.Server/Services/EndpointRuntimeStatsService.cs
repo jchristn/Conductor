@@ -150,6 +150,29 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Record that an in-flight request was cancelled by the client (disconnect/abort) before a
+        /// response completed. Releases in-flight and pending accounting without recording a failure,
+        /// applying backoff, or perturbing latency/success EWMAs, since a client cancel is not an
+        /// endpoint fault and must not penalize endpoint health or routing weight.
+        /// </summary>
+        /// <param name="vmr">Virtual model runner. Ignored when null.</param>
+        /// <param name="endpoint">Endpoint that was handling the request. Ignored when null or missing an identifier.</param>
+        public void RecordCancellation(VirtualModelRunner vmr, ModelRunnerEndpoint endpoint)
+        {
+            if (vmr == null || endpoint == null || String.IsNullOrWhiteSpace(endpoint.Id))
+            {
+                return;
+            }
+
+            RuntimeStatsState state = GetState(vmr.TenantId, vmr.Id, endpoint.Id, endpoint.Name);
+            lock (state.Lock)
+            {
+                DecrementPending(state);
+                state.LastUpdateUtc = DateTime.UtcNow;
+            }
+        }
+
+        /// <summary>
         /// Get the runtime statistics snapshot for a virtual model runner.
         /// </summary>
         /// <param name="tenantId">Tenant identifier.</param>
