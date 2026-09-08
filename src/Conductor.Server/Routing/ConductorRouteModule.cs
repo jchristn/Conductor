@@ -411,7 +411,20 @@ namespace Conductor.Server.Routing
                 return null;
             }
 
-            if (DateTime.TryParse(value, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsed))
+            // ISO 8601 timestamps contain colons, which clients (e.g. URLSearchParams) percent-encode as
+            // "%3A". The query collection is not URL-decoded, so unescape before parsing; a value that is
+            // already decoded (raw colons, no "%" sequences) is returned unchanged by UnescapeDataString.
+            string decoded = value;
+            try
+            {
+                decoded = Uri.UnescapeDataString(value);
+            }
+            catch (Exception)
+            {
+                decoded = value;
+            }
+
+            if (DateTime.TryParse(decoded, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsed))
             {
                 return parsed.ToUniversalTime();
             }
