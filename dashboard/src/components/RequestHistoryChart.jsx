@@ -12,6 +12,17 @@ function floorToStep(ts, stepMs) {
   return Math.floor(ts / stepMs) * stepMs;
 }
 
+// Server summary bucket timestamps are UTC but the JSON lacks a timezone designator
+// (e.g. "2026-09-08T18:00:00"), which the Date constructor would otherwise parse as local time.
+// Treat any timezone-less value as UTC so bucket keys align with the generated UTC grid.
+function parseUtcMs(value) {
+  if (value == null) return NaN;
+  if (typeof value !== 'string') return new Date(value).getTime();
+  const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(value.trim());
+  const normalized = hasTimezone ? value : value.replace(' ', 'T') + 'Z';
+  return new Date(normalized).getTime();
+}
+
 function generateAllBuckets(startMs, endMs, stepMs) {
   const buckets = [];
   const flooredStart = floorToStep(startMs, stepMs);
@@ -29,7 +40,7 @@ function generateAllBuckets(startMs, endMs, stepMs) {
 function mergeBuckets(allBuckets, apiData, stepMs) {
   const dataMap = new Map();
   for (const d of apiData) {
-    const key = floorToStep(new Date(d.TimestampUtc).getTime(), stepMs);
+    const key = floorToStep(parseUtcMs(d.TimestampUtc), stepMs);
     dataMap.set(key, d);
   }
   return allBuckets.map(b => {
