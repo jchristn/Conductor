@@ -31,6 +31,18 @@ function floorToStep(timestamp, stepMs) {
   return Math.floor(timestamp / stepMs) * stepMs;
 }
 
+// Server summary bucket timestamps are UTC but the JSON may lack a timezone designator
+// (e.g. "2026-09-08T14:30:00" or "2026-09-08 14:30:00"), which the Date constructor would
+// otherwise parse as local time. Treat any timezone-less value as UTC so bucket keys align
+// with the UTC grid we build below.
+function parseUtcMs(value) {
+  if (value == null) return NaN;
+  if (typeof value !== 'string') return new Date(value).getTime();
+  const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(value.trim());
+  const normalized = hasTimezone ? value : value.replace(' ', 'T') + 'Z';
+  return new Date(normalized).getTime();
+}
+
 function getRangeWindow(range, nowMs) {
   const endExclusiveMs = floorToStep(nowMs, range.stepMs) + range.stepMs;
   const startMs = endExclusiveMs - range.bucketCount * range.stepMs;
@@ -40,7 +52,7 @@ function getRangeWindow(range, nowMs) {
 function buildBuckets(summary, range, startMs) {
   const apiBuckets = new Map(
     (summary?.Data || []).map((bucket) => [
-      floorToStep(new Date(bucket.TimestampUtc).getTime(), range.stepMs),
+      floorToStep(parseUtcMs(bucket.TimestampUtc), range.stepMs),
       bucket
     ])
   );
@@ -325,9 +337,9 @@ function RequestHistorySummaryChart({ filters }) {
                   />
                   <text
                     x={PADDING_LEFT - 10}
-                    y={y + 4}
+                    y={y + 3}
                     textAnchor="end"
-                    fontSize="11"
+                    fontSize="9"
                     fill="var(--text-secondary)"
                   >
                     {tick}
@@ -400,7 +412,7 @@ function RequestHistorySummaryChart({ filters }) {
                   x={x}
                   y={CHART_HEIGHT - 14}
                   textAnchor={anchor}
-                  fontSize="11"
+                  fontSize="9"
                   fill="var(--text-secondary)"
                 >
                   {formatChartLabel(buckets[index].timestampUtc, range.interval)}
