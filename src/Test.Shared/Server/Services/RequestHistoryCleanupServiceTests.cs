@@ -78,8 +78,7 @@ namespace Test.Shared.Server.Services
             await File.WriteAllTextAsync(filePath, _Serializer.SerializeJson(detail, true)).ConfigureAwait(false);
 
             using RequestHistoryCleanupService cleanupService = new RequestHistoryCleanupService(Database, Logging, _Settings);
-            await cleanupService.StartAsync().ConfigureAwait(false);
-            await cleanupService.StopAsync().ConfigureAwait(false);
+            await cleanupService.RunCleanupOnceAsync().ConfigureAwait(false);
 
             RequestHistoryEntry entry = await Database.RequestHistory.ReadByIdAsync(detail.Id).ConfigureAwait(false);
             RequestHistoryDetail scrubbed = _Serializer.DeserializeJson<RequestHistoryDetail>(await File.ReadAllTextAsync(filePath).ConfigureAwait(false));
@@ -140,8 +139,7 @@ namespace Test.Shared.Server.Services
             await File.WriteAllTextAsync(filePath, _Serializer.SerializeJson(detail, true)).ConfigureAwait(false);
 
             using RequestHistoryCleanupService cleanupService = new RequestHistoryCleanupService(Database, Logging, _Settings);
-            await cleanupService.StartAsync().ConfigureAwait(false);
-            await cleanupService.StopAsync().ConfigureAwait(false);
+            await cleanupService.RunCleanupOnceAsync().ConfigureAwait(false);
 
             RequestHistoryEntry entry = await Database.RequestHistory.ReadByIdAsync(detail.Id).ConfigureAwait(false);
             List<RequestAnalyticsEvent> events = await Database.RequestAnalytics.ListByRequestHistoryIdAsync(detail.Id).ConfigureAwait(false);
