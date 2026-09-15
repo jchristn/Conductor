@@ -43,16 +43,17 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
-        /// Start the cleanup service.
+        /// Start the cleanup service. Returns as soon as the background loop is scheduled;
+        /// the initial cleanup pass runs inside the loop so a large backlog cannot block server startup.
         /// </summary>
         /// <param name="token">Cancellation token.</param>
         /// <returns>Task.</returns>
-        public async Task StartAsync(CancellationToken token = default)
+        public Task StartAsync(CancellationToken token = default)
         {
             if (!_Settings.Enabled)
             {
                 _Logging.Info(_Header + "request history is disabled, cleanup service not started");
-                return;
+                return Task.CompletedTask;
             }
 
             _CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -63,11 +64,19 @@ namespace Conductor.Server.Services
                 + " minutes, metadata retention: " + metadataRetentionDays
                 + " days, body retention: " + bodyRetentionDays + " days)");
 
-            // Run cleanup immediately on startup
-            await CleanupExpiredAsync(_CancellationTokenSource.Token).ConfigureAwait(false);
+            _CleanupTask = Task.Run(() => CleanupLoop(_CancellationTokenSource.Token), _CancellationTokenSource.Token);
+            return Task.CompletedTask;
+        }
 
-            // Start background task
-            _CleanupTask = Task.Run(async () => await CleanupLoop(_CancellationTokenSource.Token).ConfigureAwait(false), _CancellationTokenSource.Token);
+        /// <summary>
+        /// Run a single cleanup pass and await its completion. Useful for tests and one-off
+        /// administrative invocations where the caller needs to observe the result synchronously.
+        /// </summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        public Task RunCleanupOnceAsync(CancellationToken token = default)
+        {
+            return CleanupExpiredAsync(token);
         }
 
         /// <summary>
@@ -100,17 +109,16 @@ namespace Conductor.Server.Services
 
         private async Task CleanupLoop(CancellationToken token)
         {
+            // Run cleanup immediately, then wait one interval before the next pass.
             while (!token.IsCancellationRequested)
             {
                 try
                 {
-                    // Wait for the interval
-                    await Task.Delay(TimeSpan.FromMinutes(_Settings.CleanupIntervalMinutes), token).ConfigureAwait(false);
+                    await CleanupExpiredAsync(token).ConfigureAwait(false);
 
                     if (token.IsCancellationRequested) break;
 
-                    // Perform cleanup
-                    await CleanupExpiredAsync(token).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromMinutes(_Settings.CleanupIntervalMinutes), token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
