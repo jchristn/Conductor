@@ -308,42 +308,48 @@ namespace Test.McpServer
             // Test: tools/list
             if (await RunTestAsync("tools/list", async () =>
             {
-                object result = await _McpClient.CallAsync<object>("tools/list").ConfigureAwait(false);
-                Console.WriteLine("      Tools available:");
-                Console.WriteLine("      " + JsonSerializer.Serialize(result, _JsonOptions).Replace("\n", "\n      "));
-                return true;
+                JsonElement result = await _McpClient.CallAsync<JsonElement>("tools/list").ConfigureAwait(false);
+                List<string> names = new List<string>();
+                foreach (JsonElement tool in result.GetProperty("tools").EnumerateArray())
+                    names.Add(tool.GetProperty("name").GetString());
+
+                Console.WriteLine("      Tools available (" + names.Count + "): " + String.Join(", ", names));
+                bool exact = names.Count == _McpServer.ToolRegistry.ToolNames.Count
+                    && !names.Exists(n => !n.StartsWith("conductor_", StringComparison.Ordinal));
+                if (!exact) Console.WriteLine("      Expected exactly the " + _McpServer.ToolRegistry.ToolNames.Count + " conductor_* tools");
+                return exact;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_list_tenants
             if (await RunTestAsync("conductor_list_tenants", async () =>
             {
-                object result = await CallToolAsync("conductor_list_tenants", new { }).ConfigureAwait(false);
+                JsonElement result = await CallToolAsync("conductor_list_tenants", new { }).ConfigureAwait(false);
                 PrintResult(result);
-                return true;
+                return result.GetProperty("count").GetInt32() == 1;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_get_tenant
             if (await RunTestAsync("conductor_get_tenant", async () =>
             {
-                object result = await CallToolAsync("conductor_get_tenant", new { tenant_id = _TenantId }).ConfigureAwait(false);
+                JsonElement result = await CallToolAsync("conductor_get_tenant", new { tenant_id = _TenantId }).ConfigureAwait(false);
                 PrintResult(result);
-                return true;
+                return result.GetProperty("id").GetString() == _TenantId;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_list_models
             if (await RunTestAsync("conductor_list_models", async () =>
             {
-                object result = await CallToolAsync("conductor_list_models", new { tenant_id = _TenantId }).ConfigureAwait(false);
+                JsonElement result = await CallToolAsync("conductor_list_models", new { tenant_id = _TenantId }).ConfigureAwait(false);
                 PrintResult(result);
-                return true;
+                return result.GetProperty("count").GetInt32() == 3;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_list_models with family filter
             if (await RunTestAsync("conductor_list_models (family=llama)", async () =>
             {
-                object result = await CallToolAsync("conductor_list_models", new { tenant_id = _TenantId, family = "llama" }).ConfigureAwait(false);
+                JsonElement result = await CallToolAsync("conductor_list_models", new { tenant_id = _TenantId, family = "llama" }).ConfigureAwait(false);
                 PrintResult(result);
-                return true;
+                return result.GetProperty("count").GetInt32() == 1;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_get_model
@@ -370,9 +376,9 @@ namespace Test.McpServer
             // Test: conductor_list_endpoints
             if (await RunTestAsync("conductor_list_endpoints", async () =>
             {
-                object result = await CallToolAsync("conductor_list_endpoints", new { tenant_id = _TenantId }).ConfigureAwait(false);
+                JsonElement result = await CallToolAsync("conductor_list_endpoints", new { tenant_id = _TenantId }).ConfigureAwait(false);
                 PrintResult(result);
-                return true;
+                return result.GetProperty("count").GetInt32() == 2;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_get_endpoint
@@ -399,9 +405,9 @@ namespace Test.McpServer
             // Test: conductor_list_configs
             if (await RunTestAsync("conductor_list_configs", async () =>
             {
-                object result = await CallToolAsync("conductor_list_configs", new { tenant_id = _TenantId }).ConfigureAwait(false);
+                JsonElement result = await CallToolAsync("conductor_list_configs", new { tenant_id = _TenantId }).ConfigureAwait(false);
                 PrintResult(result);
-                return true;
+                return result.GetProperty("count").GetInt32() == 2;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_get_config
@@ -428,9 +434,9 @@ namespace Test.McpServer
             // Test: conductor_list_vmrs
             if (await RunTestAsync("conductor_list_vmrs", async () =>
             {
-                object result = await CallToolAsync("conductor_list_vmrs", new { tenant_id = _TenantId }).ConfigureAwait(false);
+                JsonElement result = await CallToolAsync("conductor_list_vmrs", new { tenant_id = _TenantId }).ConfigureAwait(false);
                 PrintResult(result);
-                return true;
+                return result.GetProperty("count").GetInt32() == 1;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_get_vmr
@@ -493,17 +499,72 @@ namespace Test.McpServer
                 return true;
             }).ConfigureAwait(false)) passed++; else failed++;
 
-            // Test: conductor_get_endpoint_health (no health service configured, should return error)
-            if (await RunTestAsync("conductor_get_endpoint_health (no service)", async () =>
+            // Negative: conductor_get_endpoint_health with no health service configured is flagged isError
+            if (await RunTestAsync("conductor_get_endpoint_health (no service) -> isError", async () =>
             {
-                object result = await CallToolAsync("conductor_get_endpoint_health", new { tenant_id = _TenantId }).ConfigureAwait(false);
-                PrintResult(result);
-                return true;
+                return await ExpectToolErrorAsync("conductor_get_endpoint_health", new { tenant_id = _TenantId }, "Health check service not configured").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: a missing entity is flagged isError
+            if (await RunTestAsync("conductor_get_model (missing) -> isError", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_get_model", new { tenant_id = _TenantId, model_id = "md_does_not_exist" }, "md_does_not_exist").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: a missing required argument is rejected by schema validation
+            if (await RunTestAsync("conductor_get_model (missing model_id) -> invalid params", async () =>
+            {
+                return await ExpectRpcErrorAsync("conductor_get_model", new { tenant_id = _TenantId }, "-32602").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: Voltaic's diagnostic tools are disabled and its removed v1.x demo tools are absent
+            if (await RunTestAsync("echo / getTime / getSessions / ping tools -> not found", async () =>
+            {
+                bool allRejected = true;
+                foreach (string name in new string[] { "echo", "getTime", "getSessions", "ping" })
+                {
+                    bool rejected = await ExpectRpcErrorAsync(name, new { }, "Tool '" + name + "' was not found.").ConfigureAwait(false);
+                    allRejected = allRejected && rejected;
+                }
+
+                return allRejected;
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Positive: the MCP ping protocol method succeeds (Voltaic 2.x answers with an empty result)
+            if (await RunTestAsync("ping (protocol method)", async () =>
+            {
+                await _McpClient.PingAsync().ConfigureAwait(false);
+                JsonElement result = await _McpClient.CallAsync<JsonElement>("ping").ConfigureAwait(false);
+                Console.WriteLine("      ping result: " + result.GetRawText());
+                return result.ValueKind == JsonValueKind.Object && !result.EnumerateObject().GetEnumerator().MoveNext();
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: a tool cannot be invoked as a bare JSON-RPC method, only through tools/call
+            if (await RunTestAsync("conductor_list_tenants as bare method -> method not found", async () =>
+            {
+                try
+                {
+                    JsonElement response = await _McpClient.CallAsync<JsonElement>("conductor_list_tenants", new { }).ConfigureAwait(false);
+                    Console.WriteLine("      Unexpected success: " + response.GetRawText());
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("      Rejected as expected: " + ex.Message);
+                    return ex.Message.Contains("-32601", StringComparison.Ordinal);
+                }
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: an unknown tool is rejected
+            if (await RunTestAsync("conductor_does_not_exist -> not found", async () =>
+            {
+                return await ExpectRpcErrorAsync("conductor_does_not_exist", new { }, "was not found").ConfigureAwait(false);
             }).ConfigureAwait(false)) passed++; else failed++;
 
             Console.WriteLine();
             Console.WriteLine("-".PadRight(70, '-'));
             Console.WriteLine("  Test Results: " + passed + " passed, " + failed + " failed");
+            if (failed > 0) Environment.ExitCode = 1;
             Console.WriteLine("-".PadRight(70, '-'));
             Console.WriteLine();
         }
@@ -544,6 +605,9 @@ namespace Test.McpServer
                 arguments = arguments
             }).ConfigureAwait(false);
 
+            if (IsErrorResult(response))
+                throw new InvalidOperationException("Tool " + toolName + " returned isError: " + response.GetRawText());
+
             // Parse the result - MCP returns content array
             if (response.TryGetProperty("content", out JsonElement content) && content.GetArrayLength() > 0)
             {
@@ -567,6 +631,45 @@ namespace Test.McpServer
             return response;
         }
 
+        private static async Task<bool> ExpectToolErrorAsync(string toolName, object arguments, string expectedText)
+        {
+            JsonElement response = await _McpClient.CallAsync<JsonElement>("tools/call", new
+            {
+                name = toolName,
+                arguments = arguments
+            }).ConfigureAwait(false);
+
+            PrintResult(response);
+            return IsErrorResult(response) && response.GetRawText().Contains(expectedText, StringComparison.Ordinal);
+        }
+
+        private static async Task<bool> ExpectRpcErrorAsync(string toolName, object arguments, string expectedText)
+        {
+            try
+            {
+                JsonElement response = await _McpClient.CallAsync<JsonElement>("tools/call", new
+                {
+                    name = toolName,
+                    arguments = arguments
+                }).ConfigureAwait(false);
+
+                Console.WriteLine("      Unexpected success: " + response.GetRawText());
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("      Rejected as expected: " + ex.Message);
+                return ex.Message.Contains(expectedText, StringComparison.Ordinal);
+            }
+        }
+
+        private static bool IsErrorResult(JsonElement response)
+        {
+            return response.ValueKind == JsonValueKind.Object
+                && response.TryGetProperty("isError", out JsonElement isError)
+                && isError.ValueKind == JsonValueKind.True;
+        }
+
         private static void PrintResult(object result)
         {
             string json = JsonSerializer.Serialize(result, _JsonOptions);
@@ -582,7 +685,8 @@ namespace Test.McpServer
             Console.WriteLine("[6/6] Interactive mode");
             Console.WriteLine();
             Console.WriteLine("The MCP server is running. You can:");
-            Console.WriteLine("  - Connect with an MCP client to http://127.0.0.1:9001/mcp/rpc");
+            Console.WriteLine("  - Connect an MCP client (e.g. Claude Code) to http://127.0.0.1:9001/mcp");
+            Console.WriteLine("  - Legacy JSON-RPC endpoint at http://127.0.0.1:9001/mcp/rpc");
             Console.WriteLine("  - SSE events available at http://127.0.0.1:9001/mcp/events");
             Console.WriteLine();
             Console.WriteLine("Press 'q' to quit, 'l' to list tools, or 't' to run a tool...");

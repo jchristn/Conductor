@@ -66,6 +66,18 @@ namespace Conductor.McpServer
         }
 
         /// <summary>
+        /// URL path for the MCP Streamable HTTP endpoint on the HTTP server. This is the endpoint current
+        /// MCP clients (for example Claude Code and the MCP Inspector) connect to, and it serves both
+        /// handshake-era sessions and stateless requests.
+        /// Default is "/mcp". Setting null or empty restores the default.
+        /// </summary>
+        public string HttpMcpPath
+        {
+            get => _HttpMcpPath;
+            set => _HttpMcpPath = (String.IsNullOrEmpty(value) ? "/mcp" : value);
+        }
+
+        /// <summary>
         /// Enable the TCP-based MCP server.
         /// Default is true.
         /// </summary>
@@ -155,6 +167,7 @@ namespace Conductor.McpServer
         private int _HttpPort = 9001;
         private string _HttpRpcPath = "/mcp/rpc";
         private string _HttpEventsPath = "/mcp/events";
+        private string _HttpMcpPath = "/mcp";
         private bool _EnableTcpServer = true;
         private string _TcpBindAddress = "127.0.0.1";
         private int _TcpPort = 9002;

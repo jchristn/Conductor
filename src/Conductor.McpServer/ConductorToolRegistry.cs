@@ -50,6 +50,15 @@ namespace Conductor.McpServer
             set => _GetAllHealthStatesFunc = value;
         }
 
+        /// <summary>
+        /// Names of the MCP tools exposed by this registry, in registration order.
+        /// Never null. Safe to read from multiple threads.
+        /// </summary>
+        public IReadOnlyList<string> ToolNames
+        {
+            get => _RegistrationCatalog.Registrations.Select(r => r.Definition.Name).ToList();
+        }
+
         #endregion
 
         #region Private-Members
@@ -1177,7 +1186,11 @@ namespace Conductor.McpServer
 
         private object CreateErrorResult(string message)
         {
-            return new { error = true, message = message };
+            // Flag failures with isError so MCP clients can distinguish them from successful results;
+            // the text payload keeps the { error, message } shape for clients that parse it.
+            McpToolCallResult result = McpToolCallResult.FromText(JsonSerializer.Serialize(new { error = true, message = message }));
+            result.IsError = true;
+            return result;
         }
 
         private static JsonElement? ToJsonElement(RpcParameters parameters)

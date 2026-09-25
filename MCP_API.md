@@ -1,12 +1,37 @@
 # Conductor MCP API
 
 Conductor ships an optional [Model Context Protocol](https://modelcontextprotocol.io) server
-(`Conductor.McpServer`) that exposes read and light management operations as MCP tools, so an
-LLM agent can inspect and reason about a Conductor deployment. The server can run over HTTP
-(JSON-RPC at `/mcp/rpc`, plus SSE events at `/mcp/events`) or over TCP; both expose the same tool
-set. Tools are invoked with the standard MCP `tools/call` request, passing the tool `name` and an
-`arguments` object matching the input schema below. Every tool returns a JSON result object (or an
-`{ "error": "<message>" }` object on failure).
+(`Conductor.McpServer`, built on [Voltaic](https://github.com/jchristn/voltaic)) that exposes read and
+light management operations as MCP tools, so an LLM agent can inspect and reason about a Conductor
+deployment. Tools are invoked with the standard MCP `tools/call` request, passing the tool `name` and an
+`arguments` object matching the input schema below.
+
+## Transports
+
+| Transport | Default address | Notes |
+| --- | --- | --- |
+| Streamable HTTP | `http://localhost:9001/mcp` (`HttpMcpPath`) | Use this for MCP clients such as Claude Code and the MCP Inspector. Serves both the `initialize` handshake revisions (up to `2025-11-25`, with an `MCP-Session-Id`) and the stateless `2026-07-28` revision (`server/discover` plus per-request `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` headers). |
+| Legacy HTTP JSON-RPC | `/mcp/rpc` (`HttpRpcPath`), SSE at `/mcp/events` (`HttpEventsPath`) | Voltaic compatibility endpoints. |
+| TCP | `127.0.0.1:9002` | `Content-Length`-framed JSON-RPC. |
+
+All transports expose the same tool set, and only the Conductor tools listed below. Voltaic's optional
+diagnostic tools (`echo`, `getTime`) are disabled, so they are not listed and calling them returns "not found".
+
+Tools are reachable only through `tools/call`; sending a tool name as a bare JSON-RPC method returns `-32601`
+(method not found). The MCP `ping` method is answered on every transport with an empty result (`{}`, or
+`{"resultType":"complete"}` under the stateless `2026-07-28` revision).
+
+For example, to connect Claude Code: `claude mcp add --transport http conductor http://localhost:9001/mcp`.
+
+## Results and errors
+
+A successful call returns a text content block holding the JSON result object described for each tool.
+
+A tool that runs but fails (for example an unknown ID, or a missing health service) returns a result with
+`"isError": true` and a text content block holding `{ "error": true, "message": "<message>" }`.
+
+A call that cannot run at all is rejected with a JSON-RPC error `-32602` (invalid params): an unknown tool
+name, or arguments that fail the tool's input schema (for example a missing required parameter).
 
 All tenant-scoped tools require a `tenant_id`. Identifiers use Conductor's prefixed forms
 (`ten_`, `md_`, `mre_`, `vmr_`, `mc_`, `qos_`, `qtc_`).

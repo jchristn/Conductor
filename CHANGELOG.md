@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Updated .NET dependencies to their latest releases: `Voltaic` (0.6.0 to 2.0.0), `Watson` (7.1.1 to 7.2.0), `OpenTelemetry`, `OpenTelemetry.Exporter.OpenTelemetryProtocol` (1.18.0 to 1.19.1), `OpenTelemetry.Instrumentation.Runtime` (1.18.0 to 1.19.0), `OpenTelemetry.Exporter.Prometheus.HttpListener` (1.17.0-beta.1 to 1.19.1-beta.1), `Microsoft.Data.SqlClient` (7.0.2 to 7.1.0), `Microsoft.Data.Sqlite` (10.0.11 to 10.0.12), `FluentAssertions` (8.10.0 to 8.11.0), `Microsoft.NET.Test.Sdk` (18.9.0 to 18.10.1), `NUnit.Analyzers` (4.14.0 to 4.15.0), and `NUnit3TestAdapter` (6.2.0 to 6.3.0).
+- Migrated the MCP server to Voltaic 2.0. The server previously disabled Voltaic's default methods, which in Voltaic 0.x/1.x also removed the MCP protocol methods (`initialize`, `server/discover`, `tools/list`, `tools/call`, `ping`), so every MCP request was answered with "method not found". Voltaic 2.x always registers the protocol methods; the server now constructs its HTTP and TCP servers with `includeDiagnosticTools: false`, so `tools/list` returns exactly the Conductor tools and Voltaic's `echo`/`getTime` diagnostic tools are not exposed. The v1.x workarounds (placeholder "not found" tools, and custom `ping` and `tools/list` overrides) are removed.
+- MCP behavior changes from Voltaic 2.0: `ping` now returns an empty result (`{}`, or `{"resultType":"complete"}` under the stateless `2026-07-28` revision) instead of `"pong"`, and Conductor tools are callable only through `tools/call`; calling a tool name as a bare JSON-RPC method returns `-32601` (method not found).
+- The MCP server now serves the Streamable HTTP endpoint at `/mcp` (configurable with the new `McpSettings.HttpMcpPath`), which current clients such as Claude Code use through the stateless `2026-07-28` revision.
+- MCP tool failures now return `isError: true` so clients can tell them apart from successful results; the text payload keeps its `{ error, message }` shape.
+- The TCP MCP transport now registers Conductor tools as MCP tools, so `tools/list` and `tools/call` work over TCP (previously only direct method calls did).
+- Added live MCP integration tests covering the handshake, stateless, legacy JSON-RPC, and TCP paths in both the positive and negative direction, and made the `Test.McpServer` harness assert results instead of always passing.
+
 ## v0.5.0
 
 - Set .NET project versions to `0.5.0` and bumped the Docker Compose image tags to `v0.5.0`.

@@ -9,12 +9,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentAssertions" Version="8.10.0" />
+    <PackageReference Include="FluentAssertions" Version="8.11.0" />
     <PackageReference Include="Touchstone.Core" Version="0.1.12" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Conductor.Core\Conductor.Core.csproj" />
+    <ProjectReference Include="..\Conductor.McpServer\Conductor.McpServer.csproj" />
     <ProjectReference Include="..\Conductor.Server\Conductor.Server.csproj" />
   </ItemGroup>
 

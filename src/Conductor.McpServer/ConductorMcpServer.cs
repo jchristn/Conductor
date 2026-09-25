@@ -12,7 +12,7 @@ namespace Conductor.McpServer
 
     /// <summary>
     /// Main MCP server for Conductor that exposes Conductor APIs as MCP tools.
-    /// Supports both HTTP (with SSE) and TCP transports.
+    /// Supports both HTTP (Streamable HTTP, plus legacy JSON-RPC and SSE endpoints) and TCP transports.
     /// </summary>
     public class ConductorMcpServer : IDisposable
     {
@@ -125,12 +125,15 @@ namespace Conductor.McpServer
                 // Start HTTP server if enabled
                 if (_Settings.EnableHttpServer)
                 {
+                    // Voltaic 2.x always registers the MCP protocol methods; its diagnostic tools (echo,
+                    // getTime) stay disabled so clients see only the Conductor tools.
                     _HttpServer = new McpHttpServer(
                         _Settings.HttpHostname,
                         _Settings.HttpPort,
                         _Settings.HttpRpcPath,
                         _Settings.HttpEventsPath,
-                        includeDefaultMethods: false);
+                        includeDiagnosticTools: false,
+                        mcpPath: _Settings.HttpMcpPath);
 
                     _HttpServer.ServerName = _Settings.ServerName;
                     _HttpServer.ServerVersion = _Settings.ServerVersion;
@@ -149,6 +152,7 @@ namespace Conductor.McpServer
                     _ = Task.Run(() => _HttpServer.StartAsync(_TokenSource.Token), _TokenSource.Token);
 
                     RaiseLog("HTTP MCP server started on " + _Settings.HttpHostname + ":" + _Settings.HttpPort);
+                    RaiseLog("  MCP endpoint: " + _Settings.HttpMcpPath);
                     RaiseLog("  RPC endpoint: " + _Settings.HttpRpcPath);
                     RaiseLog("  Events endpoint: " + _Settings.HttpEventsPath);
                 }
@@ -157,7 +161,7 @@ namespace Conductor.McpServer
                 if (_Settings.EnableTcpServer)
                 {
                     IPAddress bindAddress = IPAddress.Parse(_Settings.TcpBindAddress);
-                    _TcpServer = new McpTcpServer(bindAddress, _Settings.TcpPort, includeDefaultMethods: false);
+                    _TcpServer = new McpTcpServer(bindAddress, _Settings.TcpPort, includeDiagnosticTools: false);
 
                     _TcpServer.ServerName = _Settings.ServerName;
                     _TcpServer.ServerVersion = _Settings.ServerVersion;

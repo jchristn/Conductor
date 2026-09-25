@@ -15,8 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Held at 0.6.0 to match Conductor.McpServer; see that project for details. -->
-    <PackageReference Include="Voltaic" Version="0.6.0" />
+    <PackageReference Include="Voltaic" Version="2.0.0" />
   </ItemGroup>
 
 </Project>

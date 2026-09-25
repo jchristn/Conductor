@@ -1,44 +1,63 @@
 namespace Conductor.McpServer
 {
     using System;
+    using System.Collections.Generic;
+    using Voltaic.Core;
     using Voltaic.Mcp;
 
     internal sealed class ConductorToolRegistrationCatalog
     {
         private readonly ConductorToolHandlers _Handlers;
+        private readonly List<ConductorToolRegistration> _Registrations = new List<ConductorToolRegistration>();
 
         internal ConductorToolRegistrationCatalog(ConductorToolHandlers handlers)
         {
             _Handlers = handlers ?? throw new ArgumentNullException(nameof(handlers));
+
+            AddModelDiscoveryTools();
+            AddEndpointTools();
+            AddVmrTools();
+            AddConfigurationTools();
+            AddTenantTools();
+            AddQosTools();
+        }
+
+        internal IReadOnlyList<ConductorToolRegistration> Registrations
+        {
+            get => _Registrations;
         }
 
         internal void RegisterTools(McpHttpServer server)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
 
-            RegisterModelDiscoveryTools(server);
-            RegisterEndpointTools(server);
-            RegisterVmrTools(server);
-            RegisterConfigurationTools(server);
-            RegisterTenantTools(server);
-            RegisterQosTools(server);
+            foreach (ConductorToolRegistration registration in _Registrations)
+                server.RegisterTool(registration.Definition, registration.Handler);
         }
 
         internal void RegisterTools(McpTcpServer server)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
 
-            RegisterModelDiscoveryToolsTcp(server);
-            RegisterEndpointToolsTcp(server);
-            RegisterVmrToolsTcp(server);
-            RegisterConfigurationToolsTcp(server);
-            RegisterTenantToolsTcp(server);
-            RegisterQosToolsTcp(server);
+            foreach (ConductorToolRegistration registration in _Registrations)
+                server.RegisterTool(registration.Definition, registration.Handler);
         }
 
-        private void RegisterModelDiscoveryTools(McpHttpServer server)
+        private void AddTool(string name, string description, object inputSchema, Func<RpcParameters, object> handler)
         {
-            server.RegisterTool(
+            ToolDefinition definition = new ToolDefinition
+            {
+                Name = name,
+                Description = description,
+                InputSchema = inputSchema
+            };
+
+            _Registrations.Add(new ConductorToolRegistration(definition, handler));
+        }
+
+        private void AddModelDiscoveryTools()
+        {
+            AddTool(
                 "conductor_list_models",
                 "List all available model definitions in Conductor. Returns model metadata including name, family, parameter size, and quantization level.",
                 new
@@ -54,7 +73,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ListModels);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_model",
                 "Get details for a specific model definition by ID.",
                 new
@@ -70,9 +89,9 @@ namespace Conductor.McpServer
                 _Handlers.GetModel);
         }
 
-        private void RegisterEndpointTools(McpHttpServer server)
+        private void AddEndpointTools()
         {
-            server.RegisterTool(
+            AddTool(
                 "conductor_list_endpoints",
                 "List all model runner endpoints in Conductor. Returns endpoint configuration including hostname, port, and API type.",
                 new
@@ -87,7 +106,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ListEndpoints);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_endpoint_health",
                 "Get health status of model runner endpoints. Returns health state, in-flight requests, and uptime statistics.",
                 new
@@ -102,7 +121,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.GetEndpointHealth);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_endpoint",
                 "Get details for a specific model runner endpoint by ID.",
                 new
@@ -118,9 +137,9 @@ namespace Conductor.McpServer
                 _Handlers.GetEndpoint);
         }
 
-        private void RegisterVmrTools(McpHttpServer server)
+        private void AddVmrTools()
         {
-            server.RegisterTool(
+            AddTool(
                 "conductor_list_vmrs",
                 "List all virtual model runners (VMRs) for a tenant. VMRs are virtualized endpoints that aggregate multiple physical endpoints.",
                 new
@@ -135,7 +154,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ListVmrs);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_vmr",
                 "Get details for a specific virtual model runner by ID.",
                 new
@@ -150,7 +169,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.GetVmr);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_create_vmr",
                 "Create a new virtual model runner. Links multiple physical endpoints and configurations into a unified API.",
                 new
@@ -172,9 +191,9 @@ namespace Conductor.McpServer
                 _Handlers.CreateVmr);
         }
 
-        private void RegisterConfigurationTools(McpHttpServer server)
+        private void AddConfigurationTools()
         {
-            server.RegisterTool(
+            AddTool(
                 "conductor_list_configs",
                 "List all model configurations for a tenant. Configurations define pinned parameters for inference requests.",
                 new
@@ -189,7 +208,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ListConfigs);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_config",
                 "Get details for a specific model configuration by ID.",
                 new
@@ -204,7 +223,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.GetConfig);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_create_config",
                 "Create a new model configuration with pinned parameters.",
                 new
@@ -226,9 +245,9 @@ namespace Conductor.McpServer
                 _Handlers.CreateConfig);
         }
 
-        private void RegisterTenantTools(McpHttpServer server)
+        private void AddTenantTools()
         {
-            server.RegisterTool(
+            AddTool(
                 "conductor_list_tenants",
                 "List all tenants in Conductor. Tenants provide isolation for multi-tenant deployments.",
                 new
@@ -242,7 +261,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ListTenants);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_tenant",
                 "Get details for a specific tenant by ID.",
                 new
@@ -257,9 +276,9 @@ namespace Conductor.McpServer
                 _Handlers.GetTenant);
         }
 
-        private void RegisterQosTools(McpHttpServer server)
+        private void AddQosTools()
         {
-            server.RegisterTool(
+            AddTool(
                 "conductor_list_qos_profiles",
                 "List the QoS profiles for a tenant. QoS profiles classify and queue traffic for virtual model runners.",
                 new
@@ -274,7 +293,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ListQosProfiles);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_qos_profile",
                 "Get a QoS profile's full definition (classification rules, queue nodes and classes, links, and limits) by ID.",
                 new
@@ -289,7 +308,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.GetQosProfile);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_list_qos_traffic_classes",
                 "List the tenant's QoS traffic class catalog (the named classes profiles classify traffic into).",
                 new
@@ -303,7 +322,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ListQosTrafficClasses);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_get_qos_traffic_class",
                 "Get a QoS traffic class by ID.",
                 new
@@ -318,7 +337,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.GetQosTrafficClass);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_create_qos_profile",
                 "Create a QoS profile from a full JSON definition (classifier rules, queue nodes and classes, links, ingress, and limits).",
                 new
@@ -333,7 +352,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.CreateQosProfile);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_update_qos_profile",
                 "Update an existing QoS profile from a full JSON definition (replaces its rules, nodes, links, and ingress routes).",
                 new
@@ -349,7 +368,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.UpdateQosProfile);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_delete_qos_profile",
                 "Delete a QoS profile. The default profile cannot be deleted; referencing runners are reassigned to the tenant default.",
                 new
@@ -364,7 +383,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.DeleteQosProfile);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_validate_qos_profile",
                 "Structurally validate a QoS profile JSON definition (node names, tail/ingress references, link targets) without saving it.",
                 new
@@ -378,7 +397,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.ValidateQosProfile);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_create_qos_traffic_class",
                 "Create a QoS traffic class in the tenant catalog.",
                 new
@@ -395,7 +414,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.CreateQosTrafficClass);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_update_qos_traffic_class",
                 "Update a QoS traffic class.",
                 new
@@ -413,7 +432,7 @@ namespace Conductor.McpServer
                 },
                 _Handlers.UpdateQosTrafficClass);
 
-            server.RegisterTool(
+            AddTool(
                 "conductor_delete_qos_traffic_class",
                 "Delete a QoS traffic class.",
                 new
@@ -427,54 +446,6 @@ namespace Conductor.McpServer
                     required = new[] { "tenant_id", "class_id" }
                 },
                 _Handlers.DeleteQosTrafficClass);
-        }
-
-        private void RegisterModelDiscoveryToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_models", _Handlers.ListModels);
-            server.RegisterMethod("conductor_get_model", _Handlers.GetModel);
-        }
-
-        private void RegisterQosToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_qos_profiles", _Handlers.ListQosProfiles);
-            server.RegisterMethod("conductor_get_qos_profile", _Handlers.GetQosProfile);
-            server.RegisterMethod("conductor_create_qos_profile", _Handlers.CreateQosProfile);
-            server.RegisterMethod("conductor_update_qos_profile", _Handlers.UpdateQosProfile);
-            server.RegisterMethod("conductor_delete_qos_profile", _Handlers.DeleteQosProfile);
-            server.RegisterMethod("conductor_validate_qos_profile", _Handlers.ValidateQosProfile);
-            server.RegisterMethod("conductor_list_qos_traffic_classes", _Handlers.ListQosTrafficClasses);
-            server.RegisterMethod("conductor_get_qos_traffic_class", _Handlers.GetQosTrafficClass);
-            server.RegisterMethod("conductor_create_qos_traffic_class", _Handlers.CreateQosTrafficClass);
-            server.RegisterMethod("conductor_update_qos_traffic_class", _Handlers.UpdateQosTrafficClass);
-            server.RegisterMethod("conductor_delete_qos_traffic_class", _Handlers.DeleteQosTrafficClass);
-        }
-
-        private void RegisterEndpointToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_endpoints", _Handlers.ListEndpoints);
-            server.RegisterMethod("conductor_get_endpoint_health", _Handlers.GetEndpointHealth);
-            server.RegisterMethod("conductor_get_endpoint", _Handlers.GetEndpoint);
-        }
-
-        private void RegisterVmrToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_vmrs", _Handlers.ListVmrs);
-            server.RegisterMethod("conductor_get_vmr", _Handlers.GetVmr);
-            server.RegisterMethod("conductor_create_vmr", _Handlers.CreateVmr);
-        }
-
-        private void RegisterConfigurationToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_configs", _Handlers.ListConfigs);
-            server.RegisterMethod("conductor_get_config", _Handlers.GetConfig);
-            server.RegisterMethod("conductor_create_config", _Handlers.CreateConfig);
-        }
-
-        private void RegisterTenantToolsTcp(McpTcpServer server)
-        {
-            server.RegisterMethod("conductor_list_tenants", _Handlers.ListTenants);
-            server.RegisterMethod("conductor_get_tenant", _Handlers.GetTenant);
         }
     }
 }
