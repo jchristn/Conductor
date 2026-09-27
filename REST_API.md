@@ -847,6 +847,37 @@ The tenant class catalog. Fields: `Name` (unique per tenant), `Description`, `Ti
 | `PUT` | `/v1.0/qostrafficclasses/{id}` | Update a traffic class. |
 | `DELETE` | `/v1.0/qostrafficclasses/{id}` | Delete a traffic class. |
 
+### QoS Runtime
+
+Auth level: `Authenticated`
+
+Live, read-only QoS state for each virtual model runner: whether its admission scheduler is running,
+how much of its capacity is in use, how many requests are waiting, per-class admission statistics,
+and the concurrency of its endpoints. Statistics are held in memory and reset when the server
+restarts; history keeps one-minute buckets for the last 24 hours.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/v1.0/qosruntime` | List a `QosRuntimeSnapshot` for every VMR in scope. Optional `tenantId` query for global administrators. |
+| `GET` | `/v1.0/qosruntime/{vmrId}` | Read one VMR's `QosRuntimeSnapshot`. `404` when the VMR is not in scope. |
+| `GET` | `/v1.0/qosruntime/{vmrId}/history` | Time-bucketed admission history. Query: `startUtc` (default one hour before `endUtc`), `endUtc` (default now), `interval` (`minute` default, `5minute`, `15minute`, `hour`). Windows longer than 24 hours return `400`. |
+
+`QosRuntimeSnapshot` fields:
+
+| Field | Meaning |
+| --- | --- |
+| `SchedulerState` | `Running`; `Recovering` (the scheduler faulted and is restarting with backoff); `PassThrough` (no active profile, or the profile failed to compile, so requests are admitted without queueing); `Idle` (no request since server start). |
+| `SchedulerFaultCount`, `LastSchedulerError`, `LastSchedulerErrorUtc` | Scheduler faults recovered from since server start, and the most recent one. |
+| `Capacity`, `InUse` | Admission capacity (the sum of the endpoints' `MaxParallelRequests`; `0` = unbounded) and permits held by admitted requests. |
+| `Waiting` | Requests currently queued. |
+| `MaxQueueWaitMs` | The profile's queue wait deadline. |
+| `Classes` | Per traffic class: `Waiting`, `Admitted`, `Rejected` (queue full), `TimedOut`, `Aborted` (client disconnected while queued), `EndpointSlotTimeouts`, `AverageWaitMs`, `P95WaitMs` (over the last 512 admissions), `MaxWaitMs`, `LastAdmittedUtc`, `LastRejectedUtc`. |
+| `Endpoints` | Per endpoint: `InFlight` (across every VMR that uses it), `MaxParallelRequests`, `IsHealthy`, `Active`. |
+
+`QosRuntimeHistory` returns `Buckets`, one per class per interval that had activity, each with
+`TimestampUtc`, `ClassName`, `Admitted`, `Rejected`, `TimedOut`, `Aborted`, `EndpointSlotTimeouts`,
+`AverageWaitMs`, `MaxWaitMs`, and `PeakWaiting`.
+
 ### Model Access Policies
 
 Auth level: `TenantAdmin`
@@ -1766,6 +1797,28 @@ These VMR fields affect proxied behavior:
 | `StrictMode` | If `true`, only attached `ModelDefinitions` are accepted. |
 | `SessionAffinityMode` | Enables sticky routing by source IP, API key, or a custom header. |
 | `TimeoutMs` | Maximum proxy wait time per request. |
+
+### Health probe on the VMR base URL
+
+`GET` or `HEAD` on a VMR's base URL (`/v1.0/api/{vmr}/` or `/v1.0/api/{vmr}`) is a health probe. It needs
+no authentication, never enters a QoS queue, does not count against any endpoint's `MaxParallelRequests`,
+and never reaches a model runner. It returns `204` when at least one of the VMR's endpoints is active, in
+the `Normal` service state, and passing its health checks, and `503` otherwise (with a JSON error body for
+`GET`). Point monitors and health checkers at this URL instead of at `/v1/models` or `/api/tags`.
+
+### Admission under load
+
+Every proxied request is admitted through the VMR's QoS profile (the tenant's `Default (FIFO)` profile
+unless another is linked):
+
+- When every endpoint is at `MaxParallelRequests`, the request queues in its traffic class instead of
+  being rejected immediately. It is released in the profile's scheduling order as capacity frees.
+- An admitted request that finds its endpoint busy (for example, because another VMR shares the
+  endpoint) waits for a free slot until the profile's `MaxQueueWaitMs` deadline, measured from arrival.
+- A request that is not admitted gets the profile's `RejectionStatusCode` (default `429`) with
+  `Retry-After`: `QosRejected` when the queue is full, `QosTimedOut` when it waited past
+  `MaxQueueWaitMs`, and `EndpointAtCapacity` when no endpoint slot freed before the deadline. These
+  outcomes are recorded in request history with the denial reason and a `QosAdmission` timeline stage.
 
 ## Practical examples
 

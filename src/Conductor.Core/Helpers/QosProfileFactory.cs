@@ -7,8 +7,8 @@ namespace Conductor.Core.Helpers
 
     /// <summary>
     /// Builds the seeded QoS artifacts for a tenant: the non-deletable default FIFO profile, the
-    /// standard traffic class catalog, and the ready-to-use "Standard Workloads" profile. Stateless
-    /// and thread-safe.
+    /// standard traffic class catalog, the ready-to-use "Standard Workloads" profile, and the
+    /// "Inference First" profile. Stateless and thread-safe.
     /// </summary>
     public static class QosProfileFactory
     {
@@ -17,6 +17,25 @@ namespace Conductor.Core.Helpers
 
         /// <summary>The reserved name of the standard workloads profile.</summary>
         public const string StandardProfileName = "Standard Workloads";
+
+        /// <summary>The reserved name of the inference first profile.</summary>
+        public const string InferenceFirstProfileName = "Inference First";
+
+        /// <summary>The traffic class assigned to model metadata requests (model lists, running models, model info).</summary>
+        public const string MetadataClassName = "metadata";
+
+        /// <summary>
+        /// The request types classified as <see cref="MetadataClassName"/> by the "Inference First" profile.
+        /// These are the requests health checkers and model pickers poll; they use no inference capacity upstream.
+        /// </summary>
+        public static readonly RequestTypeEnum[] MetadataRequestTypes =
+        {
+            RequestTypeEnum.OpenAIListModels,
+            RequestTypeEnum.GeminiListModels,
+            RequestTypeEnum.OllamaListTags,
+            RequestTypeEnum.OllamaListRunningModels,
+            RequestTypeEnum.OllamaShowModelInfo
+        };
 
         /// <summary>The header clients set to name a traffic class directly.</summary>
         public const string ClassHeader = "X-Conductor-Class";
@@ -149,6 +168,81 @@ namespace Conductor.Core.Helpers
             node.Classes.Add(NewQueueClass(node.Id, 3, QosQueueClassKindEnum.FairClass, "batch-time-bound", 3, null, null, null));
             node.Classes.Add(NewQueueClass(node.Id, 4, QosQueueClassKindEnum.FairClass, "default", 2, null, null, null));
             node.Classes.Add(NewQueueClass(node.Id, 5, QosQueueClassKindEnum.FairClass, "batch-background", 1, null, null, null));
+
+            profile.Nodes.Add(node);
+            return profile;
+        }
+
+        /// <summary>
+        /// Build the metadata traffic class catalog entry used by the "Inference First" profile.
+        /// </summary>
+        /// <param name="tenantId">Tenant id. Must not be null or empty.</param>
+        /// <returns>The metadata traffic class.</returns>
+        /// <exception cref="ArgumentException"><paramref name="tenantId"/> is null or empty.</exception>
+        public static QosTrafficClass MetadataTrafficClass(string tenantId)
+        {
+            if (String.IsNullOrEmpty(tenantId)) throw new ArgumentException("Tenant id is required.", nameof(tenantId));
+            return NewClass(tenantId, MetadataClassName, "Model list and model info requests, such as health checks and model pickers.", QosClassTierEnum.BatchBackground);
+        }
+
+        /// <summary>
+        /// Build the tenant's "Inference First" profile: a strict two-band priority queue that classifies
+        /// model metadata requests (see <see cref="MetadataRequestTypes"/>) into a lower band than all other
+        /// traffic, so that polling health checkers cannot take endpoint capacity ahead of waiting inference
+        /// and embedding requests. There is no aging, so metadata requests wait while inference is queued and
+        /// are rejected once they exceed MaxQueueWaitMs (default 30000 ms).
+        /// </summary>
+        /// <param name="tenantId">Tenant id. Must not be null or empty.</param>
+        /// <returns>The inference first profile.</returns>
+        /// <exception cref="ArgumentException"><paramref name="tenantId"/> is null or empty.</exception>
+        public static QosProfile BuildInferenceFirst(string tenantId)
+        {
+            if (String.IsNullOrEmpty(tenantId)) throw new ArgumentException("Tenant id is required.", nameof(tenantId));
+
+            QosProfile profile = new QosProfile
+            {
+                TenantId = tenantId,
+                Name = InferenceFirstProfileName,
+                Description = "Admits inference and embedding requests ahead of model metadata requests (model lists, running models, model info) such as health checks.",
+                IsDefault = false,
+                Active = true,
+                DefaultClass = "default",
+                IngressMode = QosIngressModeEnum.Single,
+                IngressDefaultNode = "inference-first",
+                TailNode = "inference-first",
+                MaxTotalDepth = 0,
+                MaxQueueWaitMs = 30000,
+                RejectionStatusCode = 429,
+                IncludeRetryAfter = true,
+                RetryAfterSeconds = 5
+            };
+
+            int ordinal = 0;
+            foreach (RequestTypeEnum requestType in MetadataRequestTypes)
+            {
+                profile.Rules.Add(new QosClassifierRule
+                {
+                    ProfileId = profile.Id,
+                    Ordinal = ordinal++,
+                    Source = QosClassifierSourceEnum.RequestType,
+                    Operator = QosClassifierOperatorEnum.Equals,
+                    MatchValue = requestType.ToString(),
+                    ClassName = MetadataClassName
+                });
+            }
+
+            QosQueueNode node = new QosQueueNode
+            {
+                ProfileId = profile.Id,
+                Name = "inference-first",
+                Discipline = QosDisciplineEnum.Priority,
+                MaxDepth = 0,
+                OverflowPolicy = QosOverflowPolicyEnum.Reject,
+                AgingThresholdMs = 0
+            };
+
+            node.Classes.Add(NewQueueClass(node.Id, 0, QosQueueClassKindEnum.Band, "default", null, 0, null, null));
+            node.Classes.Add(NewQueueClass(node.Id, 1, QosQueueClassKindEnum.Band, MetadataClassName, null, 1, null, null));
 
             profile.Nodes.Add(node);
             return profile;

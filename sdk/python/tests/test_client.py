@@ -139,6 +139,41 @@ class ConductorClientTests(unittest.TestCase):
         self.assertEqual(calls[4].kwargs["url"], "http://127.0.0.1:9000/v1.0/qostrafficclasses/qtc_123?tenantId=ten_123")
         self.assertEqual(methods, ["GET", "GET", "POST", "PUT", "DELETE"])
 
+    def test_qos_runtime_methods_use_expected_routes(self) -> None:
+        session = MagicMock()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.json.return_value = {"Interval": "5minute", "Classes": [], "Buckets": []}
+        session.request.return_value = response
+
+        client = ConductorClient(base_url="http://127.0.0.1:9000", session=session)
+
+        client.list_qos_runtime("ten_123")
+        client.list_qos_runtime()
+        client.get_qos_runtime("vmr_123", "ten_123")
+        history = client.get_qos_runtime_history("vmr_123", {
+            "tenantId": "ten_123",
+            "startUtc": "2026-06-16T17:00:00Z",
+            "endUtc": "2026-06-16T18:00:00Z",
+            "interval": "5minute",
+        })
+        client.get_qos_runtime_history("vmr_123")
+
+        calls = session.request.call_args_list
+        methods = [call.kwargs["method"] for call in calls]
+        self.assertEqual(history["Interval"], "5minute")
+        self.assertEqual(calls[0].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosruntime?tenantId=ten_123")
+        self.assertEqual(calls[1].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosruntime")
+        self.assertEqual(calls[2].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosruntime/vmr_123?tenantId=ten_123")
+        self.assertEqual(
+            calls[3].kwargs["url"],
+            "http://127.0.0.1:9000/v1.0/qosruntime/vmr_123/history"
+            "?tenantId=ten_123&startUtc=2026-06-16T17%3A00%3A00Z&endUtc=2026-06-16T18%3A00%3A00Z&interval=5minute",
+        )
+        self.assertEqual(calls[4].kwargs["url"], "http://127.0.0.1:9000/v1.0/qosruntime/vmr_123/history")
+        self.assertEqual(methods, ["GET", "GET", "GET", "GET", "GET"])
+
     def test_purge_tenant_posts_confirmation_body(self) -> None:
         session = MagicMock()
         response = MagicMock()

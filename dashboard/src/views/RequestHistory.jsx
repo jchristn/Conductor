@@ -10,6 +10,7 @@ import CopyButton from '../components/CopyButton';
 import RefreshButton from '../components/RefreshButton';
 import RequestHistorySummaryChart from '../components/RequestHistorySummaryChart';
 import { copyToClipboard } from '../utils/clipboard';
+import { DEFAULT_TIME_RANGE, TIME_RANGES, applyTimeRange, getTimeRange } from '../utils/requestHistoryTimeRanges';
 
 function CollapsibleSection({ title, meta, content, defaultExpanded = false, showFormatJson = false, tooltip }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -198,6 +199,8 @@ function RequestHistory() {
   const [requestHistoryIssue, setRequestHistoryIssue] = useState(null);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE);
+  const [chartRefreshToken, setChartRefreshToken] = useState(0);
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -245,7 +248,7 @@ function RequestHistory() {
         page,
         pageSize,
         ...Object.fromEntries(
-          Object.entries(filters).filter(([_, v]) => v !== '')
+          Object.entries(applyTimeRange(filters, timeRange)).filter(([_, v]) => v !== '')
         )
       };
       const result = await api.searchRequestHistory(params);
@@ -265,17 +268,16 @@ function RequestHistory() {
     } finally {
       setLoading(false);
     }
-  }, [api, setError, page, pageSize, filters, showRequestHistoryUnavailableModal]);
+  }, [api, setError, page, pageSize, filters, timeRange, showRequestHistoryUnavailableModal]);
 
   const fetchSummary = useCallback(async () => {
     try {
       setSummaryLoading(true);
-      const endUtc = new Date().toISOString();
-      const startUtc = filters.createdAfterUtc || new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString();
+      const rangedFilters = applyTimeRange(filters, timeRange);
       const result = await api.getRequestHistorySummary({
-        ...Object.fromEntries(Object.entries(filters).filter(([_, value]) => value !== '')),
-        startUtc,
-        endUtc: filters.createdBeforeUtc || endUtc,
+        ...Object.fromEntries(Object.entries(rangedFilters).filter(([_, value]) => value !== '')),
+        startUtc: rangedFilters.createdAfterUtc,
+        endUtc: filters.createdBeforeUtc || new Date().toISOString(),
         interval: 'hour'
       });
       setSummary(result);
@@ -284,7 +286,19 @@ function RequestHistory() {
     } finally {
       setSummaryLoading(false);
     }
-  }, [api, filters]);
+  }, [api, filters, timeRange]);
+
+  const handleTimeRangeChange = (value) => {
+    setTimeRange(value);
+    setPage(1);
+    setPageInput('1');
+  };
+
+  const handleRefreshAll = () => {
+    fetchEntries();
+    fetchSummary();
+    setChartRefreshToken((token) => token + 1);
+  };
 
   const fetchVMRs = useCallback(async () => {
     try {
@@ -374,16 +388,18 @@ function RequestHistory() {
     try {
       setBulkDeleteLoading(true);
       const params = Object.fromEntries(
-        Object.entries(filters).filter(([_, v]) => v !== '')
+        Object.entries(applyTimeRange(filters, timeRange)).filter(([_, v]) => v !== '')
       );
       const result = await api.bulkDeleteRequestHistory(params);
       setShowBulkDeleteConfirm(false);
       setError(null);
       setDeleteResult({
         title: 'Request History Deleted',
-        message: `Deleted ${result.DeletedCount} entries matching the active filters.`
+        message: `Deleted ${result.DeletedCount} entries matching the active filters and time range.`
       });
       fetchEntries();
+      fetchSummary();
+      setChartRefreshToken((token) => token + 1);
     } catch (err) {
       setError('Failed to bulk delete: ' + err.message);
     } finally {
@@ -768,7 +784,7 @@ function RequestHistory() {
           <p className="view-subtitle">View and filter recent API requests including routing decisions, response details, and token usage.</p>
         </div>
         <div className="view-actions">
-          <RefreshButton onClick={fetchEntries} title="Refresh request history" disabled={loading} />
+          <RefreshButton onClick={handleRefreshAll} title="Refresh request history" disabled={loading} />
           {hasFilters && (
             <button
               className="btn-secondary btn-danger"
@@ -779,6 +795,23 @@ function RequestHistory() {
             </button>
           )}
         </div>
+        </div>
+
+        <div className="request-history-time-range-bar">
+          <span className="request-history-time-range-label">Time range</span>
+          <div className="request-history-time-tabs">
+            {TIME_RANGES.map((entry) => (
+              <button
+                key={entry.value}
+                type="button"
+                className={'request-history-time-tab' + (timeRange === entry.value ? ' active' : '')}
+                onClick={() => handleTimeRangeChange(entry.value)}
+                title={`Show requests from the ${entry.label.toLowerCase()} in the summary, chart, and table`}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="dashboard-section compact">
@@ -810,7 +843,7 @@ function RequestHistory() {
           )}
         </div>
 
-        <RequestHistorySummaryChart filters={filters} />
+        <RequestHistorySummaryChart filters={filters} timeRange={timeRange} refreshToken={chartRefreshToken} />
 
         <div className="filter-bar">
         <div className="filter-group">
@@ -1451,7 +1484,7 @@ function RequestHistory() {
         isOpen={showBulkDeleteConfirm}
         onClose={() => setShowBulkDeleteConfirm(false)}
         onConfirm={handleBulkDelete}
-        entityName={`${totalCount} entries matching filters`}
+        entityName={`${totalCount} entries matching filters in the ${getTimeRange(timeRange).label.toLowerCase()}`}
         entityType="request history entries"
         loading={bulkDeleteLoading}
       />

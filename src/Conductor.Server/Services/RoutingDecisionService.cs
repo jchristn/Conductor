@@ -419,6 +419,46 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Determine whether a virtual model runner has at least one endpoint able to accept new requests,
+        /// using the same health and service-state rules as routing: the endpoint is active, in the Normal
+        /// service state (not draining or quarantined), and its last health check passed (an endpoint with no
+        /// recorded health state is treated as healthy). Endpoint capacity is not considered. Does not contact
+        /// any endpoint. Safe for concurrent use.
+        /// </summary>
+        /// <param name="vmr">Virtual model runner. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>True when at least one endpoint is available; false when none are, including when the runner has no endpoints.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when vmr is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<bool> HasAvailableEndpointAsync(VirtualModelRunner vmr, CancellationToken token = default)
+        {
+            if (vmr == null) throw new ArgumentNullException(nameof(vmr));
+
+            List<ModelRunnerEndpoint> endpoints = await ResolveEndpointsAsync(vmr, token).ConfigureAwait(false);
+            return endpoints.Any(endpoint =>
+            {
+                if (!endpoint.Active || endpoint.ServiceState != EndpointServiceStateEnum.Normal) return false;
+                EndpointHealthState state = _HealthCheckService?.GetHealthState(endpoint.Id);
+                return state == null || state.IsHealthy;
+            });
+        }
+
+        /// <summary>
+        /// Resolve the endpoints a virtual model runner can route to: its directly referenced endpoints plus the
+        /// members of its endpoint groups, without duplicates. Missing endpoints are skipped. Safe for concurrent use.
+        /// </summary>
+        /// <param name="vmr">Virtual model runner. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The endpoints. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when vmr is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
+        public async Task<List<ModelRunnerEndpoint>> GetEndpointsAsync(VirtualModelRunner vmr, CancellationToken token = default)
+        {
+            if (vmr == null) throw new ArgumentNullException(nameof(vmr));
+            return await ResolveEndpointsAsync(vmr, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Build a resolved, read-only effective view of a virtual model runner.
         /// </summary>
         public async Task<EffectiveVirtualModelRunnerConfiguration> BuildEffectiveConfigurationAsync(VirtualModelRunner vmr, CancellationToken token = default)
@@ -1231,14 +1271,7 @@ namespace Conductor.Server.Services
             switch (vmr.SessionAffinityMode)
             {
                 case SessionAffinityModeEnum.SourceIP:
-                    if (requestContext.Headers != null && requestContext.Headers.TryGetValue("X-Forwarded-For", out string forwardedFor) && !String.IsNullOrWhiteSpace(forwardedFor))
-                    {
-                        string[] parts = forwardedFor.Split(',');
-                        if (parts.Length > 0 && !String.IsNullOrWhiteSpace(parts[0]))
-                        {
-                            return parts[0].Trim();
-                        }
-                    }
+                    // ClientIpAddress already honors X-Forwarded-For from trusted proxies (Webserver.TrustedProxies).
                     return requestContext.ClientIpAddress;
                 case SessionAffinityModeEnum.ApiKey:
                     if (requestContext.Headers != null && requestContext.Headers.TryGetValue("Authorization", out string authorization) && authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))

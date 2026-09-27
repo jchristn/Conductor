@@ -85,6 +85,12 @@ namespace Conductor.Server.Routing
                     -1,
                     new KeyValuePair<string, object>(ConductorTelemetry.TagHttpMethod, method));
 
+                // Endpoint, endpoint group, runner, or restore changes can change QoS capacity; refresh it promptly.
+                if (qosAdmissionService != null && statusCode < 400 && ChangesQosCapacity(ctx.Request.Method, ctx.Request.Url.RawWithoutQuery))
+                {
+                    qosAdmissionService.InvalidateCapacity();
+                }
+
                 await Task.CompletedTask.ConfigureAwait(false);
             };
 
@@ -164,6 +170,17 @@ namespace Conductor.Server.Routing
             if (first == "v1" || first == "api") return "proxy";
 
             return "other";
+        }
+
+        private static bool ChangesQosCapacity(WatsonWebserver.Core.HttpMethod method, string path)
+        {
+            if (method != WatsonWebserver.Core.HttpMethod.POST && method != WatsonWebserver.Core.HttpMethod.PUT && method != WatsonWebserver.Core.HttpMethod.DELETE) return false;
+            if (String.IsNullOrEmpty(path)) return false;
+
+            return path.StartsWith("/v1.0/modelrunnerendpoints", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/v1.0/endpointgroups", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/v1.0/virtualmodelrunners", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/v1.0/backup", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

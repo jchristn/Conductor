@@ -10,16 +10,21 @@ namespace Conductor.Server.Services
 
     /// <summary>
     /// Seeds a tenant's QoS defaults: the non-deletable default FIFO profile, the standard traffic-class
-    /// catalog, and the Standard Workloads profile, and backfills virtual model runners that have no
-    /// profile to the tenant default. Idempotent: the default profile is ensured on every call, while the
-    /// standard classes and Standard Workloads profile are seeded only once per tenant (guarded by a
-    /// <c>qosStandardSeeded</c> tenant tag) so an operator's later deletion is not resurrected. Thread-safe
+    /// catalog, the Standard Workloads profile, and the Inference First profile with its metadata traffic
+    /// class, and backfills virtual model runners that have no profile to the tenant default. Idempotent:
+    /// the default profile is ensured on every call, while the other artifacts are seeded only once per
+    /// tenant (guarded by the <c>qosStandardSeeded</c> and <c>qosInferenceFirstSeeded</c> tenant tags) so an
+    /// operator's later deletion is not resurrected. Tenants seeded before the Inference First profile
+    /// existed receive it once on the next call. Thread-safe
     /// only to the extent the database driver is; call sequentially per tenant.
     /// </summary>
     public sealed class QosSeeder
     {
         /// <summary>The tenant tag key marking that the standard classes and profile have been seeded.</summary>
         public const string SeededTagKey = "qosStandardSeeded";
+
+        /// <summary>The tenant tag key marking that the Inference First profile and metadata class have been seeded.</summary>
+        public const string InferenceFirstSeededTagKey = "qosInferenceFirstSeeded";
 
         private readonly DatabaseDriverBase _Database;
 
@@ -77,18 +82,30 @@ namespace Conductor.Server.Services
                 await _Database.QosProfile.CreateAsync(defaultProfile, token).ConfigureAwait(false);
             }
 
-            if (!IsSeeded(tenant))
+            bool tenantChanged = false;
+
+            if (!IsTagSet(tenant, SeededTagKey))
             {
                 foreach (QosTrafficClass trafficClass in QosProfileFactory.StandardTrafficClasses(tenantId))
                 {
-                    QosTrafficClass existing = await _Database.QosTrafficClass.ReadByNameAsync(tenantId, trafficClass.Name, token).ConfigureAwait(false);
-                    if (existing == null) await _Database.QosTrafficClass.CreateAsync(trafficClass, token).ConfigureAwait(false);
+                    await EnsureTrafficClassAsync(trafficClass, token).ConfigureAwait(false);
                 }
 
                 await _Database.QosProfile.CreateAsync(QosProfileFactory.BuildStandardWorkloads(tenantId), token).ConfigureAwait(false);
+                SetTag(tenant, SeededTagKey);
+                tenantChanged = true;
+            }
 
-                if (tenant.Tags == null) tenant.Tags = new Dictionary<string, string>();
-                tenant.Tags[SeededTagKey] = "true";
+            if (!IsTagSet(tenant, InferenceFirstSeededTagKey))
+            {
+                await EnsureTrafficClassAsync(QosProfileFactory.MetadataTrafficClass(tenantId), token).ConfigureAwait(false);
+                await _Database.QosProfile.CreateAsync(QosProfileFactory.BuildInferenceFirst(tenantId), token).ConfigureAwait(false);
+                SetTag(tenant, InferenceFirstSeededTagKey);
+                tenantChanged = true;
+            }
+
+            if (tenantChanged)
+            {
                 await _Database.Tenant.UpdateAsync(tenant, token).ConfigureAwait(false);
             }
 
@@ -96,11 +113,23 @@ namespace Conductor.Server.Services
             return defaultProfile;
         }
 
-        private static bool IsSeeded(TenantMetadata tenant)
+        private static bool IsTagSet(TenantMetadata tenant, string tagKey)
         {
             return tenant.Tags != null
-                && tenant.Tags.TryGetValue(SeededTagKey, out string marker)
+                && tenant.Tags.TryGetValue(tagKey, out string marker)
                 && String.Equals(marker, "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void SetTag(TenantMetadata tenant, string tagKey)
+        {
+            if (tenant.Tags == null) tenant.Tags = new Dictionary<string, string>();
+            tenant.Tags[tagKey] = "true";
+        }
+
+        private async Task EnsureTrafficClassAsync(QosTrafficClass trafficClass, CancellationToken token)
+        {
+            QosTrafficClass existing = await _Database.QosTrafficClass.ReadByNameAsync(trafficClass.TenantId, trafficClass.Name, token).ConfigureAwait(false);
+            if (existing == null) await _Database.QosTrafficClass.CreateAsync(trafficClass, token).ConfigureAwait(false);
         }
 
         private async Task BackfillRunnersAsync(string tenantId, QosProfile defaultProfile, CancellationToken token)

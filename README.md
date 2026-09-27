@@ -197,6 +197,7 @@ Users have three permission levels:
 | Virtual Model Runner | `vmr_` | `/v1.0/virtualmodelrunners` |
 | VMR Reservation | `vmrr_` | `/v1.0/vmrreservations` |
 | VMR Reservation Subject | `vmrrs_` | nested in VMR reservation responses |
+| QoS Runtime | - | `/v1.0/qosruntime` |
 | Request History | `req_` | `/v1.0/requesthistory` |
 | Request History Summary | - | `/v1.0/requesthistory/summary` |
 | Request Analytics | `rae_` | `/v1.0/requesthistory/analytics/overview` |
@@ -397,7 +398,7 @@ Sensible defaults are seeded per tenant on startup and on tenant creation, so no
 - A catalog of **standard traffic classes** — `realtime`, `human-interactive`, `agent-interactive`, `batch-time-bound`, `batch-background`, and `default` — that you can edit and extend.
 - A ready-to-use **Standard Workloads** profile (a low-latency queue keyed on the `X-Conductor-Class` header) to link or clone.
 
-Manage profiles and classes over REST at `/v1.0/qosprofiles` and `/v1.0/qostrafficclasses` (with `validate` and `classifier-catalog` helpers), or from the dashboard. A client can select its class with a header:
+Manage profiles and classes over REST at `/v1.0/qosprofiles` and `/v1.0/qostrafficclasses` (with `validate` and `classifier-catalog` helpers), or from the dashboard. Watch live queueing on the dashboard's **QoS Monitor** page or through `/v1.0/qosruntime`, which report each VMR's scheduler state, capacity in use, waiting requests, per-class admissions, rejections, and wait times, and endpoint slot usage. A client can select its class with a header:
 
 ```
 POST /v1.0/api/{vmr}/v1/chat/completions
@@ -494,6 +495,26 @@ SQLite remains available for local development by setting:
   "Filename": "./conductor.db"
 }
 ```
+
+### Client IP Behind a Reverse Proxy
+
+By default, request history, logs, and source-IP session affinity record the IP address of the connection Conductor receives. Behind a reverse proxy, or in Docker where published ports can replace the client address with the bridge gateway, that is the proxy's or gateway's address. To record the real client address, put a reverse proxy that sets `X-Forwarded-For` in front of Conductor and list it as trusted:
+
+```json
+{
+  "Webserver": {
+    "TrustedProxies": ["172.16.0.0/12"],
+    "ForwardedForHeader": "X-Forwarded-For"
+  }
+}
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `TrustedProxies` | string[] | `[]` | IP addresses or CIDR ranges whose forwarded-for header is trusted. The header is read from right to left, skipping trusted hops, and the first untrusted address is used |
+| `ForwardedForHeader` | string | `X-Forwarded-For` | Header carrying the forwarded client address chain |
+
+Only list addresses that untrusted clients cannot connect from. Any client connecting from a trusted address can set the header to any value.
 
 ### CORS Configuration
 
@@ -716,7 +737,8 @@ Model Runner Endpoints support comprehensive health checking with the following 
 - Draining endpoints continue to be probed and remain available for already-pinned session-affinity traffic, but they do not receive new assignments
 - Quarantined endpoints continue to be probed for diagnostics, but they are excluded from all routing, including pinned-session reuse
 - When all endpoints are unhealthy, requests return `502 Bad Gateway`
-- When all endpoints are at capacity, requests return `429 Too Many Requests`
+- When all endpoints are at capacity, requests queue in the VMR's QoS profile and are released as capacity frees; they return `429 Too Many Requests` only when the queue is full or no capacity frees before the profile's `MaxQueueWaitMs` deadline (see [QoS & Queueing](#qos--queueing))
+- `GET` or `HEAD` on a VMR's base URL (`/v1.0/api/{vmr}/`) is an unauthenticated health probe that returns `204` when the VMR has a healthy endpoint and `503` when it has none, without queueing, using an endpoint slot, or reaching a model runner
 - When all configured endpoints are quarantined or draining, requests are denied with an explicit service-state-specific error
 
 ### Rate Limiting

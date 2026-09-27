@@ -11,6 +11,7 @@ namespace Conductor.Server.Controllers
     using ConductorConstants = Conductor.Core.Constants;
     using Conductor.Core.Database;
     using Conductor.Core.Enums;
+    using Conductor.Core.Helpers;
     using Conductor.Core.Models;
     using Conductor.Core.Serialization;
     using Conductor.Core.Settings;
@@ -32,12 +33,25 @@ namespace Conductor.Server.Controllers
         private readonly OperationalMetricsService _Metrics;
         private readonly EndpointRuntimeStatsService _RuntimeStatsService;
         private readonly ModelAccessControlSettings _ModelAccessControlSettings;
+        private readonly ClientIpResolver _ClientIpResolver;
         private readonly ModelAccessListModelsResponseFilter _ModelAccessListModelsResponseFilter;
 
         /// <summary>
         /// Buffer size for streaming responses. Default is 8KB.
         /// </summary>
         public int StreamingBufferSize { get; set; } = 8192;
+
+        /// <summary>
+        /// Longest interval, in milliseconds, between re-checks while an admitted request waits for a free endpoint
+        /// slot. The wait also ends early whenever endpoint capacity changes. Minimum 50, default 500.
+        /// </summary>
+        public int EndpointSlotRecheckIntervalMs
+        {
+            get => _EndpointSlotRecheckIntervalMs;
+            set => _EndpointSlotRecheckIntervalMs = (value < 50 ? 50 : value);
+        }
+
+        private int _EndpointSlotRecheckIntervalMs = 500;
 
         private readonly Services.QosAdmissionService _QosAdmissionService;
 
@@ -57,6 +71,7 @@ namespace Conductor.Server.Controllers
         /// <param name="modelAccessControlService">Model access control service (optional).</param>
         /// <param name="runtimeStatsService">Runtime stats service (optional).</param>
         /// <param name="qosAdmissionService">QoS admission service (optional); when null, requests bypass QoS admission control.</param>
+        /// <param name="clientIpResolver">Client IP resolver (optional); when null, forwarded-for headers are ignored and the connecting peer address is used.</param>
         public ProxyController(
             DatabaseDriverBase database,
             AuthenticationService authService,
@@ -70,7 +85,8 @@ namespace Conductor.Server.Controllers
             ModelAccessControlSettings modelAccessControlSettings = null,
             IModelAccessControlService modelAccessControlService = null,
             EndpointRuntimeStatsService runtimeStatsService = null,
-            Services.QosAdmissionService qosAdmissionService = null)
+            Services.QosAdmissionService qosAdmissionService = null,
+            ClientIpResolver clientIpResolver = null)
             : base(database, authService, serializer, logging)
         {
             _QosAdmissionService = qosAdmissionService;
@@ -80,6 +96,7 @@ namespace Conductor.Server.Controllers
             _Metrics = metrics;
             _RuntimeStatsService = runtimeStatsService;
             _ModelAccessControlSettings = modelAccessControlSettings ?? new ModelAccessControlSettings();
+            _ClientIpResolver = clientIpResolver ?? new ClientIpResolver();
             if (modelAccessControlService != null)
             {
                 _ModelAccessListModelsResponseFilter = new ModelAccessListModelsResponseFilter(
@@ -129,6 +146,14 @@ namespace Conductor.Server.Controllers
                     return;
                 }
 
+                // GET/HEAD on the VMR base URL is a health probe: answered from Conductor's own endpoint
+                // health state without authentication, QoS admission, endpoint capacity, or an upstream call.
+                if (IsHealthProbe(ctx.Request.Method, urlContext))
+                {
+                    await SendHealthProbeResponseAsync(ctx, vmr, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
                 if (!await AuthenticateProxyForModelAccessAsync(ctx, vmr, cancellationToken).ConfigureAwait(false))
                 {
                     return;
@@ -162,42 +187,14 @@ namespace Conductor.Server.Controllers
                         cancellationToken).ConfigureAwait(false);
                 }
 
-                using (Activity routingActivity = ConductorTelemetry.RoutingSource.StartActivity("routing.evaluate", ActivityKind.Internal))
-                {
-                    routingResult = await _RoutingDecisionService.EvaluateAsync(vmr, urlContext, requestContext, true, cancellationToken).ConfigureAwait(false);
-                    if (routingActivity != null)
-                    {
-                        bool routed = routingResult?.Decision != null && routingResult.Decision.Success;
-                        routingActivity.SetTag("conductor.outcome", routed ? "Routed" : "Denied");
-                        if (routingResult?.Endpoint != null) routingActivity.SetTag("conductor.endpoint_id", routingResult.Endpoint.Id);
-                        if (!routed && routingResult?.Decision != null) routingActivity.SetTag("conductor.denial_reason", routingResult.Decision.DenialReasonCode);
-                    }
-                }
-
+                routingResult = await EvaluateRoutingAsync(vmr, urlContext, requestContext, cancellationToken).ConfigureAwait(false);
                 analyticsCapture.RoutingDurationMs = (int)stopwatch.ElapsedMilliseconds;
                 endpoint = routingResult.Endpoint;
 
-                if (routingResult.Decision == null || !routingResult.Decision.Success || endpoint == null)
+                // A capacity-only denial is not final when QoS is active: the request queues for admission instead.
+                if (!IsRouted(routingResult) && !(IsCapacityDenial(routingResult) && _QosAdmissionService != null))
                 {
-                    analyticsCapture.ErrorType = routingResult?.Decision?.DenialReasonCode ?? "RoutingDenied";
-                    analyticsCapture.ErrorMessage = routingResult?.Decision?.DenialReason;
-                    await SendRoutingDecisionResponse(ctx, routingResult?.Decision).ConfigureAwait(false);
-                    if (historyDetail != null && _RequestHistoryService != null)
-                    {
-                        await _RequestHistoryService.UpdateWithResponseAsync(
-                            historyDetail,
-                            routingResult?.Decision,
-                            null,
-                            routingResult?.ModelDefinition,
-                            routingResult?.ModelConfiguration,
-                            routingResult?.Decision?.HttpStatusCode ?? 502,
-                            null,
-                            null,
-                            stopwatch,
-                            cancellationToken,
-                            null,
-                            analyticsCapture).ConfigureAwait(false);
-                    }
+                    await DenyWithRoutingDecisionAsync(ctx, routingResult, null, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -221,47 +218,65 @@ namespace Conductor.Server.Controllers
 
                     if (qosAdmission != null && !qosAdmission.Admitted)
                     {
-                        analyticsCapture.ErrorType = "QosRejected";
+                        analyticsCapture.ErrorType = "Qos" + qosAdmission.Outcome;
                         analyticsCapture.ErrorMessage = qosAdmission.Reason;
-                        await SendQosRejection(ctx, qosAdmission).ConfigureAwait(false);
+                        string qosMessage = GetQosRejectionMessage(qosAdmission);
+                        ApplyQosDenial(routingResult.Decision, qosAdmission, qosMessage);
+                        await SendQosRejection(ctx, qosAdmission, qosMessage).ConfigureAwait(false);
+                        await RecordDenialAsync(historyDetail, routingResult, null, qosAdmission.StatusCode, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                         return;
+                    }
+
+                    if (qosAdmission != null && qosAdmission.ClassKey != null)
+                    {
+                        AddTimelineStage(routingResult.Decision, "QosAdmission", "QoS Admission", "Admitted",
+                            "Admitted as class '" + qosAdmission.ClassKey + "' after waiting " + qosAdmission.WaitMs.ToString("F0") + " ms.");
                     }
                 }
 
-                if (_HealthCheckService != null)
+                // Take an endpoint slot. When the endpoint is saturated (for example by another runner sharing it),
+                // an admitted request waits for a slot until its QoS deadline instead of failing immediately.
+                int limiterStartMs = (int)stopwatch.ElapsedMilliseconds;
+                while (true)
                 {
-                    int limiterStartMs = (int)stopwatch.ElapsedMilliseconds;
-                    incrementedInFlight = _HealthCheckService.TryIncrementInFlight(endpoint.Id, endpoint.MaxParallelRequests);
-                    analyticsCapture.EndpointLimiterWaitMs = Math.Max(0, (int)stopwatch.ElapsedMilliseconds - limiterStartMs);
-                    if (!incrementedInFlight)
+                    if (IsRouted(routingResult))
                     {
-                        routingResult.Decision.Success = false;
-                        routingResult.Decision.OutcomeCode = "Denied";
-                        routingResult.Decision.HttpStatusCode = 429;
-                        routingResult.Decision.DenialReasonCode = "EndpointAtCapacity";
-                        routingResult.Decision.DenialReason = "The selected endpoint reached capacity before the request was admitted.";
-                        routingResult.Decision.Message = routingResult.Decision.DenialReason;
-                        analyticsCapture.ErrorType = routingResult.Decision.DenialReasonCode;
-                        analyticsCapture.ErrorMessage = routingResult.Decision.DenialReason;
-                        await SendRoutingDecisionResponse(ctx, routingResult.Decision).ConfigureAwait(false);
-                        if (historyDetail != null && _RequestHistoryService != null)
-                        {
-                            await _RequestHistoryService.UpdateWithResponseAsync(
-                                historyDetail,
-                                routingResult.Decision,
-                                endpoint,
-                                routingResult.ModelDefinition,
-                                routingResult.ModelConfiguration,
-                                429,
-                                null,
-                                null,
-                                stopwatch,
-                                cancellationToken,
-                                null,
-                                analyticsCapture).ConfigureAwait(false);
-                        }
+                        endpoint = routingResult.Endpoint;
+                        if (_HealthCheckService == null) break;
+                        incrementedInFlight = _HealthCheckService.TryIncrementInFlight(endpoint.Id, endpoint.MaxParallelRequests);
+                        if (incrementedInFlight) break;
+                    }
+                    else if (!IsCapacityDenial(routingResult))
+                    {
+                        // While waiting, routing changed to a non-capacity denial (for example, the endpoint became unhealthy).
+                        analyticsCapture.EndpointLimiterWaitMs = Math.Max(0, (int)stopwatch.ElapsedMilliseconds - limiterStartMs);
+                        await DenyWithRoutingDecisionAsync(ctx, routingResult, null, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                         return;
                     }
+
+                    int remainingMs = GetEndpointSlotWaitRemainingMs(qosAdmission);
+                    if (remainingMs <= 0 || _HealthCheckService == null)
+                    {
+                        analyticsCapture.EndpointLimiterWaitMs = Math.Max(0, (int)stopwatch.ElapsedMilliseconds - limiterStartMs);
+                        if (qosAdmission != null && qosAdmission.ClassKey != null)
+                        {
+                            _QosAdmissionService.RecordEndpointSlotTimeout(vmr.Id, qosAdmission.ClassKey);
+                        }
+
+                        ApplyEndpointAtCapacityDenial(routingResult);
+                        await DenyWithRoutingDecisionAsync(ctx, routingResult, routingResult.Endpoint, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+
+                    await _HealthCheckService.WaitForCapacityChangeAsync(Math.Min(remainingMs, EndpointSlotRecheckIntervalMs), cancellationToken).ConfigureAwait(false);
+                    routingResult = await EvaluateRoutingAsync(vmr, urlContext, requestContext, cancellationToken).ConfigureAwait(false);
+                }
+
+                analyticsCapture.EndpointLimiterWaitMs = Math.Max(0, (int)stopwatch.ElapsedMilliseconds - limiterStartMs);
+                if (analyticsCapture.EndpointLimiterWaitMs > 0 && incrementedInFlight)
+                {
+                    AddTimelineStage(routingResult.Decision, "EndpointSlot", "Endpoint Slot", "Acquired",
+                        "Waited " + analyticsCapture.EndpointLimiterWaitMs + " ms for a free slot on endpoint '" + endpoint.Name + "'.");
                 }
 
                 if (_RuntimeStatsService != null)
@@ -475,7 +490,7 @@ namespace Conductor.Server.Controllers
             return values;
         }
 
-        private async Task SendQosRejection(HttpContextBase ctx, Services.QosAdmissionResult admission)
+        private async Task SendQosRejection(HttpContextBase ctx, Services.QosAdmissionResult admission, string message)
         {
             try
             {
@@ -484,28 +499,152 @@ namespace Conductor.Server.Controllers
                     ctx.Response.Headers.Add("Retry-After", admission.RetryAfterSeconds.ToString());
                 }
 
-                string message;
-                switch (admission.Outcome)
-                {
-                    case Services.QosAdmissionOutcomeEnum.TimedOut:
-                        message = "The request exceeded the QoS queue wait deadline.";
-                        break;
-                    case Services.QosAdmissionOutcomeEnum.Aborted:
-                        message = "The client disconnected while the request was queued.";
-                        break;
-                    default:
-                        message = "The QoS queue is full; the request was not admitted.";
-                        break;
-                }
-
                 Conductor.Core.Models.ApiErrorResponse error = Conductor.Core.Models.ApiErrorResponse.TooManyRequests(message);
                 error.StatusCode = admission.StatusCode;
                 await SendErrorResponse(ctx, error).ConfigureAwait(false);
             }
-            catch
+            catch (Exception ex)
             {
                 // The client may have disconnected; nothing more to do.
+                Logging.Debug(_Header + "failed to send QoS rejection: " + ex.Message);
             }
+        }
+
+        private static string GetQosRejectionMessage(Services.QosAdmissionResult admission)
+        {
+            switch (admission.Outcome)
+            {
+                case Services.QosAdmissionOutcomeEnum.TimedOut:
+                    return "The request exceeded the QoS queue wait deadline.";
+                case Services.QosAdmissionOutcomeEnum.Aborted:
+                    return "The client disconnected while the request was queued.";
+                default:
+                    if (String.Equals(admission.Reason, "shutdown", StringComparison.Ordinal)) return "The server is shutting down; the request was not admitted.";
+                    if (String.Equals(admission.Reason, "service_rejected", StringComparison.Ordinal) || String.Equals(admission.Reason, "internal_error", StringComparison.Ordinal))
+                    {
+                        return "The QoS queue could not hold the request; it was not admitted.";
+                    }
+
+                    return "The QoS queue is full; the request was not admitted.";
+            }
+        }
+
+        private async Task<RoutingExecutionResult> EvaluateRoutingAsync(VirtualModelRunner vmr, UrlContext urlContext, RequestContext requestContext, CancellationToken cancellationToken)
+        {
+            using (Activity routingActivity = ConductorTelemetry.RoutingSource.StartActivity("routing.evaluate", ActivityKind.Internal))
+            {
+                RoutingExecutionResult result = await _RoutingDecisionService.EvaluateAsync(vmr, urlContext, requestContext, true, cancellationToken).ConfigureAwait(false);
+                if (routingActivity != null)
+                {
+                    bool routed = IsRouted(result);
+                    routingActivity.SetTag("conductor.outcome", routed ? "Routed" : "Denied");
+                    if (result?.Endpoint != null) routingActivity.SetTag("conductor.endpoint_id", result.Endpoint.Id);
+                    if (!routed && result?.Decision != null) routingActivity.SetTag("conductor.denial_reason", result.Decision.DenialReasonCode);
+                }
+
+                return result;
+            }
+        }
+
+        private static bool IsRouted(RoutingExecutionResult result)
+        {
+            return result?.Decision != null && result.Decision.Success && result.Endpoint != null;
+        }
+
+        private static bool IsCapacityDenial(RoutingExecutionResult result)
+        {
+            return result?.Decision != null
+                && !result.Decision.Success
+                && String.Equals(result.Decision.DenialReasonCode, "AllEndpointsAtCapacity", StringComparison.Ordinal);
+        }
+
+        private static int GetEndpointSlotWaitRemainingMs(Services.QosAdmissionResult admission)
+        {
+            if (admission == null) return 0;
+            if (!admission.DeadlineUtc.HasValue) return Int32.MaxValue;
+            double remaining = (admission.DeadlineUtc.Value - DateTime.UtcNow).TotalMilliseconds;
+            if (remaining <= 0) return 0;
+            return remaining >= Int32.MaxValue ? Int32.MaxValue : (int)Math.Ceiling(remaining);
+        }
+
+        private static void ApplyEndpointAtCapacityDenial(RoutingExecutionResult routingResult)
+        {
+            RoutingDecision decision = routingResult?.Decision;
+            if (decision == null) return;
+
+            decision.Success = false;
+            decision.OutcomeCode = "Denied";
+            decision.HttpStatusCode = 429;
+            decision.DenialReasonCode = "EndpointAtCapacity";
+            decision.DenialReason = "No endpoint slot became free before the request's admission deadline.";
+            decision.Message = decision.DenialReason;
+        }
+
+        private static void ApplyQosDenial(RoutingDecision decision, Services.QosAdmissionResult admission, string message)
+        {
+            if (decision == null || admission == null) return;
+
+            decision.Success = false;
+            decision.OutcomeCode = "Denied";
+            decision.HttpStatusCode = admission.StatusCode;
+            decision.DenialReasonCode = "Qos" + admission.Outcome;
+            decision.DenialReason = message;
+            decision.Message = message;
+            AddTimelineStage(decision, "QosAdmission", "QoS Admission", admission.Outcome.ToString(),
+                message + " Class '" + (admission.ClassKey ?? "default") + "', reason '" + (admission.Reason ?? String.Empty) + "', waited " + admission.WaitMs.ToString("F0") + " ms.");
+        }
+
+        private static void AddTimelineStage(RoutingDecision decision, string code, string title, string outcome, string message)
+        {
+            if (decision == null) return;
+            decision.Timeline.Add(new RoutingDecisionStage
+            {
+                Code = code,
+                Title = title,
+                Outcome = outcome,
+                Message = message
+            });
+        }
+
+        private async Task DenyWithRoutingDecisionAsync(
+            HttpContextBase ctx,
+            RoutingExecutionResult routingResult,
+            ModelRunnerEndpoint historyEndpoint,
+            RequestHistoryDetail historyDetail,
+            Stopwatch stopwatch,
+            RequestAnalyticsCapture analyticsCapture,
+            CancellationToken cancellationToken)
+        {
+            analyticsCapture.ErrorType = routingResult?.Decision?.DenialReasonCode ?? "RoutingDenied";
+            analyticsCapture.ErrorMessage = routingResult?.Decision?.DenialReason;
+            await SendRoutingDecisionResponse(ctx, routingResult?.Decision).ConfigureAwait(false);
+            await RecordDenialAsync(historyDetail, routingResult, historyEndpoint, routingResult?.Decision?.HttpStatusCode ?? 502, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task RecordDenialAsync(
+            RequestHistoryDetail historyDetail,
+            RoutingExecutionResult routingResult,
+            ModelRunnerEndpoint historyEndpoint,
+            int statusCode,
+            Stopwatch stopwatch,
+            RequestAnalyticsCapture analyticsCapture,
+            CancellationToken cancellationToken)
+        {
+            if (historyDetail == null || _RequestHistoryService == null) return;
+
+            await _RequestHistoryService.UpdateWithResponseAsync(
+                historyDetail,
+                routingResult?.Decision,
+                historyEndpoint,
+                routingResult?.ModelDefinition,
+                routingResult?.ModelConfiguration,
+                statusCode,
+                null,
+                null,
+                stopwatch,
+                cancellationToken,
+                null,
+                analyticsCapture).ConfigureAwait(false);
         }
 
         private string BuildTargetUrl(ModelRunnerEndpoint endpoint, UrlContext urlContext)
@@ -1039,6 +1178,43 @@ namespace Conductor.Server.Controllers
             await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.TooManyRequests(message));
         }
 
+        /// <summary>
+        /// Determine whether a request is a health probe: a GET or HEAD on a virtual model runner base URL
+        /// (for example /v1.0/api/{vmr}/ or /v1.0/api/{vmr}). Health probes are answered without authentication.
+        /// </summary>
+        /// <param name="method">HTTP method.</param>
+        /// <param name="urlContext">Parsed URL. Null returns false.</param>
+        /// <returns>True when the request is a health probe.</returns>
+        internal static bool IsHealthProbe(HttpMethod method, UrlContext urlContext)
+        {
+            if (method != HttpMethod.GET && method != HttpMethod.HEAD) return false;
+            if (urlContext == null || !urlContext.IsValidVmrRequest) return false;
+            return String.IsNullOrEmpty(urlContext.RelativePath) || urlContext.RelativePath == "/";
+        }
+
+        private async Task SendHealthProbeResponseAsync(HttpContextBase ctx, VirtualModelRunner vmr, CancellationToken cancellationToken)
+        {
+            bool healthy = _RoutingDecisionService != null
+                && await _RoutingDecisionService.HasAvailableEndpointAsync(vmr, cancellationToken).ConfigureAwait(false);
+
+            if (healthy)
+            {
+                ctx.Response.StatusCode = 204;
+                await ctx.Response.Send(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (ctx.Request.Method == HttpMethod.HEAD)
+            {
+                ctx.Response.StatusCode = 503;
+                await ctx.Response.Send(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.ServiceUnavailable(
+                "No healthy endpoint is available for virtual model runner '" + vmr.Name + "'.")).ConfigureAwait(false);
+        }
+
         private async Task SendUnauthorized(HttpContextBase ctx, string message)
         {
             await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Unauthorized(message));
@@ -1121,7 +1297,7 @@ namespace Conductor.Server.Controllers
                 + "model access proxy authentication failed"
                 + " tenant=" + (vmr?.TenantId ?? String.Empty)
                 + " vmr=" + (vmr?.Id ?? String.Empty)
-                + " sourceIp=" + (ctx?.Request?.Source?.IpAddress ?? String.Empty)
+                + " sourceIp=" + (ResolveClientIp(ctx) ?? String.Empty)
                 + " reason=" + (reasonCode ?? String.Empty));
         }
 
@@ -1142,6 +1318,13 @@ namespace Conductor.Server.Controllers
             return !String.IsNullOrWhiteSpace(ctx.Request.Headers.Get("x-tenant-id"))
                 && !String.IsNullOrWhiteSpace(ctx.Request.Headers.Get("x-email"))
                 && !String.IsNullOrWhiteSpace(ctx.Request.Headers.Get("x-password"));
+        }
+
+        private string ResolveClientIp(HttpContextBase ctx)
+        {
+            string peerIp = ctx?.Request?.Source?.IpAddress;
+            if (ctx?.Request?.Headers == null) return peerIp;
+            return _ClientIpResolver.Resolve(peerIp, ctx.Request.Headers.Get(_ClientIpResolver.ForwardedForHeader));
         }
 
         private Dictionary<string, string> GetRequestHeaders(HttpContextBase ctx)
@@ -1176,7 +1359,7 @@ namespace Conductor.Server.Controllers
             requestContext.OriginalUrl = rawUrl;
             requestContext.Path = ctx.Request.Url.RawWithoutQuery;
             requestContext.QueryString = queryStart >= 0 ? rawUrl.Substring(queryStart) : null;
-            requestContext.ClientIpAddress = ctx.Request.Source.IpAddress;
+            requestContext.ClientIpAddress = ResolveClientIp(ctx);
             requestContext.Headers = GetRequestHeaders(ctx);
             requestContext.ContentType = ctx.Request.ContentType;
             requestContext.ContentLength = requestContext.Data?.LongLength ?? 0;

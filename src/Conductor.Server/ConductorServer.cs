@@ -206,7 +206,8 @@ namespace Conductor.Server
             // a default route at construction time; the default route is the proxy handler.
             _ProxyController = new Controllers.ProxyController(
                 _Database, _AuthService, _Serializer, _Logging,
-                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService, _RuntimeStatsService, _QosAdmissionService);
+                _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService, _RuntimeStatsService, _QosAdmissionService,
+                new ClientIpResolver(_Settings.Webserver.TrustedProxies, _Settings.Webserver.ForwardedForHeader));
 
             WatsonWebserver.Core.WebserverSettings webSettings = new WatsonWebserver.Core.WebserverSettings(
                 _Settings.Webserver.Hostname,

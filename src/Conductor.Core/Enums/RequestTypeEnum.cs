@@ -503,6 +503,15 @@ namespace Conductor.Core.Enums
         /// <summary>List QoS traffic classes.</summary>
         ListQosTrafficClasses,
 
+        /// <summary>List live QoS runtime state for virtual model runners.</summary>
+        ListQosRuntime,
+
+        /// <summary>Read live QoS runtime state for one virtual model runner.</summary>
+        ReadQosRuntime,
+
+        /// <summary>Read time-bucketed QoS admission history for one virtual model runner.</summary>
+        ReadQosRuntimeHistory,
+
         // ==================== Tenant Purge Operation ====================
 
         /// <summary>Purge (nuke) a tenant and all of its data. System-admin only.</summary>

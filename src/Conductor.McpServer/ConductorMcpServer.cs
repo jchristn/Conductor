@@ -251,6 +251,22 @@ namespace Conductor.McpServer
         }
 
         /// <summary>
+        /// Configure QoS runtime functions from an external QoS admission service, enabling the
+        /// conductor_list_qos_runtime, conductor_get_qos_runtime, and conductor_get_qos_runtime_history tools.
+        /// Until configured, those tools return an error result. Both functions are invoked from MCP request threads
+        /// and must be thread-safe.
+        /// </summary>
+        /// <param name="getSnapshot">Function that builds the live QoS runtime snapshot of a virtual model runner. Nullable; null disables the snapshot tools.</param>
+        /// <param name="getHistory">Function that returns admission history buckets for a runner id, window start (UTC), window end (UTC, exclusive), and bucket size in minutes. Nullable; null disables the history tool.</param>
+        public void ConfigureQosRuntime(
+            Func<VirtualModelRunner, QosRuntimeSnapshot> getSnapshot,
+            Func<string, DateTime, DateTime, int, List<QosRuntimeHistoryBucket>> getHistory)
+        {
+            _ToolRegistry.GetQosRuntimeSnapshotFunc = getSnapshot;
+            _ToolRegistry.GetQosRuntimeHistoryFunc = getHistory;
+        }
+
+        /// <summary>
         /// Broadcast a notification to all connected HTTP clients.
         /// </summary>
         /// <param name="method">The notification method name.</param>

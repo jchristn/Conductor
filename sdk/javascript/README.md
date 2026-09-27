@@ -13,6 +13,7 @@ Thin JavaScript client for the management-plane features introduced by roadmap p
 - model access policy CRUD, validation, evaluation, and effective-access queries
 - QoS profile CRUD, draft validation, and classifier-catalog lookup
 - QoS traffic class CRUD
+- read-only QoS runtime state (scheduler, capacity, per-class statistics, endpoint concurrency) and admission history
 - VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - analytics workspace catalog, query, saved reports, summary, TTFT, token usage, estimate-only cost, user, and access/reliability helpers
@@ -217,6 +218,16 @@ await client.validateQosProfile(qosProfile, qosProfile.Id);
 await client.listQosProfiles({ tenantId: 'tenant_123', activeFilter: true });
 await client.updateQosProfile(qosProfile.Id, qosProfile);
 await client.deleteQosProfile(qosProfile.Id, 'tenant_123');
+
+// Live QoS runtime state is held in memory and resets on server restart.
+const qosRuntimeList = await client.listQosRuntime('tenant_123');
+const qosRuntime = await client.getQosRuntime('vmr_123', 'tenant_123');
+const qosHistory = await client.getQosRuntimeHistory('vmr_123', {
+  tenantId: 'tenant_123',
+  startUtc: '2026-06-16T17:00:00Z',
+  endUtc: '2026-06-16T18:00:00Z',
+  interval: '5minute'
+});
 
 // System-admin only. The reserved "default" tenant cannot be purged.
 const purgeReport = await client.purgeTenant('tenant_123');

@@ -282,6 +282,43 @@ namespace Conductor.Sdk
         }
 
         /// <summary>
+        /// List live QoS runtime state for every virtual model runner in scope. The response is a JSON array of
+        /// objects shaped like <see cref="QosRuntimeSnapshot"/>. Statistics are held in server memory and reset when the server restarts.
+        /// </summary>
+        /// <param name="tenantId">Optional tenant ID (global administrators only; omit to list every tenant).</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> ListQosRuntimeAsync(string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qosruntime" + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get live QoS runtime state for a virtual model runner. The response is shaped like <see cref="QosRuntimeSnapshot"/>.
+        /// </summary>
+        /// <param name="virtualModelRunnerId">Virtual model runner ID.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetQosRuntimeAsync(string virtualModelRunnerId, string tenantId = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qosruntime/" + Uri.EscapeDataString(virtualModelRunnerId) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get time-bucketed QoS admission history for a virtual model runner. The response is shaped like <see cref="QosRuntimeHistory"/>.
+        /// The window defaults to the hour before now and may not exceed 24 hours; the server returns HTTP 400 otherwise.
+        /// </summary>
+        /// <param name="virtualModelRunnerId">Virtual model runner ID.</param>
+        /// <param name="filters">Query-string filters such as tenantId, startUtc and endUtc (ISO-8601 UTC), and interval (minute, 5minute, 15minute, or hour; default minute).</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        public async Task<JsonDocument> GetQosRuntimeHistoryAsync(string virtualModelRunnerId, IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/qosruntime/" + Uri.EscapeDataString(virtualModelRunnerId) + "/history" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Purge (nuke) a tenant and all of its data. System-admin only; the reserved <c>default</c> tenant cannot be purged.
         /// </summary>
         /// <param name="id">Tenant ID to purge.</param>

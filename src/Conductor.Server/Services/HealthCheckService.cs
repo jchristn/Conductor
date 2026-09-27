@@ -34,6 +34,7 @@ namespace Conductor.Server.Services
         private readonly ConcurrentDictionary<string, Task> _RunningTasks;
         private readonly ConcurrentDictionary<string, ModelRunnerEndpoint> _ActiveEndpoints;
         private readonly ConcurrentDictionary<string, string> _EndpointHealthCheckKeys;
+        private TaskCompletionSource<bool> _CapacityPulse = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private CancellationTokenSource _GlobalCancellation;
         private bool _Disposed;
 
@@ -257,6 +258,7 @@ namespace Conductor.Server.Services
             if (endpoint == null || !endpoint.Active) return;
             _Logging.Debug(_Header + "endpoint created: " + endpoint.Id);
             StartHealthCheckTask(endpoint);
+            PulseCapacity();
         }
 
         /// <summary>
@@ -275,6 +277,8 @@ namespace Conductor.Server.Services
             {
                 StartHealthCheckTask(endpoint);
             }
+
+            PulseCapacity();
         }
 
         /// <summary>
@@ -328,6 +332,41 @@ namespace Conductor.Server.Services
                     }
                 }
             }
+
+            PulseCapacity();
+        }
+
+        /// <summary>
+        /// Wait until endpoint capacity may have changed (an in-flight request completed, an endpoint became
+        /// healthy, or endpoint configuration changed), or until the wait elapses. Callers re-check capacity
+        /// afterwards; a wake-up does not guarantee a free slot. Holds no lock while waiting.
+        /// </summary>
+        /// <param name="maxWaitMs">Maximum wait in milliseconds. Values below 1 return immediately.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task that completes on a capacity change or when the wait elapses.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when the token is cancelled.</exception>
+        public async Task WaitForCapacityChangeAsync(int maxWaitMs, CancellationToken token = default)
+        {
+            token.ThrowIfCancellationRequested();
+            if (maxWaitMs < 1) return;
+
+            Task pulse = Volatile.Read(ref _CapacityPulse).Task;
+            using (CancellationTokenSource delayCts = CancellationTokenSource.CreateLinkedTokenSource(token))
+            {
+                Task delay = Task.Delay(maxWaitMs, delayCts.Token);
+                await Task.WhenAny(pulse, delay).ConfigureAwait(false);
+                delayCts.Cancel();
+            }
+
+            token.ThrowIfCancellationRequested();
+        }
+
+        private void PulseCapacity()
+        {
+            TaskCompletionSource<bool> previous = Interlocked.Exchange(
+                ref _CapacityPulse,
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
+            previous.TrySetResult(true);
         }
 
         private void StartHealthCheckTask(ModelRunnerEndpoint endpoint)
@@ -908,6 +947,7 @@ namespace Conductor.Server.Services
                         }
 
                         state.IsHealthy = true;
+                        PulseCapacity();
                         state.LastHealthyUtc = now;
                         state.LastStateChangeUtc = now;
 

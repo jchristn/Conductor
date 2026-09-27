@@ -32,6 +32,7 @@ namespace Conductor.Server.Routing
         protected readonly LoadBalancingPolicyController lbpController;
         protected readonly QosProfileController qosProfileController;
         protected readonly QosTrafficClassController qosTrafficClassController;
+        protected readonly QosRuntimeController qosRuntimeController;
         protected readonly QosAdmissionService qosAdmissionService;
         protected readonly ModelAccessPolicyController mapController;
         protected readonly VirtualModelRunnerController vmrController;
@@ -59,6 +60,7 @@ namespace Conductor.Server.Routing
             lbpController = context.LoadBalancingPolicyController;
             qosProfileController = context.QosProfileController;
             qosTrafficClassController = context.QosTrafficClassController;
+            qosRuntimeController = context.QosRuntimeController;
             qosAdmissionService = context.QosAdmissionService;
             mapController = context.ModelAccessPolicyController;
             vmrController = context.VirtualModelRunnerController;
@@ -223,7 +225,9 @@ namespace Conductor.Server.Routing
             string path = ctx.Request.Url.RawWithoutQuery;
             RequestTypeEnum requestType = RequestTypeResolver.Resolve(method, path);
 
-            if (Core.Authorization.AuthorizationConfig.IsPublic(requestType))
+            // GET/HEAD on a virtual model runner base URL is an unauthenticated health probe answered by the proxy.
+            if (Core.Authorization.AuthorizationConfig.IsPublic(requestType)
+                || ProxyController.IsHealthProbe(ctx.Request.Method, UrlContext.Parse(path, method)))
             {
                 return new AuthResult
                 {

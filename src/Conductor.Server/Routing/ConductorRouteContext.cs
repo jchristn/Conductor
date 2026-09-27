@@ -59,6 +59,7 @@ namespace Conductor.Server.Routing
             LoadBalancingPolicyController = new LoadBalancingPolicyController(Database, AuthService, Serializer, Logging, ConfigurationValidationService);
             QosProfileController = new QosProfileController(Database, AuthService, Serializer, Logging, QosAdmissionService);
             QosTrafficClassController = new QosTrafficClassController(Database, AuthService, Serializer, Logging);
+            QosRuntimeController = new QosRuntimeController(Database, AuthService, Serializer, Logging, QosAdmissionService, HealthCheckService, RoutingDecisionService);
             ModelAccessPolicyController = new ModelAccessPolicyController(Database, AuthService, Serializer, Logging, ModelAccessControlService);
             VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService, RuntimeStatsService);
             VirtualModelRunnerReservationController = new VirtualModelRunnerReservationController(Database, AuthService, Serializer, Logging, VirtualModelRunnerReservationService);
@@ -125,6 +126,8 @@ namespace Conductor.Server.Routing
         internal QosProfileController QosProfileController { get; }
 
         internal QosTrafficClassController QosTrafficClassController { get; }
+
+        internal QosRuntimeController QosRuntimeController { get; }
 
         internal QosAdmissionService QosAdmissionService { get; }
 

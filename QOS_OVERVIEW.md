@@ -35,13 +35,23 @@ Every tenant is seeded with a standard class catalog. These names are the vocabu
 
 ## How configuration becomes behavior
 
-A stored profile is inert rows in the database. On first use for a VMR, Conductor's compiler reads the profile aggregate and builds a live runtime: a classifier delegate, one QoSKit queue per node, the pipeline that moves work to the tail, and the scheduler that drains it. The item carried through the queues is a lightweight ticket — the class it was assigned plus a release signal — never the request body, so a deep backlog stays cheap and no payload data ever reaches a metric label. Editing a linked profile rebuilds its runtime; a compile failure fails open (the VMR admits without queueing) rather than blocking traffic.
+A stored profile is inert rows in the database. On first use for a VMR, Conductor's compiler reads the profile aggregate and builds a live runtime: a classifier delegate, one QoSKit queue per node, the pipeline that moves work to the tail, and the scheduler that drains it. The item carried through the queues is a lightweight ticket — the class it was assigned plus a release signal — never the request body, so a deep backlog stays cheap and no payload data ever reaches a metric label. Editing a linked profile rebuilds its runtime: the new runtime is compiled first, then requests already waiting in the old one are moved into it, so an edit never drops queued work. A compile failure fails open (the VMR admits without queueing) rather than blocking traffic, and a failed rebuild keeps the previous runtime serving and is retried a few seconds later.
+
+A VMR's admission capacity is the sum of its endpoints' `MaxParallelRequests`. It is re-read every few seconds and immediately after an endpoint, endpoint group, VMR, or backup restore change, without disturbing requests that are waiting or in flight. The scheduler that releases waiting requests is supervised: if it ever faults, it logs the error, returns any capacity it was holding, and restarts with backoff, and the fault is visible as the `Recovering` scheduler state and fault count in the runtime view.
 
 ## How to configure it
 
 ### The default is already there
 
 Do nothing and every VMR uses the tenant's **Default (FIFO)** profile: a single first-in-first-out queue that is a transparent pass-through when capacity is free and a fair first-come-first-served line when the VMR is saturated. The default profile is non-deletable. There is also a seeded **Standard Workloads** profile you can link or clone to get class-aware scheduling immediately.
+
+### Keeping health checks from crowding out inference
+
+Model list and model info requests (`/v1/models`, `/v1beta/models`, `/api/tags`, `/api/ps`, `/api/show`) take endpoint capacity just like inference. When many monitors or health checkers poll them through a VMR, they can fill the endpoint's `MaxParallelRequests` and cause `429`s for real inference and embedding traffic.
+
+Every tenant is seeded with an **Inference First** profile for this. It is a strict two-band `Priority` queue: requests whose request type is `OpenAIListModels`, `GeminiListModels`, `OllamaListTags`, `OllamaListRunningModels`, or `OllamaShowModelInfo` go to the `metadata` class in the lower band, and everything else goes to `default` in the higher band. When the VMR is saturated, waiting inference is always admitted before waiting metadata requests. There is no aging, so metadata requests wait until inference drains and are rejected with `429` after `MaxQueueWaitMs` (30 seconds). The profile is not linked to any VMR by default; link it to the VMRs your health checkers poll.
+
+Once admitted, a metadata request still occupies an endpoint slot until the upstream responds. Better still, point health checkers at the VMR's base URL: a `GET` or `HEAD` on `/v1.0/api/{vmr}/` needs no credentials, never queues, uses no endpoint slot, and returns `204` when the VMR has a healthy endpoint or `503` when it has none.
 
 ### Classifying by a custom header
 
@@ -95,11 +105,15 @@ curl -X PUT http://127.0.0.1:9000/v1.0/virtualmodelrunners/$VMR_ID \
 
 ### What a caller sees under load
 
-When a profile's queue is full, or a request waits past `MaxQueueWaitMs`, the caller gets `429 Too Many Requests` with a `Retry-After` header. Existing retry logic that already handles `429` works unchanged.
+When every endpoint is busy, a request queues in its class rather than being rejected, and it is released in the profile's order as capacity frees. If an admitted request then finds its endpoint busy (for example, because another VMR shares the same endpoint), it waits for a free slot until its `MaxQueueWaitMs` deadline, counted from when it arrived.
+
+When a profile's queue is full, a request waits past `MaxQueueWaitMs`, or no endpoint slot frees before the deadline, the caller gets `429 Too Many Requests` (or the profile's `RejectionStatusCode`) with a `Retry-After` header. Existing retry logic that already handles `429` works unchanged. Each of these outcomes is recorded in request history with a denial reason (`QosRejected`, `QosTimedOut`, `QosAborted`, or `EndpointAtCapacity`) and a `QosAdmission` timeline stage showing the class and how long the request waited.
 
 ## How to monitor it
 
-QoS emits through Conductor's existing OpenTelemetry pipeline, so it lands in the bundled Prometheus/Grafana/Tempo stack with no extra wiring.
+**Dashboard.** The **QoS Monitor** page in the Conductor dashboard shows, for each VMR, the scheduler state, capacity in use, requests waiting, per-class admitted, rejected, timed-out, and aborted counts with average, p95, and maximum wait, endpoint slot usage, and charts of admissions and queue wait over the selected time range. It reads the `/v1.0/qosruntime` API (see [REST_API.md](./REST_API.md#qos-runtime)). These statistics are kept in memory for 24 hours and reset when the server restarts; use the metrics below for longer history.
+
+QoS also emits through Conductor's existing OpenTelemetry pipeline, so it lands in the bundled Prometheus/Grafana/Tempo stack with no extra wiring.
 
 **Metrics.** QoSKit's own per-class instruments (`qoskit_queue_enqueued_total`, `qoskit_queue_dropped_total` by `drop_reason`, `qoskit_queue_wait_duration_milliseconds` per `queue_class`, `qoskit_policer_conformed_total` vs `qoskit_policer_exceeded_total`, depth and capacity gauges) flow alongside Conductor's admission-boundary instruments: `conductor_qos_admissions_total` (by `outcome`), `conductor_qos_rejections_total` (by `reason`), `conductor_qos_queue_wait_duration_seconds`, and `conductor_qos_queue_depth`. All are tagged with `vmr` and, where meaningful, `qos_class`. Example PromQL:
 

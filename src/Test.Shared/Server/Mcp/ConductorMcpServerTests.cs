@@ -140,7 +140,7 @@ namespace Test.Shared.Server.Mcp
 
             List<string> names = GetToolNames(response);
             names.Should().BeEquivalentTo(_Server.ToolRegistry.ToolNames);
-            names.Should().HaveCount(24);
+            names.Should().HaveCount(27);
             names.Should().OnlyContain(n => n.StartsWith("conductor_", StringComparison.Ordinal));
         }
 

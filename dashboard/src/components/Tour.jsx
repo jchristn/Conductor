@@ -67,6 +67,12 @@ function Tour() {
         position: 'right'
       },
       {
+        selector: '[data-tour-id="nav-qos-monitor"]',
+        title: 'QoS Monitor',
+        description: 'Live QoS queueing for each Virtual Model Runner: waiting requests, admissions and rejections over time, per-class wait times, and endpoint slot usage.',
+        position: 'right'
+      },
+      {
         selector: '[data-tour-id="nav-request-history"]',
         title: 'Request History',
         description: 'View and debug request/response history for Virtual Model Runners when request history is enabled.',

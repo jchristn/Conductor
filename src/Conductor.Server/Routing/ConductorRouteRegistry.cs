@@ -21,6 +21,7 @@ namespace Conductor.Server.Routing
             new LoadBalancingPolicyRouteModule(_Context).Register();
             new QosProfileRouteModule(_Context).Register();
             new QosTrafficClassRouteModule(_Context).Register();
+            new QosRuntimeRouteModule(_Context).Register();
             new ModelAccessPolicyRouteModule(_Context).Register();
             new ModelConfigurationRouteModule(_Context).Register();
             new VirtualModelRunnerRouteModule(_Context).Register();

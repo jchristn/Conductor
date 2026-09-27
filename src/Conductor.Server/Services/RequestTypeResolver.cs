@@ -146,6 +146,11 @@ namespace Conductor.Server.Services
             { new RouteKey("DELETE", "/v1.0/qosprofiles/{id}"), RequestTypeEnum.DeleteQosProfile },
             { new RouteKey("GET", "/v1.0/qosprofiles"), RequestTypeEnum.ListQosProfiles },
 
+            // QoS Runtime
+            { new RouteKey("GET", "/v1.0/qosruntime"), RequestTypeEnum.ListQosRuntime },
+            { new RouteKey("GET", "/v1.0/qosruntime/{id}"), RequestTypeEnum.ReadQosRuntime },
+            { new RouteKey("GET", "/v1.0/qosruntime/{id}/history"), RequestTypeEnum.ReadQosRuntimeHistory },
+
             // QoS Traffic Classes
             { new RouteKey("POST", "/v1.0/qostrafficclasses"), RequestTypeEnum.CreateQosTrafficClass },
             { new RouteKey("GET", "/v1.0/qostrafficclasses/{id}"), RequestTypeEnum.ReadQosTrafficClass },

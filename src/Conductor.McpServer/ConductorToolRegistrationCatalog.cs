@@ -20,6 +20,7 @@ namespace Conductor.McpServer
             AddConfigurationTools();
             AddTenantTools();
             AddQosTools();
+            AddQosRuntimeTools();
         }
 
         internal IReadOnlyList<ConductorToolRegistration> Registrations
@@ -446,6 +447,56 @@ namespace Conductor.McpServer
                     required = new[] { "tenant_id", "class_id" }
                 },
                 _Handlers.DeleteQosTrafficClass);
+        }
+
+        private void AddQosRuntimeTools()
+        {
+            AddTool(
+                "conductor_list_qos_runtime",
+                "List live QoS runtime state for every virtual model runner in a tenant: scheduler state, capacity usage, queue depth, per-class admission statistics, and endpoint concurrency. Statistics are in memory and reset when the server restarts.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID to query (required)" }
+                    },
+                    required = new[] { "tenant_id" }
+                },
+                _Handlers.ListQosRuntime);
+
+            AddTool(
+                "conductor_get_qos_runtime",
+                "Get live QoS runtime state for one virtual model runner: scheduler state, capacity usage, queue depth, per-class admission statistics, and endpoint concurrency.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        vmr_id = new { type = "string", description = "Virtual model runner ID (vmr_xxx)" }
+                    },
+                    required = new[] { "tenant_id", "vmr_id" }
+                },
+                _Handlers.GetQosRuntime);
+
+            AddTool(
+                "conductor_get_qos_runtime_history",
+                "Get time-bucketed QoS admission history for one virtual model runner: per-class admitted, rejected, timed-out, and aborted counts, wait times, and peak queue depth. At most 24 hours of in-memory history is kept.",
+                new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        tenant_id = new { type = "string", description = "Tenant ID" },
+                        vmr_id = new { type = "string", description = "Virtual model runner ID (vmr_xxx)" },
+                        start_utc = new { type = "string", description = "Window start (ISO-8601 UTC). Defaults to one hour before end_utc." },
+                        end_utc = new { type = "string", description = "Window end (ISO-8601 UTC). Defaults to now." },
+                        interval = new { type = "string", description = "Bucket interval: minute (default), 5minute, 15minute, or hour" }
+                    },
+                    required = new[] { "tenant_id", "vmr_id" }
+                },
+                _Handlers.GetQosRuntimeHistory);
         }
     }
 }

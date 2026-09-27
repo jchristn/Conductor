@@ -1,18 +1,9 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { copyChartPng } from '../utils/chartExport';
-
-// Time ranges use the same bucket sizes as the Verbex, Lattice, and Pneuma dashboards:
-// last hour -> 1 minute buckets, last day -> 15 minute buckets, last week -> 1 hour buckets,
-// last month -> 6 hour buckets. The selected range fully drives the chart window.
-const TIME_RANGES = [
-  { label: 'Last Hour', value: 'hour', interval: 'minute', stepMs: 60_000, bucketCount: 60 },
-  { label: 'Last Day', value: 'day', interval: '15minute', stepMs: 900_000, bucketCount: 96 },
-  { label: 'Last Week', value: 'week', interval: 'hour', stepMs: 3_600_000, bucketCount: 24 * 7 },
-  { label: 'Last Month', value: 'month', interval: '6hour', stepMs: 21_600_000, bucketCount: 4 * 30 }
-];
-
-const MAX_X_AXIS_LABELS = 8;
+import ChartCopyButton from './ChartCopyButton';
+import useClampedTooltip from '../hooks/useClampedTooltip';
+import { computeXLabelIndices, computeYTicks, cssColor, parseUtcMs } from '../utils/chartHelpers';
+import { floorToStep, getRangeWindow, getTimeRange } from '../utils/requestHistoryTimeRanges';
 
 // Chart geometry (SVG viewBox units). The SVG scales to fill its container width.
 const CHART_WIDTH = 800;
@@ -24,30 +15,8 @@ const PADDING_BOTTOM = 40;
 const INNER_WIDTH = CHART_WIDTH - PADDING_LEFT - PADDING_RIGHT;
 const INNER_HEIGHT = CHART_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
-// Filters that describe a time window are ignored by the chart because the range tabs own the window.
+// Filters that describe a time window are ignored by the chart because the selected time range owns the window.
 const TIME_FILTER_KEYS = new Set(['createdAfterUtc', 'createdBeforeUtc']);
-
-function floorToStep(timestamp, stepMs) {
-  return Math.floor(timestamp / stepMs) * stepMs;
-}
-
-// Server summary bucket timestamps are UTC but the JSON may lack a timezone designator
-// (e.g. "2026-09-08T14:30:00" or "2026-09-08 14:30:00"), which the Date constructor would
-// otherwise parse as local time. Treat any timezone-less value as UTC so bucket keys align
-// with the UTC grid we build below.
-function parseUtcMs(value) {
-  if (value == null) return NaN;
-  if (typeof value !== 'string') return new Date(value).getTime();
-  const hasTimezone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(value.trim());
-  const normalized = hasTimezone ? value : value.replace(' ', 'T') + 'Z';
-  return new Date(normalized).getTime();
-}
-
-function getRangeWindow(range, nowMs) {
-  const endExclusiveMs = floorToStep(nowMs, range.stepMs) + range.stepMs;
-  const startMs = endExclusiveMs - range.bucketCount * range.stepMs;
-  return { startMs, endExclusiveMs };
-}
 
 function buildBuckets(summary, range, startMs) {
   const apiBuckets = new Map(
@@ -66,31 +35,6 @@ function buildBuckets(summary, range, startMs) {
       failureCount: apiBucket?.FailureCount || 0
     };
   });
-}
-
-// Evenly spaced integer Y ticks. Always at least 2 labels; the max is rounded up so every tick is a
-// whole number and the ticks stay evenly spaced by both value and position.
-function computeYTicks(maxCount) {
-  const segments = 4;
-  const niceMax = Math.max(segments, Math.ceil(Math.max(maxCount, 1) / segments) * segments);
-  const step = niceMax / segments;
-  const ticks = [];
-  for (let i = 0; i <= segments; i++) {
-    ticks.push(Math.round(step * i));
-  }
-  return ticks;
-}
-
-// At most MAX_X_AXIS_LABELS labels, evenly spaced across the buckets (including the first and last).
-function computeXLabelIndices(bucketCount) {
-  if (bucketCount <= 0) return [];
-  const labelCount = Math.min(MAX_X_AXIS_LABELS, bucketCount);
-  if (labelCount === 1) return [0];
-  const indices = new Set();
-  for (let i = 0; i < labelCount; i++) {
-    indices.add(Math.round((i * (bucketCount - 1)) / (labelCount - 1)));
-  }
-  return Array.from(indices).sort((a, b) => a - b);
 }
 
 function formatChartLabel(timestamp, interval) {
@@ -112,24 +56,21 @@ function formatTooltipTimestamp(timestamp, interval) {
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function RequestHistorySummaryChart({ filters }) {
+function RequestHistorySummaryChart({ filters, timeRange, refreshToken }) {
   const { api } = useApp();
-  const [timeRange, setTimeRange] = useState('day');
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hovered, setHovered] = useState(null);
-  const [tooltipPos, setTooltipPos] = useState(null);
-  const [copyState, setCopyState] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const containerRef = useRef(null);
   const tooltipRef = useRef(null);
   const svgRef = useRef(null);
 
-  const range = TIME_RANGES.find((entry) => entry.value === timeRange) || TIME_RANGES[1];
+  const range = getTimeRange(timeRange);
 
-  // Only the non-time filters flow into the chart query; the range tabs own the time window.
+  // Only the non-time filters flow into the chart query; the selected time range owns the window.
   const scopedFilters = Object.fromEntries(
     Object.entries(filters || {}).filter(([key, value]) => value !== '' && value != null && !TIME_FILTER_KEYS.has(key))
   );
@@ -165,7 +106,7 @@ function RequestHistorySummaryChart({ filters }) {
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, timeRange, scopedFilterKey, refreshKey]);
+  }, [api, timeRange, scopedFilterKey, refreshKey, refreshToken]);
 
   const rangeWindow = getRangeWindow(range, Date.now());
   const buckets = buildBuckets(summary, range, rangeWindow.startMs);
@@ -181,34 +122,8 @@ function RequestHistorySummaryChart({ filters }) {
   const totalSuccess = summary?.TotalSuccess || 0;
   const totalFailure = summary?.TotalFailure || 0;
 
-  // Keep the tooltip fully inside the chart container: clamp its top/left against the container and
-  // the tooltip's own measured size so it never renders outside the chart bounds.
-  useLayoutEffect(() => {
-    if (!hovered || !containerRef.current || !tooltipRef.current) {
-      return;
-    }
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const tooltipRect = tooltipRef.current.getBoundingClientRect();
-    const margin = 8;
-    const offset = 14;
-
-    let left = hovered.relX + offset;
-    if (left + tooltipRect.width + margin > containerRect.width) {
-      left = hovered.relX - tooltipRect.width - offset;
-    }
-    left = Math.max(margin, Math.min(left, containerRect.width - tooltipRect.width - margin));
-
-    let top = hovered.relY + offset;
-    if (top + tooltipRect.height + margin > containerRect.height) {
-      top = hovered.relY - tooltipRect.height - offset;
-    }
-    top = Math.max(margin, Math.min(top, containerRect.height - tooltipRect.height - margin));
-
-    setTooltipPos((current) => {
-      if (current && current.left === left && current.top === top) return current;
-      return { left, top };
-    });
-  }, [hovered]);
+  // Keep the tooltip fully inside the chart container.
+  const tooltipPos = useClampedTooltip(containerRef, tooltipRef, hovered);
 
   const handleBarHover = (index, event) => {
     const containerRect = containerRef.current?.getBoundingClientRect();
@@ -220,25 +135,15 @@ function RequestHistorySummaryChart({ filters }) {
     });
   };
 
-  const handleCopy = async () => {
-    const result = await copyChartPng(svgRef.current, {
-      title: `Request History - ${range.label}`,
-      xLabel: 'Time',
-      yLabel: 'Requests',
-      legend: [
-        { label: 'Success (1xx-3xx)', color: cssColor('--success-color', '#10b981') },
-        { label: 'Failed (4xx-5xx)', color: cssColor('--danger-color', '#ef4444') }
-      ]
-    });
-    setCopyState(result);
-    setTimeout(() => setCopyState(null), 1800);
-  };
-
-  const copyTitle = copyState === 'copied'
-    ? 'Copied chart image to clipboard'
-    : copyState === 'downloaded'
-      ? 'Clipboard unavailable - downloaded chart image instead'
-      : 'Copy chart as an image';
+  const getCopyOptions = () => ({
+    title: `Request History - ${range.label}`,
+    xLabel: 'Time',
+    yLabel: 'Requests',
+    legend: [
+      { label: 'Success (1xx-3xx)', color: cssColor('--success-color', '#10b981') },
+      { label: 'Failed (4xx-5xx)', color: cssColor('--danger-color', '#ef4444') }
+    ]
+  });
 
   const hoveredBucket = hovered ? buckets[hovered.index] : null;
 
@@ -247,36 +152,7 @@ function RequestHistorySummaryChart({ filters }) {
       <div className="request-history-chart-header">
         <h2>API Requests Over Time</h2>
         <div className="request-history-chart-controls">
-          <div className="request-history-time-tabs">
-            {TIME_RANGES.map((entry) => (
-              <button
-                key={entry.value}
-                type="button"
-                className={'request-history-time-tab' + (timeRange === entry.value ? ' active' : '')}
-                onClick={() => setTimeRange(entry.value)}
-                title={`Show request traffic for the ${entry.label.toLowerCase()}`}
-              >
-                {entry.label}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="request-history-refresh-btn"
-            onClick={handleCopy}
-            title={copyTitle}
-          >
-            {copyState === 'copied' || copyState === 'downloaded' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            )}
-          </button>
+          <ChartCopyButton svgRef={svgRef} getOptions={getCopyOptions} />
           <button
             type="button"
             className="request-history-refresh-btn"
@@ -452,12 +328,6 @@ function RequestHistorySummaryChart({ filters }) {
       </div>
     </div>
   );
-}
-
-function cssColor(name, fallback) {
-  if (typeof window === 'undefined') return fallback;
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name);
-  return (value && value.trim()) || fallback;
 }
 
 export default RequestHistorySummaryChart;

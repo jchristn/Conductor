@@ -326,6 +326,104 @@ namespace Conductor.Sdk.Tests
         }
 
         [Fact]
+        public async Task QosRuntimeMethods_UseExpectedRoutes()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            Dictionary<string, string> filters = new Dictionary<string, string>
+            {
+                ["tenantId"] = "ten_1",
+                ["startUtc"] = "2026-06-16T17:00:00Z",
+                ["endUtc"] = "2026-06-16T18:00:00Z",
+                ["interval"] = "5minute"
+            };
+
+            using JsonDocument list = await client.ListQosRuntimeAsync("ten_1");
+            using JsonDocument listAll = await client.ListQosRuntimeAsync();
+            using JsonDocument read = await client.GetQosRuntimeAsync("vmr_1", "ten_1");
+            using JsonDocument history = await client.GetQosRuntimeHistoryAsync("vmr_1", filters);
+            using JsonDocument historyDefault = await client.GetQosRuntimeHistoryAsync("vmr_1");
+
+            Assert.All(handler.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+            Assert.Equal("https://conductor.local/v1.0/qosruntime?tenantId=ten_1", handler.Requests[0].Uri.ToString());
+            Assert.Equal("https://conductor.local/v1.0/qosruntime", handler.Requests[1].Uri.ToString());
+            Assert.Equal("https://conductor.local/v1.0/qosruntime/vmr_1?tenantId=ten_1", handler.Requests[2].Uri.ToString());
+            Assert.Equal(
+                "https://conductor.local/v1.0/qosruntime/vmr_1/history?tenantId=ten_1&startUtc=2026-06-16T17%3A00%3A00Z&endUtc=2026-06-16T18%3A00%3A00Z&interval=5minute",
+                handler.Requests[3].Uri.AbsoluteUri);
+            Assert.Equal("https://conductor.local/v1.0/qosruntime/vmr_1/history", handler.Requests[4].Uri.ToString());
+        }
+
+        [Fact]
+        public async Task GetQosRuntimeHistoryAsync_OnBadRequest_ThrowsConductorApiException()
+        {
+            RecordingHandler handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("{\"Message\":\"window too large\"}", Encoding.UTF8, "application/json")
+            });
+            using HttpClient httpClient = new HttpClient(handler);
+            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+
+            ConductorApiException exception = await Assert.ThrowsAsync<ConductorApiException>(
+                async () => await client.GetQosRuntimeHistoryAsync("vmr_1", new Dictionary<string, string> { ["interval"] = "day" }));
+
+            Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+            Assert.Contains("window too large", exception.ResponseBody);
+        }
+
+        [Fact]
+        public void QosRuntimeModels_DeserializeExpectedContractShape()
+        {
+            string snapshotJson =
+                "{\"TenantId\":\"ten_1\",\"VirtualModelRunnerId\":\"vmr_1\",\"VirtualModelRunnerName\":\"Primary\"," +
+                "\"QosProfileId\":\"qos_1\",\"QosProfileName\":\"Latency first\",\"SchedulerState\":\"Running\"," +
+                "\"SchedulerFaultCount\":2,\"LastSchedulerError\":null,\"LastSchedulerErrorUtc\":null," +
+                "\"Capacity\":8,\"InUse\":3,\"Waiting\":1,\"MaxQueueWaitMs\":30000," +
+                "\"Classes\":[{\"ClassName\":\"Interactive\",\"Waiting\":1,\"Admitted\":42,\"Rejected\":1,\"TimedOut\":0," +
+                "\"Aborted\":0,\"EndpointSlotTimeouts\":0,\"AverageWaitMs\":12.5,\"P95WaitMs\":40.0,\"MaxWaitMs\":55.0," +
+                "\"LastAdmittedUtc\":\"2026-06-16T17:59:00Z\",\"LastRejectedUtc\":null}]," +
+                "\"Endpoints\":[{\"EndpointId\":\"mre_1\",\"EndpointName\":\"GPU 1\",\"InFlight\":3,\"MaxParallelRequests\":8,\"IsHealthy\":true,\"Active\":true}]}";
+            string historyJson =
+                "{\"VirtualModelRunnerId\":\"vmr_1\",\"StartUtc\":\"2026-06-16T17:00:00Z\",\"EndUtc\":\"2026-06-16T18:00:00Z\"," +
+                "\"Interval\":\"5minute\",\"Classes\":[\"Interactive\"]," +
+                "\"Buckets\":[{\"TimestampUtc\":\"2026-06-16T17:55:00Z\",\"ClassName\":\"Interactive\",\"Admitted\":10,\"Rejected\":1," +
+                "\"TimedOut\":0,\"Aborted\":0,\"EndpointSlotTimeouts\":0,\"AverageWaitMs\":8.0,\"MaxWaitMs\":20.0,\"PeakWaiting\":2}]}";
+
+            QosRuntimeSnapshot snapshot = JsonSerializer.Deserialize<QosRuntimeSnapshot>(snapshotJson);
+            QosRuntimeHistory history = JsonSerializer.Deserialize<QosRuntimeHistory>(historyJson);
+
+            Assert.NotNull(snapshot);
+            Assert.Equal("Running", snapshot.SchedulerState);
+            Assert.Equal(2, snapshot.SchedulerFaultCount);
+            Assert.Null(snapshot.LastSchedulerErrorUtc);
+            Assert.Equal(8, snapshot.Capacity);
+            QosClassRuntimeSnapshot interactive = Assert.Single(snapshot.Classes);
+            Assert.Equal(42, interactive.Admitted);
+            Assert.Equal(40.0, interactive.P95WaitMs);
+            Assert.Equal(new DateTime(2026, 6, 16, 17, 59, 0, DateTimeKind.Utc), interactive.LastAdmittedUtc.Value.ToUniversalTime());
+            QosEndpointSlotSnapshot endpoint = Assert.Single(snapshot.Endpoints);
+            Assert.Equal(3, endpoint.InFlight);
+            Assert.True(endpoint.IsHealthy);
+
+            Assert.NotNull(history);
+            Assert.Equal("5minute", history.Interval);
+            Assert.Equal(new List<string> { "Interactive" }, history.Classes);
+            QosRuntimeHistoryBucket bucket = Assert.Single(history.Buckets);
+            Assert.Equal(10, bucket.Admitted);
+            Assert.Equal(2, bucket.PeakWaiting);
+
+            QosRuntimeSnapshot empty = new QosRuntimeSnapshot { Classes = null, Endpoints = null };
+            Assert.Equal("Idle", empty.SchedulerState);
+            Assert.Empty(empty.Classes);
+            Assert.Empty(empty.Endpoints);
+            QosRuntimeHistory emptyHistory = new QosRuntimeHistory { Classes = null, Buckets = null };
+            Assert.Empty(emptyHistory.Classes);
+            Assert.Empty(emptyHistory.Buckets);
+        }
+
+        [Fact]
         public async Task PurgeTenantAsync_PostsConfirmationBody()
         {
             RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));

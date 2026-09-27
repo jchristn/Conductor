@@ -135,6 +135,17 @@ function Sidebar() {
       )
     },
     {
+      path: '/qos-monitor',
+      label: 'QoS Monitor',
+      tourId: 'nav-qos-monitor',
+      tooltip: 'Watch live QoS queueing, admissions, rejections, and wait times per virtual model runner',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm2 1v12h10V4H5zm1.293 7.707a1 1 0 010-1.414l2-2a1 1 0 011.414 0L11 8.586l1.293-1.293a1 1 0 111.414 1.414l-2 2a1 1 0 01-1.414 0L9 9.414l-1.293 1.293a1 1 0 01-1.414 0z" clipRule="evenodd" />
+        </svg>
+      )
+    },
+    {
       path: '/model-access-policies',
       label: 'Model Access Policies',
       tourId: 'nav-model-access-policies',

@@ -57,6 +57,35 @@ namespace Test.Shared.Server.Services
             after.Data.Should().NotContain(p => p.Name == QosProfileFactory.StandardProfileName);
         }
 
+        public async Task EnsureTenant_SeedsInferenceFirstProfileAndMetadataClass()
+        {
+            await new QosSeeder(Database).EnsureTenantAsync(await Database.Tenant.ReadAsync(TestTenantId).ConfigureAwait(false)).ConfigureAwait(false);
+
+            (await Database.QosTrafficClass.ReadByNameAsync(TestTenantId, QosProfileFactory.MetadataClassName).ConfigureAwait(false)).Should().NotBeNull();
+            EnumerationResult<QosProfile> profiles = await Database.QosProfile.EnumerateAsync(TestTenantId, new EnumerationRequest { MaxResults = 100 }).ConfigureAwait(false);
+            profiles.Data.Should().ContainSingle(p => p.Name == QosProfileFactory.InferenceFirstProfileName);
+
+            TenantMetadata tenant = await Database.Tenant.ReadAsync(TestTenantId).ConfigureAwait(false);
+            tenant.Tags[QosSeeder.InferenceFirstSeededTagKey].Should().Be("true");
+        }
+
+        public async Task EnsureTenant_PreviouslySeededTenant_ReceivesInferenceFirstOnce()
+        {
+            // Simulate a tenant seeded before the Inference First profile existed.
+            TenantMetadata tenant = await Database.Tenant.ReadAsync(TestTenantId).ConfigureAwait(false);
+            if (tenant.Tags == null) tenant.Tags = new System.Collections.Generic.Dictionary<string, string>();
+            tenant.Tags[QosSeeder.SeededTagKey] = "true";
+            await Database.Tenant.UpdateAsync(tenant).ConfigureAwait(false);
+
+            QosSeeder seeder = new QosSeeder(Database);
+            await seeder.EnsureTenantAsync(await Database.Tenant.ReadAsync(TestTenantId).ConfigureAwait(false)).ConfigureAwait(false);
+            await seeder.EnsureTenantAsync(await Database.Tenant.ReadAsync(TestTenantId).ConfigureAwait(false)).ConfigureAwait(false);
+
+            EnumerationResult<QosProfile> profiles = await Database.QosProfile.EnumerateAsync(TestTenantId, new EnumerationRequest { MaxResults = 100 }).ConfigureAwait(false);
+            profiles.Data.Should().ContainSingle(p => p.Name == QosProfileFactory.InferenceFirstProfileName);
+            profiles.Data.Should().NotContain(p => p.Name == QosProfileFactory.StandardProfileName);
+        }
+
         public async Task EnsureTenant_BackfillsRunnersWithoutProfile()
         {
             VirtualModelRunner vmr = await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner { TenantId = TestTenantId, Name = "seed-vmr", BasePath = "/v1.0/api/seed-backfill/" }).ConfigureAwait(false);

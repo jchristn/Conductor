@@ -572,6 +572,46 @@ class ConductorApi {
     return this.request('DELETE', `/v1.0/qostrafficclasses/${id}${query}`);
   }
 
+  // QoS Runtime APIs
+  /**
+   * List live QoS runtime snapshots (scheduler state, capacity, per-class counters, endpoint slots)
+   * for every virtual model runner in scope. Counters are cumulative since server start.
+   * @param {Object} params - Query parameters
+   * @param {string} params.tenantId - Tenant to list (global administrators only; omit for every tenant)
+   * @returns {Promise<Array<Object>>} Array of QosRuntimeSnapshot objects
+   */
+  async listQosRuntime(params = {}) {
+    const query = this.buildQueryString(params);
+    return this.request('GET', `/v1.0/qosruntime${query}`);
+  }
+
+  /**
+   * Get the live QoS runtime snapshot for one virtual model runner.
+   * @param {string} id - Virtual model runner ID
+   * @param {string|null} tenantId - Tenant ID (global administrators only)
+   * @returns {Promise<Object>} QosRuntimeSnapshot
+   */
+  async getQosRuntime(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/qosruntime/${id}${query}`);
+  }
+
+  /**
+   * Get time-bucketed QoS admission history for one virtual model runner. Only buckets with activity
+   * are returned; history is kept in memory for 24 hours and the window may not exceed 24 hours.
+   * @param {string} id - Virtual model runner ID
+   * @param {Object} params - Query parameters
+   * @param {string} params.startUtc - Start of the window (UTC, ISO 8601)
+   * @param {string} params.endUtc - End of the window (UTC, ISO 8601)
+   * @param {string} params.interval - Bucket interval: "minute", "5minute", "15minute", or "hour"
+   * @param {string} params.tenantId - Tenant ID (global administrators only)
+   * @returns {Promise<Object>} QosRuntimeHistory with VirtualModelRunnerId, StartUtc, EndUtc, Interval, Classes, and Buckets
+   */
+  async getQosRuntimeHistory(id, params = {}) {
+    const query = this.buildQueryString(params);
+    return this.request('GET', `/v1.0/qosruntime/${id}/history${query}`);
+  }
+
   // Tenant purge (nuke) - system admin only
   async purgeTenant(id, confirmTenantId) {
     return this.request('POST', `/v1.0/tenants/${id}/purge`, { ConfirmTenantId: confirmTenantId });

@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Watson" Version="7.2.0" />
-    <PackageReference Include="QoSKit" Version="0.2.0" />
+    <PackageReference Include="QoSKit" Version="0.2.1" />
   </ItemGroup>
 
   <ItemGroup>

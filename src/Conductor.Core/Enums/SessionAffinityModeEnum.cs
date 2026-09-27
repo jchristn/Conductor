@@ -14,7 +14,7 @@ namespace Conductor.Core.Enums
         None = 0,
 
         /// <summary>
-        /// Pin by client IP address (from X-Forwarded-For or direct connection).
+        /// Pin by client IP address (the connecting peer, or the forwarded-for address when the peer is a trusted proxy per Webserver.TrustedProxies).
         /// </summary>
         SourceIP = 1,
 

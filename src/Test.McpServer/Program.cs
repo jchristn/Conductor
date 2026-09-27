@@ -505,6 +505,97 @@ namespace Test.McpServer
                 return await ExpectToolErrorAsync("conductor_get_endpoint_health", new { tenant_id = _TenantId }, "Health check service not configured").ConfigureAwait(false);
             }).ConfigureAwait(false)) passed++; else failed++;
 
+            // Negative: the QoS runtime tools with no QoS runtime service configured are flagged isError
+            if (await RunTestAsync("conductor_list_qos_runtime (no service) -> isError", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_list_qos_runtime", new { tenant_id = _TenantId }, "QoS runtime service not configured").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: a QoS history window longer than 24 hours is flagged isError
+            if (await RunTestAsync("conductor_get_qos_runtime_history (window too large) -> isError", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_get_qos_runtime_history", new
+                {
+                    tenant_id = _TenantId,
+                    vmr_id = "vmr_any",
+                    start_utc = "2026-06-14T00:00:00Z",
+                    end_utc = "2026-06-16T00:00:00Z"
+                }, "exceeds the maximum").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: an unknown QoS history interval is flagged isError
+            if (await RunTestAsync("conductor_get_qos_runtime_history (bad interval) -> isError", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_get_qos_runtime_history", new { tenant_id = _TenantId, vmr_id = "vmr_any", interval = "day" }, "interval must be one of").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Configure a stand-in QoS runtime service for the positive QoS runtime tests
+            _McpServer.ConfigureQosRuntime(
+                vmr => new QosRuntimeSnapshot
+                {
+                    TenantId = vmr.TenantId,
+                    VirtualModelRunnerId = vmr.Id,
+                    VirtualModelRunnerName = vmr.Name,
+                    QosProfileId = vmr.QosProfileId,
+                    SchedulerState = "Running",
+                    Capacity = 4,
+                    InUse = 1,
+                    Classes = new List<QosClassRuntimeSnapshot>
+                    {
+                        new QosClassRuntimeSnapshot { ClassName = "Interactive", Admitted = 5, AverageWaitMs = 2.5 }
+                    }
+                },
+                (vmrId, startUtc, endUtc, intervalMinutes) => new List<QosRuntimeHistoryBucket>
+                {
+                    new QosRuntimeHistoryBucket { TimestampUtc = startUtc, ClassName = "Interactive", Admitted = intervalMinutes, PeakWaiting = 2 }
+                });
+
+            // Test: conductor_list_qos_runtime
+            if (await RunTestAsync("conductor_list_qos_runtime", async () =>
+            {
+                JsonElement result = await CallToolAsync("conductor_list_qos_runtime", new { tenant_id = _TenantId }).ConfigureAwait(false);
+                PrintResult(result);
+                JsonElement runners = result.GetProperty("runners");
+                return result.GetProperty("count").GetInt32() > 0
+                    && runners.GetArrayLength() == result.GetProperty("count").GetInt32()
+                    && runners[0].GetProperty("schedulerState").GetString() == "Running";
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Test: conductor_get_qos_runtime and conductor_get_qos_runtime_history
+            if (await RunTestAsync("conductor_get_qos_runtime / conductor_get_qos_runtime_history", async () =>
+            {
+                JsonElement listResult = await CallToolAsync("conductor_list_vmrs", new { tenant_id = _TenantId }).ConfigureAwait(false);
+                string vmrId = null;
+                if (listResult.TryGetProperty("vmrs", out JsonElement vmrs) && vmrs.GetArrayLength() > 0)
+                {
+                    vmrId = vmrs[0].GetProperty("id").GetString();
+                }
+
+                if (String.IsNullOrEmpty(vmrId))
+                {
+                    Console.WriteLine("      No VMRs found to test");
+                    return false;
+                }
+
+                JsonElement snapshot = await CallToolAsync("conductor_get_qos_runtime", new { tenant_id = _TenantId, vmr_id = vmrId }).ConfigureAwait(false);
+                PrintResult(snapshot);
+                JsonElement history = await CallToolAsync("conductor_get_qos_runtime_history", new { tenant_id = _TenantId, vmr_id = vmrId, interval = "5minute" }).ConfigureAwait(false);
+                PrintResult(history);
+
+                return snapshot.GetProperty("vmrId").GetString() == vmrId
+                    && snapshot.GetProperty("classes")[0].GetProperty("admitted").GetInt64() == 5
+                    && history.GetProperty("interval").GetString() == "5minute"
+                    && history.GetProperty("count").GetInt32() == 1
+                    && history.GetProperty("buckets")[0].GetProperty("admitted").GetInt64() == 5
+                    && history.GetProperty("classes")[0].GetString() == "Interactive";
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // Negative: QoS runtime for a missing VMR is flagged isError
+            if (await RunTestAsync("conductor_get_qos_runtime (missing) -> isError", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_get_qos_runtime", new { tenant_id = _TenantId, vmr_id = "vmr_does_not_exist" }, "vmr_does_not_exist").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
             // Negative: a missing entity is flagged isError
             if (await RunTestAsync("conductor_get_model (missing) -> isError", async () =>
             {

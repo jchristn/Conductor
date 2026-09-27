@@ -294,6 +294,71 @@ namespace Test.Shared.Server.Services
             decision.Candidates.Find(item => item.EndpointId == busy.Id).RuntimeStats.Pending.Should().Be(8);
         }
 
+        public async Task HasAvailableEndpoint_WithHealthyEndpoint_ReturnsTrue()
+        {
+            HealthCheckService healthCheckService = new HealthCheckService(Database, Logging, new RoutingHealthCheckHandler());
+            ModelRunnerEndpoint unhealthy = await CreateEndpointAsync("Probe Mixed Unhealthy Endpoint", "probe-mixed-unhealthy.local", EndpointServiceStateEnum.Normal, true, 0, "/unhealthy").ConfigureAwait(false);
+            ModelRunnerEndpoint healthy = await CreateEndpointAsync("Probe Healthy Endpoint", "probe-healthy.local", EndpointServiceStateEnum.Normal, true, 1).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string> { unhealthy.Id, healthy.Id }, SessionAffinityModeEnum.None).ConfigureAwait(false);
+
+            try
+            {
+                await healthCheckService.StartAsync().ConfigureAwait(false);
+                await WaitForHealthyAsync(healthCheckService, new List<string> { healthy.Id }).ConfigureAwait(false);
+                _Service = new RoutingDecisionService(Database, Logging, healthCheckService, _SessionAffinityService);
+
+                // Capacity is not considered: a healthy endpoint at its concurrency limit is still available.
+                healthCheckService.TryIncrementInFlight(healthy.Id, healthy.MaxParallelRequests).Should().BeTrue();
+                (await _Service.HasAvailableEndpointAsync(vmr).ConfigureAwait(false)).Should().BeTrue();
+            }
+            finally
+            {
+                await healthCheckService.StopAsync().ConfigureAwait(false);
+                healthCheckService.Dispose();
+            }
+        }
+
+        public async Task HasAvailableEndpoint_WithOnlyUnavailableEndpoints_ReturnsFalse()
+        {
+            HealthCheckService healthCheckService = new HealthCheckService(Database, Logging, new RoutingHealthCheckHandler());
+            ModelRunnerEndpoint inactive = await CreateEndpointAsync("Probe Inactive Endpoint", "probe-inactive.local", EndpointServiceStateEnum.Normal, false).ConfigureAwait(false);
+            ModelRunnerEndpoint unhealthy = await CreateEndpointAsync("Probe Unhealthy Endpoint", "probe-unhealthy.local", EndpointServiceStateEnum.Normal, true, 0, "/unhealthy").ConfigureAwait(false);
+            ModelRunnerEndpoint draining = await CreateEndpointAsync("Probe Draining Endpoint", "probe-draining.local", EndpointServiceStateEnum.Draining).ConfigureAwait(false);
+            ModelRunnerEndpoint quarantined = await CreateEndpointAsync("Probe Quarantined Endpoint", "probe-quarantined.local", EndpointServiceStateEnum.Quarantined).ConfigureAwait(false);
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string> { inactive.Id, unhealthy.Id, draining.Id, quarantined.Id }, SessionAffinityModeEnum.None).ConfigureAwait(false);
+
+            try
+            {
+                await healthCheckService.StartAsync().ConfigureAwait(false);
+                DateTime deadlineUtc = DateTime.UtcNow.AddSeconds(5);
+                while (DateTime.UtcNow < deadlineUtc && healthCheckService.GetHealthState(unhealthy.Id) == null)
+                {
+                    await Task.Delay(50).ConfigureAwait(false);
+                }
+
+                healthCheckService.GetHealthState(unhealthy.Id).Should().NotBeNull();
+                _Service = new RoutingDecisionService(Database, Logging, healthCheckService, _SessionAffinityService);
+                (await _Service.HasAvailableEndpointAsync(vmr).ConfigureAwait(false)).Should().BeFalse();
+            }
+            finally
+            {
+                await healthCheckService.StopAsync().ConfigureAwait(false);
+                healthCheckService.Dispose();
+            }
+        }
+
+        public async Task HasAvailableEndpoint_WithNoEndpoints_ReturnsFalse()
+        {
+            VirtualModelRunner vmr = await CreateVmrAsync(new List<string>(), SessionAffinityModeEnum.None).ConfigureAwait(false);
+            (await _Service.HasAvailableEndpointAsync(vmr).ConfigureAwait(false)).Should().BeFalse();
+        }
+
+        public async Task HasAvailableEndpoint_WithNullVmr_Throws()
+        {
+            Func<Task> act = () => _Service.HasAvailableEndpointAsync(null);
+            await act.Should().ThrowAsync<ArgumentNullException>().ConfigureAwait(false);
+        }
+
         public async Task Evaluate_WithAdaptiveMode_ExcludesTransientBackoffEndpoint()
         {
             ModelRunnerEndpoint backedOff = await CreateEndpointAsync("Adaptive Backoff Endpoint", "adaptive-backoff.local", EndpointServiceStateEnum.Normal).ConfigureAwait(false);

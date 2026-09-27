@@ -13,6 +13,7 @@ Thin Python client for the management-plane features introduced by roadmap prior
 - model access policy CRUD, validation, evaluation, and effective-access queries
 - QoS profile CRUD, draft validation, and classifier-catalog lookup
 - QoS traffic class CRUD
+- read-only QoS runtime state (scheduler, capacity, per-class statistics, endpoint concurrency) and admission history
 - VMR reservation CRUD, validation, VMR-scoped listing, and effective-access queries
 - request-history search, summary, detail, analytics, and bulk delete
 - analytics workspace catalog, query, saved reports, summary, TTFT, token usage, estimate-only cost, user, and access/reliability helpers
@@ -241,6 +242,16 @@ client.validate_qos_profile(qos_profile, existing_id=qos_profile["Id"])
 client.list_qos_profiles({"tenantId": "tenant_123", "activeFilter": "true"})
 client.update_qos_profile(qos_profile["Id"], qos_profile)
 client.delete_qos_profile(qos_profile["Id"], tenant_id="tenant_123")
+
+# Live QoS runtime state is held in memory and resets on server restart.
+qos_runtime_list = client.list_qos_runtime("tenant_123")
+qos_runtime = client.get_qos_runtime("vmr_123", tenant_id="tenant_123")
+qos_history = client.get_qos_runtime_history("vmr_123", {
+    "tenantId": "tenant_123",
+    "startUtc": "2026-06-16T17:00:00Z",
+    "endUtc": "2026-06-16T18:00:00Z",
+    "interval": "5minute",
+})
 
 # System-admin only. The reserved "default" tenant cannot be purged.
 purge_report = client.purge_tenant("tenant_123")

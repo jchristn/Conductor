@@ -2,6 +2,7 @@ namespace Conductor.McpServer
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.Linq;
     using System.Text.Json;
     using System.Text.Json.Serialization;
@@ -51,6 +52,41 @@ namespace Conductor.McpServer
         }
 
         /// <summary>
+        /// Function that builds the live QoS runtime snapshot of a virtual model runner, typically the QoS admission
+        /// service's snapshot enriched with endpoint concurrency. This decouples the MCP server from the admission
+        /// service, which lives in Conductor.Server. Null (the default) means the QoS runtime tools report that the
+        /// service is not configured. The function may return null, which is reported as an Idle snapshot. It is
+        /// invoked from MCP request threads and must be thread-safe.
+        /// </summary>
+        public Func<VirtualModelRunner, QosRuntimeSnapshot> GetQosRuntimeSnapshotFunc
+        {
+            get => _GetQosRuntimeSnapshotFunc;
+            set => _GetQosRuntimeSnapshotFunc = value;
+        }
+
+        /// <summary>
+        /// Function that returns time-bucketed QoS admission history for a virtual model runner. Arguments are the
+        /// runner id, window start (UTC), window end (UTC, exclusive), and bucket size in minutes (1, 5, 15, or 60).
+        /// Null (the default) means the history tool reports that the service is not configured. The function may
+        /// return null, which is reported as no activity. It is invoked from MCP request threads and must be thread-safe.
+        /// </summary>
+        public Func<string, DateTime, DateTime, int, List<QosRuntimeHistoryBucket>> GetQosRuntimeHistoryFunc
+        {
+            get => _GetQosRuntimeHistoryFunc;
+            set => _GetQosRuntimeHistoryFunc = value;
+        }
+
+        /// <summary>
+        /// Longest QoS history window that can be requested, in minutes. Default 1440 (24 hours), minimum 1;
+        /// values below 1 reset to the default.
+        /// </summary>
+        public int MaxQosHistoryWindowMinutes
+        {
+            get => _MaxQosHistoryWindowMinutes;
+            set => _MaxQosHistoryWindowMinutes = (value < 1 ? 1440 : value);
+        }
+
+        /// <summary>
         /// Names of the MCP tools exposed by this registry, in registration order.
         /// Never null. Safe to read from multiple threads.
         /// </summary>
@@ -69,6 +105,9 @@ namespace Conductor.McpServer
         private readonly ConductorToolRegistrationCatalog _RegistrationCatalog;
         private Func<string, EndpointHealthState> _GetHealthStateFunc;
         private Func<string, List<EndpointHealthState>> _GetAllHealthStatesFunc;
+        private Func<VirtualModelRunner, QosRuntimeSnapshot> _GetQosRuntimeSnapshotFunc;
+        private Func<string, DateTime, DateTime, int, List<QosRuntimeHistoryBucket>> _GetQosRuntimeHistoryFunc;
+        private int _MaxQosHistoryWindowMinutes = 1440;
 
         #endregion
 
@@ -107,7 +146,10 @@ namespace Conductor.McpServer
                 GetQosTrafficClass = parameters => GetQosTrafficClassHandler(ToJsonElement(parameters)),
                 CreateQosTrafficClass = parameters => CreateQosTrafficClassHandler(ToJsonElement(parameters)),
                 UpdateQosTrafficClass = parameters => UpdateQosTrafficClassHandler(ToJsonElement(parameters)),
-                DeleteQosTrafficClass = parameters => DeleteQosTrafficClassHandler(ToJsonElement(parameters))
+                DeleteQosTrafficClass = parameters => DeleteQosTrafficClassHandler(ToJsonElement(parameters)),
+                ListQosRuntime = parameters => ListQosRuntimeHandler(ToJsonElement(parameters)),
+                GetQosRuntime = parameters => GetQosRuntimeHandler(ToJsonElement(parameters)),
+                GetQosRuntimeHistory = parameters => GetQosRuntimeHistoryHandler(ToJsonElement(parameters))
             });
         }
 
@@ -1093,6 +1135,245 @@ namespace Conductor.McpServer
                 return new { deleted = true, id = classId };
             }
             catch (Exception ex) { return CreateErrorResult("Failed to delete QoS traffic class: " + ex.Message); }
+        }
+
+        private object ListQosRuntimeHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            if (String.IsNullOrEmpty(tenantId))
+                return CreateErrorResult("tenant_id is required");
+
+            if (_GetQosRuntimeSnapshotFunc == null)
+                return CreateErrorResult("QoS runtime service not configured");
+
+            try
+            {
+                EnumerationResult<VirtualModelRunner> result = _Database.VirtualModelRunner
+                    .EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 1000 })
+                    .GetAwaiter().GetResult();
+
+                if (result?.Data == null)
+                    return new { runners = new object[0], count = 0 };
+
+                Dictionary<string, string> profileNames = new Dictionary<string, string>(StringComparer.Ordinal);
+                List<object> list = result.Data
+                    .Select(vmr => BuildQosRuntimeSnapshot(vmr, profileNames))
+                    .OrderBy(snapshot => snapshot.VirtualModelRunnerName ?? snapshot.VirtualModelRunnerId, StringComparer.OrdinalIgnoreCase)
+                    .Select(ProjectQosRuntimeSnapshot)
+                    .ToList();
+
+                return new { runners = list, count = list.Count };
+            }
+            catch (Exception ex)
+            {
+                return CreateErrorResult("Failed to list QoS runtime state: " + ex.Message);
+            }
+        }
+
+        private object GetQosRuntimeHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string vmrId = GetStringProperty(args, "vmr_id");
+
+            if (String.IsNullOrEmpty(tenantId))
+                return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(vmrId))
+                return CreateErrorResult("vmr_id is required");
+
+            if (_GetQosRuntimeSnapshotFunc == null)
+                return CreateErrorResult("QoS runtime service not configured");
+
+            try
+            {
+                VirtualModelRunner vmr = _Database.VirtualModelRunner
+                    .ReadAsync(tenantId, vmrId)
+                    .GetAwaiter().GetResult();
+
+                if (vmr == null)
+                    return CreateErrorResult("VMR not found: " + vmrId);
+
+                QosRuntimeSnapshot snapshot = BuildQosRuntimeSnapshot(vmr, new Dictionary<string, string>(StringComparer.Ordinal));
+                return ProjectQosRuntimeSnapshot(snapshot);
+            }
+            catch (Exception ex)
+            {
+                return CreateErrorResult("Failed to get QoS runtime state: " + ex.Message);
+            }
+        }
+
+        private object GetQosRuntimeHistoryHandler(JsonElement? args)
+        {
+            string tenantId = GetStringProperty(args, "tenant_id");
+            string vmrId = GetStringProperty(args, "vmr_id");
+
+            if (String.IsNullOrEmpty(tenantId))
+                return CreateErrorResult("tenant_id is required");
+            if (String.IsNullOrEmpty(vmrId))
+                return CreateErrorResult("vmr_id is required");
+
+            if (!TryParseUtc(GetStringProperty(args, "end_utc"), out DateTime? endArg))
+                return CreateErrorResult("end_utc is not a valid timestamp");
+            if (!TryParseUtc(GetStringProperty(args, "start_utc"), out DateTime? startArg))
+                return CreateErrorResult("start_utc is not a valid timestamp");
+
+            DateTime end = endArg ?? DateTime.UtcNow;
+            DateTime start = startArg ?? end.AddHours(-1);
+            if (start >= end)
+                return CreateErrorResult("start_utc must be before end_utc");
+            if ((end - start).TotalMinutes > _MaxQosHistoryWindowMinutes)
+                return CreateErrorResult("The requested window exceeds the maximum of " + _MaxQosHistoryWindowMinutes + " minutes");
+
+            string intervalArg = GetStringProperty(args, "interval");
+            string interval = String.IsNullOrWhiteSpace(intervalArg) ? "minute" : intervalArg.Trim().ToLowerInvariant();
+            int intervalMinutes = GetQosIntervalMinutes(interval);
+            if (intervalMinutes < 1)
+                return CreateErrorResult("interval must be one of minute, 5minute, 15minute, or hour");
+
+            if (_GetQosRuntimeHistoryFunc == null)
+                return CreateErrorResult("QoS runtime service not configured");
+
+            try
+            {
+                VirtualModelRunner vmr = _Database.VirtualModelRunner
+                    .ReadAsync(tenantId, vmrId)
+                    .GetAwaiter().GetResult();
+
+                if (vmr == null)
+                    return CreateErrorResult("VMR not found: " + vmrId);
+
+                List<QosRuntimeHistoryBucket> buckets = _GetQosRuntimeHistoryFunc(vmr.Id, start, end, intervalMinutes)
+                    ?? new List<QosRuntimeHistoryBucket>();
+
+                List<string> classes = buckets
+                    .Select(b => b.ClassName)
+                    .Where(name => !String.IsNullOrEmpty(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                List<object> bucketList = buckets.Select(b => (object)new
+                {
+                    timestampUtc = b.TimestampUtc,
+                    className = b.ClassName,
+                    admitted = b.Admitted,
+                    rejected = b.Rejected,
+                    timedOut = b.TimedOut,
+                    aborted = b.Aborted,
+                    endpointSlotTimeouts = b.EndpointSlotTimeouts,
+                    averageWaitMs = b.AverageWaitMs,
+                    maxWaitMs = b.MaxWaitMs,
+                    peakWaiting = b.PeakWaiting
+                }).ToList();
+
+                return new
+                {
+                    vmrId = vmr.Id,
+                    startUtc = start,
+                    endUtc = end,
+                    interval = interval,
+                    classes = classes,
+                    buckets = bucketList,
+                    count = bucketList.Count
+                };
+            }
+            catch (Exception ex)
+            {
+                return CreateErrorResult("Failed to get QoS runtime history: " + ex.Message);
+            }
+        }
+
+        private QosRuntimeSnapshot BuildQosRuntimeSnapshot(VirtualModelRunner vmr, Dictionary<string, string> profileNames)
+        {
+            QosRuntimeSnapshot snapshot = _GetQosRuntimeSnapshotFunc(vmr) ?? new QosRuntimeSnapshot
+            {
+                TenantId = vmr.TenantId,
+                VirtualModelRunnerId = vmr.Id,
+                VirtualModelRunnerName = vmr.Name,
+                QosProfileId = vmr.QosProfileId
+            };
+
+            if (String.IsNullOrEmpty(snapshot.QosProfileName) && !String.IsNullOrEmpty(snapshot.QosProfileId))
+            {
+                if (!profileNames.TryGetValue(snapshot.QosProfileId, out string profileName))
+                {
+                    QosProfile profile = _Database.QosProfile
+                        .ReadByIdAsync(snapshot.QosProfileId)
+                        .GetAwaiter().GetResult();
+                    profileName = profile?.Name;
+                    profileNames[snapshot.QosProfileId] = profileName;
+                }
+
+                snapshot.QosProfileName = profileName;
+            }
+
+            return snapshot;
+        }
+
+        private static object ProjectQosRuntimeSnapshot(QosRuntimeSnapshot snapshot)
+        {
+            return new
+            {
+                tenantId = snapshot.TenantId,
+                vmrId = snapshot.VirtualModelRunnerId,
+                vmrName = snapshot.VirtualModelRunnerName,
+                qosProfileId = snapshot.QosProfileId,
+                qosProfileName = snapshot.QosProfileName,
+                schedulerState = snapshot.SchedulerState,
+                schedulerFaultCount = snapshot.SchedulerFaultCount,
+                lastSchedulerError = snapshot.LastSchedulerError,
+                lastSchedulerErrorUtc = snapshot.LastSchedulerErrorUtc,
+                capacity = snapshot.Capacity,
+                inUse = snapshot.InUse,
+                waiting = snapshot.Waiting,
+                maxQueueWaitMs = snapshot.MaxQueueWaitMs,
+                classes = (snapshot.Classes ?? new List<QosClassRuntimeSnapshot>()).Select(c => (object)new
+                {
+                    className = c.ClassName,
+                    waiting = c.Waiting,
+                    admitted = c.Admitted,
+                    rejected = c.Rejected,
+                    timedOut = c.TimedOut,
+                    aborted = c.Aborted,
+                    endpointSlotTimeouts = c.EndpointSlotTimeouts,
+                    averageWaitMs = c.AverageWaitMs,
+                    p95WaitMs = c.P95WaitMs,
+                    maxWaitMs = c.MaxWaitMs,
+                    lastAdmittedUtc = c.LastAdmittedUtc,
+                    lastRejectedUtc = c.LastRejectedUtc
+                }).ToList(),
+                endpoints = (snapshot.Endpoints ?? new List<QosEndpointSlotSnapshot>()).Select(e => (object)new
+                {
+                    endpointId = e.EndpointId,
+                    endpointName = e.EndpointName,
+                    inFlight = e.InFlight,
+                    maxParallelRequests = e.MaxParallelRequests,
+                    isHealthy = e.IsHealthy,
+                    active = e.Active
+                }).ToList()
+            };
+        }
+
+        private static int GetQosIntervalMinutes(string interval)
+        {
+            switch (interval)
+            {
+                case "minute": return 1;
+                case "5minute": return 5;
+                case "15minute": return 15;
+                case "hour": return 60;
+                default: return 0;
+            }
+        }
+
+        private static bool TryParseUtc(string value, out DateTime? result)
+        {
+            result = null;
+            if (String.IsNullOrWhiteSpace(value)) return true;
+            if (!DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out DateTime parsed))
+                return false;
+
+            result = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+            return true;
         }
 
         private static List<string> ValidateProfileStructure(QosProfile profile)

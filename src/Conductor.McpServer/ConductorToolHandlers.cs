@@ -29,5 +29,8 @@ namespace Conductor.McpServer
         internal Func<RpcParameters, object> CreateQosTrafficClass { get; set; }
         internal Func<RpcParameters, object> UpdateQosTrafficClass { get; set; }
         internal Func<RpcParameters, object> DeleteQosTrafficClass { get; set; }
+        internal Func<RpcParameters, object> ListQosRuntime { get; set; }
+        internal Func<RpcParameters, object> GetQosRuntime { get; set; }
+        internal Func<RpcParameters, object> GetQosRuntimeHistory { get; set; }
     }
 }

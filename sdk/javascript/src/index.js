@@ -207,6 +207,18 @@ export class ConductorClient {
     return this.#request('DELETE', `/v1.0/qostrafficclasses/${encodeURIComponent(id)}${this.#tenantQuery(tenantId)}`);
   }
 
+  async listQosRuntime(tenantId = null) {
+    return this.#request('GET', `/v1.0/qosruntime${this.#tenantQuery(tenantId)}`);
+  }
+
+  async getQosRuntime(vmrId, tenantId = null) {
+    return this.#request('GET', `/v1.0/qosruntime/${encodeURIComponent(vmrId)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async getQosRuntimeHistory(vmrId, filters = {}) {
+    return this.#request('GET', `/v1.0/qosruntime/${encodeURIComponent(vmrId)}/history${this.#queryString(filters)}`);
+  }
+
   async purgeTenant(id, confirmTenantId = null) {
     return this.#request('POST', `/v1.0/tenants/${encodeURIComponent(id)}/purge`, {
       ConfirmTenantId: confirmTenantId != null ? confirmTenantId : id

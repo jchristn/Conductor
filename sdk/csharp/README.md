@@ -1,6 +1,6 @@
 # Conductor C# SDK
 
-This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover endpoint groups, VMR validation, effective configuration, routing explanation, runtime stats, runtime-state reset, transient-backoff clear, VMR reservations, QoS profiles (CRUD, draft validation, and classifier catalog), QoS traffic classes (CRUD), system-admin tenant purge, and the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
+This package is a lightweight starting point for Conductor management-plane automation from .NET. The implemented helpers cover endpoint groups, VMR validation, effective configuration, routing explanation, runtime stats, runtime-state reset, transient-backoff clear, VMR reservations, QoS profiles (CRUD, draft validation, and classifier catalog), QoS traffic classes (CRUD), read-only QoS runtime state and admission history, system-admin tenant purge, and the Analytics workspace APIs: catalog, query, saved reports, summary, time series, TTFT, token usage, estimate-only cost, users, and access/reliability.
 
 ```csharp
 using System.Collections.Generic;
@@ -164,6 +164,20 @@ using JsonDocument qosProfiles = await client.ListQosProfilesAsync(new Dictionar
     ["activeFilter"] = "true"
 });
 await client.DeleteQosProfileAsync("qos_123", "tenant_123");
+
+// Live QoS runtime state (in memory; resets on server restart). Deserialize into the SDK's
+// QosRuntimeSnapshot / QosRuntimeHistory models when a typed view is useful.
+using JsonDocument qosRuntimeList = await client.ListQosRuntimeAsync("tenant_123");
+using JsonDocument qosRuntime = await client.GetQosRuntimeAsync("vmr_123", "tenant_123");
+QosRuntimeSnapshot runtimeSnapshot = qosRuntime.Deserialize<QosRuntimeSnapshot>();
+using JsonDocument qosHistory = await client.GetQosRuntimeHistoryAsync("vmr_123", new Dictionary<string, string>
+{
+    ["tenantId"] = "tenant_123",
+    ["startUtc"] = "2026-06-16T17:00:00Z",
+    ["endUtc"] = "2026-06-16T18:00:00Z",
+    ["interval"] = "5minute"
+});
+QosRuntimeHistory runtimeHistory = qosHistory.Deserialize<QosRuntimeHistory>();
 
 // System-admin only. The reserved "default" tenant cannot be purged.
 using JsonDocument purgeReport = await client.PurgeTenantAsync("tenant_123");

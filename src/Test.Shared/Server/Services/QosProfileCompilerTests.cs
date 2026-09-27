@@ -105,6 +105,20 @@ namespace Test.Shared.Server.Services
             act.Should().Throw<InvalidOperationException>();
         }
 
+        public void Compile_InferenceFirstProfile_ClassifiesMetadataRequestTypes()
+        {
+            QosRuntime runtime = Compile(Conductor.Core.Helpers.QosProfileFactory.BuildInferenceFirst("ten_1"));
+
+            foreach (RequestTypeEnum requestType in Conductor.Core.Helpers.QosProfileFactory.MetadataRequestTypes)
+            {
+                runtime.Classifier(new QosClassificationContext { RequestType = requestType.ToString() }).Should().Be("metadata");
+            }
+
+            runtime.Classifier(new QosClassificationContext { RequestType = RequestTypeEnum.OpenAIChatCompletions.ToString() }).Should().Be("default");
+            runtime.Classifier(new QosClassificationContext { RequestType = RequestTypeEnum.OpenAIEmbeddings.ToString() }).Should().Be("default");
+            runtime.Classifier(new QosClassificationContext { RequestType = RequestTypeEnum.OllamaEmbeddings.ToString() }).Should().Be("default");
+        }
+
         private static QosRuntime Compile(QosProfile profile)
         {
             return new QosProfileCompiler().Compile(profile);

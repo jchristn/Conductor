@@ -157,6 +157,39 @@ test('qos traffic class methods use expected routes', async () => {
   assert.equal(captured[4].options.method, 'DELETE');
 });
 
+test('qos runtime methods use expected routes', async () => {
+  const captured = [];
+  const client = new ConductorClient({
+    baseUrl: 'http://127.0.0.1:9000',
+    fetchImpl: async (url, options = {}) => {
+      captured.push({ url, options });
+      return createJsonResponse(url.includes('/history') ? { Interval: '5minute', Classes: [], Buckets: [] } : []);
+    }
+  });
+
+  await client.listQosRuntime('ten_123');
+  await client.listQosRuntime();
+  await client.getQosRuntime('vmr_123', 'ten_123');
+  const history = await client.getQosRuntimeHistory('vmr_123', {
+    tenantId: 'ten_123',
+    startUtc: '2026-06-16T17:00:00Z',
+    endUtc: '2026-06-16T18:00:00Z',
+    interval: '5minute'
+  });
+  await client.getQosRuntimeHistory('vmr_123');
+
+  assert.equal(history.Interval, '5minute');
+  assert.deepEqual(captured.map((call) => call.options.method), ['GET', 'GET', 'GET', 'GET', 'GET']);
+  assert.equal(captured[0].url, 'http://127.0.0.1:9000/v1.0/qosruntime?tenantId=ten_123');
+  assert.equal(captured[1].url, 'http://127.0.0.1:9000/v1.0/qosruntime');
+  assert.equal(captured[2].url, 'http://127.0.0.1:9000/v1.0/qosruntime/vmr_123?tenantId=ten_123');
+  assert.equal(
+    captured[3].url,
+    'http://127.0.0.1:9000/v1.0/qosruntime/vmr_123/history?tenantId=ten_123&startUtc=2026-06-16T17%3A00%3A00Z&endUtc=2026-06-16T18%3A00%3A00Z&interval=5minute'
+  );
+  assert.equal(captured[4].url, 'http://127.0.0.1:9000/v1.0/qosruntime/vmr_123/history');
+});
+
 test('purges a tenant with confirmation body', async () => {
   const captured = [];
   const client = new ConductorClient({

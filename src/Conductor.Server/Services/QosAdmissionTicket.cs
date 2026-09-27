@@ -41,7 +41,17 @@ namespace Conductor.Server.Services
         /// </summary>
         public int Settled;
 
-        /// <summary>Completed with true when the ticket is admitted.</summary>
+        /// <summary>
+        /// Completed with true when the ticket is admitted (the waiter then owns one capacity permit), or with
+        /// false when the service rejects a still-pending ticket (for example, it could not be moved into a
+        /// rebuilt runtime).
+        /// </summary>
         public TaskCompletionSource<bool> Release { get; } = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>
+        /// Cancelled when the waiter gives up (deadline or client abort), so the scheduler stops waiting for a
+        /// permit on its behalf. Owns no timer or registration, so it is not disposed.
+        /// </summary>
+        public CancellationTokenSource Abandoned { get; } = new CancellationTokenSource();
     }
 }

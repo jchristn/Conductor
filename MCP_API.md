@@ -154,3 +154,47 @@ Update a traffic class. Params: `tenant_id` (req), `class_id` (req), `name`, `de
 
 ### `conductor_delete_qos_traffic_class`
 Delete a traffic class. Params: `tenant_id` (req), `class_id` (req).
+
+## QoS runtime
+
+Read-only views of live QoS admission state, equivalent to the `/v1.0/qosruntime` REST routes. Runtime state is
+held in memory by the Conductor server's QoS admission service and resets when the server restarts. The MCP
+server reaches it through functions supplied by the host with `ConductorMcpServer.ConfigureQosRuntime(...)`
+(the same decoupling used for `ConfigureHealthCheck`); until they are configured, these tools return
+`isError` with "QoS runtime service not configured".
+
+### `conductor_list_qos_runtime`
+List the QoS runtime state of every VMR in a tenant, ordered by VMR name. Params: `tenant_id` (req).
+Returns `{ runners: [...], count }`, each runner shaped as described for `conductor_get_qos_runtime`.
+
+### `conductor_get_qos_runtime`
+Get the QoS runtime state of one VMR. Params: `tenant_id` (req), `vmr_id` (req, `vmr_xxx`).
+
+Returns `{ tenantId, vmrId, vmrName, qosProfileId, qosProfileName, schedulerState, schedulerFaultCount,
+lastSchedulerError, lastSchedulerErrorUtc, capacity, inUse, waiting, maxQueueWaitMs, classes, endpoints }`, where
+`schedulerState` is `Running`, `Recovering`, `PassThrough`, or `Idle`; `capacity` of `0` means unbounded;
+`classes` holds `{ className, waiting, admitted, rejected, timedOut, aborted, endpointSlotTimeouts, averageWaitMs,
+p95WaitMs, maxWaitMs, lastAdmittedUtc, lastRejectedUtc }`; and `endpoints` holds `{ endpointId, endpointName,
+inFlight, maxParallelRequests, isHealthy, active }` when the host's snapshot function supplies them.
+
+### `conductor_get_qos_runtime_history`
+Get time-bucketed QoS admission history for one VMR.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `tenant_id` | string | yes | Tenant. |
+| `vmr_id` | string | yes | VMR ID (`vmr_xxx`). |
+| `start_utc` | string | no | Window start (ISO-8601 UTC). Defaults to one hour before `end_utc`. |
+| `end_utc` | string | no | Window end (ISO-8601 UTC). Defaults to now. |
+| `interval` | string | no | Bucket interval: `minute` (default), `5minute`, `15minute`, or `hour`. |
+
+The window may not exceed 24 hours, and `start_utc` must be before `end_utc`; otherwise the tool returns `isError`.
+Returns `{ vmrId, startUtc, endUtc, interval, classes, buckets: [{ timestampUtc, className, admitted, rejected,
+timedOut, aborted, endpointSlotTimeouts, averageWaitMs, maxWaitMs, peakWaiting }], count }`. Buckets without
+activity are omitted.
+
+Example:
+
+```json
+{ "name": "conductor_get_qos_runtime_history", "arguments": { "tenant_id": "default", "vmr_id": "vmr_ab12", "interval": "5minute" } }
+```

@@ -63,5 +63,29 @@ namespace Test.Shared.Core.Helpers
 
             profile.Rules.Should().OnlyContain(r => r.Source == QosClassifierSourceEnum.Header && r.MatchKey == QosProfileFactory.ClassHeader);
         }
+
+        public void BuildInferenceFirst_IsPriorityWithMetadataInLowerBand()
+        {
+            QosProfile profile = QosProfileFactory.BuildInferenceFirst("ten_1");
+            profile.Name.Should().Be(QosProfileFactory.InferenceFirstProfileName);
+            profile.IsDefault.Should().BeFalse();
+            profile.DefaultClass.Should().Be("default");
+            profile.Nodes.Should().HaveCount(1);
+
+            QosQueueNode node = profile.Nodes[0];
+            node.Discipline.Should().Be(QosDisciplineEnum.Priority);
+            node.AgingThresholdMs.Should().Be(0);
+            node.Classes.First(c => c.ClassName == "default").Band.Should().Be(0);
+            node.Classes.First(c => c.ClassName == QosProfileFactory.MetadataClassName).Band.Should().Be(1);
+
+            profile.Rules.Should().HaveCount(QosProfileFactory.MetadataRequestTypes.Length);
+            profile.Rules.Should().OnlyContain(r => r.Source == QosClassifierSourceEnum.RequestType && r.ClassName == QosProfileFactory.MetadataClassName);
+        }
+
+        public void BuildInferenceFirst_WhenTenantEmpty_Throws()
+        {
+            Action act = () => QosProfileFactory.BuildInferenceFirst("");
+            act.Should().Throw<ArgumentException>();
+        }
     }
 }

@@ -153,6 +153,15 @@ class ConductorClient:
     def delete_qos_traffic_class(self, class_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
         return self._request("DELETE", f"/v1.0/qostrafficclasses/{class_id}{self._tenant_query(tenant_id)}")
 
+    def list_qos_runtime(self, tenant_id: str | None = None) -> list[dict[str, Any]]:
+        return self._request("GET", f"/v1.0/qosruntime{self._tenant_query(tenant_id)}")
+
+    def get_qos_runtime(self, vmr_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/qosruntime/{vmr_id}{self._tenant_query(tenant_id)}")
+
+    def get_qos_runtime_history(self, vmr_id: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/qosruntime/{vmr_id}/history{self._query_string(filters)}")
+
     def purge_tenant(self, tenant_id: str, confirm_tenant_id: str | None = None) -> dict[str, Any]:
         body = {"ConfirmTenantId": confirm_tenant_id if confirm_tenant_id is not None else tenant_id}
         return self._request("POST", f"/v1.0/tenants/{tenant_id}/purge", body)

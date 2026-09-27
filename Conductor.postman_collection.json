@@ -1692,6 +1692,107 @@
       ]
     },
     {
+      "name": "QoS Runtime",
+      "description": "Read-only live QoS runtime state: per-VMR scheduler state, admission capacity usage, queue depth, per-class admission statistics, endpoint concurrency, and time-bucketed admission history. Runtime state is held in server memory and resets when the server restarts. Global administrators may pass tenantId to scope the request. All requests inherit the collection-level bearer auth.",
+      "item": [
+        {
+          "name": "List QoS Runtime",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosruntime",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosruntime"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "description": "Tenant to read (global administrators only). Omit for tenant-scoped credentials.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List the QoS runtime snapshot of every virtual model runner in scope, ordered by runner name. Each snapshot includes SchedulerState (Running, Recovering, PassThrough, or Idle), Capacity, InUse, Waiting, MaxQueueWaitMs, per-class Classes statistics, and Endpoints concurrency."
+          }
+        },
+        {
+          "name": "Get QoS Runtime",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosruntime/{{vmrId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosruntime",
+                "{{vmrId}}"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "description": "Tenant to read (global administrators only). Omit for tenant-scoped credentials.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Read the QoS runtime snapshot of a single virtual model runner. Set the vmrId collection variable to the runner id. Returns 404 when the runner does not exist in scope."
+          }
+        },
+        {
+          "name": "Get QoS Runtime History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/qosruntime/{{vmrId}}/history?interval=minute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "qosruntime",
+                "{{vmrId}}",
+                "history"
+              ],
+              "query": [
+                {
+                  "key": "startUtc",
+                  "value": "",
+                  "description": "Window start (ISO-8601 UTC). Defaults to one hour before endUtc.",
+                  "disabled": true
+                },
+                {
+                  "key": "endUtc",
+                  "value": "",
+                  "description": "Window end (ISO-8601 UTC). Defaults to now.",
+                  "disabled": true
+                },
+                {
+                  "key": "interval",
+                  "value": "minute",
+                  "description": "Bucket interval: minute (default), 5minute, 15minute, or hour."
+                },
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "description": "Tenant to read (global administrators only). Omit for tenant-scoped credentials.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Read time-bucketed QoS admission history for a virtual model runner: per-class Admitted, Rejected, TimedOut, Aborted, and EndpointSlotTimeouts counts, AverageWaitMs, MaxWaitMs, and PeakWaiting per bucket. Buckets without activity are omitted. The window may not exceed 24 hours; an invalid timestamp, interval, or window returns 400. Set the vmrId collection variable to the runner id."
+          }
+        }
+      ]
+    },
+    {
       "name": "Model Access Policies",
       "item": [
         {

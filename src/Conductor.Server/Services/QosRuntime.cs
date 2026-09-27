@@ -102,6 +102,50 @@ namespace Conductor.Server.Services
             if (_Pipeline != null) await _Pipeline.StartAsync(token).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Stop the links that move tickets between nodes. Idempotent and best effort. Call before
+        /// <see cref="DrainParked"/> so no ticket moves while the nodes are drained.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task StopLinksAsync()
+        {
+            if (_Pipeline == null) return;
+            try { await _Pipeline.StopAsync().ConfigureAwait(false); }
+            catch { /* best effort: nodes are drained regardless */ }
+        }
+
+        /// <summary>
+        /// Remove every ticket still parked in any node so it can be moved into a rebuilt runtime. Synchronous so
+        /// the caller can run it under a lock that excludes concurrent enqueues. Best effort: a ticket in transit
+        /// inside a link when the links stopped is not returned and settles by its waiter's deadline.
+        /// </summary>
+        /// <returns>The parked tickets, without duplicates. Never null.</returns>
+        public List<QosAdmissionTicket> DrainParked()
+        {
+            HashSet<QosAdmissionTicket> seen = new HashSet<QosAdmissionTicket>();
+            List<QosAdmissionTicket> drained = new List<QosAdmissionTicket>();
+            foreach (IQoSQueue<QosAdmissionTicket> node in _Nodes)
+            {
+                QosAdmissionTicket[] items;
+                try
+                {
+                    items = node.ToArray();
+                    node.Clear();
+                }
+                catch (ObjectDisposedException)
+                {
+                    continue;
+                }
+
+                foreach (QosAdmissionTicket item in items)
+                {
+                    if (item != null && seen.Add(item)) drained.Add(item);
+                }
+            }
+
+            return drained;
+        }
+
         /// <inheritdoc/>
         public async ValueTask DisposeAsync()
         {
