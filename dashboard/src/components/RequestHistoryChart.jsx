@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
+
+const TIME_RANGE_STORAGE_KEY = 'conductor_dashboard_history_range';
 
 const TIME_RANGES = [
   { label: 'Last Hour', value: 'hour', interval: 'minute', hours: 1, stepMs: 60000 },
@@ -58,7 +61,11 @@ function mergeBuckets(allBuckets, apiData, stepMs) {
 
 function RequestHistoryChart() {
   const { api } = useApp();
-  const [timeRange, setTimeRange] = useState('day');
+  const [timeRange, setTimeRange] = useState(() => readChoicePreference(
+    TIME_RANGE_STORAGE_KEY,
+    TIME_RANGES.map((r) => r.value),
+    'day'
+  ));
   const [vmrGuid, setVmrGuid] = useState('');
   const [vmrList, setVmrList] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -198,7 +205,10 @@ function RequestHistoryChart() {
               <button
                 key={r.value}
                 className={'request-history-time-tab' + (timeRange === r.value ? ' active' : '')}
-                onClick={() => setTimeRange(r.value)}
+                onClick={() => {
+                  setTimeRange(r.value);
+                  writePreference(TIME_RANGE_STORAGE_KEY, r.value);
+                }}
               >
                 {r.label}
               </button>

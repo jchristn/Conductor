@@ -3,6 +3,9 @@ import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import CopyableId from '../components/CopyableId';
 import RefreshButton from '../components/RefreshButton';
+import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
+
+const RANGE_STORAGE_KEY = 'conductor_request_analytics_range';
 
 const RANGE_OPTIONS = [
   { label: 'Last Hour', value: 'lastHour', tooltip: 'Filter every analytics panel to requests created during the last hour.' },
@@ -99,8 +102,10 @@ function getInitialQueryParam(name, fallback = '') {
 }
 
 function getInitialRange() {
-  const value = getInitialQueryParam('range', 'lastDay');
-  return RANGE_OPTIONS.some(option => option.value === value) ? value : 'lastDay';
+  const presetValues = RANGE_OPTIONS.filter(option => option.value !== 'custom').map(option => option.value);
+  const fallback = readChoicePreference(RANGE_STORAGE_KEY, presetValues, 'lastDay');
+  const value = getInitialQueryParam('range', fallback);
+  return RANGE_OPTIONS.some(option => option.value === value) ? value : fallback;
 }
 
 function getInitialTab() {
@@ -1004,7 +1009,10 @@ function RequestAnalytics() {
       <section className="dashboard-section analytics-filter-section" title={FILTER_SECTION_TOOLTIP}>
         <div className="analytics-range-tabs" title="Time range selector applied to every request analytics query on this page.">
           {RANGE_OPTIONS.map(option => (
-            <button key={option.value} className={range === option.value ? 'active' : ''} onClick={() => setRange(option.value)} title={option.tooltip}>
+            <button key={option.value} className={range === option.value ? 'active' : ''} onClick={() => {
+              setRange(option.value);
+              if (option.value !== 'custom') writePreference(RANGE_STORAGE_KEY, option.value);
+            }} title={option.tooltip}>
               {option.label}
             </button>
           ))}

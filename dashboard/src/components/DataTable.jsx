@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { PAGE_SIZE_OPTIONS, readPageSizePreference, writePreference } from '../utils/persistedPreferences';
 
 const INTERACTIVE_ROW_CLICK_SELECTOR = [
   'button',
@@ -19,10 +21,14 @@ function DataTable({
   pageSize: defaultPageSize = 10,
   onRowClick = null,
   hidePagination = false,
-  columnsAlign = 'right'
+  columnsAlign = 'right',
+  pageSizeStorageKey = null
 }) {
+  const location = useLocation();
+  // Rows-per-page is remembered per page (each view renders one table) unless a key is supplied.
+  const storageKey = pageSizeStorageKey || `conductor_page_size:${location.pathname}`;
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize, setPageSize] = useState(defaultPageSize);
+  const [pageSize, setPageSize] = useState(() => readPageSizePreference(storageKey, defaultPageSize));
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [filters, setFilters] = useState({});
   const [pageInput, setPageInput] = useState('1');
@@ -108,9 +114,11 @@ function DataTable({
     return result;
   }, [data, columns, sortConfig, filters]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredAndSortedData.length / pageSize));
-  const startIndex = currentPage * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, filteredAndSortedData.length);
+  // With pagination hidden the caller pages the data itself (e.g. server-side), so show every row.
+  const effectivePageSize = hidePagination ? Math.max(1, filteredAndSortedData.length) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(filteredAndSortedData.length / effectivePageSize));
+  const startIndex = hidePagination ? 0 : currentPage * pageSize;
+  const endIndex = Math.min(startIndex + effectivePageSize, filteredAndSortedData.length);
   const paginatedData = filteredAndSortedData.slice(startIndex, endIndex);
 
   // Reset to valid page if current is out of bounds
@@ -260,15 +268,16 @@ function DataTable({
               <select
                 value={pageSize}
                 onChange={(e) => {
-                  setPageSize(Number(e.target.value));
+                  const nextSize = Number(e.target.value);
+                  setPageSize(nextSize);
+                  writePreference(storageKey, nextSize);
                   setCurrentPage(0);
                   setPageInput('1');
                 }}
               >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
               </select>
 
               <button onClick={() => goToPage(0)} disabled={currentPage === 0}>

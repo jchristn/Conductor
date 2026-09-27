@@ -11,6 +11,10 @@ import RefreshButton from '../components/RefreshButton';
 import RequestHistorySummaryChart from '../components/RequestHistorySummaryChart';
 import { copyToClipboard } from '../utils/clipboard';
 import { DEFAULT_TIME_RANGE, TIME_RANGES, applyTimeRange, getTimeRange } from '../utils/requestHistoryTimeRanges';
+import { PAGE_SIZE_OPTIONS, readChoicePreference, readPageSizePreference, writePreference } from '../utils/persistedPreferences';
+
+const TIME_RANGE_STORAGE_KEY = 'conductor_request_history_range';
+const PAGE_SIZE_STORAGE_KEY = 'conductor_request_history_page_size';
 
 function CollapsibleSection({ title, meta, content, defaultExpanded = false, showFormatJson = false, tooltip }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -177,7 +181,7 @@ function RequestHistory() {
   const [endpoints, setEndpoints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(() => readPageSizePreference(PAGE_SIZE_STORAGE_KEY, 10));
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [pageInput, setPageInput] = useState('1');
@@ -199,7 +203,11 @@ function RequestHistory() {
   const [requestHistoryIssue, setRequestHistoryIssue] = useState(null);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE);
+  const [timeRange, setTimeRange] = useState(() => readChoicePreference(
+    TIME_RANGE_STORAGE_KEY,
+    TIME_RANGES.map((entry) => entry.value),
+    DEFAULT_TIME_RANGE
+  ));
   const [chartRefreshToken, setChartRefreshToken] = useState(0);
 
   // Filter state
@@ -290,6 +298,7 @@ function RequestHistory() {
 
   const handleTimeRangeChange = (value) => {
     setTimeRange(value);
+    writePreference(TIME_RANGE_STORAGE_KEY, value);
     setPage(1);
     setPageInput('1');
   };
@@ -1126,15 +1135,16 @@ function RequestHistory() {
           <select
             value={pageSize}
             onChange={(e) => {
-              setPageSize(Number(e.target.value));
+              const nextSize = Number(e.target.value);
+              setPageSize(nextSize);
+              writePreference(PAGE_SIZE_STORAGE_KEY, nextSize);
               setPage(1);
               setPageInput('1');
             }}
           >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
           </select>
 
           <button onClick={() => { setPage(1); setPageInput('1'); }} disabled={page <= 1}>
