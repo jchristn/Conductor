@@ -1184,7 +1184,7 @@ function RequestHistory() {
         </div>
       </div>
 
-      <DataTable data={entries} columns={columns} loading={loading} pageSize={pageSize} hidePagination={true} onRowClick={handleViewDetail} columnsAlign="left" />
+      <DataTable data={entries} columns={columns} loading={loading} pageSize={pageSize} hidePagination={true} onRowClick={handleViewDetail} />
 
       <Modal
         isOpen={Boolean(requestHistoryIssue)}

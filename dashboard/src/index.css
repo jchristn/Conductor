@@ -410,7 +410,7 @@ body {
 /* Toolbar above the table (outside the overflow container so its dropdown is not clipped). */
 .data-table-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 8px;
   min-height: 32px;
@@ -442,7 +442,7 @@ body {
 .column-selector-dropdown {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  left: 0;
   min-width: 200px;
   max-height: 320px;
   display: flex;
@@ -452,11 +452,6 @@ body {
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   z-index: 2000;
-}
-
-.column-selector-dropdown--left {
-  right: auto;
-  left: 0;
 }
 
 .column-selector-header {

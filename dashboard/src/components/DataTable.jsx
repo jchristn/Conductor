@@ -21,7 +21,6 @@ function DataTable({
   pageSize: defaultPageSize = 10,
   onRowClick = null,
   hidePagination = false,
-  columnsAlign = 'right',
   pageSizeStorageKey = null
 }) {
   const location = useLocation();
@@ -212,7 +211,7 @@ function DataTable({
 
   return (
     <div className="data-table-wrapper">
-      <div className="data-table-toolbar" style={{ justifyContent: columnsAlign === 'left' ? 'flex-start' : 'flex-end' }}>
+      <div className="data-table-toolbar">
         {selectableColumns.length > 0 && (
           <div className="column-selector" ref={columnsMenuRef}>
             <button
@@ -231,7 +230,7 @@ function DataTable({
               Columns{hiddenCount > 0 ? ` (${selectableColumns.length - hiddenCount}/${selectableColumns.length})` : ''}
             </button>
             {columnsMenuOpen && (
-              <div className={`column-selector-dropdown${columnsAlign === 'left' ? ' column-selector-dropdown--left' : ''}`}>
+              <div className="column-selector-dropdown">
                 <div className="column-selector-header">
                   <span>Show columns</span>
                   <button type="button" className="column-selector-reset" onClick={showAllColumns} disabled={hiddenCount === 0}>
