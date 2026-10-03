@@ -18,8 +18,9 @@ All transports expose the same tool set, and only the Conductor tools listed bel
 diagnostic tools (`echo`, `getTime`) are disabled, so they are not listed and calling them returns "not found".
 
 Tools are reachable only through `tools/call`; sending a tool name as a bare JSON-RPC method returns `-32601`
-(method not found). The MCP `ping` method is answered on every transport with an empty result (`{}`, or
-`{"resultType":"complete"}` under the stateless `2026-07-28` revision).
+(method not found). The MCP `ping` method is answered with an empty result (`{}`) on the handshake revisions;
+the stateless `2026-07-28` revision has no `ping`, so it returns `-32601` (HTTP `404`) there. An `initialize`
+that names an unknown protocol version is answered with the newest supported handshake revision (`2025-11-25`).
 
 For example, to connect Claude Code: `claude mcp add --transport http conductor http://localhost:9001/mcp`.
 
@@ -30,8 +31,10 @@ A successful call returns a text content block holding the JSON result object de
 A tool that runs but fails (for example an unknown ID, or a missing health service) returns a result with
 `"isError": true` and a text content block holding `{ "error": true, "message": "<message>" }`.
 
-A call that cannot run at all is rejected with a JSON-RPC error `-32602` (invalid params): an unknown tool
-name, or arguments that fail the tool's input schema (for example a missing required parameter).
+Arguments that fail the tool's input schema (for example a missing required parameter or a wrong type) also
+return a result with `"isError": true`, whose text names the problem; the tool does not run.
+
+A call to an unknown tool name is rejected with a JSON-RPC error `-32602` (invalid params).
 
 All tenant-scoped tools require a `tenant_id`. Identifiers use Conductor's prefixed forms
 (`ten_`, `md_`, `mre_`, `vmr_`, `mc_`, `qos_`, `qtc_`).

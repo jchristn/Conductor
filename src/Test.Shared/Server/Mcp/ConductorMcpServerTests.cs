@@ -124,12 +124,14 @@ namespace Test.Shared.Server.Mcp
             _SessionId.Should().NotBeNullOrEmpty();
         }
 
-        public async Task Handshake_Initialize_UnknownVersion_ReturnsInvalidParams()
+        public async Task Handshake_Initialize_UnknownVersion_NegotiatesSupportedVersion()
         {
+            // The MCP specification requires a server to answer an unknown version with one it supports;
+            // Voltaic 2.1+ answers with its newest handshake-era revision instead of -32602.
             JsonElement response = await InitializeSessionAsync("1999-01-01").ConfigureAwait(false);
 
-            response.TryGetProperty("result", out _).Should().BeFalse();
-            response.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+            response.TryGetProperty("error", out _).Should().BeFalse();
+            response.GetProperty("result").GetProperty("protocolVersion").GetString().Should().Be(_HandshakeVersion);
         }
 
         public async Task Handshake_ToolsList_ReturnsExactlyConductorTools()
@@ -190,14 +192,18 @@ namespace Test.Shared.Server.Mcp
             payload.GetProperty("message").GetString().Should().Contain("md_does_not_exist");
         }
 
-        public async Task Handshake_ToolsCall_MissingRequiredArgument_ReturnsInvalidParams()
+        public async Task Handshake_ToolsCall_MissingRequiredArgument_ReturnsToolError()
         {
             await OpenSessionAsync().ConfigureAwait(false);
 
+            // Voltaic 2.1+ reports input schema failures as tool execution errors (isError), not JSON-RPC -32602,
+            // as the 2025-11-25 and 2026-07-28 specifications require, so the model can correct its arguments.
             JsonElement response = await SessionCallAsync("tools/call", new { name = "conductor_get_model", arguments = new { tenant_id = _TenantId } }).ConfigureAwait(false);
 
-            response.TryGetProperty("result", out _).Should().BeFalse();
-            response.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+            response.TryGetProperty("error", out _).Should().BeFalse();
+            JsonElement result = response.GetProperty("result");
+            IsErrorResult(result).Should().BeTrue();
+            result.GetRawText().Should().Contain("model_id");
         }
 
         public async Task Handshake_ToolsCall_VoltaicBuiltInTools_AreNotFound()
@@ -258,14 +264,17 @@ namespace Test.Shared.Server.Mcp
             IsErrorResult(response.GetProperty("result")).Should().BeFalse();
         }
 
-        public async Task Handshake_ToolsCall_WrongArgumentType_ReturnsInvalidParams()
+        public async Task Handshake_ToolsCall_WrongArgumentType_ReturnsToolError()
         {
             await OpenSessionAsync().ConfigureAwait(false);
 
+            // Voltaic 2.1+ reports input schema failures as tool execution errors (isError), not JSON-RPC -32602.
             JsonElement response = await SessionCallAsync("tools/call", new { name = "conductor_get_tenant", arguments = new { tenant_id = 42 } }).ConfigureAwait(false);
 
-            response.TryGetProperty("result", out _).Should().BeFalse();
-            response.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32602);
+            response.TryGetProperty("error", out _).Should().BeFalse();
+            JsonElement result = response.GetProperty("result");
+            IsErrorResult(result).Should().BeTrue();
+            result.GetRawText().Should().Contain("tenant_id");
         }
 
         public async Task Handshake_UnknownMethod_ReturnsMethodNotFound()
@@ -346,14 +355,15 @@ namespace Test.Shared.Server.Mcp
             }
         }
 
-        public async Task Stateless_Ping_ReturnsCompleteEmptyResult()
+        public async Task Stateless_Ping_IsMethodNotFound()
         {
+            // The stateless 2026-07-28 revision removes ping; Voltaic 2.1+ answers it with 404 and -32601.
             HttpResponseMessage http = await StatelessPostAsync("ping", new { }, null).ConfigureAwait(false);
 
-            http.StatusCode.Should().Be(HttpStatusCode.OK);
-            JsonElement result = (await ReadJsonAsync(http).ConfigureAwait(false)).GetProperty("result");
-            result.GetProperty("resultType").GetString().Should().Be("complete");
-            result.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(new string[] { "resultType" });
+            http.StatusCode.Should().Be(HttpStatusCode.NotFound);
+            JsonElement response = await ReadJsonAsync(http).ConfigureAwait(false);
+            response.TryGetProperty("result", out _).Should().BeFalse();
+            response.GetProperty("error").GetProperty("code").GetInt32().Should().Be(-32601);
         }
 
         #endregion

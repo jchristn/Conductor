@@ -273,25 +273,19 @@ namespace Test.McpServer
         {
             Console.WriteLine("[4/6] Connecting MCP client...");
 
-            _McpClient = new McpHttpClient();
-            bool connected = await _McpClient.ConnectAsync("http://127.0.0.1:9001/mcp/rpc").ConfigureAwait(false);
+            // ConnectAsync performs the MCP handshake (initialize, then notifications/initialized), so the
+            // session is initialized on return. The base URL and the RPC/events paths are passed separately.
+            _McpClient = new McpHttpClient
+            {
+                ClientName = "Test.McpServer",
+                ClientVersion = "1.0.0"
+            };
+            bool connected = await _McpClient.ConnectAsync("http://127.0.0.1:9001", "/mcp/rpc", "/mcp/events").ConfigureAwait(false);
 
             if (!connected)
             {
                 throw new Exception("Failed to connect MCP client");
             }
-
-            // Initialize the MCP session
-            object initResult = await _McpClient.CallAsync<object>("initialize", new
-            {
-                protocolVersion = "2025-03-26",
-                capabilities = new { },
-                clientInfo = new
-                {
-                    name = "Test.McpServer",
-                    version = "1.0.0"
-                }
-            }).ConfigureAwait(false);
 
             Console.WriteLine("      Connected and initialized MCP session");
             Console.WriteLine();
@@ -602,10 +596,11 @@ namespace Test.McpServer
                 return await ExpectToolErrorAsync("conductor_get_model", new { tenant_id = _TenantId, model_id = "md_does_not_exist" }, "md_does_not_exist").ConfigureAwait(false);
             }).ConfigureAwait(false)) passed++; else failed++;
 
-            // Negative: a missing required argument is rejected by schema validation
-            if (await RunTestAsync("conductor_get_model (missing model_id) -> invalid params", async () =>
+            // Negative: a missing required argument fails input schema validation, which Voltaic 2.1+ reports as a
+            // tool execution error (isError) rather than a JSON-RPC -32602, per the 2025-11-25 specification
+            if (await RunTestAsync("conductor_get_model (missing model_id) -> isError", async () =>
             {
-                return await ExpectRpcErrorAsync("conductor_get_model", new { tenant_id = _TenantId }, "-32602").ConfigureAwait(false);
+                return await ExpectToolErrorAsync("conductor_get_model", new { tenant_id = _TenantId }, "is missing required property").ConfigureAwait(false);
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Negative: Voltaic's diagnostic tools are disabled and its removed v1.x demo tools are absent
