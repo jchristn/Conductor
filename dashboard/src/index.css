@@ -71,6 +71,9 @@ body {
 
 .main-content {
   flex: 1;
+  /* Without this, a wide child (such as an Analytics breakdown table) sets the flex item's
+     minimum width and pushes the page past the viewport instead of scrolling in its container. */
+  min-width: 0;
   padding: 24px;
   margin-left: 260px;
   min-height: 100vh;
@@ -3814,7 +3817,9 @@ body {
   flex-wrap: wrap;
 }
 
-.file-input-hidden {
+/* `input.` raises specificity above `.form-group input { width: 100% }`, which otherwise
+   stretches the visually hidden input to full width and pushes the page sideways. */
+input.file-input-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
