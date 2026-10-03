@@ -230,10 +230,23 @@ body {
   margin-bottom: 2px;
 }
 
-.nav-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.1);
-  margin: 8px 2px;
+.nav-group {
+  padding-top: 6px;
+}
+
+.nav-group + .nav-group {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 4px;
+}
+
+.nav-group-label {
+  padding: 8px 20px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sidebar-text);
+  opacity: 0.7;
 }
 
 .nav-link {
@@ -244,14 +257,6 @@ body {
   text-decoration: none;
   border-radius: 5px;
   transition: all 0.15s ease;
-}
-
-.nav-action-button {
-  width: 100%;
-  border: none;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
 }
 
 .nav-link:hover {
@@ -276,6 +281,148 @@ body {
 .nav-label {
   font-size: 13px;
   font-weight: 500;
+}
+
+/* Hub pages: a title plus a URL-synced tab strip; each tab renders an existing view */
+.hub-view {
+  width: 100%;
+}
+
+.hub-header {
+  margin-bottom: 12px;
+}
+
+.hub-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.page-tabs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.page-tabs-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.page-tabs-list {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.page-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.page-tab:hover {
+  color: var(--text-primary);
+}
+
+.page-tab:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
+.page-tab.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  font-weight: 600;
+}
+
+.page-tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  flex-shrink: 0;
+}
+
+.page-tab-panel {
+  min-width: 0;
+}
+
+/* Embedded mode: the hub heading replaces each view's own page title, and every view's
+   header (description on the left, actions on the right) renders the same way. */
+.hub-panel .view-header h1,
+.hub-panel .page > .page-header h1 {
+  display: none;
+}
+
+.hub-panel .view-header,
+.hub-panel .page > .page-header {
+  margin-bottom: 16px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  gap: 16px;
+}
+
+.hub-panel .view-subtitle,
+.hub-panel .page > .page-header p {
+  margin-top: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* Header help menu (Replay Tour, Setup Wizard) */
+.help-menu {
+  position: relative;
+}
+
+.help-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 180px;
+  padding: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  z-index: 1000;
+}
+
+.help-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-menu-dropdown button:hover,
+.help-menu-dropdown button:focus-visible {
+  background: var(--bg-color);
+  outline: none;
 }
 
 /* View Container */
@@ -4671,27 +4818,36 @@ body {
 }
 
 .analytics-workspace-tabs {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 8px;
   margin: 14px 0 10px;
-  border-bottom: 1px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .analytics-workspace-tabs button {
   border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
+  background: var(--card-bg);
   color: var(--text-secondary);
-  padding: 10px 4px 9px;
+  padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.analytics-workspace-tabs button:not(:last-child) {
+  border-right: 1px solid var(--border-color);
+}
+
+.analytics-workspace-tabs button:hover {
+  background: var(--bg-color);
 }
 
 .analytics-workspace-tabs button.active {
-  border-bottom-color: var(--primary-color);
-  color: var(--text-primary);
-  font-weight: 600;
+  background: var(--primary-color);
+  color: white;
 }
 
 .analytics-export-format-grid {

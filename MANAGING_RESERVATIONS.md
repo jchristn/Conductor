@@ -40,7 +40,7 @@ After a participant passes the reservation gate, all normal checks still run. A 
 
 ## Dashboard Workflow
 
-Open **VMR Reservations** in the dashboard.
+Open **Virtual Runners** in the dashboard and select the **Reservations** tab.
 
 The page supports:
 

@@ -111,7 +111,7 @@ When a profile's queue is full, a request waits past `MaxQueueWaitMs`, or no end
 
 ## How to monitor it
 
-**Dashboard.** The **QoS Monitor** page in the Conductor dashboard shows, for each VMR, the scheduler state, capacity in use, requests waiting, per-class admitted, rejected, timed-out, and aborted counts with average, p95, and maximum wait, endpoint slot usage, and charts of admissions and queue wait over the selected time range. It reads the `/v1.0/qosruntime` API (see [REST_API.md](./REST_API.md#qos-runtime)). These statistics are kept in memory for 24 hours and reset when the server restarts; use the metrics below for longer history.
+**Dashboard.** The **Monitor** tab of the **Traffic (QoS)** page in the Conductor dashboard shows, for each VMR, the scheduler state, capacity in use, requests waiting, per-class admitted, rejected, timed-out, and aborted counts with average, p95, and maximum wait, endpoint slot usage, and charts of admissions and queue wait over the selected time range. It reads the `/v1.0/qosruntime` API (see [REST_API.md](./REST_API.md#qos-runtime)). These statistics are kept in memory for 24 hours and reset when the server restarts; use the metrics below for longer history.
 
 QoS also emits through Conductor's existing OpenTelemetry pipeline, so it lands in the bundled Prometheus/Grafana/Tempo stack with no extra wiring.
 

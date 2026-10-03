@@ -109,7 +109,8 @@ function getInitialRange() {
 }
 
 function getInitialTab() {
-  const value = getInitialQueryParam('tab', 'overview');
+  // The hub owns `?tab=`; this page's own sections use `?view=`.
+  const value = getInitialQueryParam('view', 'overview');
   return ANALYTICS_TABS.some(option => option.value === value) ? value : 'overview';
 }
 
@@ -733,7 +734,7 @@ function RequestAnalytics() {
     };
 
     setOrDelete('analyticsReport', selectedSavedReportId);
-    setOrDelete('tab', activeTab === 'overview' ? '' : activeTab);
+    setOrDelete('view', activeTab === 'overview' ? '' : activeTab);
     setOrDelete('tenantId', hasGlobalAnalyticsScope ? tenantId : '');
     setOrDelete('range', range === 'lastDay' ? '' : range);
     setOrDelete('startUtc', range === 'custom' ? filters.startUtc : '');

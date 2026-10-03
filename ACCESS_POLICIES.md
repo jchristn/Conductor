@@ -59,13 +59,13 @@ In `Monitor` mode, denied decisions are recorded but requests continue. In `Enfo
 ## Creating Policies in the Dashboard
 
 1. Open the dashboard and sign in as a tenant admin or global admin.
-2. Go to `Model Access Policies`.
+2. Go to `Virtual Runners` and select the `Model Access Policies` tab.
 3. Select `Create Policy`.
 4. Choose the tenant, name, default decision, and active state.
 5. Add one or more rules.
 6. Use `Validate` to check references and rule shape.
 7. Save the policy.
-8. Go to `Virtual Model Runners`.
+8. Select the `Virtual Model Runners` tab.
 9. Create or edit a VMR and set its `Model Access Policy`.
 10. Use the VMR effective configuration and routing explanation views to confirm the attached policy.
 

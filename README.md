@@ -89,6 +89,23 @@ npm run build
 npm run preview -- --host 0.0.0.0
 ```
 
+#### Dashboard Navigation
+
+The sidebar groups pages into two sections. Pages with tabs keep the active tab in the URL (`?tab=`), so a tab can be bookmarked or linked directly.
+
+| Section | Page | Tabs |
+|---|---|---|
+| Workspace | Dashboard | |
+| Workspace | Virtual Runners (`/runners`) | Virtual Model Runners, Reservations, Model Access Policies |
+| Workspace | Endpoints (`/endpoints`) | Model Runner Endpoints, Endpoint Groups, Load Balancing Policies |
+| Workspace | Models (`/models`) | Model Definitions, Model Configurations |
+| Workspace | Traffic (QoS) (`/qos`) | Monitor, Profiles, Traffic Classes |
+| Workspace | Observability (`/observability`) | Request History, Analytics |
+| Administration | Access (`/access`) | Tenants, Users, Credentials, Administrators (system admins) |
+| Administration | System (`/system`) | API Explorer, Backup & Restore (admins) |
+
+Replay Tour and Setup Wizard are in the **?** help menu in the page header. The previous page URLs (for example `/vmr`, `/reservations?vmrId=...`, `/qos-monitor`, `/analytics`) redirect to the matching page and tab, keeping their query parameters. The sidebar and tabs are defined in `dashboard/src/config/navConfig.jsx`.
+
 ## Documentation
 
 - [REST_API.md](./REST_API.md): management API routes, resource shapes, proxy behavior, request history, analytics, and observability.
@@ -219,7 +236,7 @@ See [REST_API.md](./REST_API.md#model-loading) for request fields, outcome codes
 
 VMR reservations schedule exclusive access windows for a Virtual Model Runner. During the active window, and during any configured admission drain lead time, Conductor admits only the users and credentials listed on the reservation. Outside the window, normal on-demand VMR access continues and existing ACL/model-access checks still apply after a reservation participant is allowed.
 
-Operators can manage reservations from the dashboard **Reservations** workspace, from VMR row actions, or through `/v1.0/vmrreservations`. The dashboard supports listing, refreshing, VMR-scoped creation, validating, row-click editing, deactivating, row-level JSON inspection, VMR reservation badges, request-history reservation filters/detail fields, analytics reservation-denial cards, and evaluating effective reservation access for a candidate user or credential. Reservation denials are recorded in logs, request history, and request analytics with machine-readable reasons such as `ReservationDenied`, `ReservationDrainDenied`, `ReservationAuthenticationRequired`, and `ReservationConflict`. Backup/restore includes reservation records and subjects.
+Operators can manage reservations from the **Reservations** tab of the dashboard's **Virtual Runners** page, from VMR row actions, or through `/v1.0/vmrreservations`. The dashboard supports listing, refreshing, VMR-scoped creation, validating, row-click editing, deactivating, row-level JSON inspection, VMR reservation badges, request-history reservation filters/detail fields, analytics reservation-denial cards, and evaluating effective reservation access for a candidate user or credential. Reservation denials are recorded in logs, request history, and request analytics with machine-readable reasons such as `ReservationDenied`, `ReservationDrainDenied`, `ReservationAuthenticationRequired`, and `ReservationConflict`. Backup/restore includes reservation records and subjects.
 
 See [MANAGING_RESERVATIONS.md](./MANAGING_RESERVATIONS.md) for operational guidance, API examples, enforcement order, troubleshooting, and implementation details.
 
@@ -398,7 +415,7 @@ Sensible defaults are seeded per tenant on startup and on tenant creation, so no
 - A catalog of **standard traffic classes** — `realtime`, `human-interactive`, `agent-interactive`, `batch-time-bound`, `batch-background`, and `default` — that you can edit and extend.
 - A ready-to-use **Standard Workloads** profile (a low-latency queue keyed on the `X-Conductor-Class` header) to link or clone.
 
-Manage profiles and classes over REST at `/v1.0/qosprofiles` and `/v1.0/qostrafficclasses` (with `validate` and `classifier-catalog` helpers), or from the dashboard. Watch live queueing on the dashboard's **QoS Monitor** page or through `/v1.0/qosruntime`, which report each VMR's scheduler state, capacity in use, waiting requests, per-class admissions, rejections, and wait times, and endpoint slot usage. A client can select its class with a header:
+Manage profiles and classes over REST at `/v1.0/qosprofiles` and `/v1.0/qostrafficclasses` (with `validate` and `classifier-catalog` helpers), or from the dashboard. Watch live queueing on the **Monitor** tab of the dashboard's **Traffic (QoS)** page or through `/v1.0/qosruntime`, which report each VMR's scheduler state, capacity in use, waiting requests, per-class admissions, rejections, and wait times, and endpoint slot usage. A client can select its class with a header:
 
 ```
 POST /v1.0/api/{vmr}/v1/chat/completions
@@ -654,7 +671,7 @@ Success is defined as HTTP status 100-399; failure is HTTP status 400-599 or nul
 
 ### Analytics Workspace API
 
-The dashboard navigation includes an **Analytics** workspace at `/analytics`. This workspace builds on request-history data and answers first-release operator questions without requiring raw request-body access. See [ADR 0002](./docs/adr/0002-analytics-workspace.md) for API, retention, authorization, saved-report, and export decisions.
+The dashboard includes an **Analytics** workspace on the **Analytics** tab of the **Observability** page (`/observability?tab=analytics`; the old `/analytics` URL redirects there). This workspace builds on request-history data and answers first-release operator questions without requiring raw request-body access. See [ADR 0002](./docs/adr/0002-analytics-workspace.md) for API, retention, authorization, saved-report, and export decisions.
 
 - What was the average, P50, P95, and P99 time-to-first-token for a model endpoint, VMR, model, tenant, user, credential, or provider?
 - How many prompt, completion, and total tokens were used over time for a model, endpoint, VMR, provider, tenant, or user?
@@ -676,7 +693,7 @@ POST /v1.0/analytics/query
 
 Analytics data is retained for 30 days in the first release. Named ranges are `lastHour`, `lastDay`, `lastWeek`, `lastMonth`, or `custom` with `startUtc` and `endUtc`; custom ranges are clamped to the retained window. Operators can choose bucket granularity with `bucketSeconds`.
 
-Analytics is populated from persisted request-history rows. Request history must be enabled globally in `conductor.json` and enabled on the Virtual Model Runner before the requests are sent; enabling it later only affects new requests. The Docker dashboard create form defaults new VMRs to Request History and Analytics enabled, and existing VMRs can be edited from the Virtual Model Runners page.
+Analytics is populated from persisted request-history rows. Request history must be enabled globally in `conductor.json` and enabled on the Virtual Model Runner before the requests are sent; enabling it later only affects new requests. The Docker dashboard create form defaults new VMRs to Request History and Analytics enabled, and existing VMRs can be edited from the **Virtual Runners** page.
 
 Cost output is an estimate only. Conductor multiplies successful reported token usage by the caller-supplied `tokenUnitCost`; it does not model provider billing rules, cached-token discounts, multimodal pricing, currency conversion, taxes, credits, or account-specific contracts. Missing provider token usage is reported as unknown and is not treated as zero.
 
@@ -793,6 +810,8 @@ The included Docker Compose setup uses named Docker Hub images:
 
 ### Building Docker Images
 
+Windows:
+
 ```bash
 # Build and push server with the specified tag and latest
 build-server.bat v0.5.0
@@ -803,6 +822,16 @@ build-dashboard.bat v0.5.0
 # Build and push both images with the specified tag and latest
 build-all.bat v0.5.0
 ```
+
+macOS and Linux:
+
+```bash
+./build-server.sh v0.5.0
+./build-dashboard.sh v0.5.0
+./build-all.sh v0.5.0
+```
+
+The scripts build with the `cloud-jchristn77-jchristn77` Docker Build Cloud builder. The `.sh` scripts build `linux/amd64` images by default, so building on Apple silicon still produces images that run on x86-64 hosts; set `DOCKER_PLATFORM` (for example `linux/arm64`) or `DOCKER_BUILDER` to override.
 
 ### Updating a Deployment
 

@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOnboarding } from '../context/OnboardingContext';
 import Modal from './Modal';
+import { hubPath } from '../config/navConfig';
 
 const WIZARD_STEPS = [
   {
@@ -15,7 +16,7 @@ const WIZARD_STEPS = [
     title: 'Create a Tenant',
     description: 'Tenants are organizational units that group users, credentials, and resources. Everything in Conductor belongs to a tenant. Create your first tenant to get started.',
     entityType: 'tenant',
-    route: '/tenants',
+    route: hubPath('access', 'tenants'),
     buttonLabel: 'Create Tenant'
   },
   {
@@ -23,7 +24,7 @@ const WIZARD_STEPS = [
     title: 'Create a User',
     description: 'Users belong to tenants and authenticate to use the API. Create a user account that will be associated with your tenant.',
     entityType: 'user',
-    route: '/users',
+    route: hubPath('access', 'users'),
     buttonLabel: 'Create User'
   },
   {
@@ -31,7 +32,7 @@ const WIZARD_STEPS = [
     title: 'Create a Credential',
     description: 'Credentials are API bearer tokens that users present to authenticate requests. Create a credential for your user to access Virtual Model Runners.',
     entityType: 'credential',
-    route: '/credentials',
+    route: hubPath('access', 'credentials'),
     buttonLabel: 'Create Credential'
   },
   {
@@ -39,7 +40,7 @@ const WIZARD_STEPS = [
     title: 'Add a Model Runner Endpoint',
     description: 'Connect Conductor to a backend inference server such as Ollama, OpenAI, vLLM, Gemini, or another compatible service. This is where your AI models actually run.',
     entityType: 'endpoint',
-    route: '/endpoints',
+    route: hubPath('endpoints', 'endpoints'),
     buttonLabel: 'Add Endpoint'
   },
   {
@@ -47,7 +48,7 @@ const WIZARD_STEPS = [
     title: 'Create a Model Definition',
     description: 'Describe a model that exists on your endpoint. Model definitions capture metadata like the model name, family, and what capabilities it supports.',
     entityType: 'definition',
-    route: '/definitions',
+    route: hubPath('models', 'definitions'),
     buttonLabel: 'Create Definition'
   },
   {
@@ -55,7 +56,7 @@ const WIZARD_STEPS = [
     title: 'Create a Model Configuration',
     description: 'Set default parameters for inference requests such as temperature, max tokens, and other settings that control model behavior.',
     entityType: 'configuration',
-    route: '/configurations',
+    route: hubPath('models', 'configurations'),
     buttonLabel: 'Create Configuration'
   },
   {
@@ -63,7 +64,7 @@ const WIZARD_STEPS = [
     title: 'Create a Virtual Model Runner',
     description: 'The final piece! Combine your endpoints, definitions, and configurations into a virtualized API endpoint with load balancing, session affinity, and more.',
     entityType: 'vmr',
-    route: '/vmr',
+    route: hubPath('runners', 'runners'),
     buttonLabel: 'Create VMR'
   },
   {
@@ -115,7 +116,7 @@ function SetupWizard() {
   }, [currentStep, navigate, setPendingCreate]);
 
   const handleGoToExplorer = useCallback(() => {
-    navigate('/api-explorer');
+    navigate(hubPath('system', 'api-explorer'));
     endWizard();
   }, [navigate, endWizard]);
 

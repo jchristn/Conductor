@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useHubPanel } from '../context/HubPanelContext';
 import { PAGE_SIZE_OPTIONS, readPageSizePreference, writePreference } from '../utils/persistedPreferences';
 
 const INTERACTIVE_ROW_CLICK_SELECTOR = [
@@ -24,8 +25,10 @@ function DataTable({
   pageSizeStorageKey = null
 }) {
   const location = useLocation();
+  const { storagePath } = useHubPanel();
   // Rows-per-page is remembered per page (each view renders one table) unless a key is supplied.
-  const storageKey = pageSizeStorageKey || `conductor_page_size:${location.pathname}`;
+  // Inside a hub tab the tab's stable storage path is used so each tab keeps its own preference.
+  const storageKey = pageSizeStorageKey || `conductor_page_size:${storagePath || location.pathname}`;
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(() => readPageSizePreference(storageKey, defaultPageSize));
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });

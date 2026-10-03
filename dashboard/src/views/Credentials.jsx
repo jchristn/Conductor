@@ -11,6 +11,7 @@ import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
+import { hubPath } from '../config/navConfig';
 
 function Credentials() {
   const { api, setError } = useApp();
@@ -109,10 +110,10 @@ function Credentials() {
   };
 
   const handleEvaluateAccess = (credential) => {
-    const params = new URLSearchParams();
-    if (credential.TenantId) params.append('tenantId', credential.TenantId);
-    params.append('credentialId', credential.Id);
-    navigate(`/model-access-policies?${params.toString()}`);
+    navigate(hubPath('runners', 'access-policies', {
+      tenantId: credential.TenantId,
+      credentialId: credential.Id
+    }));
   };
 
   const handleDelete = async () => {

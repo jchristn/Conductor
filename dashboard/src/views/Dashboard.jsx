@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import RequestHistoryChart from '../components/RequestHistoryChart';
+import { hubPath } from '../config/navConfig';
 
 function Dashboard() {
   const { api, counts, fetchCounts } = useApp();
@@ -32,14 +33,14 @@ function Dashboard() {
   }, [api]);
 
   const cards = [
-    { label: 'Tenants', count: counts.tenants, path: '/tenants', color: '#3b82f6', tooltip: 'Organizational units for grouping resources' },
-    { label: 'Users', count: counts.users, path: '/users', color: '#10b981', tooltip: 'User accounts that authenticate via API credentials' },
-    { label: 'Credentials', count: counts.credentials, path: '/credentials', color: '#f59e0b', tooltip: 'API bearer tokens used for authentication' },
-    { label: 'Model Runner Endpoints', count: counts.modelRunnerEndpoints, path: '/endpoints', color: '#8b5cf6', tooltip: 'Backend inference servers (Ollama, OpenAI, vLLM, Gemini, etc.)' },
-    { label: 'Endpoint Groups', count: counts.endpointGroups, path: '/endpoint-groups', color: '#14b8a6', tooltip: 'Reusable endpoint collections for virtual model runners' },
-    { label: 'Model Definitions', count: counts.modelDefinitions, path: '/definitions', color: '#ec4899', tooltip: 'Model metadata describing available models' },
-    { label: 'Model Configurations', count: counts.modelConfigurations, path: '/configurations', color: '#06b6d4', tooltip: 'Parameter presets applied to inference requests' },
-    { label: 'Virtual Model Runners', count: counts.virtualModelRunners, path: '/vmr', color: '#f97316', tooltip: 'Virtualized API endpoints exposed to clients' }
+    { label: 'Tenants', count: counts.tenants, path: hubPath('access', 'tenants'), color: '#3b82f6', tooltip: 'Organizational units for grouping resources' },
+    { label: 'Users', count: counts.users, path: hubPath('access', 'users'), color: '#10b981', tooltip: 'User accounts that authenticate via API credentials' },
+    { label: 'Credentials', count: counts.credentials, path: hubPath('access', 'credentials'), color: '#f59e0b', tooltip: 'API bearer tokens used for authentication' },
+    { label: 'Model Runner Endpoints', count: counts.modelRunnerEndpoints, path: hubPath('endpoints', 'endpoints'), color: '#8b5cf6', tooltip: 'Backend inference servers (Ollama, OpenAI, vLLM, Gemini, etc.)' },
+    { label: 'Endpoint Groups', count: counts.endpointGroups, path: hubPath('endpoints', 'groups'), color: '#14b8a6', tooltip: 'Reusable endpoint collections for virtual model runners' },
+    { label: 'Model Definitions', count: counts.modelDefinitions, path: hubPath('models', 'definitions'), color: '#ec4899', tooltip: 'Model metadata describing available models' },
+    { label: 'Model Configurations', count: counts.modelConfigurations, path: hubPath('models', 'configurations'), color: '#06b6d4', tooltip: 'Parameter presets applied to inference requests' },
+    { label: 'Virtual Model Runners', count: counts.virtualModelRunners, path: hubPath('runners', 'runners'), color: '#f97316', tooltip: 'Virtualized API endpoints exposed to clients' }
   ];
 
   // Subordinate observability services shipped with the Docker Compose stack. The URLs are
@@ -133,19 +134,19 @@ function Dashboard() {
         <section className="dashboard-section">
           <h2>Quick Actions</h2>
           <div className="quick-actions">
-            <Link to="/vmr" className="action-card" title="Create a new virtualized API endpoint that load-balances across model runner endpoints">
+            <Link to={hubPath('runners', 'runners')} className="action-card" title="Create a new virtualized API endpoint that load-balances across model runner endpoints">
               <span className="action-icon">+</span>
               <span>Create Virtual Model Runner</span>
             </Link>
-            <Link to="/endpoints" className="action-card" title="Register a new backend inference server (Ollama, OpenAI, vLLM, Gemini, etc.)">
+            <Link to={hubPath('endpoints', 'endpoints')} className="action-card" title="Register a new backend inference server (Ollama, OpenAI, vLLM, Gemini, etc.)">
               <span className="action-icon">+</span>
               <span>Add Model Runner Endpoint</span>
             </Link>
-            <Link to="/endpoint-groups" className="action-card" title="Create a reusable collection of model runner endpoints">
+            <Link to={hubPath('endpoints', 'groups')} className="action-card" title="Create a reusable collection of model runner endpoints">
               <span className="action-icon">+</span>
               <span>Create Endpoint Group</span>
             </Link>
-            <Link to="/configurations" className="action-card" title="Create a parameter preset to apply to inference requests">
+            <Link to={hubPath('models', 'configurations')} className="action-card" title="Create a parameter preset to apply to inference requests">
               <span className="action-icon">+</span>
               <span>Create Model Configuration</span>
             </Link>

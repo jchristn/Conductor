@@ -25,84 +25,48 @@ function Tour() {
         position: 'right'
       },
       {
-        selector: '[data-tour-id="nav-tenants"]',
-        title: 'Tenants',
-        description: 'Organizational units that group users, credentials, and resources together. Each tenant operates independently within the platform.',
-        position: 'right'
-      },
-      {
-        selector: '[data-tour-id="nav-users"]',
-        title: 'Users',
-        description: 'User accounts within a tenant. Users authenticate to access the API and can have different permission levels.',
-        position: 'right'
-      },
-      {
-        selector: '[data-tour-id="nav-credentials"]',
-        title: 'Credentials',
-        description: 'API bearer tokens for authenticating requests. Each credential is tied to a user and used to access Virtual Model Runners.',
+        selector: '[data-tour-id="nav-runners"]',
+        title: 'Virtual Runners',
+        description: 'The core abstraction. Virtual Model Runners combine endpoints, definitions, and configurations into a virtualized API with load balancing and session affinity. Reservations and Model Access Policies live here as tabs.',
         position: 'right'
       },
       {
         selector: '[data-tour-id="nav-endpoints"]',
-        title: 'Model Runner Endpoints',
-        description: 'Backend inference servers like Ollama, OpenAI, vLLM, Gemini, or other compatible services that Conductor proxies requests to.',
+        title: 'Endpoints',
+        description: 'Backend inference servers like Ollama, OpenAI, vLLM, or Gemini that Conductor proxies requests to, plus reusable Endpoint Groups and Load Balancing Policies.',
         position: 'right'
       },
       {
-        selector: '[data-tour-id="nav-definitions"]',
-        title: 'Model Definitions',
-        description: 'Metadata describing AI models available on your endpoints, including capabilities like completions and embeddings support.',
+        selector: '[data-tour-id="nav-models"]',
+        title: 'Models',
+        description: 'Model Definitions describe the models available on your endpoints; Model Configurations are parameter presets such as temperature and max tokens.',
         position: 'right'
       },
       {
-        selector: '[data-tour-id="nav-configurations"]',
-        title: 'Model Configurations',
-        description: 'Parameter presets such as temperature, max tokens, and other inference settings applied to requests.',
+        selector: '[data-tour-id="nav-qos"]',
+        title: 'Traffic (QoS)',
+        description: 'Watch live queueing and admissions on the Monitor tab, and manage QoS Profiles and the Traffic Class catalog that classify and schedule requests.',
         position: 'right'
       },
       {
-        selector: '[data-tour-id="nav-vmr"]',
-        title: 'Virtual Model Runners',
-        description: 'The core abstraction. Combines endpoints, definitions, and configurations into a virtualized API with load balancing and session affinity.',
+        selector: '[data-tour-id="nav-observability"]',
+        title: 'Observability',
+        description: 'Debug individual requests in Request History and analyze TTFT, token usage, and estimated cost in Analytics.',
         position: 'right'
       },
       {
-        selector: '[data-tour-id="nav-qos-monitor"]',
-        title: 'QoS Monitor',
-        description: 'Live QoS queueing for each Virtual Model Runner: waiting requests, admissions and rejections over time, per-class wait times, and endpoint slot usage.',
+        selector: '[data-tour-id="nav-access"]',
+        title: 'Access',
+        description: 'Tenants group and isolate resources; Users and Credentials (API bearer tokens) authenticate requests to Virtual Model Runners.' + (isAdmin ? ' Dashboard administrator accounts are managed here too.' : ''),
         position: 'right'
       },
       {
-        selector: '[data-tour-id="nav-request-history"]',
-        title: 'Request History',
-        description: 'View and debug request/response history for Virtual Model Runners when request history is enabled.',
-        position: 'right'
-      },
-      {
-        selector: '[data-tour-id="nav-api-explorer"]',
-        title: 'API Explorer',
-        description: 'Interactive tool to browse and test the Conductor REST API directly from the dashboard.',
+        selector: '[data-tour-id="nav-system"]',
+        title: 'System',
+        description: 'Browse and test the Conductor REST API in the API Explorer.' + (hasAdminAccess ? ' Export and import configuration with Backup & Restore.' : ''),
         position: 'right'
       }
     ];
-
-    // Add admin-only nav items
-    if (isAdmin) {
-      baseSteps.push({
-        selector: '[data-tour-id="nav-administrators"]',
-        title: 'Administrators',
-        description: 'Manage dashboard administrator accounts that have full system-level access.',
-        position: 'right'
-      });
-    }
-    if (hasAdminAccess) {
-      baseSteps.push({
-        selector: '[data-tour-id="nav-backup"]',
-        title: 'Backup & Restore',
-        description: 'Export and import system configuration data for backup and migration purposes.',
-        position: 'right'
-      });
-    }
 
     // Header items
     baseSteps.push(
@@ -112,6 +76,12 @@ function Tour() {
         description: 'Shows which Conductor server you\'re currently connected to.',
         position: 'bottom'
       },
+      ...(hasAdminAccess ? [{
+        selector: '[data-tour-id="header-help"]',
+        title: 'Help',
+        description: 'Replay this tour or open the Setup Wizard at any time.',
+        position: 'bottom'
+      }] : []),
       {
         selector: '[data-tour-id="header-theme"]',
         title: 'Theme Toggle',

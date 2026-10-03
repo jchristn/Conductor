@@ -12,6 +12,7 @@ import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 import LoadModelModal from '../components/LoadModelModal';
 import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
+import { hubPath } from '../config/navConfig';
 
 const VMR_BASE_PATH_PREFIX = '/v1.0/api/';
 
@@ -394,7 +395,7 @@ function VirtualModelRunners() {
   };
 
   const handleViewReservations = (vmr) => {
-    navigate(`/reservations?vmrId=${encodeURIComponent(vmr.Id)}`);
+    navigate(hubPath('runners', 'reservations', { vmrId: vmr.Id }));
   };
 
   const handleDelete = async () => {
@@ -1253,7 +1254,7 @@ function VirtualModelRunners() {
           <div className="detail-section">
             <div className="section-header">
               <h3>Endpoint Groups</h3>
-              <button type="button" className="btn-secondary" onClick={() => navigate('/endpoint-groups')}>Manage Groups</button>
+              <button type="button" className="btn-secondary" onClick={() => navigate(hubPath('endpoints', 'groups'))}>Manage Groups</button>
             </div>
             {!formData.TenantId ? (
               <p className="no-items">Select a tenant first.</p>

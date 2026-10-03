@@ -9,32 +9,13 @@ import ControlTooltipHydrator from './components/ControlTooltipHydrator';
 import Tour from './components/Tour';
 import SetupWizard from './components/SetupWizard';
 import Dashboard from './views/Dashboard';
-import Tenants from './views/Tenants';
-import Users from './views/Users';
-import Credentials from './views/Credentials';
-import ModelRunnerEndpoints from './views/ModelRunnerEndpoints';
-import EndpointGroups from './views/EndpointGroups';
-import ModelDefinitions from './views/ModelDefinitions';
-import ModelConfigurations from './views/ModelConfigurations';
-import LoadBalancingPolicies from './views/LoadBalancingPolicies';
-import QosProfiles from './views/QosProfiles';
-import QosTrafficClasses from './views/QosTrafficClasses';
-import QosMonitor from './views/QosMonitor';
-import ModelAccessPolicies from './views/ModelAccessPolicies';
-import VirtualModelRunners from './views/VirtualModelRunners';
-import Reservations from './views/Reservations';
-import RequestHistory from './views/RequestHistory';
-import RequestAnalytics from './views/RequestAnalytics';
-import ApiExplorer from './views/ApiExplorer';
-import Administrators from './views/Administrators';
-import BackupRestore from './views/BackupRestore';
+import HubView from './views/hubs/HubView';
+import LegacyRedirect from './components/LegacyRedirect';
+import { HUB_ITEMS, LEGACY_REDIRECTS } from './config/navConfig';
 import Login from './views/Login';
 
 function App() {
-  const { isConnected, isAdmin, currentUser, error, setError } = useApp();
-
-  // Allow backup access for system admins OR users with IsAdmin flag
-  const hasAdminAccess = isAdmin || currentUser?.IsAdmin;
+  const { isConnected, error, setError } = useApp();
 
   if (!isConnected) {
     return <Login />;
@@ -50,26 +31,12 @@ function App() {
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/tenants" element={<Tenants />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/credentials" element={<Credentials />} />
-            <Route path="/endpoints" element={<ModelRunnerEndpoints />} />
-            <Route path="/endpoint-groups" element={<EndpointGroups />} />
-            <Route path="/definitions" element={<ModelDefinitions />} />
-            <Route path="/configurations" element={<ModelConfigurations />} />
-            <Route path="/policies" element={<LoadBalancingPolicies />} />
-            <Route path="/qos-profiles" element={<QosProfiles />} />
-            <Route path="/qos-traffic-classes" element={<QosTrafficClasses />} />
-            <Route path="/qos-monitor" element={<QosMonitor />} />
-            <Route path="/model-access-policies" element={<ModelAccessPolicies />} />
-            <Route path="/vmr" element={<VirtualModelRunners />} />
-            <Route path="/reservations" element={<Reservations />} />
-            <Route path="/request-history" element={<RequestHistory />} />
-            <Route path="/analytics" element={<RequestAnalytics />} />
-            <Route path="/request-analytics" element={<Navigate to="/analytics" replace />} />
-            <Route path="/api-explorer" element={<ApiExplorer />} />
-            {isAdmin && <Route path="/administrators" element={<Administrators />} />}
-            {hasAdminAccess && <Route path="/backup" element={<BackupRestore />} />}
+            {HUB_ITEMS.map((item) => (
+              <Route key={item.key} path={item.path} element={<HubView key={item.key} hubKey={item.key} />} />
+            ))}
+            {LEGACY_REDIRECTS.map((redirect) => (
+              <Route key={redirect.from} path={redirect.from} element={<LegacyRedirect to={redirect.to} tab={redirect.tab} />} />
+            ))}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -10,6 +10,7 @@ import ViewMetadataModal from '../components/ViewMetadataModal';
 import StatusIndicator from '../components/StatusIndicator';
 import CopyableId from '../components/CopyableId';
 import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
+import { hubPath } from '../config/navConfig';
 
 function ModelDefinitions() {
   const { api, setError } = useApp();
@@ -138,11 +139,11 @@ function ModelDefinitions() {
   };
 
   const handleEvaluateAccess = (definition) => {
-    const params = new URLSearchParams();
-    if (definition.TenantId) params.append('tenantId', definition.TenantId);
-    params.append('modelDefinitionId', definition.Id);
-    params.append('modelName', definition.Name);
-    navigate(`/model-access-policies?${params.toString()}`);
+    navigate(hubPath('runners', 'access-policies', {
+      tenantId: definition.TenantId,
+      modelDefinitionId: definition.Id,
+      modelName: definition.Name
+    }));
   };
 
   const handleDelete = async () => {
