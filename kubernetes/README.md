@@ -1,6 +1,6 @@
 # Kubernetes
 
-This Kustomize base deploys Conductor v0.6.1, its dashboard, ClusterIP services,
+This Kustomize base deploys Conductor v0.6.0, its dashboard, ClusterIP services,
 a 10Gi persistent volume, resource limits and health probes. It requires kubectl,
 Python 3, a default StorageClass and outbound access to Docker Hub. Images default
 to linux/amd64; use amd64 cluster nodes or publish the images for your node architecture.
