@@ -5453,11 +5453,31 @@ input.file-input-hidden {
 }
 
 /* Queue configuration dialogs share the profile form rhythm. */
-.queue-editor label.form-group { display: block; margin-bottom: 16px; }
+.queue-editor-intro { color: var(--text-secondary); line-height: 1.6; }
+.queue-editor .queue-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.queue-editor label.form-group { display: block; margin: 0; font-weight: 500; font-size: 14px; min-width: 0; }
 .queue-editor label.form-group > input,
 .queue-editor label.form-group > select { display: block; width: 100%; margin-top: 6px; }
-.queue-editor label > input[type="checkbox"],
-.queue-editor label > input[type="radio"] { margin-right: 8px; }
-.queue-editor .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.queue-editor label.form-group small { display: block; margin-top: 6px; color: var(--text-secondary); font-weight: 400; line-height: 1.5; }
+.queue-editor .checkbox-label { display: flex; align-items: center; gap: 8px; margin: 0; line-height: 1.5; cursor: pointer; }
+.queue-editor .checkbox-label > input { flex: 0 0 auto; width: auto; margin: 0; accent-color: var(--primary-color); }
+.queue-editor .queue-choice-list { display: grid; gap: 12px; }
+.queue-editor-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color); }
+.queue-editor-section h3 { margin: 0 0 12px; font-size: 16px; }
+.queue-editor-section p { line-height: 1.6; }
+.queue-section-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.queue-section-heading h3, .queue-section-heading h4 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.queue-config-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 12px; background: var(--bg-color); }
+.queue-empty-state { border: 1px dashed var(--border-color); border-radius: 8px; padding: 16px; color: var(--text-secondary); }
+.queue-add-button { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+.queue-editor .modal-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color); }
 .queue-editor p { margin-bottom: 16px; }
 .chart-copy-status { font-size: 12px; color: var(--text-secondary); }
+@media (max-width: 640px) {
+  .queue-editor .queue-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .queue-section-heading { align-items: flex-start; }
+}

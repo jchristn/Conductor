@@ -2,9 +2,9 @@
 
 # Conductor
 
-Project version: `0.6.0`
+Project version: `0.6.1`
 
-NOTE: Conductor is in ALPHA and is v0.6.0. APIs and functionality subject to change.
+NOTE: Conductor is in ALPHA and is v0.6.1. APIs and functionality subject to change.
 
 Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
@@ -46,7 +46,7 @@ docker compose up -d
 ```
 
 The server will be available at `http://localhost:9000` and the dashboard at `http://localhost:9100`.
-The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.6.0` and `jchristn77/conductor-dashboard:v0.6.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
+The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.6.1` and `jchristn77/conductor-dashboard:v0.6.1`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
 
 The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` from `docker/compose.yaml`, so the login page points browsers at the host-exposed Conductor API by default.
 
@@ -805,8 +805,8 @@ Response includes:
 
 The included Docker Compose setup uses named Docker Hub images:
 
-- **Server**: `jchristn77/conductor-server:v0.6.0`
-- **Dashboard**: `jchristn77/conductor-dashboard:v0.6.0`
+- **Server**: `jchristn77/conductor-server:v0.6.1`
+- **Dashboard**: `jchristn77/conductor-dashboard:v0.6.1`
 
 ### Building Docker Images
 
@@ -814,21 +814,21 @@ Windows:
 
 ```bash
 # Build and push server with the specified tag and latest
-build-server.bat v0.6.0
+build-server.bat v0.6.1
 
 # Build and push dashboard with the specified tag and latest
-build-dashboard.bat v0.6.0
+build-dashboard.bat v0.6.1
 
 # Build and push both images with the specified tag and latest
-build-all.bat v0.6.0
+build-all.bat v0.6.1
 ```
 
 macOS and Linux:
 
 ```bash
-./build-server.sh v0.6.0
-./build-dashboard.sh v0.6.0
-./build-all.sh v0.6.0
+./build-server.sh v0.6.1
+./build-dashboard.sh v0.6.1
+./build-all.sh v0.6.1
 ```
 
 The scripts build with the `cloud-jchristn77-jchristn77` Docker Build Cloud builder. The `.sh` scripts build `linux/amd64` images by default, so building on Apple silicon still produces images that run on x86-64 hosts; set `DOCKER_PLATFORM` (for example `linux/arm64`) or `DOCKER_BUILDER` to override.
@@ -902,7 +902,7 @@ MIT License - see [LICENSE.md](LICENSE.md) for details.
 
 <a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Freepik - Flaticon</a>
 
-### Visual QoS editing and chart workspace (v0.6.0)
+### Visual QoS editing and chart workspace (v0.6.1)
 
 Traffic (QoS) → Profiles → Create/Edit → Diagram shows directional links from
 **Start of queuing** through the configured queues to **End of queuing / Dispatch**.
@@ -939,3 +939,8 @@ and model; endpoint routing share alongside health and capacity; QoS wait/depth 
 admission/rejection rates by class; reservation denials by identity; token throughput
 by model; estimated token cost by tenant/user; and captured processing-stage duration
 by stage. Cache-hit and multimodal trends need persisted provider usage fields first.
+
+The v0.6.1 QoS editor uses responsive class and ingress-route cards with consistently
+styled actions. Dropdowns display readable names (for example, “Priority class” and
+“JSON body path”) while API enum values remain unchanged. Queue settings, placement
+and telemetry options are grouped separately, with clearer helper text and validation.

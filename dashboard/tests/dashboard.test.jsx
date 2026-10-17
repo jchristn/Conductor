@@ -31,7 +31,7 @@ describe('queue topology', () => {
    const onSave = vi.fn(); render(<QueueNodeEditor topology={topology} node={topology.Nodes[0]} onSave={onSave} onClose={() => {}} />);
    fireEvent.change(screen.getByLabelText('Queue type'), { target: { value: 'Llq' } });
    fireEvent.click(screen.getByText('Add class'));
-   fireEvent.change(screen.getByLabelText('ClassName'), { target: { value: 'interactive' } });
+   fireEvent.change(screen.getByLabelText('Class name'), { target: { value: 'interactive' } });
    fireEvent.click(screen.getByText('Apply queue'));
    expect(onSave.mock.calls[0][0].Nodes[0].Discipline).toBe('Llq');
    expect(onSave.mock.calls[0][0].Nodes[0].Classes[0].ClassName).toBe('interactive');

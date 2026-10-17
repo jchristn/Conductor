@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.1
+
+- Finished the QoS editor styling: consistent Add class, Remove class and ingress-route buttons; responsive field grids; class and route cards; grouped queue options; and clearer empty states.
+- Replaced raw enum/property names with readable labels throughout queue configuration and classification rules. Corrected scheduling acronyms (FIFO, LIFO, WFQ, CBWFQ, LLQ and WRR) while preserving API values.
+- Rewrote helper text, tooltips and validation messages with consistent sentence case and clearer instructions for applying queue changes and saving profiles.
+- Added regression coverage for styled actions, readable options, accessible classifier labels and unchanged configuration payloads. Updated release and deployment image tags to v0.6.1.
+
 ## v0.6.0
 
 - Added visual QoS queue configuration dialogs with queue disciplines, limits, overflow, flow settings, editable classes and policers, ingress/tail selection, directional start/end arrows, rename reference updates and cycle prevention.

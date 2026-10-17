@@ -376,7 +376,7 @@ export default function QosProfiles() {
             ) : (
               <>
                 <QosClassifierRulesEditor rules={parsedRules} classes={classNameOptions} onChange={handleRulesChange} />
-                <small>Rules are evaluated top to bottom; the first match assigns the request's class. Unmatched requests use <strong>{parsedTopology.value?.DefaultClass || 'the default class'}</strong>. Edits are written back into the definition JSON below, which stays authoritative for Validate and Save.</small>
+                <small>Rules are evaluated from top to bottom. The first match assigns a traffic class. Unmatched requests use <strong>{parsedTopology.value?.DefaultClass || 'the default class'}</strong>. Rule and diagram edits stay in sync with the JSON definition. Validate the draft before saving.</small>
               </>
             )}
           </div>
@@ -401,7 +401,7 @@ export default function QosProfiles() {
                 ) : (
                   <QueueHierarchyDiagram topology={parsedTopology.value} onChange={handleTopologyChange} />
                 )}
-                <small>Drag between nodes to add a link, select a node/edge and press Delete to remove it, or use <strong>Add node</strong>. Edits are written back into the JSON, which remains the source of truth for Validate and Save. Click any queue to configure its type, limits and classes. Use Entry, exit and limits for profile-wide settings.</small>
+                <small>Drag between handles to connect queues. Select a queue or link and press Delete to remove it. To create a queue, use <strong>Add node</strong>. Click a queue to edit its settings, or use Entry, exit and limits to configure the profile. Diagram and JSON edits stay in sync. Validate the draft before saving.</small>
               </>
             )}
           </div>

@@ -68,10 +68,10 @@ export function topologyToFlow(topology) {
       const isIngress = ingressDefault && name === ingressDefault;
       const isTail = tailNode && name === tailNode;
       const roleParts = [];
-      if (isIngress) roleParts.push('ingress');
-      if (isTail) roleParts.push('tail');
+      if (isIngress) roleParts.push('Default entry');
+      if (isTail) roleParts.push('Final queue');
 
-      const discipline = node.Discipline || 'Fifo';
+      const discipline = ({ Fifo: 'FIFO', Lifo: 'LIFO', Wfq: 'WFQ', Cbwfq: 'CBWFQ', Llq: 'LLQ', Wrr: 'WRR', Priority: 'Priority' })[node.Discipline] || node.Discipline || 'FIFO';
       const depth = (node.MaxDepth === 0 || node.MaxDepth) ? node.MaxDepth : '';
       const classCount = Array.isArray(node.Classes) ? node.Classes.length : 0;
 
@@ -121,7 +121,7 @@ export function topologyToFlow(topology) {
   }
   if (tailNode && nodeNames.includes(tailNode)) {
     const tail = flowNodes.find(n => n.id === tailNode);
-    flowNodes.push({ id: '__end', type: 'output', targetPosition: Position.Left, position: { x: tail.position.x + 260, y: tail.position.y }, data: { label: 'End of queuing → Dispatch' }, deletable: false, connectable: false });
+    flowNodes.push({ id: '__end', type: 'output', targetPosition: Position.Left, position: { x: tail.position.x + 260, y: tail.position.y }, data: { label: 'End of queuing → dispatch' }, deletable: false, connectable: false });
     flowEdges.push({ id: '__egress', source: tailNode, target: '__end', deletable: false, markerEnd: { type: MarkerType.ArrowClosed } });
   }
   return { flowNodes, flowEdges };

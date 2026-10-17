@@ -1,0 +1,43 @@
+import React from 'react';
+import { it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import QueueNodeEditor from '../src/components/QueueNodeEditor';
+import QueueProfileSettings from '../src/components/QueueProfileSettings';
+import Rules from '../src/components/QosClassifierRulesEditor';
+const topology = { DefaultClass: 'default', Nodes: [{ Name: 'entry' }], IngressDefaultNode: 'entry', TailNode: 'entry' };
+it('styles every class action and displays readable scheduling labels', () => {
+ const save = vi.fn();
+ render(<QueueNodeEditor topology={topology} node={{ Name: 'entry', Discipline: 'Llq', Classes: [] }} onSave={save} onClose={() => {}} />);
+ const add = screen.getByRole('button', { name: 'Add class' });
+ expect(add.classList.contains('btn-secondary')).toBe(true);
+ fireEvent.click(add);
+ expect(screen.getByRole('button', { name: 'Remove class' }).classList.contains('btn-secondary')).toBe(true);
+ expect(screen.getByRole('option', { name: 'LLQ — Low-latency queuing' }).value).toBe('Llq');
+ fireEvent.change(screen.getByLabelText('Class name'), { target: { value: 'interactive' } });
+ fireEvent.change(screen.getByLabelText('Class type'), { target: { value: 'PriorityClass' } });
+ expect(screen.getByLabelText('Rate per second')).toBeTruthy();
+ expect(screen.queryByLabelText('Weight')).toBeNull();
+ expect(screen.queryByText('PriorityClass')).toBeNull();
+ fireEvent.click(screen.getByRole('button', { name: 'Apply queue' }));
+ expect(save.mock.calls[0][0].Nodes[0].Classes[0]).toMatchObject({ Kind: 'PriorityClass', ClassName: 'interactive' });
+});
+it('styles route actions and keeps readable option labels separate from API values', () => {
+ render(<QueueProfileSettings topology={{ ...topology, IngressMode: 'Router' }} onSave={() => {}} onClose={() => {}} />);
+ expect(screen.getByRole('option', { name: 'Route by traffic class' }).value).toBe('Router');
+ const add = screen.getByRole('button', { name: 'Add ingress route' });
+ expect(add.classList.contains('btn-secondary')).toBe(true);
+ fireEvent.click(add);
+ expect(screen.getByRole('button', { name: 'Remove route' }).classList.contains('btn-secondary')).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Remove route' }));
+ expect(screen.queryByLabelText('Traffic class')).toBeNull();
+});
+it('uses readable classifier sources and operators without changing their payload values', () => {
+ const change = vi.fn();
+ render(<Rules rules={[{ Source: 'Header', Operator: 'Equals', ClassName: 'default' }]} onChange={change} />);
+ expect(screen.getByRole('option', { name: 'Client IP address' }).value).toBe('ClientIp');
+ expect(screen.getByRole('option', { name: 'JSON body path' }).value).toBe('BodyJsonPath');
+ fireEvent.change(screen.getByLabelText('Operator'), { target: { value: 'GreaterThan' } });
+ expect(change.mock.calls[0][0][0].Operator).toBe('GreaterThan');
+ expect(screen.queryByText('GreaterThan')).toBeNull();
+ expect(screen.queryByText('BodyJsonPath')).toBeNull();
+});

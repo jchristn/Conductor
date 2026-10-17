@@ -17,6 +17,11 @@ const TIER_OPTIONS = [
   'Default',
 ];
 
+const TIER_LABELS = {
+  Realtime: 'Real-time', Interactive: 'Interactive', AgentInteractive: 'Interactive agent',
+  BatchTimebound: 'Time-bound batch', BatchBackground: 'Background batch', Default: 'Default',
+};
+
 function defaultForm() {
   return {
     TenantId: '',
@@ -121,7 +126,7 @@ export default function QosTrafficClasses() {
     { key: 'Name', label: 'Name', tooltip: 'Class name, unique per tenant' },
     { key: 'Id', label: 'ID', width: '300px', render: (row) => <CopyableId value={row.Id} /> },
     { key: 'TenantId', label: 'Tenant', width: '180px', render: (row) => tenantName(row.TenantId) },
-    { key: 'Tier', label: 'Tier', width: '160px', render: (row) => row.Tier || 'Default' },
+    { key: 'Tier', label: 'Tier', width: '160px', render: (row) => TIER_LABELS[row.Tier] || row.Tier || 'Default' },
     {
       key: 'IsSystem',
       label: 'System',
@@ -216,7 +221,7 @@ export default function QosTrafficClasses() {
               value={formData.Tier}
               onChange={(e) => setFormData({ ...formData, Tier: e.target.value })}
             >
-              {TIER_OPTIONS.map((tier) => <option key={tier} value={tier}>{tier}</option>)}
+              {TIER_OPTIONS.map((tier) => <option key={tier} value={tier}>{TIER_LABELS[tier]}</option>)}
             </select>
           </div>
 

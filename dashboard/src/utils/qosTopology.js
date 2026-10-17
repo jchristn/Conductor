@@ -4,14 +4,15 @@ export function saveQueue(topology, originalName, draft, roles = {}) {
   const name = draft.Name?.trim();
   if (!name || name.startsWith('__')) throw new Error('Enter a queue name that does not begin with __.');
   if (nodes.some(n => n.Name === name && n.Name !== originalName)) throw new Error('Queue names must be unique.');
+  const labels = { MaxDepth: 'Maximum depth', AgingThresholdMs: 'Priority aging', DefaultWeight: 'Default weight', Weight: 'Weight', Band: 'Priority band', RatePerSecond: 'Rate per second', Burst: 'Burst capacity' };
   for (const key of ['MaxDepth', 'AgingThresholdMs', 'DefaultWeight']) {
     const min = key === 'DefaultWeight' ? 1 : 0;
-    if (!Number.isInteger(draft[key] ?? min) || (draft[key] ?? min) < min) throw new Error(`${key} must be an integer of at least ${min}.`);
+    if (!Number.isInteger(draft[key] ?? min) || (draft[key] ?? min) < min) throw new Error(`${labels[key]} must be a whole number of at least ${min}.`);
   }
   const classes = (draft.Classes || []).map((row, Ordinal) => {
     if (!row.ClassName?.trim()) throw new Error('Each class needs a name.');
     for (const key of ['Weight', 'Band', 'RatePerSecond', 'Burst']) {
-      if (row[key] != null && (!Number.isFinite(row[key]) || row[key] < (key === 'Weight' ? 1 : 0))) throw new Error(`${key} is outside its allowed range.`);
+      if (row[key] != null && (!Number.isFinite(row[key]) || row[key] < (key === 'Weight' ? 1 : 0))) throw new Error(`${labels[key]} is outside its allowed range.`);
     }
     return { ...row, Ordinal };
   });

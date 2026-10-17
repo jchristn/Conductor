@@ -17,6 +17,16 @@ const SOURCE_OPTIONS = [
   'Vmr',
 ];
 
+const SOURCE_LABELS = {
+  Header: 'HTTP header', BodyJsonPath: 'JSON body path', QueryParam: 'Query parameter',
+  Model: 'Model', ApiFamily: 'API family', RequestType: 'Request type', Tenant: 'Tenant',
+  Credential: 'Credential', User: 'User', ClientIp: 'Client IP address', Vmr: 'Virtual model runner',
+};
+const OPERATOR_LABELS = {
+  Equals: 'Equals', Contains: 'Contains', Regex: 'Matches regular expression',
+  Exists: 'Is present', GreaterThan: 'Greater than', LessThan: 'Less than',
+};
+
 // Sources whose match is keyed by a caller-supplied name (header/query/JSON-path).
 const KEY_SOURCES = new Set(['Header', 'BodyJsonPath', 'QueryParam']);
 
@@ -120,7 +130,7 @@ function QosClassifierRulesEditor({ rules, classes, onChange }) {
 
       {rows.length === 0 ? (
         <p className="qos-rules-empty">
-          No classification rules. Requests will be assigned the profile's default class. Add a rule to route traffic by header, model, tenant, and more.
+          No rules yet. Requests use the default traffic class. Add a rule to classify requests by a header, model, tenant or another request attribute.
         </p>
       ) : (
         <div className="qos-rules-list">
@@ -135,46 +145,52 @@ function QosClassifierRulesEditor({ rules, classes, onChange }) {
 
                 <div className="qos-rule-fields">
                   <div className="form-group">
-                    <label>Source</label>
-                    <select value={source} onChange={(e) => updateRow(index, 'Source', e.target.value)}>
-                      {SOURCE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    <label htmlFor={`qos-rule-${index}-source`}>Source</label>
+                    <select id={`qos-rule-${index}-source`} title="Request attribute inspected by this classification rule." value={source} onChange={(e) => updateRow(index, 'Source', e.target.value)}>
+                      {SOURCE_OPTIONS.map((opt) => <option key={opt} value={opt}>{SOURCE_LABELS[opt]}</option>)}
                     </select>
                   </div>
 
                   <div className="form-group">
-                    <label>Key</label>
+                    <label htmlFor={`qos-rule-${index}-key`}>Key</label>
                     <input
                       type="text"
+                      id={`qos-rule-${index}-key`}
+                      title="Header name, query parameter or JSON path to inspect. Other sources do not need a key."
                       value={rule.MatchKey || ''}
                       onChange={(e) => updateRow(index, 'MatchKey', e.target.value)}
                       placeholder={keyPlaceholder(source)}
                       disabled={!keyed}
                     />
-                    <small>{keyed ? 'Header / query / JSON-path name.' : 'Unused for this source.'}</small>
+                    <small>{keyed ? 'Enter a header name, query parameter or JSON path.' : 'This source does not need a key.'}</small>
                   </div>
 
                   <div className="form-group">
-                    <label>Operator</label>
-                    <select value={operator} onChange={(e) => updateRow(index, 'Operator', e.target.value)}>
-                      {OPERATOR_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                    <label htmlFor={`qos-rule-${index}-operator`}>Operator</label>
+                    <select id={`qos-rule-${index}-operator`} title="Comparison used to decide whether the request attribute matches this rule." value={operator} onChange={(e) => updateRow(index, 'Operator', e.target.value)}>
+                      {OPERATOR_OPTIONS.map((opt) => <option key={opt} value={opt}>{OPERATOR_LABELS[opt]}</option>)}
                     </select>
                   </div>
 
                   <div className="form-group">
-                    <label>Value</label>
+                    <label htmlFor={`qos-rule-${index}-value`}>Value</label>
                     <input
                       type="text"
+                      id={`qos-rule-${index}-value`}
+                      title="Value compared with the request attribute. The Is present operator does not need a value."
                       value={rule.MatchValue || ''}
                       onChange={(e) => updateRow(index, 'MatchValue', e.target.value)}
-                      placeholder={valueDisabled ? 'Not used for Exists' : 'Match value'}
+                      placeholder={valueDisabled ? 'Not needed for Is present' : 'Match value'}
                       disabled={valueDisabled}
                     />
                   </div>
 
                   <div className="form-group">
-                    <label>Class</label>
+                    <label htmlFor={`qos-rule-${index}-class`}>Traffic class</label>
                     <input
                       type="text"
+                      id={`qos-rule-${index}-class`}
+                      title="Traffic class assigned when this rule is the first match."
                       value={rule.ClassName || ''}
                       onChange={(e) => updateRow(index, 'ClassName', e.target.value)}
                       placeholder="Class assigned on match"
@@ -189,7 +205,7 @@ function QosClassifierRulesEditor({ rules, classes, onChange }) {
                     className="btn-icon-small"
                     onClick={() => moveRow(index, -1)}
                     disabled={index === 0}
-                    title="Move up"
+                    title="Evaluate this rule before the rule above it."
                     aria-label={`Move rule ${index + 1} up`}
                   >
                     <UpIcon />
@@ -199,7 +215,7 @@ function QosClassifierRulesEditor({ rules, classes, onChange }) {
                     className="btn-icon-small"
                     onClick={() => moveRow(index, 1)}
                     disabled={index === rows.length - 1}
-                    title="Move down"
+                    title="Evaluate this rule after the rule below it."
                     aria-label={`Move rule ${index + 1} down`}
                   >
                     <DownIcon />
@@ -208,7 +224,7 @@ function QosClassifierRulesEditor({ rules, classes, onChange }) {
                     type="button"
                     className="btn-icon-small qos-rule-delete"
                     onClick={() => deleteRow(index)}
-                    title="Delete rule"
+                    title="Remove this classification rule from the profile draft."
                     aria-label={`Delete rule ${index + 1}`}
                   >
                     <DeleteIcon />
@@ -221,7 +237,7 @@ function QosClassifierRulesEditor({ rules, classes, onChange }) {
       )}
 
       <div className="qos-rules-footer">
-        <button type="button" className="btn-secondary btn-small" onClick={addRow}>
+        <button type="button" className="btn-secondary btn-small" title="Add a rule that assigns a traffic class when a request attribute matches." onClick={addRow}>
           <PlusIcon /> Add rule
         </button>
       </div>
