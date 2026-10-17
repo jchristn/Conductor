@@ -2,9 +2,9 @@
 
 # Conductor
 
-Project version: `0.5.1`
+Project version: `0.6.0`
 
-NOTE: Conductor is in ALPHA and is v0.5.1. APIs and functionality subject to change.
+NOTE: Conductor is in ALPHA and is v0.6.0. APIs and functionality subject to change.
 
 Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
@@ -46,7 +46,7 @@ docker compose up -d
 ```
 
 The server will be available at `http://localhost:9000` and the dashboard at `http://localhost:9100`.
-The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.5.0` and `jchristn77/conductor-dashboard:v0.5.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
+The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.6.0` and `jchristn77/conductor-dashboard:v0.6.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
 
 The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` from `docker/compose.yaml`, so the login page points browsers at the host-exposed Conductor API by default.
 
@@ -805,8 +805,8 @@ Response includes:
 
 The included Docker Compose setup uses named Docker Hub images:
 
-- **Server**: `jchristn77/conductor-server:v0.5.0`
-- **Dashboard**: `jchristn77/conductor-dashboard:v0.5.0`
+- **Server**: `jchristn77/conductor-server:v0.6.0`
+- **Dashboard**: `jchristn77/conductor-dashboard:v0.6.0`
 
 ### Building Docker Images
 
@@ -814,21 +814,21 @@ Windows:
 
 ```bash
 # Build and push server with the specified tag and latest
-build-server.bat v0.5.0
+build-server.bat v0.6.0
 
 # Build and push dashboard with the specified tag and latest
-build-dashboard.bat v0.5.0
+build-dashboard.bat v0.6.0
 
 # Build and push both images with the specified tag and latest
-build-all.bat v0.5.0
+build-all.bat v0.6.0
 ```
 
 macOS and Linux:
 
 ```bash
-./build-server.sh v0.5.0
-./build-dashboard.sh v0.5.0
-./build-all.sh v0.5.0
+./build-server.sh v0.6.0
+./build-dashboard.sh v0.6.0
+./build-all.sh v0.6.0
 ```
 
 The scripts build with the `cloud-jchristn77-jchristn77` Docker Build Cloud builder. The `.sh` scripts build `linux/amd64` images by default, so building on Apple silicon still produces images that run on x86-64 hosts; set `DOCKER_PLATFORM` (for example `linux/arm64`) or `DOCKER_BUILDER` to override.
@@ -901,3 +901,41 @@ MIT License - see [LICENSE.md](LICENSE.md) for details.
 ## Attributions
 
 <a href="https://www.flaticon.com/free-icons/music" title="music icons">Music icons created by Freepik - Flaticon</a>
+
+### Visual QoS editing and chart workspace (v0.6.0)
+
+Traffic (QoS) → Profiles → Create/Edit → Diagram shows directional links from
+**Start of queuing** through the configured queues to **End of queuing / Dispatch**.
+Click a queue or Add node to configure scheduling, overflow, limits, flow keys,
+class weights, priority bands and LLQ policers in a dialog. Apply queue updates the
+profile draft; save the profile to persist. Connect handles to add links; cyclic,
+self and duplicate connections are rejected. Rename updates links and ingress routes.
+Server validation remains the final check for discipline-specific topology rules.
+
+The dashboard chart tabs show request history, volume / average TTFT, response
+latency / average TTFT, and token usage. Observability uses the same distinct chart
+renderers. Latency charts use milliseconds for both series; volume uses a separate
+TTFT axis. Missing timing samples remain gaps. Token categories are input excluding
+cache, output, cached input, and other reported tokens. Cached usage is a subset of
+input; overlapping multimodal totals are not added again. Cached/multimodal provider
+fields currently remain unknown where not persisted, rather than inferred zeros.
+
+Each chart has an image-copy control. On supported HTTPS/localhost browsers it
+copies a PNG. Browser security prevents automatic image clipboard writes on remote
+plain HTTP or when permission is denied; the control opens a PNG preview with
+instructions to right-click → Copy Image, plus a download option. This manual image
+copy path works without a secure origin. See the browser
+[Clipboard API restrictions](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/write).
+Controls and column headers receive contextual hover help, including dynamically
+opened dialogs and menus.
+
+Cluster assets and instructions: [Kubernetes](kubernetes/README.md) and
+[Minikube / k3s](minikube/README.md). Run dashboard checks with `cd dashboard && npm test`
+and `npm run build`; run the shared .NET suite with
+`dotnet run --project src/Test.Automated -- --results /tmp/conductor-tests.json`.
+
+Useful additional charts from existing metadata: failure/status rate by provider
+and model; endpoint routing share alongside health and capacity; QoS wait/depth and
+admission/rejection rates by class; reservation denials by identity; token throughput
+by model; estimated token cost by tenant/user; and captured processing-stage duration
+by stage. Cache-hit and multimodal trends need persisted provider usage fields first.

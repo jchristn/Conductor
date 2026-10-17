@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
+import ChartCopyButton from '../components/ChartCopyButton';
+import AnalyticsTrendChart from '../components/AnalyticsTrendChart';
 import CopyableId from '../components/CopyableId';
 import RefreshButton from '../components/RefreshButton';
 import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
@@ -45,7 +47,7 @@ const EXPORT_FORMATS = [
 const PROVIDERS = ['', 'OpenAI', 'vLLM', 'Gemini', 'Ollama'];
 const PAGE_TOOLTIP = 'Analytics workspace for time-to-first-token, token usage, estimated cost, users, endpoints, and request outcomes.';
 const FILTER_SECTION_TOOLTIP = 'Filters applied to every metric, chart, table, and analytics detail on this page. Analytics data is retained for 30 days.';
-const CHART_TOOLTIP = 'Combined time-series chart. Stacked bars show successful and failed request volume per bucket, and the line shows average time-to-first-token.';
+const CHART_TOOLTIP = 'Combined time-series chart. Grouped bars show successful and failed request volume per bucket, and the line shows average time-to-first-token.';
 const STAGE_BREAKDOWN_TOOLTIP = 'Aggregated analytics stages for the active filters. Each row compares total time spent in that stage across captured events.';
 const SLOWEST_REQUESTS_TOOLTIP = 'Slowest individual requests matching the active filters. Click a row to inspect its per-stage analytics timeline.';
 const ENDPOINT_SUMMARY_TOOLTIP = 'Endpoint-level analytics grouped by routed model endpoint for the active filters.';
@@ -186,130 +188,21 @@ function MetricCard({ label, value, sublabel, tooltip, valueTooltip, sublabelToo
   );
 }
 
-function TimeSeriesChart({ data }) {
-  const [hovered, setHovered] = useState(null);
-  const chartRef = useRef(null);
-  const [chartWidth, setChartWidth] = useState(920);
-  const buckets = data || [];
-  const width = chartWidth;
-  const height = 390;
-  const padLeft = 52;
-  const padRight = 18;
-  const padTop = 24;
-  const padBottom = 44;
-  const innerWidth = width - padLeft - padRight;
-  const innerHeight = height - padTop - padBottom;
-  const maxRequests = Math.max(1, ...buckets.map(item => item.RequestCount || 0));
-  const maxLatency = Math.max(1, ...buckets.map(item => item.P95DurationMs || 0));
-  const requestAxisTicks = maxRequests <= 1
-    ? [{ ratio: 0, label: 0 }, { ratio: 1, label: 1 }]
-    : [0, 0.25, 0.5, 0.75, 1].map(tick => ({
-      ratio: tick,
-      label: Math.round(maxRequests * tick)
-    }));
-  const groupWidth = buckets.length > 0 ? innerWidth / buckets.length : innerWidth;
-  const barWidth = Math.max(2, Math.min(24, groupWidth * 0.62));
-
-  useEffect(() => {
-    const updateWidth = () => {
-      if (chartRef.current) {
-        setChartWidth(Math.max(640, Math.round(chartRef.current.clientWidth || 920)));
-      }
-    };
-
-    updateWidth();
-
-    if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(updateWidth);
-      if (chartRef.current) {
-        observer.observe(chartRef.current);
-      }
-      return () => observer.disconnect();
-    }
-
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, []);
-
-  const points = buckets.map((bucket, index) => {
-    const x = padLeft + index * groupWidth + groupWidth / 2;
-    const y = padTop + innerHeight - ((bucket.P95DurationMs || 0) / maxLatency) * innerHeight;
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <div className="analytics-chart-wrap" ref={chartRef} title={CHART_TOOLTIP}>
-      {buckets.length < 1 ? (
-        <div className="analytics-empty" title="No request analytics time buckets matched the active range and filters.">No analytics buckets in this range.</div>
-      ) : (
-        <>
-          <svg className="analytics-chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={CHART_TOOLTIP}>
-            <title>{CHART_TOOLTIP}</title>
-            {requestAxisTicks.map(tick => {
-              const y = padTop + innerHeight - tick.ratio * innerHeight;
-              return (
-                <g key={tick.ratio}>
-                  <title>Request-count grid line used to read stacked bar height against the highest-volume bucket in the active range.</title>
-                  <line x1={padLeft} x2={width - padRight} y1={y} y2={y} />
-                  <text x={padLeft - 8} y={y + 4} textAnchor="end">{tick.label}</text>
-                </g>
-              );
-            })}
-            {buckets.map((bucket, index) => {
-              const totalHeight = ((bucket.RequestCount || 0) / maxRequests) * innerHeight;
-              const failureHeight = ((bucket.FailureCount || 0) / maxRequests) * innerHeight;
-              const successHeight = Math.max(0, totalHeight - failureHeight);
-              const x = padLeft + index * groupWidth + (groupWidth - barWidth) / 2;
-              const ySuccess = padTop + innerHeight - totalHeight;
-              const yFailure = padTop + innerHeight - failureHeight;
-              const showLabel = index % Math.max(1, Math.ceil(buckets.length / 8)) === 0;
-              return (
-                <g key={bucket.TimestampUtc || index} onMouseEnter={() => setHovered(index)} onMouseLeave={() => setHovered(null)}>
-                  <title>One time bucket in the active range. Bars show successful and failed request volume, and the line shows P95 latency for this bucket.</title>
-                  <rect x={padLeft + index * groupWidth} y={padTop} width={groupWidth} height={innerHeight + padBottom} fill="transparent" />
-                  {successHeight > 0 && (
-                    <rect x={x} y={ySuccess} width={barWidth} height={successHeight} rx="2" className="analytics-bar-success">
-                      <title>Successful requests in this time bucket. Height is scaled against the highest request-count bucket in the chart.</title>
-                    </rect>
-                  )}
-                  {failureHeight > 0 && (
-                    <rect x={x} y={yFailure} width={barWidth} height={failureHeight} rx="2" className="analytics-bar-failure">
-                      <title>Failed requests in this time bucket, including missing or 4xx/5xx HTTP status results.</title>
-                    </rect>
-                  )}
-                  {showLabel && (
-                    <text x={padLeft + index * groupWidth + groupWidth / 2} y={height - 10} textAnchor="middle">
-                      <title>Bucket date label for the time-series x-axis.</title>
-                      {new Date(bucket.TimestampUtc).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-            {points && (
-              <polyline points={points} className="analytics-latency-line">
-                <title>P95 latency trend across the displayed time buckets.</title>
-              </polyline>
-            )}
-          </svg>
-          {hovered != null && buckets[hovered] && (
-            <div className="analytics-tooltip" style={{ left: `${((hovered + 0.5) / buckets.length) * 100}%` }} title="Point-in-time values for the bucket under the cursor: request count, failed requests, and P95 latency.">
-              <strong title="Timestamp for the hovered analytics bucket">{new Date(buckets[hovered].TimestampUtc).toLocaleString()}</strong>
-              <span title="Total requests recorded in the hovered analytics bucket">Requests: {formatNumber(buckets[hovered].RequestCount)}</span>
-              <span title="Requests in the hovered bucket with missing or 4xx/5xx HTTP status results">Failed: {formatNumber(buckets[hovered].FailureCount)}</span>
-              <span title="Average time-to-first-token for the hovered analytics bucket">Avg TTFT: {formatMs(buckets[hovered].P95DurationMs)}</span>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 function StageBreakdown({ stages }) {
+  const svgRef = useRef(null);
   const max = Math.max(1, ...(stages || []).map(item => item.TotalDurationMs || 0));
   return (
     <div className="analytics-stage-list" title={STAGE_BREAKDOWN_TOOLTIP}>
+      {stages?.length > 0 && <>
+        <ChartCopyButton svgRef={svgRef} getOptions={() => ({ title: 'Processing stage duration', xLabel: 'Total captured duration (ms)', yLabel: 'Processing stage' })} />
+        <svg ref={svgRef} viewBox={`0 0 900 ${Math.max(60, stages.length * 38)}`} role="img" aria-label="Processing stage total duration" style={{ width: '100%' }}>
+          {stages.map((stage, i) => <g key={stage.StageKind}>
+            <text x="215" y={i * 38 + 24} textAnchor="end" fill="currentColor" fontSize="12">{stage.StageName || stage.StageKind}</text>
+            <rect x="225" y={i * 38 + 7} width={Math.max(1, (stage.TotalDurationMs || 0) / max * 530)} height="24" fill="#2563eb"><title>{`${stage.StageName || stage.StageKind}: ${stage.TotalDurationMs || 0} ms total; ${stage.Count} events; P95 ${stage.P95DurationMs} ms`}</title></rect>
+            <text x="770" y={i * 38 + 24} fill="currentColor" fontSize="12">{formatMs(stage.TotalDurationMs)}</text>
+          </g>)}
+        </svg>
+      </>}
       {(stages || []).length < 1 && <div className="analytics-empty" title="No per-stage request analytics events matched the active range and filters.">No stage events captured for this range.</div>}
       {(stages || []).map(stage => (
         <div className="analytics-stage-row" key={stage.StageKind} title="One analytics stage aggregated across filtered requests. The bar compares total captured duration for this stage against the slowest aggregate stage.">
@@ -317,7 +210,7 @@ function StageBreakdown({ stages }) {
             <strong title="Human-readable name for the analytics stage.">{stage.StageName || stage.StageKind}</strong>
             <span title="Number of captured events for this stage and its 95th percentile duration.">{stage.Count} events / p95 {formatMs(stage.P95DurationMs)}</span>
           </div>
-          <div className="analytics-stage-track" title="Relative total duration for this stage compared with the stage that consumed the most time in the active result set.">
+          <div style={{ display: 'none' }} className="analytics-stage-track" title="Relative total duration for this stage compared with the stage that consumed the most time in the active result set.">
             <div className="analytics-stage-fill" style={{ width: `${Math.max(2, ((stage.TotalDurationMs || 0) / max) * 100)}%` }} title="Filled bar showing this stage's share of the maximum aggregate stage duration." />
           </div>
           <span className="analytics-stage-total" title="Total captured duration for this stage across all matching analytics events.">{formatMs(stage.TotalDurationMs)}</span>
@@ -558,7 +451,7 @@ function TimelineModal({ analytics, onClose }) {
                 <strong title="Human-readable name for this request analytics stage.">{event.StageName || event.StageKind}</strong>
                 <span title="Stable analytics stage kind and whether this stage completed successfully.">{event.StageKind} / {event.Success ? 'success' : 'failed'}</span>
               </div>
-              <div className="analytics-stage-track" title="Relative duration for this stage compared with the longest captured stage in this request.">
+              <div style={{ display: 'none' }} className="analytics-stage-track" title="Relative duration for this stage compared with the longest captured stage in this request.">
                 <div className="analytics-stage-fill" style={{ width: `${Math.max(2, ((event.DurationMs || 0) / total) * 100)}%` }} title="Filled bar showing this stage duration relative to the request's longest stage." />
               </div>
               <span className="analytics-stage-total" title="Measured duration for this individual analytics stage.">{formatMs(event.DurationMs)}</span>
@@ -1224,12 +1117,8 @@ function RequestAnalytics() {
           <h2 title={CHART_TOOLTIP}>Volume and TTFT</h2>
           {loading && <span className="text-muted" title="Request analytics overview is loading with the active filters.">Loading...</span>}
         </div>
-        <TimeSeriesChart data={overview?.TimeSeries || []} />
-        <div className="request-history-chart-legend" title="Legend for the request volume and latency chart.">
-          <span className="request-history-legend-item" title="Green stacked bar segment represents successful requests in each time bucket."><span className="request-history-legend-color success" title="Success bar color." />Success</span>
-          <span className="request-history-legend-item" title="Red stacked bar segment represents failed requests in each time bucket."><span className="request-history-legend-color danger" title="Failure bar color." />Failed</span>
-          <span className="request-history-legend-item" title="Line represents average time-to-first-token in each time bucket."><span className="analytics-line-key" title="Average TTFT line color." />Avg TTFT</span>
-        </div>
+        <AnalyticsTrendChart data={overview?.TimeSeries || []} mode="volume" />
+
       </section>
 
       <div className="analytics-grid-two" title="Secondary analytics panels for stage timing and slow individual request inspection.">
@@ -1358,12 +1247,12 @@ function RequestAnalytics() {
               tooltip="Weighted percentage of successful completions with captured time-to-first-token, based on grouped user analytics."
             />
           </div>
-          <section className="dashboard-section analytics-main-chart" title={CHART_TOOLTIP}>
+          <section className="dashboard-section analytics-main-chart" title="Compare average full response duration with average first-token time on the same millisecond scale; missing timings remain gaps.">
             <div className="request-history-chart-header" title="Latency chart header.">
-              <h2 title={CHART_TOOLTIP}>TTFT Trend</h2>
+              <h2 title="Compare average full response duration with average first-token time on the same millisecond scale; missing timings remain gaps.">Response latency and TTFT</h2>
               {loading && <span className="text-muted" title="Latency analytics are loading with the active filters.">Loading...</span>}
             </div>
-            <TimeSeriesChart data={overview?.TimeSeries || []} />
+            <AnalyticsTrendChart data={overview?.TimeSeries || []} mode="latency" />
           </section>
           <div className="analytics-grid-two" title="Latency detail panels.">
             <section className="dashboard-section" title={STAGE_BREAKDOWN_TOOLTIP}>
@@ -1424,7 +1313,7 @@ function RequestAnalytics() {
               <h2 title="Token usage over time.">Token Usage Trend</h2>
               {loading && <span className="text-muted" title="Token analytics are loading with the active filters.">Loading...</span>}
             </div>
-            <TimeSeriesChart data={overview?.TimeSeries || []} />
+            <AnalyticsTrendChart data={overview?.TimeSeries || []} mode="tokens" />
           </section>
           <div className="analytics-breakdown-grid" title="Token usage by user and credential.">
             <AnalyticsBreakdownTable title="User Token Breakdown" tooltip={USER_BREAKDOWN_TOOLTIP} rows={userBreakdown} loading={loading} emptyMessage="No user token analytics in this range." identityFallback="(anonymous)" costCurrency={overview?.CostCurrency} />

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.0
+
+- Added visual QoS queue configuration dialogs with queue disciplines, limits, overflow, flow settings, editable classes and policers, ingress/tail selection, directional start/end arrows, rename reference updates and cycle prevention.
+- Replaced duplicate Observability charts with distinct volume/TTFT, response latency/TTFT and token-type trends. Added nullable average response timing to analytics time buckets and dashboard chart tabs.
+- Expanded contextual hover help to links, table headers, tabs and dynamically mounted controls, preserving detailed authored descriptions.
+- Added image copy to analytics and health charts. Preserve clipboard activation with deferred PNG rendering; offer a native image preview/manual Copy Image path on insecure origins or denied clipboard permissions, with honest failure feedback.
+- Added persistent single-server Kubernetes assets and a Minikube/k3s overlay, same-origin API proxy, generated private settings, probes, resources and deployment instructions.
+- Added positive and negative dashboard regressions; updated release versions and Docker Compose tags to v0.6.0.
+
 ## v0.5.1
 
 - Set .NET project versions to `0.5.1`.

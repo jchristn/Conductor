@@ -384,6 +384,14 @@ namespace Test.Shared.Server.Services
                 Limit = 100
             }).ConfigureAwait(false);
 
+            // Response duration and TTFT use separate fields and exclude failed completions.
+            result.TimeSeries.Where(bucket => bucket.AverageResponseTimeMs.HasValue)
+                .Should().OnlyContain(bucket => bucket.AverageResponseTimeMs.Value >= 400m
+                    && bucket.AverageResponseTimeMs.Value <= 600m);
+            result.TimeSeries.Where(bucket => bucket.SuccessfulCompletionCount == 0)
+                .Should().OnlyContain(bucket => bucket.AverageResponseTimeMs == null
+                    && bucket.AverageTimeToFirstTokenMs == null);
+            result.TimeSeries.Sum(bucket => bucket.SuccessfulCompletionCount).Should().Be(3);
             result.TotalRequests.Should().Be(4);
             result.SuccessfulCompletionCount.Should().Be(3);
             result.FailedRequestCount.Should().Be(1);

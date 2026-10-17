@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import ChartCopyButton from './ChartCopyButton';
 
 function HealthHistogram({ history, width = 120, height = 24, fill = false, onClick }) {
+  const svgRef = useRef(null);
   if (!history || history.length === 0) {
     return <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>No data</span>;
   }
@@ -49,7 +51,7 @@ function HealthHistogram({ history, width = 120, height = 24, fill = false, onCl
   const totalWidth = buckets.length * (barWidth + barGap) - barGap;
 
   return (
-    <svg
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><ChartCopyButton svgRef={svgRef} getOptions={() => ({ title: 'Endpoint health history', xLabel: 'Health check time', yLabel: 'Health outcome' })} /><svg ref={svgRef}
       viewBox={`0 0 ${totalWidth} ${height}`}
       width={fill ? '100%' : totalWidth}
       height={height}
@@ -83,7 +85,7 @@ function HealthHistogram({ history, width = 120, height = 24, fill = false, onCl
           </rect>
         );
       })}
-    </svg>
+    </svg></span>
   );
 }
 

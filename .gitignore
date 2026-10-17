@@ -78,3 +78,6 @@ conductor.log
 docker/data/request-history/*
 !docker/data/request-history/.gitkeep
 docker/logs/*.log*
+
+# Private cluster settings generated locally
+kubernetes/conductor.json

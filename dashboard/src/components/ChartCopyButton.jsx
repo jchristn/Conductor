@@ -23,11 +23,13 @@ function ChartCopyButton({ svgRef, getOptions, label = 'Copy chart as an image' 
 
   const title = copyState === 'copied'
     ? 'Copied chart image to clipboard'
-    : copyState === 'downloaded'
-      ? 'Clipboard unavailable - downloaded chart image instead'
+    : copyState === 'manual'
+      ? 'Image preview opened — right-click the image and choose Copy Image'
+      : copyState === 'failed' ? 'Could not render chart image. Try again.'
       : label;
 
   return (
+    <>
     <button
       type="button"
       className="request-history-refresh-btn"
@@ -35,7 +37,7 @@ function ChartCopyButton({ svgRef, getOptions, label = 'Copy chart as an image' 
       title={title}
       aria-label={title}
     >
-      {copyState === 'copied' || copyState === 'downloaded' ? (
+      {copyState === 'copied' ? (
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <polyline points="20 6 9 17 4 12" />
         </svg>
@@ -46,6 +48,8 @@ function ChartCopyButton({ svgRef, getOptions, label = 'Copy chart as an image' 
         </svg>
       )}
     </button>
+    <span className="chart-copy-status" role="status" aria-live="polite">{copyState === 'failed' ? 'Image export failed. Try again.' : copyState === 'copied' ? 'Image copied' : ''}</span>
+    </>
   );
 }
 

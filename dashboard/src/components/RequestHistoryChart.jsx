@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ChartCopyButton from './ChartCopyButton';
 import { useApp } from '../context/AppContext';
 import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
 
@@ -60,6 +61,7 @@ function mergeBuckets(allBuckets, apiData, stepMs) {
 }
 
 function RequestHistoryChart() {
+  const svgRef = useRef(null);
   const { api } = useApp();
   const [timeRange, setTimeRange] = useState(() => readChoicePreference(
     TIME_RANGE_STORAGE_KEY,
@@ -190,7 +192,8 @@ function RequestHistoryChart() {
       <div className="request-history-chart-header">
         <h2>Request History</h2>
         <div className="request-history-chart-controls">
-          <select
+          <ChartCopyButton svgRef={svgRef} getOptions={() => ({ title: 'Request history', xLabel: 'Request time', yLabel: 'Request count', legend: [{ label: 'Success (1xx–3xx)', color: '#10b981' }, { label: 'Failure (4xx–5xx)', color: '#ef4444' }] })} />
+          <select aria-label="Virtual model runner" title="Limit request history to one virtual runner, or show all runners in the current scope."
             value={vmrGuid}
             onChange={e => setVmrGuid(e.target.value)}
             className="request-history-select"
@@ -258,7 +261,7 @@ function RequestHistoryChart() {
 
       {buckets.length > 0 && (
         <div className="request-history-chart-container" style={{ position: 'relative' }}>
-          <svg
+          <svg ref={svgRef}
             width="100%"
             viewBox={`0 0 800 ${chartHeight}`}
             preserveAspectRatio="xMidYMid meet"

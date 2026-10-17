@@ -8,6 +8,10 @@ import {
   useEdgesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import QueueProfileSettings from './QueueProfileSettings';
+import QueueNodeEditor from './QueueNodeEditor';
+import { validConnection } from '../utils/qosTopology';
+import { MarkerType, Position } from '@xyflow/react';
 
 // Compute a simple topological level for each node based on Links (FromNode -> ToNode).
 // Nodes with no incoming link are level 0; every other node is one deeper than its deepest parent.
@@ -35,7 +39,7 @@ function computeLevels(nodeNames, links) {
 }
 
 // Convert a profile topology object into React Flow nodes and edges with a basic layered layout.
-function topologyToFlow(topology) {
+export function topologyToFlow(topology) {
   const safeTopology = topology && typeof topology === 'object' ? topology : {};
   const nodeList = Array.isArray(safeTopology.Nodes) ? safeTopology.Nodes : [];
   const linkList = Array.isArray(safeTopology.Links) ? safeTopology.Links : [];
@@ -73,6 +77,7 @@ function topologyToFlow(topology) {
 
       return {
         id: name,
+        sourcePosition: Position.Right, targetPosition: Position.Left,
         position: { x: level * columnWidth + 40, y: row * rowHeight + 40 },
         data: {
           label: (
@@ -104,8 +109,21 @@ function topologyToFlow(topology) {
       source: String(link.FromNode),
       target: String(link.ToNode),
       animated: false,
+      markerEnd: { type: MarkerType.ArrowClosed },
     }));
 
+  if (ingressDefault && nodeNames.includes(ingressDefault)) {
+    flowNodes.push({ id: '__start', type: 'input', sourcePosition: Position.Right, position: { x: -220, y: 40 }, data: { label: 'Start of queuing →' }, deletable: false, connectable: false });
+    if (safeTopology.IngressMode === 'Router') (safeTopology.IngressRoutes || []).forEach((route, i) => {
+      if (nodeNames.includes(route.Node)) flowEdges.push({ id: `__route-${i}`, source: '__start', target: route.Node, label: route.ClassName, deletable: false, markerEnd: { type: MarkerType.ArrowClosed } });
+    });
+    flowEdges.push({ id: '__ingress', source: '__start', target: ingressDefault, deletable: false, markerEnd: { type: MarkerType.ArrowClosed } });
+  }
+  if (tailNode && nodeNames.includes(tailNode)) {
+    const tail = flowNodes.find(n => n.id === tailNode);
+    flowNodes.push({ id: '__end', type: 'output', targetPosition: Position.Left, position: { x: tail.position.x + 260, y: tail.position.y }, data: { label: 'End of queuing → Dispatch' }, deletable: false, connectable: false });
+    flowEdges.push({ id: '__egress', source: tailNode, target: '__end', deletable: false, markerEnd: { type: MarkerType.ArrowClosed } });
+  }
   return { flowNodes, flowEdges };
 }
 
@@ -119,6 +137,8 @@ function topologyToFlow(topology) {
  * null, or malformed topology renders an empty canvas instead of throwing.
  */
 export default function QueueHierarchyDiagram({ topology, onChange }) {
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState(null);
   const { flowNodes, flowEdges } = useMemo(() => topologyToFlow(topology), [topology]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes);
@@ -126,7 +146,7 @@ export default function QueueHierarchyDiagram({ topology, onChange }) {
 
   // Re-seed local flow state whenever the incoming topology changes (e.g. template applied, JSON edited).
   React.useEffect(() => {
-    setNodes(flowNodes);
+    setNodes(current => flowNodes.map(node => ({ ...node, position: (!node.id.startsWith('__') && current.find(n => n.id === node.id)?.position) || node.position })));
     setEdges(flowEdges);
   }, [flowNodes, flowEdges, setNodes, setEdges]);
 
@@ -139,28 +159,30 @@ export default function QueueHierarchyDiagram({ topology, onChange }) {
     const nodeByName = {};
     existingNodes.forEach((node) => { if (node && node.Name) nodeByName[String(node.Name)] = node; });
 
-    const nextNodes = nextNodeIds.map((id) => nodeByName[id] || {
+    const nextNodes = nextNodeIds.filter(id => !id.startsWith('__')).map((id) => nodeByName[id] || {
       Name: id, Discipline: 'Fifo', MaxDepth: 0, OverflowPolicy: 'Reject', Classes: [],
     });
 
     const nextLinks = nextEdges
-      .filter((edge) => edge && edge.source && edge.target)
+      .filter((edge) => edge && edge.source && edge.target && !edge.source.startsWith('__') && !edge.target.startsWith('__'))
       .map((edge) => ({ FromNode: edge.source, ToNode: edge.target }));
 
     onChange({
       ...source,
       Nodes: nextNodes,
       Links: nextLinks,
+      IngressDefaultNode: nextNodes.some(n => n.Name === source.IngressDefaultNode) ? source.IngressDefaultNode : nextNodes[0]?.Name || null,
+      TailNode: nextNodes.some(n => n.Name === source.TailNode) ? source.TailNode : nextNodes.at(-1)?.Name || null,
+      IngressRoutes: (source.IngressRoutes || []).filter(r => nextNodes.some(n => n.Name === r.Node)),
     });
   }, [onChange, topology]);
 
   const onConnect = useCallback((connection) => {
-    setEdges((current) => {
-      const updated = addEdge(connection, current);
-      emitChange(nodes.map((node) => node.id), updated);
-      return updated;
-    });
-  }, [setEdges, emitChange, nodes]);
+    if (!validConnection(topology, connection.source, connection.target)) return;
+    const updated = addEdge(connection, edges);
+    setEdges(updated);
+    emitChange(nodes.map(node => node.id), updated);
+  }, [setEdges, emitChange, nodes, edges, topology]);
 
   const onNodesDelete = useCallback((deleted) => {
     const deletedIds = new Set(deleted.map((node) => node.id));
@@ -175,24 +197,20 @@ export default function QueueHierarchyDiagram({ topology, onChange }) {
     emitChange(nodes.map((node) => node.id), remainingEdges);
   }, [nodes, edges, emitChange]);
 
-  const handleAddNode = useCallback(() => {
-    // Generate a unique node name so the topology stays valid.
-    const existing = new Set(nodes.map((node) => node.id));
-    let suffix = existing.size + 1;
-    let name = `node-${suffix}`;
-    while (existing.has(name)) {
-      suffix += 1;
-      name = `node-${suffix}`;
-    }
-    emitChange([...nodes.map((node) => node.id), name], edges);
-  }, [nodes, edges, emitChange]);
+  const handleAddNode = () => setEditing({ node: null });
 
   return (
-    <div style={{ position: 'relative', height: 380, border: '1px solid var(--border-color, #cbd5e1)', borderRadius: 8, overflow: 'hidden' }}>
+    <>
+    <button type="button" className="btn-secondary btn-small" title="Configure default class, ingress routing, start/end queues and profile-wide admission limits." onClick={() => setSettingsOpen(true)}>Entry, exit and limits</button>
+    <p title="Arrow direction follows request flow. Node edits remain in the draft until the profile is saved.">Click a queue to configure it. Drag between handles to connect queues. Select a link and press Delete to remove it.</p>
+    <div style={{ position: 'relative', height: 480, border: '1px solid var(--border-color, #cbd5e1)', borderRadius: 8, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 5 }}>
-        <button type="button" className="btn-secondary btn-small" onClick={handleAddNode}>Add node</button>
+        <button type="button" className="btn-secondary btn-small" title="Create a queue and choose its scheduling algorithm and limits." onClick={handleAddNode}>Add node</button>
       </div>
       <ReactFlow
+        onNodeClick={(_, node) => { if (!node.id.startsWith('__')) setEditing({ node: (topology?.Nodes || []).find(n => n.Name === node.id) }); }}
+        isValidConnection={c => validConnection(topology, c.source, c.target)}
+        defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed } }}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -207,5 +225,8 @@ export default function QueueHierarchyDiagram({ topology, onChange }) {
         <Controls />
       </ReactFlow>
     </div>
+    {settingsOpen && <QueueProfileSettings topology={topology} onClose={() => setSettingsOpen(false)} onSave={value => { onChange(value); setSettingsOpen(false); }} />}
+    {editing && <QueueNodeEditor topology={topology} node={editing.node} onClose={() => setEditing(null)} onSave={value => { onChange(value); setEditing(null); }} />}
+    </>
   );
 }

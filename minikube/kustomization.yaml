@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../kubernetes
+patches:
+  - target:
+      kind: PersistentVolumeClaim
+      name: conductor-data
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 2Gi

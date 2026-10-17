@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conductor
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: conductor}
+  template:
+    metadata:
+      labels: {app: conductor}
+    spec:
+      containers:
+        - name: server
+          image: jchristn77/conductor-server:v0.6.0
+          ports: [{containerPort: 9000}]
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: '2', memory: 2Gi}
+          startupProbe:
+            httpGet: {path: /, port: 9000}
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet: {path: /, port: 9000}
+          livenessProbe:
+            httpGet: {path: /, port: 9000}
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          volumeMounts:
+            - {name: settings, mountPath: /app/conductor.json, subPath: conductor.json, readOnly: true}
+            - {name: data, mountPath: /app/data}
+            - {name: logs, mountPath: /app/logs}
+      volumes:
+        - name: settings
+          secret: {secretName: conductor-settings}
+        - name: data
+          persistentVolumeClaim: {claimName: conductor-data}
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: conductor
+spec:
+  selector: {app: conductor}
+  ports: [{port: 9000, targetPort: 9000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conductor-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: conductor-dashboard}
+  template:
+    metadata:
+      labels: {app: conductor-dashboard}
+    spec:
+      containers:
+        - name: dashboard
+          image: jchristn77/conductor-dashboard:v0.6.0
+          ports: [{containerPort: 9100}]
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          env:
+            - {name: CONDUCTOR_SERVER_URL, value: /api}
+          readinessProbe:
+            httpGet: {path: /, port: 9100}
+          livenessProbe:
+            httpGet: {path: /, port: 9100}
+          volumeMounts:
+            - {name: nginx, mountPath: /etc/nginx/conf.d/default.conf, subPath: default.conf, readOnly: true}
+      volumes:
+        - name: nginx
+          configMap: {name: conductor-nginx}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: conductor-dashboard
+spec:
+  selector: {app: conductor-dashboard}
+  ports: [{port: 9100, targetPort: 9100}]

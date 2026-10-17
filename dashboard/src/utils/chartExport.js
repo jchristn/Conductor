@@ -148,26 +148,51 @@ export async function renderChartPngBlob(svgEl, opts = {}) {
  */
 export async function copyChartPng(svgEl, opts = {}) {
   try {
-    const blob = await renderChartPngBlob(svgEl, opts);
-    if (!blob) return 'failed';
+    // Pass a promise immediately to ClipboardItem to preserve Safari user activation.
+    const blobPromise = renderChartPngBlob(svgEl, opts);
+    if (!svgEl) return 'failed';
     if (navigator.clipboard && typeof window.ClipboardItem !== 'undefined') {
       try {
-        await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })]);
+        await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blobPromise })]);
         return 'copied';
-      } catch {
-        /* clipboard blocked (permissions/insecure context) - fall through to download */
-      }
+      } catch { /* permission denied or unsupported MIME: offer a native image */ }
     }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(opts.title || 'chart').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    return 'downloaded';
+    const blob = await blobPromise;
+    if (!blob) return 'failed';
+    showChartImage(blob, opts.title || 'Chart');
+    return 'manual';
   } catch {
     return 'failed';
   }
+}
+
+// A native image context menu works on HTTP as well as HTTPS. Do not claim
+// clipboard success when the browser requires the user to choose Copy Image.
+export function showChartImage(blob, title) {
+  const url = URL.createObjectURL(blob);
+  const dialog = document.createElement('dialog');
+  dialog.setAttribute('aria-label', 'Copy chart image');
+  dialog.style.cssText = 'max-width:90vw;max-height:90vh;overflow:auto';
+  const heading = document.createElement('h2');
+  heading.textContent = title;
+  const help = document.createElement('p');
+  help.textContent = 'Automatic image copy is unavailable here. Right-click the image and choose Copy Image (or long-press on touch devices).';
+  const image = document.createElement('img');
+  image.src = url;
+  image.alt = title;
+  image.title = 'Right-click this rendered PNG and choose Copy Image to copy the image itself.';
+  image.style.cssText = 'display:block;max-width:100%;height:auto';
+  const download = document.createElement('a');
+  download.href = url;
+  download.download = 'conductor-chart.png';
+  download.textContent = 'Download PNG';
+  download.title = 'Save this chart as a PNG file.';
+  const close = document.createElement('button');
+  close.textContent = 'Close';
+  close.title = 'Close the image preview and return to the dashboard.';
+  close.onclick = () => dialog.close();
+  dialog.addEventListener('close', () => { URL.revokeObjectURL(url); dialog.remove(); }, { once: true });
+  dialog.append(heading, help, image, download, close);
+  document.body.appendChild(dialog);
+  dialog.showModal();
 }

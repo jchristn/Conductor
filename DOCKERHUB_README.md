@@ -4,7 +4,7 @@
 
 Conductor puts a single, controllable front door in front of all of your model runners. You register your backends — OpenAI, vLLM, Gemini, or Ollama — and Conductor virtualizes them into stable endpoints that speak the OpenAI, vLLM, Gemini, and Ollama APIs your clients already use. Load balancing, health checking, session affinity, access policies, and request analytics happen in between, without your applications having to know which backend actually served a request.
 
-> **Alpha.** Conductor is v0.5.0 and under active development. APIs and behavior can change between releases.
+> **Alpha.** Conductor is v0.6.0 and under active development. APIs and behavior can change between releases.
 
 This page covers running Conductor from the published Docker images. The full source, SDKs, and reference documentation live at [github.com/jchristn/Conductor](https://github.com/jchristn/Conductor).
 
@@ -15,7 +15,7 @@ This page covers running Conductor from the published Docker images. The full so
 | [`jchristn77/conductor-server`](https://hub.docker.com/r/jchristn77/conductor-server) | REST API, inference proxy, routing engine | 9000 |
 | [`jchristn77/conductor-dashboard`](https://hub.docker.com/r/jchristn77/conductor-dashboard) | React management UI | 9100 |
 
-Both images publish versioned tags (the current published tag is `v0.5.0`) alongside `latest`.
+Both images publish versioned tags (the current published tag is `v0.6.0`) alongside `latest`.
 
 ## What you can do with it
 

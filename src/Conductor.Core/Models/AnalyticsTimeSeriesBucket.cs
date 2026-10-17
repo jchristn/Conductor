@@ -43,6 +43,12 @@ namespace Conductor.Core.Models
         public decimal? AverageTimeToFirstTokenMs { get; set; }
 
         /// <summary>
+        /// Average complete response duration for successful completions with captured timing.
+        /// Null when no successful completion in the bucket reports response timing.
+        /// </summary>
+        public decimal? AverageResponseTimeMs { get; set; }
+
+        /// <summary>
         /// Prompt token total.
         /// </summary>
         public long PromptTokens { get; set; }

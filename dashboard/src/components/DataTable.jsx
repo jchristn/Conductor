@@ -1,3 +1,4 @@
+import { controlHelp } from '../utils/controlHelp';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useHubPanel } from '../context/HubPanelContext';
@@ -267,7 +268,7 @@ function DataTable({
             </div>
 
             <div className="pagination-controls">
-              <select
+              <select aria-label="Rows per page" title="Choose how many filtered rows appear on each page."
                 value={pageSize}
                 onChange={(e) => {
                   const nextSize = Number(e.target.value);
@@ -296,7 +297,7 @@ function DataTable({
                   value={pageInput}
                   onChange={handlePageInputChange}
                   onKeyDown={handlePageInputSubmit}
-                  className="page-input"
+                  className="page-input" aria-label="Jump to page" title="Enter a page number to jump within the current filtered results."
                 />{' '}
                 of {totalPages}
               </span>
@@ -320,7 +321,7 @@ function DataTable({
                   onClick={() => handleSort(col.key)}
                   className={col.sortable !== false ? 'sortable' : ''}
                   style={col.width ? { width: col.width } : {}}
-                  title={col.tooltip || ''}
+                  title={col.tooltip || `${controlHelp(col.key) || controlHelp(col.label) || `Recorded ${col.label} for this resource.`}${col.sortable !== false ? ' Click to sort; click again to reverse the order.' : ''}`}
                 >
                   <div className="th-content">
                     <span>{col.headerRender ? col.headerRender() : col.label}</span>
@@ -331,11 +332,12 @@ function DataTable({
             </tr>
             <tr className="filter-row">
               {visibleColumns.map((col) => (
-                <th key={`filter-${col.key}`}>
+                <th key={`filter-${col.key}`} title={`Filter the ${col.label} column without changing other column filters.`}>
                   {col.filterable !== false && !col.isAction && (
                     <input
                       type="text"
                       placeholder="Filter..."
+                      title={`Show rows whose ${col.label} matches the entered text; clear to remove this column filter.`}
                       value={filters[col.key] || ''}
                       onChange={(e) => handleFilterChange(col.key, e.target.value)}
                     />

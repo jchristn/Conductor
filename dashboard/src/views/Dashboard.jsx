@@ -1,11 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import Tabs from '../components/Tabs';
+import AnalyticsTrendChart from '../components/AnalyticsTrendChart';
 import RequestHistoryChart from '../components/RequestHistoryChart';
 import { hubPath } from '../config/navConfig';
 
 function Dashboard() {
   const { api, counts, fetchCounts } = useApp();
+  const [analytics, setAnalytics] = useState(null);
+  const [chartError, setChartError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    api.queryAnalytics({ Range: 'lastDay' }).then(result => { if (!cancelled) setAnalytics(result); }).catch(error => { if (!cancelled) setChartError(error.message); });
+    return () => { cancelled = true; };
+  }, [api]);
   const [observability, setObservability] = useState(null);
 
   useEffect(() => {
@@ -94,7 +103,11 @@ function Dashboard() {
         </div>
       </div>
 
-      <RequestHistoryChart />
+      {chartError && <p role="alert">Analytics unavailable: {chartError}</p>}
+      <Tabs param="chart" ariaLabel="Dashboard charts" tabs={[
+        { key: 'history', label: 'Request history', tooltip: 'Inspect request outcomes across the selected history range.', render: () => <RequestHistoryChart /> },
+        ...[['volume', 'Volume / TTFT'], ['latency', 'Latency / TTFT'], ['tokens', 'Tokens']].map(([key, label]) => ({ key, label, tooltip: key === 'tokens' ? 'Compare input, output, cached input and other reported token usage.' : key === 'latency' ? 'Track average time until the first token, with gaps for missing timings.' : 'Compare request outcomes with first-token delay on a separate axis.', render: () => analytics ? <AnalyticsTrendChart data={analytics.TimeSeries || []} mode={key} /> : <p role="status">{chartError ? 'Analytics unavailable.' : 'Loading analytics…'}</p> }))
+      ]} />
 
       {observability?.Overall && (
         <section className="dashboard-section">

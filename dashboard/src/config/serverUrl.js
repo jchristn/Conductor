@@ -1,6 +1,8 @@
 export const LEGACY_DEFAULT_SERVER_URL = 'http://localhost:9001';
 export const DEFAULT_SERVER_URL =
-  (typeof window !== 'undefined' && window.CONDUCTOR_SERVER_URL) || 'http://localhost:9000';
+  (typeof window !== 'undefined' && window.CONDUCTOR_SERVER_URL
+    ? new URL(window.CONDUCTOR_SERVER_URL, window.location.origin).href.replace(/\/$/, '')
+    : 'http://localhost:9000');
 
 const SERVER_URL_STORAGE_KEY = 'conductor_server_url';
 const SERVER_URL_SOURCE_KEY = 'conductor_server_url_source';

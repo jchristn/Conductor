@@ -515,6 +515,7 @@ namespace Conductor.Server.Services
                     DeniedRequestCount = bucketEntries.Count(IsDenied),
                     RateLimitedRequestCount = bucketEntries.Count(IsRateLimited),
                     AverageTimeToFirstTokenMs = AverageInt(ttftValues),
+                    AverageResponseTimeMs = AverageInt(bucketSuccessfulEntries.Where(item => item.ResponseTimeMs.HasValue).Select(item => item.ResponseTimeMs.Value).ToList()),
                     PromptTokens = SumTokens(bucketSuccessfulEntries, item => item.PromptTokens),
                     CompletionTokens = SumTokens(bucketSuccessfulEntries, item => item.CompletionTokens),
                     TotalTokens = totalTokens,

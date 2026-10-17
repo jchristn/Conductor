@@ -401,7 +401,7 @@ export default function QosProfiles() {
                 ) : (
                   <QueueHierarchyDiagram topology={parsedTopology.value} onChange={handleTopologyChange} />
                 )}
-                <small>Drag between nodes to add a link, select a node/edge and press Delete to remove it, or use <strong>Add node</strong>. Edits are written back into the JSON, which remains the source of truth for Validate and Save. Fine-tune disciplines, classes, and limits in the JSON view.</small>
+                <small>Drag between nodes to add a link, select a node/edge and press Delete to remove it, or use <strong>Add node</strong>. Edits are written back into the JSON, which remains the source of truth for Validate and Save. Click any queue to configure its type, limits and classes. Use Entry, exit and limits for profile-wide settings.</small>
               </>
             )}
           </div>
