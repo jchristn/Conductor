@@ -34,6 +34,7 @@ namespace Conductor.Server.Services
                 StrictMode = vmr.StrictMode,
                 RequestHistoryEnabled = vmr.RequestHistoryEnabled,
                 LoadBalancingMode = vmr.LoadBalancingMode,
+                RequestTimeoutMs = vmr.TimeoutMs,
                 Permissions = new EffectiveRequestPermissions
                 {
                     AllowEmbeddings = vmr.AllowEmbeddings,
@@ -132,7 +133,9 @@ namespace Conductor.Server.Services
                     Active = endpoint.Active,
                     ServiceState = endpoint.ServiceState,
                     Weight = endpoint.Weight,
-                    MaxParallelRequests = endpoint.MaxParallelRequests
+                    MaxParallelRequests = endpoint.MaxParallelRequests,
+                    TimeoutMs = endpoint.TimeoutMs,
+                    RequestTimeout = EffectiveRequestTimeout.Resolve(vmr, endpoint)
                 });
             }
         }

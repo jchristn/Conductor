@@ -84,6 +84,47 @@ namespace Test.Shared.Server.Services
             _Transport.Plans[0].Path.Should().Be("/api/ps");
         }
 
+        public async Task LoadEndpointAsync_WithOllamaLoadTimeout_ReturnsRunnerLoadTimeout()
+        {
+            ModelRunnerEndpoint endpoint = CreateEndpoint("Slow Load Endpoint", ApiTypeEnum.Ollama, true);
+            _Transport.Responses.Enqueue(new ModelLoadTransportResponse
+            {
+                StatusCode = 500,
+                Body = "{\"error\":\"timed out waiting for llama-server to start\"}"
+            });
+            ModelLoadRequest request = new ModelLoadRequest
+            {
+                Model = "qwen3.5:122b",
+                VerifyLoaded = false
+            };
+
+            ModelLoadResponse response = await _Service.LoadEndpointAsync(endpoint, request).ConfigureAwait(false);
+
+            response.Success.Should().BeFalse();
+            response.EndpointResults[0].OutcomeCode.Should().Be(ModelLoadOutcomeEnum.RunnerLoadTimeout);
+            response.EndpointResults[0].ErrorMessage.Should().Contain("OLLAMA_LOAD_TIMEOUT");
+        }
+
+        public async Task LoadEndpointAsync_WithOtherUpstreamError_ReturnsFailed()
+        {
+            ModelRunnerEndpoint endpoint = CreateEndpoint("Failing Endpoint", ApiTypeEnum.Ollama, true);
+            _Transport.Responses.Enqueue(new ModelLoadTransportResponse
+            {
+                StatusCode = 500,
+                Body = "{\"error\":\"model not found\"}"
+            });
+            ModelLoadRequest request = new ModelLoadRequest
+            {
+                Model = "missing:latest",
+                VerifyLoaded = false
+            };
+
+            ModelLoadResponse response = await _Service.LoadEndpointAsync(endpoint, request).ConfigureAwait(false);
+
+            response.Success.Should().BeFalse();
+            response.EndpointResults[0].OutcomeCode.Should().Be(ModelLoadOutcomeEnum.Failed);
+        }
+
         public async Task LoadVirtualModelRunnerAsync_WithAllConfiguredDryRun_SkipsInactiveUnlessIncluded()
         {
             ModelRunnerEndpoint activeEndpoint = await Database.ModelRunnerEndpoint.CreateAsync(

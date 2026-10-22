@@ -160,6 +160,8 @@ Typical response codes:
 | `404` | Resource not found |
 | `409` | Conflict, such as deleting an attached model access policy without `forceDetach=true` |
 | `500` | Unexpected server failure |
+| `502` | Proxied request failed to reach the upstream endpoint (connection refused, reset, DNS failure) |
+| `504` | Proxied request: the upstream endpoint did not return response headers within the effective `TimeoutMs`. The body's `Code` is `UpstreamTimeout` and the `X-Conductor-Error-Code` response header is set. See [Request timeouts](#request-timeouts-time-to-first-byte). |
 
 The dashboard client expects error payloads to include `Message` or `message`, but exact error bodies may vary by route.
 
@@ -233,7 +235,7 @@ These are the primary JSON resources used across the API.
   "ApiKey": null,
   "ApiType": "Ollama",                  // Ollama, OpenAI, Gemini, vLLM
   "UseSsl": false,
-  "TimeoutMs": 60000,
+  "TimeoutMs": 300000,                  // time to first byte; see Request timeouts. Default 300000, minimum 1000
   "Active": true,
   "HealthCheckUrl": "/",
   "HealthCheckMethod": "GET",
@@ -455,7 +457,7 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
     "llama3.2:latest": "mc_default"
   },
   "ModelDefinitionIds": ["md_llama"],
-  "TimeoutMs": 300000,
+  "TimeoutMs": 300000,                    // time to first byte; see Request timeouts. Default 300000, minimum 1000
   "AllowEmbeddings": true,
   "AllowCompletions": true,
   "AllowModelManagement": false,
@@ -1097,7 +1099,7 @@ VMR health response fields include:
 - `ActiveSessionCount`
 - `Endpoints`
 
-Validation routes return a `ResourceValidationResult` with `Errors` and `Warnings`. The VMR `effective` response resolves the endpoint inventory, request permissions, session-affinity settings, attached policy metadata, model definitions, model configurations, adaptive settings, endpoint groups, and `ModelConfigurationMappings` that the proxy path will use. Runtime stats responses return `EndpointRuntimeStatsCollection` with per-endpoint pending count, completed count, success/error EWMA, latency EWMA, TTFT EWMA, last status/error, consecutive failures, transient backoff state, and recency timestamps. The VMR `explain-routing` response returns a `RoutingDecision` containing a timeline, selected endpoint, selection strategy, endpoint group, adaptive score evidence, session-affinity outcome, policy metadata, mutation summary, and per-candidate evidence.
+Validation routes return a `ResourceValidationResult` with `Errors` and `Warnings`. The VMR `effective` response resolves the endpoint inventory, request permissions, the VMR's time-to-first-byte limit (`RequestTimeoutMs`) and, for each endpoint, the limit actually applied (`Endpoints[].RequestTimeout`, with `TimeoutMs`, `Source` of `VirtualModelRunner`, `ModelRunnerEndpoint` or `Both`, and a readable `Description` such as `"60,000 ms (virtual model runner; endpoint Dell GB10 allows 300,000 ms)"`), session-affinity settings, attached policy metadata, model definitions, model configurations, adaptive settings, endpoint groups, and `ModelConfigurationMappings` that the proxy path will use. Runtime stats responses return `EndpointRuntimeStatsCollection` with per-endpoint pending count, completed count, success/error EWMA, latency EWMA, TTFT EWMA, last status/error, consecutive failures, transient backoff state, and recency timestamps. The VMR `explain-routing` response returns a `RoutingDecision` containing a timeline, selected endpoint, selection strategy, endpoint group, adaptive score evidence, session-affinity outcome, policy metadata, mutation summary, and per-candidate evidence.
 
 ### Model loading
 
@@ -1144,7 +1146,7 @@ Fields:
 | `EndpointIds` | Required only when `TargetMode=SpecificEndpointIds`; IDs must already be attached to the VMR. |
 | `InputText` | Tiny non-sensitive probe text. It may be sent to hosted providers for explicit generation or embedding probes. |
 | `KeepAlive` | Ollama retention hint. Other providers report it in `IgnoredFields`. |
-| `TimeoutMs` | Per-attempt upstream timeout, clamped by the server from 1,000 to 1,800,000 ms. |
+| `TimeoutMs` | Per-attempt upstream timeout covering the whole load call, clamped by the server from 1,000 to 1,800,000 ms. Default 300,000. Long values are honored in full (before v0.6.1 every load was cut off at 100 seconds). A cold load also has to fit within the runner's own load timeout, such as Ollama's `OLLAMA_LOAD_TIMEOUT`. |
 | `MaxRetries` | Per-endpoint retry count, clamped from 0 to 3. |
 | `VerifyLoaded` | Runs provider-specific verification after a probe, such as Ollama `/api/ps` or metadata list checks. |
 | `IncludeInactive` | VMR target selection includes inactive configured endpoints when true. |
@@ -1183,7 +1185,11 @@ Response body:
 }
 ```
 
-Stable outcome codes include `Loaded`, `AlreadyAvailable`, `Verified`, `VerifiedRemote`, `DryRun`, `Skipped`, `Failed`, `TimedOut`, `UnauthorizedUpstream`, `ModelRequired`, `ModelNotAttached`, `NoEligibleEndpoints`, and `UnsupportedApiType`.
+Stable outcome codes include `Loaded`, `AlreadyAvailable`, `Verified`, `VerifiedRemote`, `DryRun`, `Skipped`, `Failed`, `TimedOut`, `UnauthorizedUpstream`, `ModelRequired`, `ModelNotAttached`, `NoEligibleEndpoints`, `UnsupportedApiType`, and `RunnerLoadTimeout`.
+
+`TimedOut` means Conductor's `TimeoutMs` expired. `RunnerLoadTimeout` means the model runner itself gave up loading the model, for example Ollama's `timed out waiting for llama-server to start` after `OLLAMA_LOAD_TIMEOUT` (default 5 minutes). Raise the runner's load timeout or use a smaller model; raising Conductor's `TimeoutMs` alone does not help.
+
+To keep a large model warm before traffic arrives, call `load-model` with a long `KeepAlive` (for example `"KeepAlive": "24h"`) and a `TimeoutMs` that covers the cold load.
 
 Provider behavior:
 
@@ -1819,6 +1825,45 @@ unless another is linked):
   `Retry-After`: `QosRejected` when the queue is full, `QosTimedOut` when it waited past
   `MaxQueueWaitMs`, and `EndpointAtCapacity` when no endpoint slot freed before the deadline. These
   outcomes are recorded in request history with the denial reason and a `QosAdmission` timeline stage.
+
+### Request timeouts (time to first byte)
+
+`TimeoutMs` on a VMR and on a model runner endpoint limits how long Conductor waits for the upstream endpoint to
+return **response headers**. It does not limit the whole response:
+
+- The limit applied is the smaller of the VMR's and the endpoint's `TimeoutMs`. The VMR `effective` response
+  shows the applied value per endpoint and which side set it. Both default to 300,000 ms (5 minutes).
+- It must cover model load time. Ollama sends nothing while it loads a model, so a cold load of a large model
+  counts against the limit. If Conductor gives up, Ollama abandons the load, and every retry starts over.
+- For streamed requests (`"stream": true`), headers arrive with the first token, so the limit covers load and
+  prompt evaluation only. After that the stream is not limited.
+- For non-streaming requests, Ollama sends headers only when generation ends, so the whole generation must
+  fit inside the limit. Use streaming for long generations.
+- The runner has its own limits. Ollama abandons a load after `OLLAMA_LOAD_TIMEOUT` (default 5 minutes)
+  regardless of Conductor's setting. Raising Conductor's `TimeoutMs` past the runner's load timeout does not
+  help a model that cannot load in time.
+
+When Conductor's limit expires, the client gets `504 Gateway Timeout`, never `502`:
+
+```json
+{
+  "Error": "No response headers from endpoint Dell GB10 within 60,000 ms (virtual model runner qwen3.5:122b TimeoutMs). A cold model load or a non-streaming generation can take longer; raise TimeoutMs or use streaming.",
+  "StatusCode": 504,
+  "Code": "UpstreamTimeout",
+  "Timestamp": "2026-10-22T12:00:00Z"
+}
+```
+
+The response also carries `X-Conductor-Error-Code: UpstreamTimeout`, and request history records status `504`
+with the same message. A `502` means the upstream could not be reached at all.
+
+When an upstream answers with Ollama's `timed out waiting for llama-server to start`, Conductor passes the
+upstream status and body through unchanged, adds `X-Conductor-Error-Code: RunnerLoadTimeout`, and records
+`RunnerLoadTimeout` as the request's analytics error type. The fix is on the runner (raise `OLLAMA_LOAD_TIMEOUT`)
+or the model size, not Conductor's `TimeoutMs`.
+
+At startup Conductor logs a warning listing VMRs and endpoints whose `TimeoutMs` is still 60,000 ms, the
+default before v0.6.1. Records are not changed automatically.
 
 ## Practical examples
 

@@ -95,11 +95,11 @@ namespace Test.Shared.Core.Models
         #endregion
 
         #region TimeoutMs-Tests
-        public void TimeoutMs_WhenLessThan1000_DefaultsTo60000()
+        public void TimeoutMs_WhenLessThan1000_DefaultsTo300000()
         {
             ModelRunnerEndpoint endpoint = new ModelRunnerEndpoint();
             endpoint.TimeoutMs = 500;
-            endpoint.TimeoutMs.Should().Be(60000);
+            endpoint.TimeoutMs.Should().Be(300000);
         }
         public void TimeoutMs_WhenGreaterOrEqual1000_UsesProvidedValue()
         {

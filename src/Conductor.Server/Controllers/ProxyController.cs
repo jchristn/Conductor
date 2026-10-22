@@ -27,6 +27,8 @@ namespace Conductor.Server.Controllers
     public class ProxyController : BaseController
     {
         private static readonly string _Header = "[ProxyController] ";
+        private const string _UpstreamTimeoutErrorCode = "UpstreamTimeout";
+        private const string _RunnerLoadTimeoutErrorCode = "RunnerLoadTimeout";
         private readonly HealthCheckService _HealthCheckService;
         private readonly RequestHistoryService _RequestHistoryService;
         private readonly RoutingDecisionService _RoutingDecisionService;
@@ -349,6 +351,59 @@ namespace Conductor.Server.Controllers
                 if (runtimeStatsAdmitted && !runtimeStatsCompleted && _RuntimeStatsService != null && vmr != null && endpoint != null)
                 {
                     _RuntimeStatsService.RecordCancellation(vmr, endpoint);
+                    runtimeStatsCompleted = true;
+                }
+            }
+            catch (UpstreamTimeoutException ex)
+            {
+                Logging.Warn(_Header + ex.Message);
+                analyticsCapture.ErrorType = _UpstreamTimeoutErrorCode;
+                analyticsCapture.ErrorMessage = ex.Message;
+
+                TagList errorTags = new TagList
+                {
+                    { ConductorTelemetry.TagApiFamily, GetApiFamily(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown) },
+                    { ConductorTelemetry.TagVmr, vmr != null ? vmr.Name : "unknown" },
+                    { "exception_type", ex.GetType().Name }
+                };
+                ConductorTelemetry.InferenceUpstreamErrors.Add(1, errorTags);
+
+                if (proxyActivity != null)
+                {
+                    proxyActivity.SetTag("exception.type", ex.GetType().FullName);
+                    proxyActivity.SetTag("conductor.timeout_ms", ex.Timeout.TimeoutMs);
+                    proxyActivity.SetTag("conductor.timeout_source", ex.Timeout.Source.ToString());
+                    proxyActivity.SetStatus(ActivityStatusCode.Error, ex.Message);
+                }
+
+                ctx.Response.Headers.Add(ConductorConstants.HeaderErrorCode, _UpstreamTimeoutErrorCode);
+                await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.GatewayTimeout(ex.Message, _UpstreamTimeoutErrorCode)).ConfigureAwait(false);
+
+                if (historyDetail != null && _RequestHistoryService != null)
+                {
+                    await _RequestHistoryService.UpdateWithResponseAsync(
+                        historyDetail,
+                        routingResult?.Decision,
+                        endpoint,
+                        routingResult?.ModelDefinition,
+                        routingResult?.ModelConfiguration,
+                        504,
+                        null,
+                        ex.Message,
+                        stopwatch,
+                        cancellationToken,
+                        null,
+                        analyticsCapture).ConfigureAwait(false);
+                }
+
+                if (runtimeStatsAdmitted && !runtimeStatsCompleted && _RuntimeStatsService != null && vmr != null && endpoint != null)
+                {
+                    _RuntimeStatsService.RecordFailure(
+                        vmr,
+                        endpoint,
+                        MapRuntimeErrorCode(ex),
+                        stopwatch.Elapsed.TotalMilliseconds,
+                        vmr.AdaptiveLoadBalancing);
                     runtimeStatsCompleted = true;
                 }
             }
@@ -744,16 +799,13 @@ namespace Conductor.Server.Controllers
                 : "http";
             request.Headers.TryAddWithoutValidation(ConductorConstants.HeaderXForwardedProto, proto);
 
-            int effectiveTimeoutMs = endpoint.TimeoutMs;
-            if (vmr != null && vmr.TimeoutMs > 0)
-            {
-                effectiveTimeoutMs = Math.Min(vmr.TimeoutMs, endpoint.TimeoutMs);
-            }
+            EffectiveRequestTimeout effectiveTimeout = EffectiveRequestTimeout.Resolve(vmr, endpoint);
 
             HttpClient httpClient = ProxyHttpClientCache.GetHttpClient(endpoint);
 
-            // Create a cancellation token with timeout
-            using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeoutMs)))
+            // The timeout bounds time to first byte only: SendAsync returns once response headers arrive
+            // (ResponseHeadersRead), and the body then streams without a deadline.
+            using (CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(effectiveTimeout.TimeoutMs)))
             using (CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
             using (Activity forwardActivity = ConductorTelemetry.InferenceSource.StartActivity("inference.forward", ActivityKind.Client))
             {
@@ -782,6 +834,18 @@ namespace Conductor.Server.Controllers
                     }
 
                     return response;
+                }
+                catch (OperationCanceledException ex) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    // Conductor's own deadline fired, not a client disconnect: report it as such.
+                    UpstreamTimeoutException timeoutEx = new UpstreamTimeoutException(effectiveTimeout, ex);
+                    if (forwardActivity != null)
+                    {
+                        forwardActivity.SetTag("exception.type", typeof(UpstreamTimeoutException).FullName);
+                        forwardActivity.SetStatus(ActivityStatusCode.Error, timeoutEx.Message);
+                    }
+                    request.Dispose();
+                    throw timeoutEx;
                 }
                 catch (Exception ex)
                 {
@@ -905,8 +969,24 @@ namespace Conductor.Server.Controllers
                     analyticsCapture.IsStreaming = false;
                     analyticsCapture.ResponseBytes = responseBody?.LongLength;
                 }
-                await ctx.Response.Send(responseBody).ConfigureAwait(false);
+
                 responseBodyString = responseBody != null ? Encoding.UTF8.GetString(responseBody) : null;
+                if ((int)response.StatusCode >= 500 && RunnerErrorClassifier.IsRunnerLoadTimeout(responseBodyString))
+                {
+                    // The runner, not Conductor, gave up loading the model. Pass its body through unchanged and
+                    // label the outcome so clients and request history can tell it apart from other upstream errors.
+                    ctx.Response.Headers.Add(ConductorConstants.HeaderErrorCode, _RunnerLoadTimeoutErrorCode);
+                    if (analyticsCapture != null)
+                    {
+                        analyticsCapture.ErrorType = _RunnerLoadTimeoutErrorCode;
+                        analyticsCapture.ErrorMessage = RunnerErrorClassifier.RunnerLoadTimeoutHint;
+                    }
+
+                    Logging.Warn(_Header + "endpoint " + (endpoint?.Name ?? "unknown") + " reported a model load timeout: "
+                        + RunnerErrorClassifier.RunnerLoadTimeoutHint);
+                }
+
+                await ctx.Response.Send(responseBody).ConfigureAwait(false);
             }
 
             if (_RuntimeStatsService != null && vmr != null && endpoint != null)
@@ -991,7 +1071,7 @@ namespace Conductor.Server.Controllers
                 return "UpstreamFailure";
             }
 
-            if (ex is TaskCanceledException || ex is OperationCanceledException)
+            if (ex is UpstreamTimeoutException || ex is TaskCanceledException || ex is OperationCanceledException)
             {
                 return "Timeout";
             }

@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.1
+
+- Request timeouts: `TimeoutMs` on virtual model runners and model runner endpoints now defaults to 300,000 ms everywhere (model, setter fallback, data-row loading and all four database schemas). Previously the API, schemas and model defaulted to 60,000 ms while the dashboard used 300,000 ms. A startup warning lists records still at the old 60,000 ms default; they are not changed automatically.
+- When Conductor's own time-to-first-byte deadline expires, the proxy now returns `504 Gateway Timeout` with `Code: "UpstreamTimeout"`, an `X-Conductor-Error-Code: UpstreamTimeout` header, and a message naming the endpoint, the limit and whether the VMR or endpoint set it. Previously it returned `502 Proxy error: A task was canceled.` Request history records the 504.
+- The proxy HTTP client no longer applies its own timeout alongside the per-request deadline, and editing an endpoint's `TimeoutMs` no longer disposes a client that in-flight requests are using.
+- Fixed `load-model` and Ollama model management (list, pull, delete) being cut off after 100 seconds regardless of `TimeoutMs`: the transport's HttpClient now has no timeout of its own, and each call is bounded only by its `TimeoutMs`.
+- Added the `RunnerLoadTimeout` model load outcome for Ollama's `timed out waiting for llama-server to start`, with a hint to raise `OLLAMA_LOAD_TIMEOUT`. Proxied responses carrying that error pass through unchanged with `X-Conductor-Error-Code: RunnerLoadTimeout` and are recorded under that analytics error type.
+- The VMR `effective` response now includes `RequestTimeoutMs` and, per endpoint, `TimeoutMs` and `RequestTimeout` (effective value, source and description). The dashboard's Effective Config view shows them.
+- Dashboard: the VMR and endpoint timeout fields are now labelled "Time to first byte (ms)", with help text explaining what the limit covers and that the smaller value applies.
+- Documented request timeout semantics, cold model loads, `OLLAMA_LOAD_TIMEOUT`, and warming with `load-model` in README.md and REST_API.md. Updated release and deployment image tags to v0.6.1.
+
 ## v0.6.0
 
 - Finished the QoS editor styling: consistent Add class, Remove class and ingress-route buttons; responsive field grids; class and route cards; grouped queue options; and clearer empty states.

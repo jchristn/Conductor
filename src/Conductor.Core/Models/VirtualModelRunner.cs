@@ -269,12 +269,16 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
-        /// Request timeout in milliseconds.
+        /// Time to first byte, in milliseconds: how long Conductor waits for the upstream endpoint to return response
+        /// headers. This covers model load, prompt evaluation and, for non-streaming requests, the whole generation.
+        /// Streamed responses are not limited after the first chunk arrives.
+        /// The effective limit for a request is the smaller of this value and the endpoint's TimeoutMs.
+        /// Minimum: 1000. Values below the minimum reset to the default. Default: 300000 (5 minutes).
         /// </summary>
         public int TimeoutMs
         {
             get => _TimeoutMs;
-            set => _TimeoutMs = (value < 1000 ? 60000 : value);
+            set => _TimeoutMs = (value < 1000 ? Constants.DefaultRequestTimeoutMs : value);
         }
 
         /// <summary>
@@ -437,7 +441,7 @@ namespace Conductor.Core.Models
         private string _ModelDefinitionIdsJson = "[]";
         private Dictionary<string, string> _ModelConfigurationMappings = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
         private string _ModelConfigurationMappingsJson = "{}";
-        private int _TimeoutMs = 60000;
+        private int _TimeoutMs = Constants.DefaultRequestTimeoutMs;
         private int _SessionTimeoutMs = 600000;
         private int _SessionMaxEntries = 10000;
         private List<string> _Labels = new List<string>();
@@ -482,7 +486,7 @@ namespace Conductor.Core.Models
                 LastUpdateUtc = DataTableHelper.GetDateTimeValue(row, "lastupdateutc")
             };
 
-            if (obj.TimeoutMs == 0) obj.TimeoutMs = 60000;
+            if (obj.TimeoutMs == 0) obj.TimeoutMs = Constants.DefaultRequestTimeoutMs;
             if (String.IsNullOrEmpty(obj.BasePath)) obj.BasePath = "/v1.0/api/" + obj.Id + "/";
 
             obj.SessionAffinityMode = DataTableHelper.GetEnumValue<SessionAffinityModeEnum>(row, "sessionaffinitymode", SessionAffinityModeEnum.None);

@@ -65,6 +65,23 @@ namespace Test.Shared.Core.Models
 
         #endregion
 
+        #region GatewayTimeout-Tests
+        public void GatewayTimeout_WithDefaults_Returns504()
+        {
+            ApiErrorResponse response = ApiErrorResponse.GatewayTimeout();
+            response.StatusCode.Should().Be(504);
+            response.Code.Should().Be("GatewayTimeout");
+        }
+        public void GatewayTimeout_WithMessageAndCode_ReturnsBoth()
+        {
+            ApiErrorResponse response = ApiErrorResponse.GatewayTimeout("No response headers", "UpstreamTimeout");
+            response.StatusCode.Should().Be(504);
+            response.Code.Should().Be("UpstreamTimeout");
+            response.Error.Should().Be("No response headers");
+        }
+
+        #endregion
+
         #region NotFound-Tests
         public void NotFound_WithDefaultMessage_ReturnsCorrectResponse()
         {

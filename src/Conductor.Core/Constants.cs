@@ -21,6 +21,18 @@ namespace Conductor.Core
 
 """;
 
+        /// <summary>
+        /// Default time to first byte, in milliseconds, for virtual model runners and model runner endpoints.
+        /// 300000 (5 minutes) matches Ollama's default model load timeout, so a cold model load can finish.
+        /// </summary>
+        public const int DefaultRequestTimeoutMs = 300000;
+
+        /// <summary>
+        /// Default request timeout, in milliseconds, used by Conductor releases before v0.6.1.
+        /// Records still set to this value are reported at startup because cold loads of large models often exceed it.
+        /// </summary>
+        public const int LegacyDefaultRequestTimeoutMs = 60000;
+
         #endregion
 
         #region Response-Headers
@@ -45,6 +57,12 @@ namespace Conductor.Core
         /// Value is "true" when a pinned endpoint was used, "false" when load balancing was used.
         /// </summary>
         public static string HeaderSessionPinned = "X-Conductor-Session-Pinned";
+
+        /// <summary>
+        /// Response header carrying a Conductor error code when Conductor, rather than the upstream endpoint,
+        /// classified the failure. Values include "UpstreamTimeout" and "RunnerLoadTimeout".
+        /// </summary>
+        public static string HeaderErrorCode = "X-Conductor-Error-Code";
 
         #endregion
 

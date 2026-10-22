@@ -141,6 +141,16 @@ namespace Conductor.Server
             // Workloads profile, and that existing runners are backfilled to the default profile.
             await new QosSeeder(_Database).EnsureAllTenantsAsync(_TokenSource.Token).ConfigureAwait(false);
 
+            // Warn about runners and endpoints still on the pre-v0.6.1 60-second timeout default.
+            try
+            {
+                await new LegacyTimeoutReporter(_Database, _Logging).ReportAsync(_TokenSource.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (!(ex is OperationCanceledException))
+            {
+                _Logging.Warn(_Header + "unable to check for legacy request timeouts: " + ex.Message);
+            }
+
             // Initialize authentication service
             _AuthService = new AuthenticationService(_Database, _Logging, _Settings.AdminApiKeys);
             _Logging.Debug(_Header + "authentication service initialized");

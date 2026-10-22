@@ -82,23 +82,23 @@ namespace Test.Shared.Core.Models
         #endregion
 
         #region TimeoutMs-Tests
-        public void TimeoutMs_WhenLessThan1000_DefaultsTo60000()
+        public void TimeoutMs_WhenLessThan1000_DefaultsTo300000()
         {
             VirtualModelRunner vmr = new VirtualModelRunner();
             vmr.TimeoutMs = 500;
-            vmr.TimeoutMs.Should().Be(60000);
+            vmr.TimeoutMs.Should().Be(300000);
         }
-        public void TimeoutMs_WhenZero_DefaultsTo60000()
+        public void TimeoutMs_WhenZero_DefaultsTo300000()
         {
             VirtualModelRunner vmr = new VirtualModelRunner();
             vmr.TimeoutMs = 0;
-            vmr.TimeoutMs.Should().Be(60000);
+            vmr.TimeoutMs.Should().Be(300000);
         }
-        public void TimeoutMs_WhenNegative_DefaultsTo60000()
+        public void TimeoutMs_WhenNegative_DefaultsTo300000()
         {
             VirtualModelRunner vmr = new VirtualModelRunner();
             vmr.TimeoutMs = -1000;
-            vmr.TimeoutMs.Should().Be(60000);
+            vmr.TimeoutMs.Should().Be(300000);
         }
         public void TimeoutMs_WhenGreaterOrEqual1000_UsesProvidedValue()
         {

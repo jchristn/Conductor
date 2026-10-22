@@ -19,20 +19,39 @@ namespace Conductor.Server.Services
 
         /// <summary>
         /// Instantiate the default model load transport.
+        /// The underlying HTTP client has no timeout of its own; each call is bounded by the timeoutMs passed to
+        /// <see cref="SendAsync"/>, so model loads and pulls can run longer than HttpClient's 100-second default.
         /// </summary>
-        public DefaultModelLoadTransport()
+        public DefaultModelLoadTransport() : this(null)
         {
-            _HttpClient = new HttpClient();
         }
+
+        /// <summary>
+        /// Instantiate the default model load transport with a custom message handler.
+        /// </summary>
+        /// <param name="handler">HTTP message handler, or null to use the default handler. Disposed with this transport.</param>
+        public DefaultModelLoadTransport(HttpMessageHandler handler)
+        {
+            _HttpClient = handler == null ? new HttpClient() : new HttpClient(handler, true);
+            _HttpClient.Timeout = Timeout.InfiniteTimeSpan;
+        }
+
+        /// <summary>
+        /// Timeout applied by the underlying HTTP client. Always <see cref="Timeout.InfiniteTimeSpan"/>; per-call
+        /// limits come from the timeoutMs argument of <see cref="SendAsync"/>.
+        /// </summary>
+        public TimeSpan ClientTimeout => _HttpClient.Timeout;
 
         /// <summary>
         /// Send a model load probe to an upstream endpoint.
         /// </summary>
         /// <param name="endpoint">Model runner endpoint.</param>
         /// <param name="plan">Provider request plan.</param>
-        /// <param name="timeoutMs">Request timeout in milliseconds.</param>
+        /// <param name="timeoutMs">Request timeout in milliseconds. Bounds the whole call, including reading the body.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>Transport response.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="endpoint"/> or <paramref name="plan"/> is null.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="timeoutMs"/> elapses or <paramref name="token"/> is cancelled.</exception>
         public async Task<ModelLoadTransportResponse> SendAsync(
             ModelRunnerEndpoint endpoint,
             ModelLoadProbePlan plan,

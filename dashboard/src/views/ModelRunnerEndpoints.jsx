@@ -991,7 +991,7 @@ function ModelRunnerEndpoints() {
               </select>
             </div>
             <div className="form-group">
-              <label htmlFor="timeoutMs" title="Maximum time in milliseconds to wait for response">Timeout (ms)</label>
+              <label htmlFor="timeoutMs" title="How long Conductor waits for this endpoint to start responding: model load, prompt evaluation and, for non-streaming requests, the whole generation. Streamed responses are not limited after the first token. The smaller of this and the VMR's value applies.">Time to first byte (ms)</label>
               <input
                 type="number"
                 id="timeoutMs"
@@ -1000,6 +1000,7 @@ function ModelRunnerEndpoints() {
                 min="1000"
                 step="1000"
               />
+              <small className="form-help">Must cover cold model loads, and should not exceed the runner's own load timeout (Ollama: OLLAMA_LOAD_TIMEOUT, default 5 minutes).</small>
             </div>
           </div>
           <div className="form-group">

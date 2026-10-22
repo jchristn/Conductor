@@ -15,7 +15,7 @@ function formatDurationMs(value) {
 function getOutcomeTone(outcome, success) {
   if (success === true) return 'success';
   if (outcome === 'Skipped' || outcome === 'DryRun') return 'neutral';
-  if (outcome === 'TimedOut' || outcome === 'UnauthorizedUpstream' || outcome === 'Failed') return 'danger';
+  if (outcome === 'TimedOut' || outcome === 'RunnerLoadTimeout' || outcome === 'UnauthorizedUpstream' || outcome === 'Failed') return 'danger';
   return 'warning';
 }
 

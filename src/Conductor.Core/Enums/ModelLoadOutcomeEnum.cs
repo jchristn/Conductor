@@ -73,6 +73,12 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// The endpoint API type is not supported by model loading.
         /// </summary>
-        UnsupportedApiType = 13
+        UnsupportedApiType = 13,
+
+        /// <summary>
+        /// The model runner gave up loading the model before it was ready, for example Ollama's
+        /// "timed out waiting for llama-server to start" when a load exceeds OLLAMA_LOAD_TIMEOUT.
+        /// </summary>
+        RunnerLoadTimeout = 14
     }
 }

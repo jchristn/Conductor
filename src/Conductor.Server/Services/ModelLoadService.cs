@@ -9,6 +9,7 @@ namespace Conductor.Server.Services
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Enums;
+    using Conductor.Core.Helpers;
     using Conductor.Core.Models;
     using Conductor.Core.Requests;
     using Conductor.Core.Responses;
@@ -304,6 +305,14 @@ namespace Conductor.Server.Services
                 if (!transportResponse.IsSuccessStatusCode)
                 {
                     result.Success = false;
+                    if (RunnerErrorClassifier.IsRunnerLoadTimeout(transportResponse.Body))
+                    {
+                        result.OutcomeCode = ModelLoadOutcomeEnum.RunnerLoadTimeout;
+                        result.ErrorMessage = "Upstream provider returned HTTP " + transportResponse.StatusCode
+                            + " (" + RunnerErrorClassifier.OllamaLoadTimeoutText + "). " + RunnerErrorClassifier.RunnerLoadTimeoutHint;
+                        return FinalizeEndpointResult(result, stopwatch);
+                    }
+
                     result.OutcomeCode = transportResponse.StatusCode == 401 || transportResponse.StatusCode == 403
                         ? ModelLoadOutcomeEnum.UnauthorizedUpstream
                         : ModelLoadOutcomeEnum.Failed;
@@ -338,7 +347,7 @@ namespace Conductor.Server.Services
             {
                 result.Success = false;
                 result.OutcomeCode = ModelLoadOutcomeEnum.TimedOut;
-                result.ErrorMessage = "The model load request timed out or was cancelled.";
+                result.ErrorMessage = "The model load request did not complete within " + request.TimeoutMs + " ms (TimeoutMs) or was cancelled.";
                 return FinalizeEndpointResult(result, stopwatch);
             }
             catch (Exception ex)

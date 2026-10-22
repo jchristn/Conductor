@@ -2,9 +2,9 @@
 
 # Conductor
 
-Project version: `0.6.0`
+Project version: `0.6.1`
 
-NOTE: Conductor is in ALPHA and is v0.6.0. APIs and functionality subject to change.
+NOTE: Conductor is in ALPHA and is v0.6.1. APIs and functionality subject to change.
 
 Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
@@ -46,7 +46,7 @@ docker compose up -d
 ```
 
 The server will be available at `http://localhost:9000` and the dashboard at `http://localhost:9100`.
-The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.6.0` and `jchristn77/conductor-dashboard:v0.6.0`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
+The Compose file uses the named Docker Hub images `jchristn77/conductor-server:v0.6.1` and `jchristn77/conductor-dashboard:v0.6.1`, starts PostgreSQL with a persisted `conductor-postgres-data` volume, and runs a one-shot `conductor-db-init` container to create the database schema and factory default records.
 
 The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` from `docker/compose.yaml`, so the login page points browsers at the host-exposed Conductor API by default.
 
@@ -228,7 +228,7 @@ Tenant admins can ask Conductor to load or verify a model before user traffic re
 - `POST /v1.0/modelrunnerendpoints/{id}/load-model`
 - `POST /v1.0/virtualmodelrunners/{id}/load-model`
 
-For Ollama, `ProbeKind=Auto` uses a minimal native generation probe and can keep the model resident with `KeepAlive`. For vLLM, OpenAI, and Gemini, `Auto` defaults to metadata verification because those providers generally do not expose a host-local load primitive through their public APIs. Explicit generation or embedding probes for hosted providers may be billable.
+For Ollama, `ProbeKind=Auto` uses a minimal native generation probe and can keep the model resident with `KeepAlive`. The request's `TimeoutMs` (default 300,000, maximum 1,800,000) bounds the whole load. If the runner gives up first, for example Ollama's `OLLAMA_LOAD_TIMEOUT`, the outcome is `RunnerLoadTimeout` rather than `Failed`. For vLLM, OpenAI, and Gemini, `Auto` defaults to metadata verification because those providers generally do not expose a host-local load primitive through their public APIs. Explicit generation or embedding probes for hosted providers may be billable.
 
 See [REST_API.md](./REST_API.md#model-loading) for request fields, outcome codes, dashboard behavior, SDK examples, and provider caveats.
 
@@ -402,6 +402,19 @@ Virtual model runners expose an API at their configured base path. For example, 
 - **vLLM API**: `/v1.0/api/my-vmr/v1/chat/completions`, `/v1.0/api/my-vmr/v1/embeddings`
 - **Gemini API**: `/v1.0/api/my-vmr/v1beta/models/gemini-2.5-flash:generateContent`, `/v1.0/api/my-vmr/v1beta/models/text-embedding-004:embedContent`
 - **Ollama API**: `/v1.0/api/my-vmr/api/generate`, `/v1.0/api/my-vmr/api/chat`
+
+#### Request timeouts
+
+`TimeoutMs` on a VMR and on an endpoint is a **time to first byte** limit: how long Conductor waits for the upstream to return response headers. The smaller of the two applies, and both default to 300,000 ms (5 minutes). The VMR's **Effective Config** view in the dashboard, and the `effective` API, show the applied value per endpoint and which side set it.
+
+- It must cover model load time. Ollama sends nothing while loading a model, and abandons the load if Conductor disconnects.
+- Streamed requests are limited only until the first token. Non-streaming requests must finish generating within the limit, because Ollama sends headers only when generation ends.
+- The runner has its own load limit (Ollama: `OLLAMA_LOAD_TIMEOUT`, default 5 minutes). Raising Conductor's limit beyond it does not help a model that cannot load in time.
+- When Conductor's limit expires, the client gets `504` with `Code: "UpstreamTimeout"` and an `X-Conductor-Error-Code: UpstreamTimeout` header naming the endpoint, the VMR and the limit. A runner-side load timeout is passed through with `X-Conductor-Error-Code: RunnerLoadTimeout`.
+- To avoid cold loads on live traffic, warm large models with `load-model` and a long `KeepAlive`.
+- At startup, Conductor logs a warning listing VMRs and endpoints still at 60,000 ms, the default before v0.6.1.
+
+See [REST_API.md](./REST_API.md#request-timeouts-time-to-first-byte) for details.
 
 ## QoS & Queueing
 
@@ -754,6 +767,7 @@ Model Runner Endpoints support comprehensive health checking with the following 
 - Draining endpoints continue to be probed and remain available for already-pinned session-affinity traffic, but they do not receive new assignments
 - Quarantined endpoints continue to be probed for diagnostics, but they are excluded from all routing, including pinned-session reuse
 - When all endpoints are unhealthy, requests return `502 Bad Gateway`
+- When the upstream does not return response headers within the effective `TimeoutMs`, requests return `504 Gateway Timeout` (see [Request timeouts](#request-timeouts))
 - When all endpoints are at capacity, requests queue in the VMR's QoS profile and are released as capacity frees; they return `429 Too Many Requests` only when the queue is full or no capacity frees before the profile's `MaxQueueWaitMs` deadline (see [QoS & Queueing](#qos--queueing))
 - `GET` or `HEAD` on a VMR's base URL (`/v1.0/api/{vmr}/`) is an unauthenticated health probe that returns `204` when the VMR has a healthy endpoint and `503` when it has none, without queueing, using an endpoint slot, or reaching a model runner
 - When all configured endpoints are quarantined or draining, requests are denied with an explicit service-state-specific error
@@ -805,8 +819,8 @@ Response includes:
 
 The included Docker Compose setup uses named Docker Hub images:
 
-- **Server**: `jchristn77/conductor-server:v0.6.0`
-- **Dashboard**: `jchristn77/conductor-dashboard:v0.6.0`
+- **Server**: `jchristn77/conductor-server:v0.6.1`
+- **Dashboard**: `jchristn77/conductor-dashboard:v0.6.1`
 
 ### Building Docker Images
 
@@ -814,21 +828,21 @@ Windows:
 
 ```bash
 # Build and push server with the specified tag and latest
-build-server.bat v0.6.0
+build-server.bat v0.6.1
 
 # Build and push dashboard with the specified tag and latest
-build-dashboard.bat v0.6.0
+build-dashboard.bat v0.6.1
 
 # Build and push both images with the specified tag and latest
-build-all.bat v0.6.0
+build-all.bat v0.6.1
 ```
 
 macOS and Linux:
 
 ```bash
-./build-server.sh v0.6.0
-./build-dashboard.sh v0.6.0
-./build-all.sh v0.6.0
+./build-server.sh v0.6.1
+./build-dashboard.sh v0.6.1
+./build-all.sh v0.6.1
 ```
 
 The scripts build with the `cloud-jchristn77-jchristn77` Docker Build Cloud builder. The `.sh` scripts build `linux/amd64` images by default, so building on Apple silicon still produces images that run on x86-64 hosts; set `DOCKER_PLATFORM` (for example `linux/arm64`) or `DOCKER_BUILDER` to override.

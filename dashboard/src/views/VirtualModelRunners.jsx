@@ -1017,7 +1017,7 @@ function VirtualModelRunners() {
               </select>
             </div>
             <div className="form-group">
-              <label htmlFor="timeoutMs" title="Maximum time in milliseconds to wait for endpoint response">Timeout (ms)</label>
+              <label htmlFor="timeoutMs" title="How long Conductor waits for the model to start responding: model load, prompt evaluation and, for non-streaming requests, the whole generation. Streamed responses are not limited after the first token. The smaller of this and the endpoint's value applies.">Time to first byte (ms)</label>
               <input
                 type="number"
                 id="timeoutMs"
@@ -1026,6 +1026,7 @@ function VirtualModelRunners() {
                 min="1000"
                 step="1000"
               />
+              <small className="form-help">Must cover cold model loads. The smaller of this and the endpoint's value applies.</small>
             </div>
           </div>
 
@@ -1680,6 +1681,7 @@ function VirtualModelRunners() {
                   <div className="detail-item"><label>Strict Mode</label><span>{effectiveConfig.StrictMode ? 'Enabled' : 'Disabled'}</span></div>
                   <div className="detail-item"><label>Request History</label><span>{effectiveConfig.RequestHistoryEnabled ? 'Enabled' : 'Disabled'}</span></div>
                   <div className="detail-item"><label>Session Affinity</label><span>{effectiveConfig.SessionAffinity?.Mode || 'None'}</span></div>
+                  <div className="detail-item"><label title="This VMR's time-to-first-byte limit. Each endpoint below shows the limit actually applied.">Time to First Byte</label><span>{effectiveConfig.RequestTimeoutMs != null ? `${Number(effectiveConfig.RequestTimeoutMs).toLocaleString()} ms` : 'Unknown'}</span></div>
                 </div>
               </div>
 
@@ -1724,6 +1726,7 @@ function VirtualModelRunners() {
                         <div className="detail-item"><label>Weight</label><span>{endpoint.Weight}</span></div>
                         <div className="detail-item"><label>Max Parallel</label><span>{endpoint.MaxParallelRequests}</span></div>
                         <div className="detail-item"><label>Active</label><span>{endpoint.Active ? 'Yes' : 'No'}</span></div>
+                        <div className="detail-item"><label title="The smaller of the VMR and endpoint time-to-first-byte limits, and which side set it">Effective Timeout</label><span>{endpoint.RequestTimeout?.Description || (endpoint.TimeoutMs != null ? `${Number(endpoint.TimeoutMs).toLocaleString()} ms` : 'Unknown')}</span></div>
                       </div>
                     </div>
                   ))}

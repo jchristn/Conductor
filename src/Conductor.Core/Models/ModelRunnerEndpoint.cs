@@ -72,12 +72,16 @@ namespace Conductor.Core.Models
         public bool UseSsl { get; set; } = false;
 
         /// <summary>
-        /// Request timeout in milliseconds.
+        /// Time to first byte, in milliseconds: how long Conductor waits for this endpoint to return response headers
+        /// for a proxied request. This covers model load, prompt evaluation and, for non-streaming requests, the whole
+        /// generation. Streamed responses are not limited after the first chunk arrives.
+        /// The effective limit for a request is the smaller of this value and the virtual model runner's TimeoutMs.
+        /// Minimum: 1000. Values below the minimum reset to the default. Default: 300000 (5 minutes).
         /// </summary>
         public int TimeoutMs
         {
             get => _TimeoutMs;
-            set => _TimeoutMs = (value < 1000 ? 60000 : value);
+            set => _TimeoutMs = (value < 1000 ? Constants.DefaultRequestTimeoutMs : value);
         }
 
         /// <summary>
@@ -262,7 +266,7 @@ namespace Conductor.Core.Models
         private string _Name = "Default Endpoint";
         private string _Hostname = "localhost";
         private int _Port = 11434;
-        private int _TimeoutMs = 60000;
+        private int _TimeoutMs = Constants.DefaultRequestTimeoutMs;
         private List<string> _Labels = new List<string>();
         private Dictionary<string, string> _Tags = new Dictionary<string, string>();
         private string _HealthCheckUrl = "/";
@@ -330,7 +334,7 @@ namespace Conductor.Core.Models
             };
 
             if (obj.Port == 0) obj.Port = 11434;
-            if (obj.TimeoutMs == 0) obj.TimeoutMs = 60000;
+            if (obj.TimeoutMs == 0) obj.TimeoutMs = Constants.DefaultRequestTimeoutMs;
             if (obj.HealthCheckIntervalMs == 0) obj.HealthCheckIntervalMs = 5000;
             if (obj.HealthCheckTimeoutMs == 0) obj.HealthCheckTimeoutMs = 5000;
             if (obj.HealthCheckExpectedStatusCode == 0) obj.HealthCheckExpectedStatusCode = 200;

@@ -41,6 +41,21 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Create a GatewayTimeout error response, used when Conductor's own deadline expires before the upstream responds.
+        /// </summary>
+        /// <param name="message">Error message describing which deadline expired.</param>
+        /// <param name="code">Error code for programmatic handling. Default is "GatewayTimeout".</param>
+        public static ApiErrorResponse GatewayTimeout(string message = "Upstream endpoint did not respond in time", string code = "GatewayTimeout")
+        {
+            return new ApiErrorResponse
+            {
+                Error = message,
+                StatusCode = 504,
+                Code = code
+            };
+        }
+
+        /// <summary>
         /// Create a NotFound error response.
         /// </summary>
         public static ApiErrorResponse NotFound(string message = "Not found")

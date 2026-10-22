@@ -39,6 +39,12 @@ namespace Conductor.Core.Models
         public bool StrictMode { get; set; } = false;
 
         /// <summary>
+        /// The virtual model runner's time-to-first-byte limit in milliseconds. The limit applied to a request is the
+        /// smaller of this and the selected endpoint's value; see <see cref="EffectiveEndpointSummary.RequestTimeout"/>.
+        /// </summary>
+        public int RequestTimeoutMs { get; set; } = Constants.DefaultRequestTimeoutMs;
+
+        /// <summary>
         /// Request permission summary.
         /// </summary>
         public EffectiveRequestPermissions Permissions { get; set; } = new EffectiveRequestPermissions();
@@ -216,6 +222,17 @@ namespace Conductor.Core.Models
         /// Endpoint max parallel request setting.
         /// </summary>
         public int MaxParallelRequests { get; set; } = 0;
+
+        /// <summary>
+        /// The endpoint's own time-to-first-byte limit in milliseconds.
+        /// </summary>
+        public int TimeoutMs { get; set; } = Constants.DefaultRequestTimeoutMs;
+
+        /// <summary>
+        /// The limit applied when this virtual model runner routes a request to this endpoint, and which side set it.
+        /// Null when it could not be resolved.
+        /// </summary>
+        public EffectiveRequestTimeout RequestTimeout { get; set; } = null;
     }
 
     /// <summary>
