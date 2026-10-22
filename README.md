@@ -232,6 +232,12 @@ For Ollama, `ProbeKind=Auto` uses a minimal native generation probe and can keep
 
 See [REST_API.md](./REST_API.md#model-loading) for request fields, outcome codes, dashboard behavior, SDK examples, and provider caveats.
 
+### Keep Warm
+
+Set `KeepWarm.Enabled` on a VMR (dashboard: **Keep models warm** in the VMR form) to keep its models loaded on its eligible Ollama endpoints. Every `IntervalMs` (default 5 minutes) Conductor checks residency with `/api/ps` and loads any model that is not resident, using `KeepAlive` (default `30m`) and `TimeoutMs` (default 300,000). A warm-up load takes one of the endpoint's `MaxParallelRequests` slots, so client requests queue behind it, and a busy endpoint is retried at the next interval. Passes run one at a time across the server.
+
+Status and a **Run now** action are in the VMR's **Effective Config** view, or through `GET /v1.0/virtualmodelrunners/{id}/keep-warm` and `POST /v1.0/virtualmodelrunners/{id}/keep-warm/run`. See [REST_API.md](./REST_API.md#keep-warm).
+
 ### VMR Reservations
 
 VMR reservations schedule exclusive access windows for a Virtual Model Runner. During the active window, and during any configured admission drain lead time, Conductor admits only the users and credentials listed on the reservation. Outside the window, normal on-demand VMR access continues and existing ACL/model-access checks still apply after a reservation participant is allowed.
@@ -411,7 +417,7 @@ Virtual model runners expose an API at their configured base path. For example, 
 - Streamed requests are limited only until the first token. Non-streaming requests must finish generating within the limit, because Ollama sends headers only when generation ends.
 - The runner has its own load limit (Ollama: `OLLAMA_LOAD_TIMEOUT`, default 5 minutes). Raising Conductor's limit beyond it does not help a model that cannot load in time.
 - When Conductor's limit expires, the client gets `504` with `Code: "UpstreamTimeout"` and an `X-Conductor-Error-Code: UpstreamTimeout` header naming the endpoint, the VMR and the limit. A runner-side load timeout is passed through with `X-Conductor-Error-Code: RunnerLoadTimeout`.
-- To avoid cold loads on live traffic, warm large models with `load-model` and a long `KeepAlive`.
+- To avoid cold loads on live traffic, enable [Keep Warm](#keep-warm) on the VMR, or warm large models with `load-model` and a long `KeepAlive`.
 - At startup, Conductor logs a warning listing VMRs and endpoints still at 60,000 ms, the default before v0.6.1.
 
 See [REST_API.md](./REST_API.md#request-timeouts-time-to-first-byte) for details.

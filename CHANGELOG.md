@@ -9,7 +9,9 @@
 - Added the `RunnerLoadTimeout` model load outcome for Ollama's `timed out waiting for llama-server to start`, with a hint to raise `OLLAMA_LOAD_TIMEOUT`. Proxied responses carrying that error pass through unchanged with `X-Conductor-Error-Code: RunnerLoadTimeout` and are recorded under that analytics error type.
 - The VMR `effective` response now includes `RequestTimeoutMs` and, per endpoint, `TimeoutMs` and `RequestTimeout` (effective value, source and description). The dashboard's Effective Config view shows them.
 - Dashboard: the VMR and endpoint timeout fields are now labelled "Time to first byte (ms)", with help text explaining what the limit covers and that the smaller value applies.
-- Documented request timeout semantics, cold model loads, `OLLAMA_LOAD_TIMEOUT`, and warming with `load-model` in README.md and REST_API.md. Updated release and deployment image tags to v0.6.1.
+- Added keep-warm for virtual model runners (`KeepWarm` settings: `Enabled`, `Models`, `IntervalMs`, `KeepAlive`, `TimeoutMs`). A background service checks residency on eligible Ollama endpoints with `/api/ps` and loads models that are not resident. Each warm-up load takes one of the endpoint's `MaxParallelRequests` slots; a busy endpoint is retried at the next interval, and passes run one at a time. New routes `GET /v1.0/virtualmodelrunners/{id}/keep-warm` and `POST .../keep-warm/run`, a `keepwarm` column with migrations for all four databases, validation warnings, and dashboard settings plus status and Run now in Effective Config.
+- Fixed build warnings from a vulnerable transitive `System.Security.Cryptography.Pkcs` (9.0.18, via Microsoft.Data.SqlClient 7.1.1) by referencing 10.0.13 directly. Updated NuGet packages: Microsoft.Data.Sqlite 10.0.13, MySql.Data 26.10.0, OpenTelemetry 1.20.1, Watson 7.3.2, QoSKit 0.2.2, Voltaic 2.4.0, SyslogLogging 2.4.1, RestWrapper 3.3.2, PrettyId 2.0.2, JsonMerge 1.1.1, Touchstone 0.2.1, and test SDK/adapters.
+- Documented request timeout semantics, cold model loads, `OLLAMA_LOAD_TIMEOUT`, keep-warm, and warming with `load-model` in README.md and REST_API.md. Updated release and deployment image tags to v0.6.1.
 
 ## v0.6.0
 

@@ -102,6 +102,7 @@ namespace Conductor.Core.Database.SqlServer
             await EnsureColumnAsync("virtualmodelrunners", "qosprofileid", TableQueries.AddQosProfileIdColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "modelconfigurationmappings", "ALTER TABLE virtualmodelrunners ADD modelconfigurationmappings NVARCHAR(MAX);", token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "adaptiveloadbalancing", TableQueries.AddAdaptiveLoadBalancingColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "keepwarm", TableQueries.AddKeepWarmColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroupids", TableQueries.AddEndpointGroupIdsColumn, token).ConfigureAwait(false);
 

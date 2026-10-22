@@ -43,6 +43,7 @@ namespace Conductor.Server
         private static RoutingDecisionService _RoutingDecisionService;
         private static ConfigurationValidationService _ConfigurationValidationService;
         private static ModelLoadService _ModelLoadService;
+        private static KeepWarmService _KeepWarmService;
         private static OllamaModelManagementService _OllamaModelManagementService;
         private static RequestHistoryService _RequestHistoryService;
         private static VirtualModelRunnerReservationService _VirtualModelRunnerReservationService;
@@ -186,6 +187,8 @@ namespace Conductor.Server
                 _HealthCheckService,
                 _OperationalMetricsService);
             _OllamaModelManagementService = new OllamaModelManagementService();
+            _KeepWarmService = new KeepWarmService(_Database, _Logging, _ModelLoadService);
+            await _KeepWarmService.StartAsync(_TokenSource.Token).ConfigureAwait(false);
             _Logging.Info(_Header + "routing, validation, and observability services initialized");
 
             // Initialize request history service
@@ -317,6 +320,13 @@ namespace Conductor.Server
                 _Logging.Info(_Header + "request history cleanup service stopped");
             }
 
+            // Stop keep-warm before the model load service it depends on
+            if (_KeepWarmService != null)
+            {
+                await _KeepWarmService.StopAsync().ConfigureAwait(false);
+                _KeepWarmService.Dispose();
+            }
+
             if (_ModelLoadService != null)
             {
                 _ModelLoadService.Dispose();
@@ -377,7 +387,8 @@ namespace Conductor.Server
                 _OllamaModelManagementService,
                 _RequestHistoryService,
                 _VirtualModelRunnerReservationService,
-                _QosAdmissionService);
+                _QosAdmissionService,
+                _KeepWarmService);
             Routing.ConductorRouteRegistry routeRegistry = new Routing.ConductorRouteRegistry(routeContext);
             routeRegistry.RegisterRoutes();
         }

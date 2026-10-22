@@ -116,6 +116,8 @@ namespace Conductor.Server.Services
             { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/reservation-effective"), RequestTypeEnum.ReadVirtualModelRunnerReservationEffective },
             { new RouteKey("POST", "/v1.0/virtualmodelrunners/{id}/explain-routing"), RequestTypeEnum.ExplainVirtualModelRunnerRouting },
             { new RouteKey("POST", "/v1.0/virtualmodelrunners/{id}/load-model"), RequestTypeEnum.LoadVirtualModelRunnerModel },
+            { new RouteKey("GET", "/v1.0/virtualmodelrunners/{id}/keep-warm"), RequestTypeEnum.ReadVirtualModelRunnerKeepWarm },
+            { new RouteKey("POST", "/v1.0/virtualmodelrunners/{id}/keep-warm/run"), RequestTypeEnum.RunVirtualModelRunnerKeepWarm },
             { new RouteKey("PUT", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.UpdateVirtualModelRunner },
             { new RouteKey("DELETE", "/v1.0/virtualmodelrunners/{id}"), RequestTypeEnum.DeleteVirtualModelRunner },
             { new RouteKey("GET", "/v1.0/virtualmodelrunners"), RequestTypeEnum.ListVirtualModelRunners },

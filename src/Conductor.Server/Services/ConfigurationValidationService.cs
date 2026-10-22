@@ -2,7 +2,9 @@ namespace Conductor.Server.Services
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.Linq;
+    using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
@@ -135,6 +137,7 @@ namespace Conductor.Server.Services
             }
 
             ValidateAdaptiveLoadBalancing(result, vmr);
+            ValidateKeepWarm(result, vmr, endpoints);
             await ValidateEndpointGroupReferencesAsync(result, tenantId, vmr, endpoints, token).ConfigureAwait(false);
             ValidateEndpointGroups(result, vmr, endpoints);
 
@@ -448,6 +451,61 @@ namespace Conductor.Server.Services
             IEnumerable<string> metricIds = (policy?.Filters ?? new List<LoadBalancingPolicyFilter>()).Select(item => item.Metric)
                 .Concat((policy?.Ranking ?? new List<LoadBalancingPolicyRankingRule>()).Select(item => item.Metric));
             return metricIds.Any(metric => !String.IsNullOrWhiteSpace(metric) && metric.StartsWith("rig.", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void ValidateKeepWarm(ResourceValidationResult result, VirtualModelRunner vmr, List<ModelRunnerEndpoint> endpoints)
+        {
+            KeepWarmSettings settings = vmr.KeepWarm;
+            if (settings == null || !settings.Enabled) return;
+
+            if (endpoints == null || !endpoints.Exists(item => item.ApiType == ApiTypeEnum.Ollama))
+            {
+                AddWarning(result, "KeepWarmNoOllamaEndpoints", "KeepWarm.Enabled", "Keep warm only loads models on Ollama endpoints, and none are attached.");
+            }
+
+            if ((settings.Models == null || settings.Models.Count < 1) && (vmr.ModelDefinitionIds == null || vmr.ModelDefinitionIds.Count < 1))
+            {
+                AddWarning(result, "KeepWarmNoModels", "KeepWarm.Models", "Keep warm has no models: list them in KeepWarm.Models or attach model definitions.");
+            }
+
+            long? keepAliveMs = ParseKeepAliveMs(settings.KeepAlive);
+            if (keepAliveMs.HasValue && keepAliveMs.Value >= 0 && keepAliveMs.Value <= settings.IntervalMs)
+            {
+                AddWarning(result, "KeepWarmKeepAliveTooShort", "KeepWarm.KeepAlive",
+                    "KeepAlive (" + settings.KeepAlive + ") is not longer than IntervalMs (" + settings.IntervalMs + " ms), so the runner may unload the model between checks.");
+            }
+        }
+
+        private static long? ParseKeepAliveMs(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value)) return null;
+            string text = value.Trim();
+
+            if (Int64.TryParse(text, out long seconds)) return seconds < 0 ? -1 : seconds * 1000;
+
+            bool negative = text.StartsWith("-", StringComparison.Ordinal);
+            if (negative) text = text.Substring(1);
+
+            MatchCollection matches = Regex.Matches(text, @"(\d+(?:\.\d+)?)(ms|h|m|s)");
+            if (matches.Count < 1) return null;
+
+            int consumed = 0;
+            double total = 0;
+            foreach (Match match in matches)
+            {
+                consumed += match.Length;
+                double amount = Double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                switch (match.Groups[2].Value)
+                {
+                    case "h": total += amount * 3600000; break;
+                    case "m": total += amount * 60000; break;
+                    case "s": total += amount * 1000; break;
+                    default: total += amount; break;
+                }
+            }
+
+            if (consumed != text.Length) return null;
+            return negative ? -1 : (long)total;
         }
 
         private static void ValidateAdaptiveLoadBalancing(ResourceValidationResult result, VirtualModelRunner vmr)

@@ -170,6 +170,99 @@ namespace Conductor.Server.Services
             return response;
         }
 
+        /// <summary>
+        /// Keep a model warm on a virtual model runner's eligible Ollama endpoints. For each endpoint, Conductor first
+        /// checks whether the model is resident (Ollama /api/ps). Only when it is not does Conductor load it, and the
+        /// load takes one of the endpoint's MaxParallelRequests slots for its duration so it cannot crowd out client
+        /// traffic. An endpoint with no free slot is reported as Skipped and retried at the next interval.
+        /// The reservation gate is not applied: keep-warm is system-initiated and does not serve a client.
+        /// </summary>
+        /// <param name="vmr">Virtual model runner. Must not be null.</param>
+        /// <param name="model">Model name to keep warm. Must not be null or blank.</param>
+        /// <param name="settings">Keep-warm settings supplying KeepAlive and TimeoutMs. Null uses defaults.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Model load response with one result per configured endpoint.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="vmr"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="model"/> is null or blank.</exception>
+        /// <exception cref="WebserverException">Thrown when the model is not attached to the virtual model runner.</exception>
+        public async Task<ModelLoadResponse> KeepWarmVirtualModelRunnerAsync(
+            VirtualModelRunner vmr,
+            string model,
+            KeepWarmSettings settings,
+            CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(vmr);
+            if (String.IsNullOrWhiteSpace(model)) throw new ArgumentException("Model is required.", nameof(model));
+            settings = settings ?? new KeepWarmSettings();
+
+            ModelLoadRequest request = NormalizeRequest(new ModelLoadRequest
+            {
+                Model = model,
+                ProbeKind = ModelLoadProbeKindEnum.Auto,
+                TargetMode = ModelLoadTargetModeEnum.AllEligibleEndpoints,
+                KeepAlive = settings.KeepAlive,
+                TimeoutMs = settings.TimeoutMs,
+                VerifyLoaded = true
+            });
+
+            string resolvedModel = await ResolveModelAsync(vmr, request, token).ConfigureAwait(false);
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            ModelLoadResponse response = CreateResponse("VirtualModelRunner", vmr.Id, vmr.TenantId, resolvedModel, request.ProbeKind);
+
+            ModelLoadTargetSelection selection = await ResolveTargetsAsync(vmr, request, resolvedModel, token).ConfigureAwait(false);
+            if (!String.IsNullOrWhiteSpace(selection.EffectiveModel))
+            {
+                resolvedModel = selection.EffectiveModel;
+                response.Model = resolvedModel;
+            }
+
+            response.EndpointResults.AddRange(selection.SkippedResults);
+
+            foreach (ModelRunnerEndpoint endpoint in selection.Endpoints)
+            {
+                token.ThrowIfCancellationRequested();
+
+                if (endpoint.ApiType != ApiTypeEnum.Ollama)
+                {
+                    response.EndpointResults.Add(CreateSkippedResult(endpoint, "Keep warm applies to Ollama endpoints only."));
+                    continue;
+                }
+
+                bool resident = await _VerificationService.VerifyAsync(endpoint, resolvedModel, request.TimeoutMs, token).ConfigureAwait(false);
+                if (resident)
+                {
+                    response.EndpointResults.Add(CreateAlreadyAvailableResult(endpoint));
+                    continue;
+                }
+
+                bool slotAcquired = false;
+                if (_HealthCheckService != null)
+                {
+                    slotAcquired = _HealthCheckService.TryIncrementInFlight(endpoint.Id, endpoint.MaxParallelRequests);
+                    if (!slotAcquired)
+                    {
+                        response.EndpointResults.Add(CreateSkippedResult(endpoint,
+                            "Endpoint is at MaxParallelRequests; keep warm will retry at the next interval."));
+                        continue;
+                    }
+                }
+
+                try
+                {
+                    ModelLoadEndpointResult result = await ExecuteForEndpointAsync(endpoint, request, resolvedModel, token).ConfigureAwait(false);
+                    response.EndpointResults.Add(result);
+                }
+                finally
+                {
+                    if (slotAcquired) _HealthCheckService.DecrementInFlight(endpoint.Id);
+                }
+            }
+
+            CompleteResponse(response, stopwatch);
+            RecordMetrics(response);
+            return response;
+        }
+
         private async Task EnforceReservationGateAsync(VirtualModelRunner vmr, RequestContext requestContext, CancellationToken token)
         {
             string credentialOwnerUserId = await ResolveCredentialOwnerUserIdAsync(vmr.TenantId, requestContext, token).ConfigureAwait(false);
@@ -768,6 +861,25 @@ namespace Conductor.Server.Services
                         }
                     }
                 }, false)
+            };
+        }
+
+        private static ModelLoadEndpointResult CreateAlreadyAvailableResult(ModelRunnerEndpoint endpoint)
+        {
+            DateTime now = DateTime.UtcNow;
+            return new ModelLoadEndpointResult
+            {
+                EndpointId = endpoint.Id,
+                EndpointName = endpoint.Name,
+                ApiType = endpoint.ApiType,
+                BaseUrl = endpoint.GetBaseUrl(),
+                Success = true,
+                OutcomeCode = ModelLoadOutcomeEnum.AlreadyAvailable,
+                VerifiedLoaded = true,
+                Mechanism = "OllamaRunningModels",
+                RequestPath = "/api/ps",
+                StartedUtc = now,
+                CompletedUtc = now
             };
         }
 

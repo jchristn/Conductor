@@ -455,6 +455,7 @@ namespace Conductor.Core.Database.Sqlite.Queries
                 loadbalancingmode INTEGER NOT NULL DEFAULT 0,
                 modelrunnerendpointids TEXT,
                 adaptiveloadbalancing TEXT,
+                keepwarm TEXT,
                 endpointgroups TEXT,
                 endpointgroupids TEXT,
                 modelconfigurationids TEXT,
@@ -780,6 +781,13 @@ namespace Conductor.Core.Database.Sqlite.Queries
         /// </summary>
         public static readonly string AddAdaptiveLoadBalancingColumn = @"
             ALTER TABLE virtualmodelrunners ADD COLUMN adaptiveloadbalancing TEXT;
+        ";
+
+        /// <summary>
+        /// Add keepwarm column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddKeepWarmColumn = @"
+            ALTER TABLE virtualmodelrunners ADD COLUMN keepwarm TEXT;
         ";
 
         /// <summary>

@@ -156,6 +156,39 @@ function normalizeAdaptiveLoadBalancing(value) {
   };
 }
 
+export function createDefaultKeepWarm() {
+  return {
+    Enabled: false,
+    ModelsText: '',
+    IntervalMs: 300000,
+    KeepAlive: '30m',
+    TimeoutMs: 300000
+  };
+}
+
+export function normalizeKeepWarm(value) {
+  const source = value || {};
+  return {
+    ...createDefaultKeepWarm(),
+    Enabled: source.Enabled === true,
+    ModelsText: (source.Models || []).join(', '),
+    IntervalMs: source.IntervalMs || 300000,
+    KeepAlive: source.KeepAlive || '30m',
+    TimeoutMs: source.TimeoutMs || 300000
+  };
+}
+
+export function keepWarmToPayload(value) {
+  const source = value || createDefaultKeepWarm();
+  return {
+    Enabled: source.Enabled === true,
+    Models: String(source.ModelsText || '').split(',').map((item) => item.trim()).filter(Boolean),
+    IntervalMs: parseInt(source.IntervalMs, 10) || 300000,
+    KeepAlive: String(source.KeepAlive || '').trim() || '30m',
+    TimeoutMs: parseInt(source.TimeoutMs, 10) || 300000
+  };
+}
+
 function VirtualModelRunners() {
   const { api, setError, serverUrl } = useApp();
   const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
@@ -189,6 +222,8 @@ function VirtualModelRunners() {
   const [showEffective, setShowEffective] = useState(false);
   const [effectiveConfig, setEffectiveConfig] = useState(null);
   const [effectiveLoading, setEffectiveLoading] = useState(false);
+  const [keepWarmStatus, setKeepWarmStatus] = useState(null);
+  const [keepWarmRunning, setKeepWarmRunning] = useState(false);
   const [showExplain, setShowExplain] = useState(false);
   const [explainLoading, setExplainLoading] = useState(false);
   const [routingExplanation, setRoutingExplanation] = useState(null);
@@ -205,6 +240,7 @@ function VirtualModelRunners() {
     ModelAccessPolicyId: '',
     ModelRunnerEndpointIds: [],
     AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
+    KeepWarm: createDefaultKeepWarm(),
     EndpointGroupIds: [],
     ModelConfigurationIds: [],
     ModelDefinitionIds: [],
@@ -284,6 +320,7 @@ function VirtualModelRunners() {
       ModelAccessPolicyId: '',
       ModelRunnerEndpointIds: [],
       AdaptiveLoadBalancing: createDefaultAdaptiveLoadBalancing(),
+      KeepWarm: createDefaultKeepWarm(),
       EndpointGroupIds: [],
       ModelConfigurationIds: [],
       ModelDefinitionIds: [],
@@ -321,6 +358,7 @@ function VirtualModelRunners() {
       ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
       AdaptiveLoadBalancing: normalizeAdaptiveLoadBalancing(vmr.AdaptiveLoadBalancing),
+      KeepWarm: normalizeKeepWarm(vmr.KeepWarm),
       EndpointGroupIds: vmr.EndpointGroupIds || [],
       ModelConfigurationIds: vmr.ModelConfigurationIds || [],
       ModelDefinitionIds: vmr.ModelDefinitionIds || [],
@@ -358,6 +396,7 @@ function VirtualModelRunners() {
       ModelAccessPolicyId: vmr.ModelAccessPolicyId || '',
       ModelRunnerEndpointIds: vmr.ModelRunnerEndpointIds || [],
       AdaptiveLoadBalancing: normalizeAdaptiveLoadBalancing(vmr.AdaptiveLoadBalancing),
+      KeepWarm: normalizeKeepWarm(vmr.KeepWarm),
       EndpointGroupIds: vmr.EndpointGroupIds || [],
       ModelConfigurationIds: vmr.ModelConfigurationIds || [],
       ModelDefinitionIds: vmr.ModelDefinitionIds || [],
@@ -448,6 +487,7 @@ function VirtualModelRunners() {
           EndpointWeight: parseFloat(formData.AdaptiveLoadBalancing.Weights.EndpointWeight)
         }
       },
+      KeepWarm: keepWarmToPayload(formData.KeepWarm),
       EndpointGroupIds: formData.EndpointGroupIds || [],
       EndpointGroups: [],
       ModelConfigurationIds: formData.ModelConfigurationIds,
@@ -495,6 +535,11 @@ function VirtualModelRunners() {
     try {
       const result = await api.getVirtualModelRunnerEffectiveConfiguration(vmr.Id, vmr.TenantId);
       setEffectiveConfig(result);
+      try {
+        setKeepWarmStatus(await api.getVirtualModelRunnerKeepWarm(vmr.Id, vmr.TenantId));
+      } catch {
+        setKeepWarmStatus(null);
+      }
     } catch (err) {
       setError('Failed to fetch effective configuration: ' + err.message);
       setEffectiveConfig(null);
@@ -1228,6 +1273,72 @@ function VirtualModelRunners() {
           </div>
 
           <div className="form-group">
+            <div className="checkbox-group">
+              <label title="Periodically check that this VMR's models are loaded on its eligible Ollama endpoints, and load any that are not, so clients do not wait for a cold load. A warm-up load uses one of the endpoint's Max Parallel Requests slots; a busy endpoint is retried at the next interval.">
+                <input
+                  type="checkbox"
+                  id="keepWarmEnabled"
+                  checked={formData.KeepWarm?.Enabled === true}
+                  onChange={(e) => setFormData({ ...formData, KeepWarm: { ...(formData.KeepWarm || createDefaultKeepWarm()), Enabled: e.target.checked } })}
+                />
+                Keep models warm
+              </label>
+            </div>
+            {formData.KeepWarm?.Enabled && (
+              <>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="keepWarmModels" title="Comma-separated model names. Leave blank to keep every active attached model definition warm.">Models</label>
+                    <input
+                      type="text"
+                      id="keepWarmModels"
+                      value={formData.KeepWarm.ModelsText}
+                      onChange={(e) => setFormData({ ...formData, KeepWarm: { ...formData.KeepWarm, ModelsText: e.target.value } })}
+                      placeholder="All attached model definitions"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="keepWarmIntervalMs" title="How often to check residency. Minimum 30,000 ms. Keep it shorter than Keep alive.">Check interval (ms)</label>
+                    <input
+                      type="number"
+                      id="keepWarmIntervalMs"
+                      value={formData.KeepWarm.IntervalMs}
+                      onChange={(e) => setFormData({ ...formData, KeepWarm: { ...formData.KeepWarm, IntervalMs: e.target.value } })}
+                      min="30000"
+                      step="30000"
+                    />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="keepWarmKeepAlive" title="Ollama keep_alive sent with each warm-up load, for example 30m or 24h. Must be longer than the check interval.">Keep alive</label>
+                    <input
+                      type="text"
+                      id="keepWarmKeepAlive"
+                      value={formData.KeepWarm.KeepAlive}
+                      onChange={(e) => setFormData({ ...formData, KeepWarm: { ...formData.KeepWarm, KeepAlive: e.target.value } })}
+                      placeholder="30m"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="keepWarmTimeoutMs" title="Timeout for each warm-up load. Must cover a cold load of the largest model, and the runner's own load timeout (Ollama: OLLAMA_LOAD_TIMEOUT).">Load timeout (ms)</label>
+                    <input
+                      type="number"
+                      id="keepWarmTimeoutMs"
+                      value={formData.KeepWarm.TimeoutMs}
+                      onChange={(e) => setFormData({ ...formData, KeepWarm: { ...formData.KeepWarm, TimeoutMs: e.target.value } })}
+                      min="1000"
+                      max="1800000"
+                      step="1000"
+                    />
+                  </div>
+                </div>
+                <small className="form-help">Applies to Ollama endpoints only. Status and a Run now action are in Effective Config.</small>
+              </>
+            )}
+          </div>
+
+          <div className="form-group">
             <label title="Backend model runner endpoints that will handle requests for this VMR">Model Runner Endpoints</label>
             <div className="endpoint-list">
               {!formData.TenantId ? (
@@ -1663,7 +1774,7 @@ function VirtualModelRunners() {
 
         <Modal
           isOpen={showEffective}
-          onClose={() => { setShowEffective(false); setEffectiveConfig(null); }}
+          onClose={() => { setShowEffective(false); setEffectiveConfig(null); setKeepWarmStatus(null); }}
           title={`Effective Configuration: ${selectedVmr?.Name || 'VMR'}`}
           extraWide
         >
@@ -1731,6 +1842,56 @@ function VirtualModelRunners() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Keep Warm</h3>
+                {keepWarmStatus ? (
+                  <>
+                    <div className="detail-grid">
+                      <div className="detail-item"><label>Enabled</label><span>{keepWarmStatus.Enabled ? 'Yes' : 'No'}</span></div>
+                      <div className="detail-item"><label>Interval</label><span>{Number(keepWarmStatus.IntervalMs || 0).toLocaleString()} ms</span></div>
+                      <div className="detail-item"><label>Last run</label><span>{keepWarmStatus.LastRunCompletedUtc ? new Date(keepWarmStatus.LastRunCompletedUtc).toLocaleString() : 'Never'}</span></div>
+                      <div className="detail-item"><label>Next run</label><span>{keepWarmStatus.NextRunUtc ? new Date(keepWarmStatus.NextRunUtc).toLocaleString() : 'Not scheduled'}</span></div>
+                      <div className="detail-item"><label>Result</label><span>{keepWarmStatus.Running ? 'Running' : (keepWarmStatus.LastRunCompletedUtc ? (keepWarmStatus.LastRunSucceeded ? 'OK' : 'Failed') : 'No runs yet')}</span></div>
+                    </div>
+                    {keepWarmStatus.LastError && <p className="form-help">{keepWarmStatus.LastError}</p>}
+                    {(keepWarmStatus.LastResults || []).map((response) => (
+                      <div key={response.Model} className="summary-badge-row">
+                        <strong>{response.Model}</strong>
+                        {(response.EndpointResults || []).map((result) => (
+                          <span
+                            key={result.EndpointId}
+                            className={`service-state-badge ${result.Success ? 'success' : (result.OutcomeCode === 'Skipped' ? 'neutral' : 'danger')}`}
+                            title={result.ErrorMessage || ''}
+                          >
+                            {(result.EndpointName || result.EndpointId)}: {result.OutcomeCode}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={keepWarmRunning}
+                      title="Run a keep-warm pass now. A cold load can take several minutes."
+                      onClick={async () => {
+                        setKeepWarmRunning(true);
+                        try {
+                          setKeepWarmStatus(await api.runVirtualModelRunnerKeepWarm(selectedVmr.Id, selectedVmr.TenantId));
+                        } catch (err) {
+                          setError('Keep warm run failed: ' + err.message);
+                        } finally {
+                          setKeepWarmRunning(false);
+                        }
+                      }}
+                    >
+                      {keepWarmRunning ? 'Running...' : 'Run now'}
+                    </button>
+                  </>
+                ) : (
+                  <p className="no-items">Keep-warm status is unavailable.</p>
+                )}
               </div>
 
               <div className="detail-section">

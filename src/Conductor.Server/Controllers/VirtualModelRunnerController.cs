@@ -29,6 +29,7 @@ namespace Conductor.Server.Controllers
         private readonly RoutingDecisionService _RoutingDecisionService;
         private readonly ModelLoadService _ModelLoadService;
         private readonly EndpointRuntimeStatsService _RuntimeStatsService;
+        private readonly KeepWarmService _KeepWarmService;
 
         /// <summary>
         /// Instantiate the virtual model runner controller.
@@ -43,7 +44,8 @@ namespace Conductor.Server.Controllers
             ConfigurationValidationService validationService = null,
             RoutingDecisionService routingDecisionService = null,
             ModelLoadService modelLoadService = null,
-            EndpointRuntimeStatsService runtimeStatsService = null)
+            EndpointRuntimeStatsService runtimeStatsService = null,
+            KeepWarmService keepWarmService = null)
             : base(database, authService, serializer, logging)
         {
             _HealthCheckService = healthCheckService;
@@ -52,6 +54,7 @@ namespace Conductor.Server.Controllers
             _RoutingDecisionService = routingDecisionService;
             _ModelLoadService = modelLoadService;
             _RuntimeStatsService = runtimeStatsService;
+            _KeepWarmService = keepWarmService;
         }
 
         /// <summary>
@@ -330,6 +333,39 @@ namespace Conductor.Server.Controllers
                 request,
                 BuildRequestContext(auth),
                 token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Read keep-warm status for a virtual model runner.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID, or null for cross-tenant callers.</param>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <returns>Keep-warm status snapshot.</returns>
+        /// <exception cref="WebserverException">Thrown when keep-warm is unavailable or the runner is not found.</exception>
+        public async Task<KeepWarmStatus> GetKeepWarmStatus(string tenantId, string id)
+        {
+            if (_KeepWarmService == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "Keep warm is not available.");
+
+            VirtualModelRunner vmr = await Read(tenantId, id).ConfigureAwait(false);
+            return _KeepWarmService.GetStatus(vmr);
+        }
+
+        /// <summary>
+        /// Run a keep-warm pass for a virtual model runner now, regardless of its schedule or Enabled flag.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID, or null for cross-tenant callers.</param>
+        /// <param name="id">Virtual model runner ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Keep-warm status after the pass.</returns>
+        /// <exception cref="WebserverException">Thrown when keep-warm is unavailable or the runner is not found.</exception>
+        public async Task<KeepWarmStatus> RunKeepWarm(string tenantId, string id, CancellationToken token = default)
+        {
+            if (_KeepWarmService == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "Keep warm is not available.");
+
+            VirtualModelRunner vmr = await Read(tenantId, id).ConfigureAwait(false);
+            return await _KeepWarmService.RunNowAsync(vmr, token).ConfigureAwait(false);
         }
 
         /// <summary>

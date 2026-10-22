@@ -28,10 +28,12 @@ namespace Conductor.Server.Routing
             OllamaModelManagementService ollamaModelManagementService,
             RequestHistoryService requestHistoryService,
             VirtualModelRunnerReservationService virtualModelRunnerReservationService,
-            QosAdmissionService qosAdmissionService = null)
+            QosAdmissionService qosAdmissionService = null,
+            KeepWarmService keepWarmService = null)
         {
             App = app;
             QosAdmissionService = qosAdmissionService;
+            KeepWarmService = keepWarmService;
             Settings = settings;
             Logging = logging;
             Database = database;
@@ -61,7 +63,7 @@ namespace Conductor.Server.Routing
             QosTrafficClassController = new QosTrafficClassController(Database, AuthService, Serializer, Logging);
             QosRuntimeController = new QosRuntimeController(Database, AuthService, Serializer, Logging, QosAdmissionService, HealthCheckService, RoutingDecisionService);
             ModelAccessPolicyController = new ModelAccessPolicyController(Database, AuthService, Serializer, Logging, ModelAccessControlService);
-            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService, RuntimeStatsService);
+            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService, RuntimeStatsService, KeepWarmService);
             VirtualModelRunnerReservationController = new VirtualModelRunnerReservationController(Database, AuthService, Serializer, Logging, VirtualModelRunnerReservationService);
             AuthController = new AuthController(Database, AuthService, Serializer, Logging, Settings.AdminApiKeys);
             AdministratorController = new AdministratorController(Database, AuthService, Serializer, Logging);
@@ -130,6 +132,8 @@ namespace Conductor.Server.Routing
         internal QosRuntimeController QosRuntimeController { get; }
 
         internal QosAdmissionService QosAdmissionService { get; }
+
+        internal KeepWarmService KeepWarmService { get; }
 
         internal ModelAccessPolicyController ModelAccessPolicyController { get; }
 

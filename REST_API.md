@@ -467,6 +467,13 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
   "SessionTimeoutMs": 600000,
   "SessionMaxEntries": 10000,
   "RequestHistoryEnabled": true,
+  "KeepWarm": {                           // see Keep warm; disabled by default
+    "Enabled": false,
+    "Models": [],                         // empty = every active attached model definition
+    "IntervalMs": 300000,                 // 30000 to 86400000
+    "KeepAlive": "30m",                   // Ollama keep_alive; keep it longer than IntervalMs
+    "TimeoutMs": 300000                   // per warm-up load; 1000 to 1800000
+  },
   "Active": true,
   "Labels": [],
   "Tags": {},
@@ -1085,6 +1092,8 @@ Auth level: `Authenticated`
 | `POST` | `/v1.0/virtualmodelrunners/{id}/runtime-backoff/clear` | Clear transient runtime backoff for the VMR or one endpoint. Optional `tenantId` query. Body may include `EndpointId`. |
 | `POST` | `/v1.0/virtualmodelrunners/{id}/explain-routing` | Simulate routing for a representative request. Optional `tenantId` query. |
 | `POST` | `/v1.0/virtualmodelrunners/{id}/load-model` | Tenant-admin route to resolve VMR targets, then load or verify a model. Optional `tenantId` query. |
+| `GET` | `/v1.0/virtualmodelrunners/{id}/keep-warm` | Return keep-warm schedule and last-pass results (`KeepWarmStatus`). Optional `tenantId` query. |
+| `POST` | `/v1.0/virtualmodelrunners/{id}/keep-warm/run` | Tenant-admin route to run a keep-warm pass now, regardless of schedule or `Enabled`. Waits for the pass, which can take as long as a cold load. Optional `tenantId` query. |
 
 VMR health response fields include:
 
@@ -1189,7 +1198,7 @@ Stable outcome codes include `Loaded`, `AlreadyAvailable`, `Verified`, `Verified
 
 `TimedOut` means Conductor's `TimeoutMs` expired. `RunnerLoadTimeout` means the model runner itself gave up loading the model, for example Ollama's `timed out waiting for llama-server to start` after `OLLAMA_LOAD_TIMEOUT` (default 5 minutes). Raise the runner's load timeout or use a smaller model; raising Conductor's `TimeoutMs` alone does not help.
 
-To keep a large model warm before traffic arrives, call `load-model` with a long `KeepAlive` (for example `"KeepAlive": "24h"`) and a `TimeoutMs` that covers the cold load.
+To keep a large model warm continuously, enable [Keep warm](#keep-warm) on the VMR. For a one-off warm-up, call `load-model` with a long `KeepAlive` (for example `"KeepAlive": "24h"`) and a `TimeoutMs` that covers the cold load.
 
 Provider behavior:
 
@@ -1199,6 +1208,48 @@ Provider behavior:
 | vLLM | `GET /v1/models` metadata verification unless an explicit probe is requested. | `Verified` when the model is served. Explicit probes can warm tokenization or graph paths, but do not load arbitrary new weights. |
 | OpenAI | `GET /v1/models` metadata verification unless an explicit probe is requested. | `VerifiedRemote`; hosted OpenAI has no host-local load primitive. Explicit generation or embedding probes may be billable. |
 | Gemini | `GET /v1beta/models` metadata verification unless an explicit probe is requested. | `VerifiedRemote`; hosted Gemini has no host-local load primitive. Explicit generation or embedding probes may be billable. |
+
+### Keep warm
+
+A VMR with `KeepWarm.Enabled` keeps its models loaded on its eligible Ollama endpoints so clients do not wait
+for a cold load:
+
+- Every `KeepWarm.IntervalMs`, Conductor checks each model on each eligible endpoint (active, healthy, `Normal`
+  service state) with Ollama `/api/ps`. A resident model is reported as `AlreadyAvailable` and nothing is loaded.
+- A model that is not resident is loaded with `/api/generate`, `keep_alive` set to `KeepWarm.KeepAlive`, and
+  `KeepWarm.TimeoutMs` as the load timeout.
+- **A warm-up load takes one of the endpoint's `MaxParallelRequests` slots** for its duration, so client requests
+  queue behind it exactly as they would behind another request. If no slot is free, the endpoint is reported as
+  `Skipped` and retried at the next interval.
+- Passes run one at a time across the server, so warm-up loads never stack up on one GPU.
+- `KeepWarm.Models` lists model names; when empty, every active model definition attached to the VMR is used.
+- Non-Ollama endpoints are skipped. The reservation gate does not apply, since keep-warm serves no client.
+- Validation warns when keep-warm has no models, when no Ollama endpoint is attached, and when `KeepAlive` is not
+  longer than `IntervalMs` (the runner could unload the model between checks).
+- Each warm-up load must fit within the runner's own load timeout (Ollama `OLLAMA_LOAD_TIMEOUT`, default 5
+  minutes). A runner-side timeout is reported as `RunnerLoadTimeout`.
+
+`GET /v1.0/virtualmodelrunners/{id}/keep-warm` returns:
+
+```json
+{
+  "VirtualModelRunnerId": "vmr_123",
+  "VirtualModelRunnerName": "gpu-chat",
+  "Enabled": true,
+  "Running": false,
+  "IntervalMs": 300000,
+  "Models": ["qwen3.5:122b"],
+  "LastRunStartedUtc": "2026-10-22T17:06:44Z",
+  "LastRunCompletedUtc": "2026-10-22T17:06:48Z",
+  "NextRunUtc": "2026-10-22T17:11:48Z",
+  "LastRunSucceeded": true,
+  "LastResults": [ /* one ModelLoadResponse per model, with per-endpoint OutcomeCode */ ]
+}
+```
+
+`LastError` is present only when something failed. `LastRunSucceeded` is false only when an attempted endpoint failed. `Skipped` endpoints are listed in
+`LastResults` but are not failures. Status is held in memory and resets when the server restarts; the first pass
+after startup runs within one tick (15 seconds).
 
 ### Backup and restore
 

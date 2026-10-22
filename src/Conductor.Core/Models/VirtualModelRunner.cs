@@ -119,6 +119,27 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Keep-warm settings. Never null; null assigns default (disabled) settings.
+        /// </summary>
+        public KeepWarmSettings KeepWarm
+        {
+            get => _KeepWarm;
+            set => _KeepWarm = value ?? new KeepWarmSettings();
+        }
+
+        /// <summary>
+        /// JSON-serialized keep-warm settings for database storage.
+        /// </summary>
+        [JsonIgnore]
+        public string KeepWarmJson
+        {
+            get => _Serializer.SerializeJson(_KeepWarm ?? new KeepWarmSettings(), false);
+            set => _KeepWarm = String.IsNullOrEmpty(value)
+                ? new KeepWarmSettings()
+                : (_Serializer.DeserializeJson<KeepWarmSettings>(value) ?? new KeepWarmSettings());
+        }
+
+        /// <summary>
         /// JSON-serialized adaptive load-balancing settings for database storage.
         /// </summary>
         [JsonIgnore]
@@ -431,6 +452,7 @@ namespace Conductor.Core.Models
         private string _ModelRunnerEndpointIdsJson = "[]";
         private AdaptiveLoadBalancingSettings _AdaptiveLoadBalancing = new AdaptiveLoadBalancingSettings();
         private string _AdaptiveLoadBalancingJson = "{}";
+        private KeepWarmSettings _KeepWarm = new KeepWarmSettings();
         private List<EndpointGroup> _EndpointGroups = new List<EndpointGroup>();
         private string _EndpointGroupsJson = "[]";
         private List<string> _EndpointGroupIds = new List<string>();
@@ -512,6 +534,15 @@ namespace Conductor.Core.Models
                 if (!String.IsNullOrEmpty(adaptiveLoadBalancingJson))
                 {
                     obj.AdaptiveLoadBalancingJson = adaptiveLoadBalancingJson;
+                }
+            }
+
+            if (row.Table.Columns.Contains("keepwarm"))
+            {
+                string keepWarmJson = DataTableHelper.GetStringValue(row, "keepwarm");
+                if (!String.IsNullOrEmpty(keepWarmJson))
+                {
+                    obj.KeepWarmJson = keepWarmJson;
                 }
             }
 

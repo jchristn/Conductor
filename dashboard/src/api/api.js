@@ -725,6 +725,16 @@ class ConductorApi {
     return this.request('POST', `/v1.0/virtualmodelrunners/${id}/explain-routing${query}`, payload);
   }
 
+  async getVirtualModelRunnerKeepWarm(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/virtualmodelrunners/${id}/keep-warm${query}`);
+  }
+
+  async runVirtualModelRunnerKeepWarm(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('POST', `/v1.0/virtualmodelrunners/${id}/keep-warm/run${query}`, {});
+  }
+
   async loadVirtualModelRunnerModel(id, payload = {}, tenantId = null) {
     const query = tenantId ? `?tenantId=${tenantId}` : '';
     return this.request('POST', `/v1.0/virtualmodelrunners/${id}/load-model${query}`, payload);

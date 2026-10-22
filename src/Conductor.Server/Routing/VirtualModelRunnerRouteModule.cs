@@ -80,6 +80,40 @@ namespace Conductor.Server.Routing
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);
 
+            _App.Get("/v1.0/virtualmodelrunners/{id}/keep-warm", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.GetKeepWarmStatus(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Get keep-warm status")
+                .WithDescription("Return the virtual model runner's keep-warm schedule and the per-model, per-endpoint results of the last pass.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithResponse(200, Api.JsonResponse<KeepWarmStatus>("Keep-warm status"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Post<object>("/v1.0/virtualmodelrunners/{id}/keep-warm/run", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await vmrController.RunKeepWarm(tenantId, req.Parameters["id"]);
+            },
+            api => api
+                .WithTag("Virtual Model Runners")
+                .WithSummary("Run keep-warm now")
+                .WithDescription("Run a keep-warm pass immediately, regardless of schedule or the Enabled flag, and return the resulting status. Waits for the pass to finish, which can take as long as a cold model load.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The virtual model runner ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithResponse(200, Api.JsonResponse<KeepWarmStatus>("Keep-warm status after the pass"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
             _App.Get("/v1.0/virtualmodelrunners/{id}", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));

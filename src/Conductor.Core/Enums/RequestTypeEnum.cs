@@ -714,6 +714,16 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// Read JSON metrics summary.
         /// </summary>
-        ReadObservabilityMetricsSummary
+        ReadObservabilityMetricsSummary,
+
+        /// <summary>
+        /// Read keep-warm status for a virtual model runner.
+        /// </summary>
+        ReadVirtualModelRunnerKeepWarm,
+
+        /// <summary>
+        /// Run a keep-warm pass for a virtual model runner immediately.
+        /// </summary>
+        RunVirtualModelRunnerKeepWarm
     }
 }

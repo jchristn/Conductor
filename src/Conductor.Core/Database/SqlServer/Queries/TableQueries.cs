@@ -528,6 +528,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 loadbalancingmode INT NOT NULL DEFAULT 0,
                 modelrunnerendpointids NVARCHAR(MAX),
                 adaptiveloadbalancing NVARCHAR(MAX),
+                keepwarm NVARCHAR(MAX),
                 endpointgroups NVARCHAR(MAX),
                 endpointgroupids NVARCHAR(MAX),
                 modelconfigurationids NVARCHAR(MAX),
@@ -888,6 +889,13 @@ namespace Conductor.Core.Database.SqlServer.Queries
         /// </summary>
         public static readonly string AddAdaptiveLoadBalancingColumn = @"
             ALTER TABLE virtualmodelrunners ADD adaptiveloadbalancing NVARCHAR(MAX);
+        ";
+
+        /// <summary>
+        /// Add keepwarm column to virtualmodelrunners table (migration).
+        /// </summary>
+        public static readonly string AddKeepWarmColumn = @"
+            ALTER TABLE virtualmodelrunners ADD keepwarm NVARCHAR(MAX);
         ";
 
         /// <summary>

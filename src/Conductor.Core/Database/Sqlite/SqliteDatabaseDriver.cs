@@ -243,6 +243,7 @@ namespace Conductor.Core.Database.Sqlite
             await EnsureColumnAsync("virtualmodelrunners", "qosprofileid", TableQueries.AddQosProfileIdColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "modelconfigurationmappings", "ALTER TABLE virtualmodelrunners ADD COLUMN modelconfigurationmappings TEXT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "adaptiveloadbalancing", TableQueries.AddAdaptiveLoadBalancingColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "keepwarm", TableQueries.AddKeepWarmColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroupids", TableQueries.AddEndpointGroupIdsColumn, token).ConfigureAwait(false);
 
