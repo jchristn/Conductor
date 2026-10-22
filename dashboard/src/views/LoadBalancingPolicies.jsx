@@ -488,6 +488,7 @@ function LoadBalancingPolicies() {
   const columns = [
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       tooltip: 'Unique identifier for this load-balancing policy',
       width: '340px',

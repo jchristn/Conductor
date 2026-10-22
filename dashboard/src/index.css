@@ -557,15 +557,6 @@ body {
   position: relative;
 }
 
-/* Toolbar above the table (outside the overflow container so its dropdown is not clipped). */
-.data-table-toolbar {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  margin-bottom: 8px;
-  min-height: 32px;
-}
-
 .column-selector {
   position: relative;
 }
@@ -592,7 +583,7 @@ body {
 .column-selector-dropdown {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  right: 0;
   min-width: 200px;
   max-height: 320px;
   display: flex;
@@ -614,6 +605,11 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
+}
+
+.column-selector-actions {
+  display: inline-flex;
+  gap: 10px;
 }
 
 .column-selector-reset {
@@ -680,11 +676,17 @@ body {
   line-height: 1.1;
 }
 
+/* The bordered frame does not scroll, so the pagination bar (and its Columns dropdown) stays put and
+   is never clipped; only the table itself scrolls horizontally when it has to. */
 .data-table-container {
   background: var(--card-bg);
   border-radius: 8px;
   border: 1px solid var(--border-color);
+}
+
+.data-table-scroll {
   overflow-x: auto;
+  border-radius: 0 0 8px 8px;
 }
 
 .data-table {
@@ -872,11 +874,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
   position: relative;
-  z-index: 0;
+  z-index: 1;
   background: var(--card-bg);
+  border-radius: 8px 8px 0 0;
 }
 
 .pagination-info {
@@ -887,7 +892,30 @@ body {
 .pagination-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+/* The bar's generic button styling must not reach the links inside the Columns dropdown. */
+.pagination-controls .column-selector-dropdown button.column-selector-reset {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+}
+
+.column-selector-header > span:first-child {
+  white-space: nowrap;
+}
+
+.column-selector-dropdown {
+  min-width: 240px;
+}
+
+.pagination-controls .column-selector-trigger {
+  padding: 6px 10px;
+  border-color: var(--input-border);
+  border-radius: 4px;
 }
 
 .pagination-controls select {
@@ -2444,6 +2472,11 @@ body {
   background: var(--card-bg);
   border-radius: 8px;
   border: 1px solid var(--border-color);
+}
+
+.data-table-container .data-table-loading {
+  border: none;
+  border-radius: 0 0 8px 8px;
 }
 
 .spinner {
@@ -4995,8 +5028,16 @@ input.file-input-hidden {
   margin-top: 16px;
 }
 
-.analytics-breakdown-table {
-  min-width: 1120px;
+.analytics-nowrap {
+  white-space: nowrap;
+}
+
+.analytics-cell-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .analytics-breakdown-identity {

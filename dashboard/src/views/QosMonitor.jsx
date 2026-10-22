@@ -44,6 +44,18 @@ function formatUtcDate(value) {
   return new Date(ms).toLocaleString();
 }
 
+// Compact timestamp for narrow columns: the time alone when it is today, otherwise a short date and time.
+// The full timestamp is still available on hover.
+export function formatRecentUtc(value, now = new Date()) {
+  const ms = parseUtcMs(value);
+  if (Number.isNaN(ms)) return '-';
+  const date = new Date(ms);
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 function sumClasses(snapshot, key) {
   return (snapshot?.Classes || []).reduce((sum, cls) => sum + (cls[key] || 0), 0);
 }
@@ -385,9 +397,7 @@ function QosMonitor() {
               <th>Class</th>
               <th title="Requests of this class waiting in the queue now">Waiting</th>
               <th title="Requests admitted">Admitted</th>
-              <th title="Requests rejected because the queue was full">Rejected</th>
-              <th title="Requests that waited longer than MaxQueueWaitMs">Timed Out</th>
-              <th title="Requests the client abandoned while waiting">Aborted</th>
+              <th title="Requests rejected because the queue was full / that waited longer than MaxQueueWaitMs / that the client abandoned while waiting">Rejected / Timed Out / Aborted</th>
               <th title="Admitted requests that then timed out waiting for a free endpoint slot">Slot Timeouts</th>
               <th title="Average / 95th percentile / maximum queue wait">Avg / P95 / Max Wait</th>
               <th title="Most recent admission">Last Admitted</th>
@@ -396,7 +406,7 @@ function QosMonitor() {
           </thead>
           <tbody>
             {(selected?.Classes || []).length === 0 ? (
-              <tr><td colSpan="10" className="detail-table-empty-cell">No traffic classes have seen requests since the server started.</td></tr>
+              <tr><td colSpan="8" className="detail-table-empty-cell">No traffic classes have seen requests since the server started.</td></tr>
             ) : selected.Classes.map((cls) => (
               <tr key={cls.ClassName}>
                 <td className="detail-table-title-cell">
@@ -407,13 +417,17 @@ function QosMonitor() {
                 </td>
                 <td className={cls.Waiting > 0 ? 'qos-monitor-emphasis' : ''}>{formatNumber(cls.Waiting)}</td>
                 <td>{formatNumber(cls.Admitted)}</td>
-                <td className={cls.Rejected > 0 ? 'qos-monitor-failed' : ''}>{formatNumber(cls.Rejected)}</td>
-                <td className={cls.TimedOut > 0 ? 'qos-monitor-failed' : ''}>{formatNumber(cls.TimedOut)}</td>
-                <td>{formatNumber(cls.Aborted)}</td>
+                <td className="qos-monitor-nowrap">
+                  <span className={cls.Rejected > 0 ? 'qos-monitor-failed' : ''}>{formatNumber(cls.Rejected)}</span>
+                  {' / '}
+                  <span className={cls.TimedOut > 0 ? 'qos-monitor-failed' : ''}>{formatNumber(cls.TimedOut)}</span>
+                  {' / '}
+                  <span>{formatNumber(cls.Aborted)}</span>
+                </td>
                 <td className={cls.EndpointSlotTimeouts > 0 ? 'qos-monitor-failed' : ''}>{formatNumber(cls.EndpointSlotTimeouts)}</td>
                 <td className="qos-monitor-nowrap">{formatWaitMs(cls.AverageWaitMs)} / {formatWaitMs(cls.P95WaitMs)} / {formatWaitMs(cls.MaxWaitMs)}</td>
-                <td className="qos-monitor-nowrap">{formatUtcDate(cls.LastAdmittedUtc)}</td>
-                <td className="qos-monitor-nowrap">{formatUtcDate(cls.LastRejectedUtc)}</td>
+                <td className="qos-monitor-nowrap" title={formatUtcDate(cls.LastAdmittedUtc)}>{formatRecentUtc(cls.LastAdmittedUtc)}</td>
+                <td className="qos-monitor-nowrap" title={formatUtcDate(cls.LastRejectedUtc)}>{formatRecentUtc(cls.LastRejectedUtc)}</td>
               </tr>
             ))}
           </tbody>

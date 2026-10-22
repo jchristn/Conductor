@@ -124,7 +124,7 @@ export default function QosTrafficClasses() {
 
   const columns = useMemo(() => ([
     { key: 'Name', label: 'Name', tooltip: 'Class name, unique per tenant' },
-    { key: 'Id', label: 'ID', width: '300px', render: (row) => <CopyableId value={row.Id} /> },
+    { key: 'Id', defaultHidden: true, label: 'ID', width: '300px', render: (row) => <CopyableId value={row.Id} /> },
     { key: 'TenantId', label: 'Tenant', width: '180px', render: (row) => tenantName(row.TenantId) },
     { key: 'Tier', label: 'Tier', width: '160px', render: (row) => TIER_LABELS[row.Tier] || row.Tier || 'Default' },
     {

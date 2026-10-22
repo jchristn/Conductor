@@ -301,7 +301,7 @@ export default function QosProfiles() {
     { key: 'Name', label: 'Name', render: (row) => (
       <span>{row.Name}{row.IsDefault ? <span className="status-badge" style={{ marginLeft: 8 }}>default</span> : null}</span>
     ) },
-    { key: 'Id', label: 'ID', width: '300px', render: (row) => <CopyableId value={row.Id} /> },
+    { key: 'Id', defaultHidden: true, label: 'ID', width: '300px', render: (row) => <CopyableId value={row.Id} /> },
     { key: 'TenantId', label: 'Tenant', width: '180px', render: (row) => tenantName(row.TenantId) },
     { key: 'TailNode', label: 'Tail', width: '160px', render: (row) => row.TailNode },
     { key: 'Active', label: 'Active', width: '120px', render: (row) => <StatusIndicator active={row.Active} /> },

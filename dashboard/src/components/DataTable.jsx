@@ -2,7 +2,7 @@ import { controlHelp } from '../utils/controlHelp';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useHubPanel } from '../context/HubPanelContext';
-import { PAGE_SIZE_OPTIONS, readPageSizePreference, writePreference } from '../utils/persistedPreferences';
+import { PAGE_SIZE_OPTIONS, readPageSizePreference, readPreference, writePreference } from '../utils/persistedPreferences';
 
 const INTERACTIVE_ROW_CLICK_SELECTOR = [
   'button',
@@ -16,6 +16,27 @@ const INTERACTIVE_ROW_CLICK_SELECTOR = [
   '[data-row-click-ignore="true"]'
 ].join(', ');
 
+function defaultHiddenKeys(columns) {
+  return columns.filter((col) => col.defaultHidden && !col.isAction).map((col) => col.key);
+}
+
+// Restores a remembered column choice. Keys that no longer exist are ignored, so renamed or removed
+// columns cannot hide anything, and a choice that would hide every selectable column is discarded.
+function readHiddenColumns(storageKey, columns) {
+  const fallback = new Set(defaultHiddenKeys(columns));
+  const stored = readPreference(storageKey);
+  if (!stored) return fallback;
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return fallback;
+    const selectableKeys = columns.filter((col) => !col.isAction && col.selectable !== false && col.label !== '').map((col) => col.key);
+    const hidden = new Set(parsed.filter((key) => selectableKeys.includes(key)));
+    return selectableKeys.some((key) => !hidden.has(key)) ? hidden : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function DataTable({
   data = [],
   columns = [],
@@ -23,7 +44,9 @@ function DataTable({
   pageSize: defaultPageSize = 10,
   onRowClick = null,
   hidePagination = false,
-  pageSizeStorageKey = null
+  pageSizeStorageKey = null,
+  paginationInfo = null,
+  paginationControls = null
 }) {
   const location = useLocation();
   const { storagePath } = useHubPanel();
@@ -35,17 +58,17 @@ function DataTable({
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [filters, setFilters] = useState({});
   const [pageInput, setPageInput] = useState('1');
+  // Column choices are remembered the same way as rows-per-page.
+  const columnsStorageKey = `conductor_columns:${pageSizeStorageKey || storagePath || location.pathname}`;
   // Columns flagged `defaultHidden` start hidden but remain toggleable in the Columns selector.
-  const [hiddenColumns, setHiddenColumns] = useState(
-    () => new Set(columns.filter((col) => col.defaultHidden && !col.isAction).map((col) => col.key))
-  );
+  const [hiddenColumns, setHiddenColumns] = useState(() => readHiddenColumns(columnsStorageKey, columns));
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
   const columnsMenuRef = useRef(null);
 
   // Columns the user is allowed to hide (action columns always stay visible so row actions
-  // remain reachable; a column can opt out with `selectable: false`).
+  // remain reachable; unlabeled utility columns and columns with `selectable: false` opt out).
   const selectableColumns = useMemo(
-    () => columns.filter((col) => !col.isAction && col.selectable !== false),
+    () => columns.filter((col) => !col.isAction && col.selectable !== false && col.label !== ''),
     [columns]
   );
 
@@ -65,22 +88,28 @@ function DataTable({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [columnsMenuOpen]);
 
-  const toggleColumn = (key) => {
-    setHiddenColumns((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        // Keep at least one selectable column visible.
-        const remainingVisible = selectableColumns.filter((col) => !next.has(col.key) && col.key !== key);
-        if (remainingVisible.length === 0) return prev;
-        next.add(key);
-      }
-      return next;
-    });
+  const applyHiddenColumns = (next) => {
+    setHiddenColumns(next);
+    const defaults = defaultHiddenKeys(columns);
+    const matchesDefaults = next.size === defaults.length && defaults.every((key) => next.has(key));
+    writePreference(columnsStorageKey, matchesDefaults ? null : JSON.stringify([...next]));
   };
 
-  const showAllColumns = () => setHiddenColumns(new Set());
+  const toggleColumn = (key) => {
+    const next = new Set(hiddenColumns);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      // Keep at least one selectable column visible.
+      const remainingVisible = selectableColumns.filter((col) => !next.has(col.key) && col.key !== key);
+      if (remainingVisible.length === 0) return;
+      next.add(key);
+    }
+    applyHiddenColumns(next);
+  };
+
+  const resetColumns = () => applyHiddenColumns(new Set(defaultHiddenKeys(columns)));
+  const showAllColumns = () => applyHiddenColumns(new Set());
 
   const filteredAndSortedData = useMemo(() => {
     let result = [...data];
@@ -202,174 +231,188 @@ function DataTable({
     onRowClick(item);
   };
 
-  if (loading) {
-    return (
-      <div className="data-table-loading">
-        <div className="spinner"></div>
-        <span>Loading...</span>
-      </div>
-    );
-  }
-
   const hiddenCount = selectableColumns.filter((col) => hiddenColumns.has(col.key)).length;
+  const defaultHidden = defaultHiddenKeys(columns);
+  const atDefaults = hiddenColumns.size === defaultHidden.length && defaultHidden.every((key) => hiddenColumns.has(key));
+
+  const columnSelector = selectableColumns.length > 0 && (
+    <div className="column-selector" ref={columnsMenuRef}>
+      <button
+        type="button"
+        className="column-selector-trigger"
+        onClick={() => setColumnsMenuOpen((open) => !open)}
+        aria-haspopup="true"
+        aria-expanded={columnsMenuOpen}
+        title="Choose which columns to display. Your choice is remembered for this table."
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+          <line x1="6" y1="2.5" x2="6" y2="13.5" />
+          <line x1="10.5" y1="2.5" x2="10.5" y2="13.5" />
+        </svg>
+        Columns{hiddenCount > 0 ? ` (${selectableColumns.length - hiddenCount}/${selectableColumns.length})` : ''}
+      </button>
+      {columnsMenuOpen && (
+        <div className="column-selector-dropdown">
+          <div className="column-selector-header">
+            <span>Show columns</span>
+            <span className="column-selector-actions">
+              <button type="button" className="column-selector-reset" onClick={resetColumns} disabled={atDefaults} title="Restore this table's default columns">
+                Defaults
+              </button>
+              <button type="button" className="column-selector-reset" onClick={showAllColumns} disabled={hiddenCount === 0} title="Show every column">
+                Show all
+              </button>
+            </span>
+          </div>
+          <div className="column-selector-list">
+            {selectableColumns.map((col) => (
+              <label key={col.key} className="column-selector-item">
+                <input
+                  type="checkbox"
+                  checked={!hiddenColumns.has(col.key)}
+                  onChange={() => toggleColumn(col.key)}
+                />
+                <span>{typeof col.label === 'string' && col.label ? col.label : col.key}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="data-table-wrapper">
-      <div className="data-table-toolbar">
-        {selectableColumns.length > 0 && (
-          <div className="column-selector" ref={columnsMenuRef}>
-            <button
-              type="button"
-              className="column-selector-trigger"
-              onClick={() => setColumnsMenuOpen((open) => !open)}
-              aria-haspopup="true"
-              aria-expanded={columnsMenuOpen}
-              title="Choose which columns to display"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
-                <line x1="6" y1="2.5" x2="6" y2="13.5" />
-                <line x1="10.5" y1="2.5" x2="10.5" y2="13.5" />
-              </svg>
-              Columns{hiddenCount > 0 ? ` (${selectableColumns.length - hiddenCount}/${selectableColumns.length})` : ''}
-            </button>
-            {columnsMenuOpen && (
-              <div className="column-selector-dropdown">
-                <div className="column-selector-header">
-                  <span>Show columns</span>
-                  <button type="button" className="column-selector-reset" onClick={showAllColumns} disabled={hiddenCount === 0}>
-                    Reset
-                  </button>
-                </div>
-                <div className="column-selector-list">
-                  {selectableColumns.map((col) => (
-                    <label key={col.key} className="column-selector-item">
-                      <input
-                        type="checkbox"
-                        checked={!hiddenColumns.has(col.key)}
-                        onChange={() => toggleColumn(col.key)}
-                      />
-                      <span>{typeof col.label === 'string' && col.label ? col.label : col.key}</span>
-                    </label>
+      <div className="data-table-container">
+        <div className="pagination">
+          <div className="pagination-info">
+            {hidePagination
+              ? (paginationInfo || `${filteredAndSortedData.length} ${filteredAndSortedData.length === 1 ? 'entry' : 'entries'}`)
+              : (
+                <>
+                  Showing {filteredAndSortedData.length === 0 ? 0 : startIndex + 1} to{' '}
+                  {endIndex} of {filteredAndSortedData.length} entries
+                </>
+              )}
+          </div>
+
+          <div className="pagination-controls">
+            {columnSelector}
+            {hidePagination ? paginationControls : (
+              <>
+                <select aria-label="Rows per page" title="Choose how many filtered rows appear on each page."
+                  value={pageSize}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setPageSize(nextSize);
+                    writePreference(storageKey, nextSize);
+                    setCurrentPage(0);
+                    setPageInput('1');
+                  }}
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
                   ))}
-                </div>
-              </div>
+                </select>
+
+                <button onClick={() => goToPage(0)} disabled={currentPage === 0}>
+                  First
+                </button>
+                <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
+                  Prev
+                </button>
+
+                <span className="page-input-container">
+                  Page{' '}
+                  <input
+                    type="text"
+                    value={pageInput}
+                    onChange={handlePageInputChange}
+                    onKeyDown={handlePageInputSubmit}
+                    className="page-input" aria-label="Jump to page" title="Enter a page number to jump within the current filtered results."
+                  />{' '}
+                  of {totalPages}
+                </span>
+
+                <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
+                  Next
+                </button>
+                <button onClick={() => goToPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
+                  Last
+                </button>
+              </>
             )}
           </div>
-        )}
-      </div>
+        </div>
 
-      <div className="data-table-container">
-        {!hidePagination && (
-          <div className="pagination">
-            <div className="pagination-info">
-              Showing {filteredAndSortedData.length === 0 ? 0 : startIndex + 1} to{' '}
-              {endIndex} of {filteredAndSortedData.length} entries
-            </div>
-
-            <div className="pagination-controls">
-              <select aria-label="Rows per page" title="Choose how many filtered rows appear on each page."
-                value={pageSize}
-                onChange={(e) => {
-                  const nextSize = Number(e.target.value);
-                  setPageSize(nextSize);
-                  writePreference(storageKey, nextSize);
-                  setCurrentPage(0);
-                  setPageInput('1');
-                }}
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-
-              <button onClick={() => goToPage(0)} disabled={currentPage === 0}>
-                First
-              </button>
-              <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 0}>
-                Prev
-              </button>
-
-              <span className="page-input-container">
-                Page{' '}
-                <input
-                  type="text"
-                  value={pageInput}
-                  onChange={handlePageInputChange}
-                  onKeyDown={handlePageInputSubmit}
-                  className="page-input" aria-label="Jump to page" title="Enter a page number to jump within the current filtered results."
-                />{' '}
-                of {totalPages}
-              </span>
-
-              <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages - 1}>
-                Next
-              </button>
-              <button onClick={() => goToPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>
-                Last
-              </button>
-            </div>
+        {loading ? (
+          <div className="data-table-loading">
+            <div className="spinner"></div>
+            <span>Loading...</span>
           </div>
-        )}
-
-        <table className="data-table">
-          <thead>
-            <tr>
-              {visibleColumns.map((col) => (
-                <th
-                  key={col.key}
-                  onClick={() => handleSort(col.key)}
-                  className={col.sortable !== false ? 'sortable' : ''}
-                  style={col.width ? { width: col.width } : {}}
-                  title={col.tooltip || `${controlHelp(col.key) || controlHelp(col.label) || `Recorded ${col.label} for this resource.`}${col.sortable !== false ? ' Click to sort; click again to reverse the order.' : ''}`}
-                >
-                  <div className="th-content">
-                    <span>{col.headerRender ? col.headerRender() : col.label}</span>
-                    {col.sortable !== false && getSortIcon(col.key)}
-                  </div>
-                </th>
-              ))}
-            </tr>
-            <tr className="filter-row">
-              {visibleColumns.map((col) => (
-                <th key={`filter-${col.key}`} title={`Filter the ${col.label} column without changing other column filters.`}>
-                  {col.filterable !== false && !col.isAction && (
-                    <input
-                      type="text"
-                      placeholder="Filter..."
-                      title={`Show rows whose ${col.label} matches the entered text; clear to remove this column filter.`}
-                      value={filters[col.key] || ''}
-                      onChange={(e) => handleFilterChange(col.key, e.target.value)}
-                    />
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedData.length === 0 ? (
-              <tr>
-                <td colSpan={visibleColumns.length} className="no-data">
-                  No data available
-                </td>
-              </tr>
-            ) : (
-              paginatedData.map((item, index) => (
-                <tr
-                  key={item.Id || index}
-                  onClick={(event) => handleRowClick(event, item)}
-                  className={onRowClick ? 'clickable' : ''}
-                >
+        ) : (
+          <div className="data-table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
                   {visibleColumns.map((col) => (
-                    <td key={col.key}>
-                      {col.render ? col.render(item) : item[col.key]}
-                    </td>
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className={col.sortable !== false ? 'sortable' : ''}
+                      style={col.width ? { width: col.width } : {}}
+                      title={col.tooltip || `${controlHelp(col.key) || controlHelp(col.label) || `Recorded ${col.label} for this resource.`}${col.sortable !== false ? ' Click to sort; click again to reverse the order.' : ''}`}
+                    >
+                      <div className="th-content">
+                        <span>{col.headerRender ? col.headerRender() : col.label}</span>
+                        {col.sortable !== false && getSortIcon(col.key)}
+                      </div>
+                    </th>
                   ))}
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                <tr className="filter-row">
+                  {visibleColumns.map((col) => (
+                    <th key={`filter-${col.key}`} title={`Filter the ${col.label} column without changing other column filters.`}>
+                      {col.filterable !== false && !col.isAction && (
+                        <input
+                          type="text"
+                          placeholder="Filter..."
+                          title={`Show rows whose ${col.label} matches the entered text; clear to remove this column filter.`}
+                          value={filters[col.key] || ''}
+                          onChange={(e) => handleFilterChange(col.key, e.target.value)}
+                        />
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedData.length === 0 ? (
+                  <tr>
+                    <td colSpan={visibleColumns.length} className="no-data">
+                      No data available
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedData.map((item, index) => (
+                    <tr
+                      key={item.Id || index}
+                      onClick={(event) => handleRowClick(event, item)}
+                      className={onRowClick ? 'clickable' : ''}
+                    >
+                      {visibleColumns.map((col) => (
+                        <td key={col.key}>
+                          {col.render ? col.render(item) : item[col.key]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -189,6 +189,7 @@ function EndpointGroups() {
   const columns = [
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       width: '340px',
       render: (group) => (

@@ -677,6 +677,7 @@ function ModelRunnerEndpoints() {
   const columns = [
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       tooltip: 'Unique identifier for this endpoint',
       width: '340px',
@@ -706,6 +707,7 @@ function ModelRunnerEndpoints() {
     },
     {
       key: 'RigMonitor',
+      defaultHidden: true,
       label: 'RigMonitor',
       tooltip: 'Whether this endpoint is configured to collect RigMonitor telemetry during health checks',
       width: '120px',
@@ -790,6 +792,7 @@ function ModelRunnerEndpoints() {
     },
     {
       key: 'Uptime',
+      defaultHidden: true,
       label: 'Uptime',
       tooltip: 'Percentage of time this endpoint has been healthy since monitoring started',
       width: '72px',

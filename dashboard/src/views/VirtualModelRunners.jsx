@@ -798,6 +798,7 @@ function VirtualModelRunners() {
   const columns = [
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       tooltip: 'Unique identifier for this virtual model runner',
       width: '340px',
@@ -833,6 +834,7 @@ function VirtualModelRunners() {
     },
     {
       key: 'LoadBalancingMode',
+      defaultHidden: true,
       label: 'Load Balancing',
       tooltip: 'How requests are distributed across endpoints. Session affinity, if enabled, pins clients to specific endpoints.',
       width: '220px',
@@ -852,6 +854,7 @@ function VirtualModelRunners() {
     },
     {
       key: 'ModelAccessPolicyId',
+      defaultHidden: true,
       label: 'Model Access',
       tooltip: 'Model access policy attached to this VMR',
       width: '180px',
@@ -864,6 +867,7 @@ function VirtualModelRunners() {
     },
     {
       key: 'ReservationState',
+      defaultHidden: true,
       label: 'Reservation',
       tooltip: 'Current reservation state for this VMR',
       width: '130px',
@@ -883,6 +887,7 @@ function VirtualModelRunners() {
     },
       {
         key: 'RequestHistoryEnabled',
+        defaultHidden: true,
         label: 'History',
         tooltip: 'Whether request history capture is enabled for this route',
         width: '100px',

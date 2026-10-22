@@ -390,6 +390,7 @@ function Reservations() {
     },
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       width: '340px',
       render: (item) => (
@@ -405,6 +406,7 @@ function Reservations() {
     },
     {
       key: 'TenantId',
+      defaultHidden: true,
       label: 'Tenant',
       render: (item) => tenantsById[item.TenantId]?.Name || item.TenantId
     },
@@ -438,6 +440,7 @@ function Reservations() {
     },
     {
       key: 'Active',
+      defaultHidden: true,
       label: 'Enabled',
       width: '92px',
       render: (item) => <StatusIndicator active={item.Active} />

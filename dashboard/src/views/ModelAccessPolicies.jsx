@@ -375,6 +375,7 @@ function ModelAccessPolicies() {
   const columns = [
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       width: '340px',
       render: (item) => <CopyableId value={item.Id} />

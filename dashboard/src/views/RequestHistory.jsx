@@ -608,6 +608,7 @@ function RequestHistory() {
     {
       key: 'selection',
       label: '',
+      selectable: false,
       tooltip: 'Select request history entries on this page',
       width: '44px',
       sortable: false,
@@ -636,6 +637,7 @@ function RequestHistory() {
     },
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       tooltip: 'Unique identifier for this request history entry',
       width: '340px',
@@ -645,11 +647,12 @@ function RequestHistory() {
       key: 'CreatedUtc',
       label: 'Time',
       tooltip: 'When the request was received',
-      width: '180px',
+      width: '200px',
       render: (item) => formatDate(item.CreatedUtc)
     },
     {
       key: 'HttpMethod',
+      defaultHidden: true,
       label: 'Method',
       tooltip: 'HTTP method used',
       width: '80px'
@@ -745,6 +748,7 @@ function RequestHistory() {
     },
     {
       key: 'ModelAccessDecision',
+      defaultHidden: true,
       label: 'Access',
       tooltip: 'Model access policy decision recorded for this request',
       width: '110px',
@@ -759,6 +763,7 @@ function RequestHistory() {
     },
     {
       key: 'RequestorSourceIp',
+      defaultHidden: true,
       label: 'Source IP',
       tooltip: 'IP address of the requestor',
       width: '130px'
@@ -1114,77 +1119,84 @@ function RequestHistory() {
         )}
       </div>
 
-      <div className="pagination">
-        <div className="pagination-info">
-          Showing {entries.length === 0 ? 0 : ((page - 1) * pageSize) + 1} to{' '}
-          {Math.min(page * pageSize, totalCount)} of {totalCount} entries
-        </div>
-
-        <div className="pagination-controls">
-          {selectedCount > 0 && (
-            <button
-              className="btn-icon request-history-selected-delete"
-              onClick={() => setShowSelectedDeleteConfirm(true)}
-              title={`Delete ${selectedCount} selected request history ${selectedCount === 1 ? 'entry' : 'entries'}`}
-            >
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </button>
-          )}
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              const nextSize = Number(e.target.value);
-              setPageSize(nextSize);
-              writePreference(PAGE_SIZE_STORAGE_KEY, nextSize);
-              setPage(1);
-              setPageInput('1');
-            }}
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
-
-          <button onClick={() => { setPage(1); setPageInput('1'); }} disabled={page <= 1}>
-            First
-          </button>
-          <button onClick={() => { setPage(p => Math.max(1, p - 1)); setPageInput(String(Math.max(1, page - 1))); }} disabled={page <= 1}>
-            Prev
-          </button>
-
-          <span className="page-input-container">
-            Page{' '}
-            <input
-              type="text"
-              value={pageInput}
-              onChange={(e) => setPageInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const pageNum = parseInt(pageInput, 10);
-                  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                    setPage(pageNum);
-                  } else {
-                    setPageInput(String(page));
-                  }
-                }
+      <DataTable
+        data={entries}
+        columns={columns}
+        loading={loading}
+        pageSize={pageSize}
+        hidePagination={true}
+        onRowClick={handleViewDetail}
+        paginationInfo={(
+          <>
+            Showing {entries.length === 0 ? 0 : ((page - 1) * pageSize) + 1} to{' '}
+            {Math.min(page * pageSize, totalCount)} of {totalCount} entries
+          </>
+        )}
+        paginationControls={(
+          <>
+            {selectedCount > 0 && (
+              <button
+                className="btn-icon request-history-selected-delete"
+                onClick={() => setShowSelectedDeleteConfirm(true)}
+                title={`Delete ${selectedCount} selected request history ${selectedCount === 1 ? 'entry' : 'entries'}`}
+              >
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const nextSize = Number(e.target.value);
+                setPageSize(nextSize);
+                writePreference(PAGE_SIZE_STORAGE_KEY, nextSize);
+                setPage(1);
+                setPageInput('1');
               }}
-              className="page-input"
-            />{' '}
-            of {totalPages}
-          </span>
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
 
-          <button onClick={() => { setPage(p => Math.min(totalPages, p + 1)); setPageInput(String(Math.min(totalPages, page + 1))); }} disabled={page >= totalPages}>
-            Next
-          </button>
-          <button onClick={() => { setPage(totalPages); setPageInput(String(totalPages)); }} disabled={page >= totalPages}>
-            Last
-          </button>
-        </div>
-      </div>
+            <button onClick={() => { setPage(1); setPageInput('1'); }} disabled={page <= 1}>
+              First
+            </button>
+            <button onClick={() => { setPage(p => Math.max(1, p - 1)); setPageInput(String(Math.max(1, page - 1))); }} disabled={page <= 1}>
+              Prev
+            </button>
 
-      <DataTable data={entries} columns={columns} loading={loading} pageSize={pageSize} hidePagination={true} onRowClick={handleViewDetail} />
+            <span className="page-input-container">
+              Page{' '}
+              <input
+                type="text"
+                value={pageInput}
+                onChange={(e) => setPageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const pageNum = parseInt(pageInput, 10);
+                    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                      setPage(pageNum);
+                    } else {
+                      setPageInput(String(page));
+                    }
+                  }
+                }}
+                className="page-input"
+              />{' '}
+              of {totalPages}
+            </span>
+
+            <button onClick={() => { setPage(p => Math.min(totalPages, p + 1)); setPageInput(String(Math.min(totalPages, page + 1))); }} disabled={page >= totalPages}>
+              Next
+            </button>
+            <button onClick={() => { setPage(totalPages); setPageInput(String(totalPages)); }} disabled={page >= totalPages}>
+              Last
+            </button>
+          </>
+        )}
+      />
 
       <Modal
         isOpen={Boolean(requestHistoryIssue)}

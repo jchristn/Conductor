@@ -198,6 +198,7 @@ function ModelDefinitions() {
   const columns = [
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       tooltip: 'Unique identifier for this model definition',
       width: '340px',
@@ -250,7 +251,7 @@ function ModelDefinitions() {
       key: 'CreatedUtc',
       label: 'Created',
       tooltip: 'When this model definition was created',
-      width: '180px',
+      width: '200px',
       render: (item) => formatDate(item.CreatedUtc)
     },
     {

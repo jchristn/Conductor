@@ -153,7 +153,7 @@ function Tenants() {
       key: 'CreatedUtc',
       label: 'Created',
       tooltip: 'When this tenant was first created',
-      width: '180px',
+      width: '200px',
       render: (item) => formatDate(item.CreatedUtc)
     },
     {

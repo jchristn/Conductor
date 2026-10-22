@@ -366,18 +366,15 @@ function AnalyticsBreakdownTable({ title, tooltip, rows, loading, emptyMessage, 
               <th title="Total requests matching the active filters for this group.">Requests</th>
               <th title="Successful completion percentage and count for this group.">Success</th>
               <th title="Failed, denied, and rate-limited request counts for this group.">Fail / Deny / 429</th>
-              <th title="Average time-to-first-token for successful completions in this group.">Avg TTFT</th>
-              <th title="95th percentile time-to-first-token for successful completions in this group.">P95 TTFT</th>
-              <th title="Provider-reported total tokens for successful completions in this group.">Tokens</th>
-              <th title="Successful completions in this group without usable provider token metrics.">Unknown Usage</th>
+              <th title="Average / 95th percentile time-to-first-token for successful completions in this group, with the percentage of successful completions that had a measured time-to-first-token.">TTFT Avg / P95</th>
+              <th title="Provider-reported total tokens for successful completions in this group, and how many successful completions had no usable provider token metrics.">Tokens</th>
               <th title="Estimate-only cost for this group using the supplied per-token unit cost.">Est. Cost</th>
-              <th title="Percentage of successful completions in this group with measured time-to-first-token.">Coverage</th>
               <th title="Most recent request timestamp in this group.">Last Seen</th>
             </tr>
           </thead>
           <tbody>
             {visibleRows.length < 1 ? (
-              <tr><td colSpan="11" className="detail-table-empty-cell" title={emptyMessage}>{emptyMessage}</td></tr>
+              <tr><td colSpan="8" className="detail-table-empty-cell" title={emptyMessage}>{emptyMessage}</td></tr>
             ) : visibleRows.map((row, index) => {
               const requestCount = row.RequestCount || 0;
               const successCount = row.SuccessfulCompletionCount || 0;
@@ -390,15 +387,20 @@ function AnalyticsBreakdownTable({ title, tooltip, rows, loading, emptyMessage, 
                 <tr key={`${row.Dimension || title}:${row.Value || index}`} title="One analytics group matching the active filters.">
                   <td title="User or credential label and identifier."><BreakdownIdentity row={row} fallback={identityFallback} /></td>
                   <td title="Total filtered requests for this group.">{formatNumber(requestCount)}</td>
-                  <td title="Successful completions and success rate for this group.">{formatNumber(successCount)} / {formatPercent(successRate)}</td>
-                  <td title="Failed, denied, and rate-limited request counts for this group.">{formatNumber(failedCount)} / {formatNumber(deniedCount)} / {formatNumber(rateLimitedCount)}</td>
-                  <td title="Average time-to-first-token for successful completions in this group.">{formatMs(row.AverageTimeToFirstTokenMs)}</td>
-                  <td title="95th percentile time-to-first-token for successful completions in this group.">{formatMs(row.P95TimeToFirstTokenMs)}</td>
-                  <td title="Total provider-reported tokens for successful completions in this group.">{formatNumber(row.TotalTokens || 0)}</td>
-                  <td title="Successful completions in this group where provider token usage was missing and is treated as unknown.">{formatNumber(row.UnknownTokenUsageCount || 0)}</td>
+                  <td className="analytics-nowrap" title="Successful completions and success rate for this group.">{formatNumber(successCount)} / {formatPercent(successRate)}</td>
+                  <td className="analytics-nowrap" title="Failed, denied, and rate-limited request counts for this group.">{formatNumber(failedCount)} / {formatNumber(deniedCount)} / {formatNumber(rateLimitedCount)}</td>
+                  <td title="Average / 95th percentile time-to-first-token for successful completions in this group, and time-to-first-token coverage.">
+                    <span className="analytics-nowrap">{formatMs(row.AverageTimeToFirstTokenMs)} / {formatMs(row.P95TimeToFirstTokenMs)}</span>
+                    <span className="analytics-cell-note">{formatPercent(row.TimeToFirstTokenCoveragePercent)} coverage</span>
+                  </td>
+                  <td title="Total provider-reported tokens for successful completions in this group, and completions with unknown token usage.">
+                    {formatNumber(row.TotalTokens || 0)}
+                    {(row.UnknownTokenUsageCount || 0) > 0 && (
+                      <span className="analytics-cell-note">{formatNumber(row.UnknownTokenUsageCount)} unknown</span>
+                    )}
+                  </td>
                   <td title="Estimate-only cost for this group.">{formatCost(row.EstimatedCost, costCurrency)}</td>
-                  <td title="Time-to-first-token coverage for successful completions in this group.">{formatPercent(row.TimeToFirstTokenCoveragePercent)}</td>
-                  <td title="Most recent request timestamp in this group.">{formatDateTime(row.LastSeenUtc)}</td>
+                  <td className="analytics-nowrap" title="Most recent request timestamp in this group.">{formatDateTime(row.LastSeenUtc)}</td>
                 </tr>
               );
             })}

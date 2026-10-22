@@ -156,6 +156,7 @@ function Users() {
   const columns = [
     {
       key: 'Id',
+      defaultHidden: true,
       label: 'ID',
       tooltip: 'Unique identifier for this user',
       width: '340px',
@@ -195,9 +196,10 @@ function Users() {
     },
     {
       key: 'CreatedUtc',
+      defaultHidden: true,
       label: 'Created',
       tooltip: 'When this user account was created',
-      width: '180px',
+      width: '200px',
       render: (item) => formatDate(item.CreatedUtc)
     },
     {
