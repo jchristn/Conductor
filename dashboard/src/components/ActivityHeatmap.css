@@ -1,14 +1,14 @@
-/* Activity heat map (Dashboard > Heatmap tab). Colors come only from existing theme variables.
-   Level 4 is solid --primary-color: 3.68:1 against the light --card-bg and 3.98:1 against the dark
-   --card-bg, so the strongest cell clears the 3:1 non-text contrast minimum in both themes.
-   Levels 1-3 mix the primary color into the card background so exported PNGs keep the same fill. */
+/* Activity heat map (Dashboard > Heatmap tab). Active cells run light green -> green -> dark green
+   in both themes; empty cells use the theme border color. Level 4 (#216e39) is 6.3:1 against the
+   light --card-bg (about 2.3:1 against the dark --card-bg, where the light levels stand out most). Fixed hex values
+   (not color-mix) so exported PNGs keep the same fill. */
 :root,
 [data-theme="dark"] {
   --hm-level-0: var(--border-color);
-  --hm-level-1: color-mix(in srgb, var(--primary-color) 25%, var(--card-bg));
-  --hm-level-2: color-mix(in srgb, var(--primary-color) 50%, var(--card-bg));
-  --hm-level-3: color-mix(in srgb, var(--primary-color) 75%, var(--card-bg));
-  --hm-level-4: var(--primary-color);
+  --hm-level-1: #9be9a8;
+  --hm-level-2: #40c463;
+  --hm-level-3: #30a14e;
+  --hm-level-4: #216e39;
   --hm-cell-stroke: var(--input-border);
 }
 
