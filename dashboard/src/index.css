@@ -4756,7 +4756,7 @@ input.file-input-hidden {
   padding: 12px 16px;
   color: var(--sidebar-text);
   font-size: 11px;
-  opacity: 0.6;
+  opacity: 0.9;
 }
 
 .sidebar-nav {
