@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Tabs from '../components/Tabs';
 import AnalyticsTrendChart from '../components/AnalyticsTrendChart';
+import ActivityHeatmap from '../components/ActivityHeatmap';
 import RequestHistoryChart from '../components/RequestHistoryChart';
 import { hubPath } from '../config/navConfig';
 
@@ -106,7 +107,8 @@ function Dashboard() {
       {chartError && <p role="alert">Analytics unavailable: {chartError}</p>}
       <Tabs param="chart" ariaLabel="Dashboard charts" tabs={[
         { key: 'history', label: 'Request history', tooltip: 'Inspect request outcomes across the selected history range.', render: () => <RequestHistoryChart /> },
-        ...[['volume', 'Volume / TTFT'], ['latency', 'Latency / TTFT'], ['tokens', 'Tokens']].map(([key, label]) => ({ key, label, tooltip: key === 'tokens' ? 'Compare input, output, cached input and other reported token usage.' : key === 'latency' ? 'Track average time until the first token, with gaps for missing timings.' : 'Compare request outcomes with first-token delay on a separate axis.', render: () => analytics ? <AnalyticsTrendChart data={analytics.TimeSeries || []} mode={key} /> : <p role="status">{chartError ? 'Analytics unavailable.' : 'Loading analytics…'}</p> }))
+        ...[['volume', 'Volume / TTFT'], ['latency', 'Latency / TTFT'], ['tokens', 'Tokens']].map(([key, label]) => ({ key, label, tooltip: key === 'tokens' ? 'Compare input, output, cached input and other reported token usage.' : key === 'latency' ? 'Track average time until the first token, with gaps for missing timings.' : 'Compare request outcomes with first-token delay on a separate axis.', render: () => analytics ? <AnalyticsTrendChart data={analytics.TimeSeries || []} mode={key} /> : <p role="status">{chartError ? 'Analytics unavailable.' : 'Loading analytics…'}</p> })),
+        { key: 'heatmap', label: 'Heatmap', tooltip: 'See when activity happens across UTC time buckets for the selected timeframe and metric.', render: () => <ActivityHeatmap /> }
       ]} />
 
       {observability?.Overall && (
