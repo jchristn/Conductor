@@ -74,19 +74,20 @@
 
 .activity-heatmap .hm-chart {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
+  display: block;
+  width: 100%;
 }
 
 .activity-heatmap .hm-svg {
   display: block;
-  max-width: 100%;
+  width: 100%;
   height: auto;
   overflow: visible;
 }
 
+/* SVG user units: the grid scales with the card width, so this tracks the 28-unit cells. */
 .activity-heatmap .hm-axis-label {
-  font-size: 10px;
+  font-size: 20px;
   fill: var(--text-secondary);
 }
 

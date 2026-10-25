@@ -968,6 +968,12 @@ class ConductorApi {
     return this.request('POST', '/v1.0/analytics/query', body);
   }
 
+  // Aggregate-only analytics (database GROUP BY, no row cap); same response shape as queryAnalytics
+  // without percentiles or groups.
+  async queryAnalyticsBuckets(body = {}) {
+    return this.request('POST', '/v1.0/analytics/buckets', body);
+  }
+
   async listAnalyticsSavedReports(params = {}) {
     const query = new URLSearchParams();
     if (params.tenantId) query.append('tenantId', params.tenantId);

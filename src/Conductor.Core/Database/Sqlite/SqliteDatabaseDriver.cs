@@ -45,6 +45,7 @@ namespace Conductor.Core.Database.Sqlite
             Administrator = new AdministratorMethods(this);
             RequestHistory = new RequestHistoryMethods(this);
             RequestAnalytics = new Conductor.Core.Database.RequestAnalyticsMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.Sqlite);
+            RequestHistoryAggregate = new Conductor.Core.Database.RequestHistoryAggregateMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.Sqlite);
             AnalyticsSavedReport = new Conductor.Core.Database.AnalyticsSavedReportMethods(this, Conductor.Core.Database.RequestAnalyticsSqlDialect.Sqlite);
         }
 
@@ -336,6 +337,8 @@ namespace Conductor.Core.Database.Sqlite
             await EnsureIndexAsync("idx_requesthistory_analyticscaptured", "CREATE INDEX IF NOT EXISTS idx_requesthistory_analyticscaptured ON requesthistory(analyticscaptured);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_dominantstagekind", "CREATE INDEX IF NOT EXISTS idx_requesthistory_dominantstagekind ON requesthistory(dominantstagekind);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_analyticsfailurecode", "CREATE INDEX IF NOT EXISTS idx_requesthistory_analyticsfailurecode ON requesthistory(analyticsfailurecode);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_tenant_created", "CREATE INDEX IF NOT EXISTS idx_requesthistory_tenant_created ON requesthistory(tenantguid, createdutc);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_vmr_created", "CREATE INDEX IF NOT EXISTS idx_requesthistory_vmr_created ON requesthistory(virtualmodelrunnerguid, createdutc);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_tenant_created", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_tenant_created ON requestanalyticsevents(tenantguid, createdutc);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_requesthistoryid", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_requesthistoryid ON requestanalyticsevents(requesthistoryid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_traceid", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalyticsevents(traceid);", token).ConfigureAwait(false);

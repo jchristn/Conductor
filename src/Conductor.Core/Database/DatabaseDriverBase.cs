@@ -93,6 +93,12 @@ namespace Conductor.Core.Database
         public IRequestAnalyticsMethods RequestAnalytics { get; protected set; }
 
         /// <summary>
+        /// Request history aggregate methods (database-side time bucketing and bounded range reads).
+        /// May be null for drivers that do not support aggregation.
+        /// </summary>
+        public IRequestHistoryAggregateMethods RequestHistoryAggregate { get; protected set; }
+
+        /// <summary>
         /// Analytics saved report methods.
         /// </summary>
         public IAnalyticsSavedReportMethods AnalyticsSavedReport { get; protected set; }

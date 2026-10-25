@@ -17,10 +17,14 @@ import {
 } from '../utils/heatmap';
 import './ActivityHeatmap.css';
 
-const CELL = 14;
-const GAP = 3;
+// Geometry is in SVG user units. The SVG scales to the card width (width 100%), capped at MAX_SCALE
+// times its natural size so short layouts (month calendar) do not balloon.
+const CELL = 28;
+const GAP = 6;
 const PITCH = CELL + GAP;
-const TRUNCATION_LIMIT = 10000;
+const RADIUS = 4;
+const LABEL_GAP = 12;
+const MAX_SCALE = 1.5;
 const pad2 = n => String(n).padStart(2, '0');
 
 // Column header text for row layouts: clock time when rows start at UTC midnight, else a minute offset.
@@ -34,8 +38,9 @@ function columnLabel(layout, column) {
 
 /**
  * UTC activity heat map for the Dashboard chart tabs. The timeframe (?heatmapRange=) and metric
- * (?heatmapMetric=) live in the query string. A timeframe change re-queries POST /v1.0/analytics/query;
- * a metric change re-renders from the cached response. Superseded responses are ignored.
+ * (?heatmapMetric=) live in the query string. A timeframe change re-queries POST /v1.0/analytics/buckets
+ * (aggregated in the database, never truncated); a metric change re-renders from the cached response.
+ * Superseded responses are ignored.
  */
 function ActivityHeatmap() {
   const { api } = useApp();
@@ -52,7 +57,7 @@ function ActivityHeatmap() {
     let cancelled = false;
     const { range, bucketSeconds } = HEATMAP_TIMEFRAMES[timeframeKey];
     setResult({ timeframe: null, response: null, error: null });
-    api.queryAnalytics({ Range: range, BucketSeconds: bucketSeconds })
+    api.queryAnalyticsBuckets({ Range: range, BucketSeconds: bucketSeconds })
       .then(response => { if (!cancelled) setResult({ timeframe: timeframeKey, response: response || {}, error: null }); })
       .catch(error => { if (!cancelled) setResult({ timeframe: timeframeKey, response: null, error: error?.message || String(error) }); });
     return () => { cancelled = true; };
@@ -121,11 +126,17 @@ function ActivityHeatmap() {
   };
 
   const isCalendar = layout.kind === 'calendar';
-  const left = isCalendar ? 36 : 80;
-  const top = 18;
+  const isColumns = layout.kind === 'columns';
+  // Horizontal (columns) layouts get a date line above the hour labels and short ':MM' row labels.
+  const left = isCalendar || isColumns ? 72 : 160;
+  const top = isColumns ? 64 : 36;
+  const headerY = top - LABEL_GAP;
   const width = left + Math.max(1, layout.cellsPerRow) * PITCH;
   const height = top + Math.max(1, layout.rows.length) * PITCH;
   const columnStep = layout.cellsPerRow > 12 ? 3 : 1;
+  // Date over every UTC midnight column and over the first column (unless midnight is right next to it,
+  // where the two dates would overlap), so the repeated hour at each end of Last day stays unambiguous.
+  const showDate = (column, c) => column.label === '00:00' || (c === 0 && layout.columns[1]?.label !== '00:00');
 
   const cellByKey = useMemo(() => {
     const map = new Map();
@@ -136,7 +147,6 @@ function ActivityHeatmap() {
   const tip = tipKey ? cellByKey.get(tipKey) : null;
 
   const gridLabel = `Activity heatmap, ${metric.label}, ${timeframe.label}`;
-  const truncated = Number(response?.TotalRequests) >= TRUNCATION_LIMIT;
 
   return (
     <div className="dashboard-section activity-heatmap">
@@ -183,39 +193,43 @@ function ActivityHeatmap() {
               <span className="hm-tile-value">{summary.active.text}</span>
             </div>
           </div>
-          {truncated && <p className="text-muted hm-note">Results may be truncated at 10,000 requests.</p>}
           {isEmpty ? (
             <p className="hm-empty" role="status">No activity for this time range</p>
           ) : (
             <>
               <p className="text-muted hm-note">All times are UTC.</p>
-              <div className="hm-chart">
+              <div className="hm-chart" style={{ maxWidth: `${width * MAX_SCALE}px` }}>
                 <svg
                   ref={svgRef}
                   className="hm-svg"
                   viewBox={`0 0 ${width} ${height}`}
-                  width={width}
-                  height={height}
+                  width="100%"
+                  preserveAspectRatio="xMinYMin meet"
                   role="grid"
                   aria-label={gridLabel}
                 >
                   <g aria-hidden="true">
-                    {isCalendar
-                      ? layout.columns.map((column, c) => (
-                        <text key={column.key} className="hm-axis-label" x={left + c * PITCH} y={12}>{c % 2 === 0 ? column.label : ''}</text>
-                      ))
-                      : Array.from({ length: layout.cellsPerRow }, (_, c) => (c % columnStep === 0 ? (
-                        <text key={`c${c}`} className="hm-axis-label" x={left + c * PITCH} y={12}>{columnLabel(layout, c)}</text>
-                      ) : null))}
+                    {isColumns && layout.columns.map((column, c) => (showDate(column, c) ? (
+                      <text key={`d${column.key}`} className="hm-axis-label" x={left + c * PITCH} y={headerY - 26}>{column.dateLabel}</text>
+                    ) : null))}
+                    {isColumns && layout.columns.map((column, c) => (c % 2 === 0 ? (
+                      <text key={column.key} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{column.label}</text>
+                    ) : null))}
+                    {isCalendar && layout.columns.map((column, c) => (
+                      <text key={column.key} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{c % 2 === 0 ? column.label : ''}</text>
+                    ))}
+                    {!isCalendar && !isColumns && Array.from({ length: layout.cellsPerRow }, (_, c) => (c % columnStep === 0 ? (
+                      <text key={`c${c}`} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{columnLabel(layout, c)}</text>
+                    ) : null))}
                   </g>
                   {layout.rows.map((row, r) => (
                     <g key={row.key} role="row">
-                      <text className="hm-axis-label" aria-hidden="true" x={left - 6} y={top + r * PITCH + CELL - 3} textAnchor="end">{row.label}</text>
+                      <text className="hm-axis-label" aria-hidden="true" x={left - LABEL_GAP} y={top + r * PITCH + CELL - 8} textAnchor="end">{row.label}</text>
                       {row.cells.map((cell, c) => {
                         const x = left + c * PITCH;
                         const y = top + r * PITCH;
                         if (cell.padding) {
-                          return <rect key={cell.key} className="hm-cell hm-padding" x={x} y={y} width={CELL} height={CELL} rx={2} aria-hidden="true" />;
+                          return <rect key={cell.key} className="hm-cell hm-padding" x={x} y={y} width={CELL} height={CELL} rx={RADIUS} aria-hidden="true" />;
                         }
                         const label = cellLabel(cell.bucket, metricKey, layout.bucketSeconds);
                         return (
@@ -227,7 +241,7 @@ function ActivityHeatmap() {
                             y={y}
                             width={CELL}
                             height={CELL}
-                            rx={2}
+                            rx={RADIUS}
                             role="gridcell"
                             aria-label={label}
                             tabIndex={cell.key === tabStopKey ? 0 : -1}
@@ -256,7 +270,7 @@ function ActivityHeatmap() {
                 <span>Less</span>
                 {[0, 1, 2, 3, 4].map(level => (
                   <svg key={level} className="hm-legend-swatch" width={CELL} height={CELL} viewBox={`0 0 ${CELL} ${CELL}`} aria-hidden="true">
-                    <rect className={`hm-cell hm-level-${level}`} x={0.5} y={0.5} width={CELL - 1} height={CELL - 1} rx={2} />
+                    <rect className={`hm-cell hm-level-${level}`} x={0.5} y={0.5} width={CELL - 1} height={CELL - 1} rx={RADIUS} />
                   </svg>
                 ))}
                 <span>More</span>

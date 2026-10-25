@@ -16,6 +16,7 @@ const pkg = JSON.parse(readFileSync(resolve(dashboardDir, 'package.json'), 'utf8
 
 const api = vi.hoisted(() => ({
   queryAnalytics: vi.fn(),
+  queryAnalyticsBuckets: vi.fn(),
   getObservabilityMetricsSummary: vi.fn(),
   listVirtualModelRunners: vi.fn(),
   getRequestHistorySummary: vi.fn()
@@ -41,14 +42,22 @@ function renderApp(entry) {
   return render(<MemoryRouter initialEntries={[entry]}><Sidebar /><Dashboard /><LocationProbe /></MemoryRouter>);
 }
 const isHeatmapBody = body => Boolean(body) && 'BucketSeconds' in body;
-const heatmapCalls = () => api.queryAnalytics.mock.calls.map(call => call[0]).filter(isHeatmapBody);
+// The heat map calls POST /v1.0/analytics/buckets (queryAnalyticsBuckets); Dashboard keeps queryAnalytics.
+// Both mocks share one router so a misrouted call still resolves, and heatmapCalls only reads the buckets mock.
+const heatmapCalls = () => api.queryAnalyticsBuckets.mock.calls.map(call => call[0]).filter(isHeatmapBody);
+const misroutedHeatmapCalls = () => api.queryAnalytics.mock.calls.map(call => call[0]).filter(isHeatmapBody);
+const routeAnalytics = impl => {
+  api.queryAnalytics.mockImplementation(impl);
+  api.queryAnalyticsBuckets.mockImplementation(impl);
+};
 const search = () => new URLSearchParams(screen.getByTestId('search').textContent);
 const chartTab = name => within(screen.getByRole('tablist', { name: 'Dashboard charts' })).getByRole('tab', { name });
 
 beforeEach(() => {
   // Capture is installed before every render so the first effect's call is observed.
   api.queryAnalytics.mockReset();
-  api.queryAnalytics.mockImplementation(body => Promise.resolve(isHeatmapBody(body) ? heatmapResponse(body) : dashboardResponse()));
+  api.queryAnalyticsBuckets.mockReset();
+  routeAnalytics(body => Promise.resolve(isHeatmapBody(body) ? heatmapResponse(body) : dashboardResponse()));
   api.getObservabilityMetricsSummary.mockReset().mockResolvedValue(null);
   api.listVirtualModelRunners.mockReset().mockResolvedValue({ Data: [] });
   api.getRequestHistorySummary.mockReset().mockResolvedValue({ Buckets: [], TotalSuccess: 0, TotalFailure: 0, TotalRequests: 0 });
@@ -65,6 +74,7 @@ describe('voyage integration: version footer and heatmap tab together', () => {
     // The capture saw both known requests: Dashboard's own lastDay call and exactly one heat map call.
     expect(api.queryAnalytics).toHaveBeenCalledWith({ Range: 'lastDay' });
     expect(heatmapCalls()).toEqual([{ Range: 'lastDay', BucketSeconds: 900 }]);
+    expect(misroutedHeatmapCalls()).toEqual([]);
     expect(container.querySelectorAll('.sidebar-version').length).toBe(1);
   });
 
@@ -101,12 +111,12 @@ describe('voyage integration: version footer and heatmap tab together', () => {
   });
 
   it('a Dashboard lastDay failure does not hide the heat map, and a heat map failure does not hide the other tabs', async () => {
-    api.queryAnalytics.mockImplementation(body => isHeatmapBody(body) ? Promise.resolve(dayResponse()) : Promise.reject(new Error('dashboard down')));
+    routeAnalytics(body => isHeatmapBody(body) ? Promise.resolve(dayResponse()) : Promise.reject(new Error('dashboard down')));
     renderApp('/?chart=heatmap');
     expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' })).toBeTruthy();
     expect((await screen.findAllByRole('alert')).map(node => node.textContent)).toEqual(['Analytics unavailable: dashboard down']);
 
-    api.queryAnalytics.mockImplementation(body => isHeatmapBody(body) ? Promise.reject(new Error('heatmap down')) : Promise.resolve(dashboardResponse()));
+    routeAnalytics(body => isHeatmapBody(body) ? Promise.reject(new Error('heatmap down')) : Promise.resolve(dashboardResponse()));
     fireEvent.change(screen.getByLabelText('Timeframe'), { target: { value: 'hour' } });
     await waitFor(() => expect(screen.getAllByRole('alert').map(node => node.textContent)).toContain('Analytics unavailable: heatmap down'));
     expect(heatmapCalls().at(-1)).toEqual({ Range: 'lastHour', BucketSeconds: 60 });

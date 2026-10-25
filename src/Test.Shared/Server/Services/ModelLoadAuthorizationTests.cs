@@ -112,6 +112,8 @@ namespace Test.Shared.Server.Services
                 .Should().Be(RequestTypeEnum.ReadAnalytics);
             RequestTypeResolver.Resolve("POST", "/v1.0/analytics/query")
                 .Should().Be(RequestTypeEnum.ReadAnalytics);
+            RequestTypeResolver.Resolve("POST", "/v1.0/analytics/buckets")
+                .Should().Be(RequestTypeEnum.ReadAnalytics);
             RequestTypeResolver.Resolve("GET", "/v1.0/analytics/summary?range=lastDay")
                 .Should().Be(RequestTypeEnum.ReadAnalytics);
             RequestTypeResolver.Resolve("GET", "/v1.0/analytics/reports/asr_123")
