@@ -62,6 +62,17 @@ describe('analytics', () => {
    render(<AnalyticsTrendChart mode="tokens" data={[{ TimestampUtc: '2026-10-01T00:00:00Z', PromptTokens: 50, CompletionTokens: 20 }]} />);
    expect(screen.getByText('Cached input')).toBeTruthy(); expect(screen.getByRole('button', { name: 'Copy chart as an image' })).toBeTruthy();
  });
+ it('shows a hover tooltip with every series value for the hovered bucket', () => {
+   const data = [{ TimestampUtc: '2026-10-01T00:00:00Z', SuccessCount: 7, FailureCount: 2, AverageTimeToFirstTokenMs: 123.4 }, { TimestampUtc: '2026-10-01T01:00:00Z', SuccessCount: 1, FailureCount: 0 }];
+   render(<AnalyticsTrendChart mode="volume" data={data} />);
+   expect(screen.queryByRole('tooltip')).toBeNull();
+   const zones = screen.getAllByTestId('analytics-hover-zone'); expect(zones).toHaveLength(2);
+   fireEvent.mouseEnter(zones[0], { clientX: 10, clientY: 10 });
+   const tip = screen.getByRole('tooltip').textContent;
+   expect(tip).toContain('Successful requests: 7'); expect(tip).toContain('Failed requests: 2'); expect(tip).toContain('123 ms'); expect(tip).toContain('Total requests: 9');
+   fireEvent.mouseEnter(zones[1], { clientX: 20, clientY: 10 }); expect(screen.getByRole('tooltip').textContent).toContain('Not reported');
+   fireEvent.mouseLeave(zones[1]); expect(screen.queryByRole('tooltip')).toBeNull();
+ });
 });
 describe('tooltips', () => {
  it('explains headers and field constraints instead of repeating labels', () => {
