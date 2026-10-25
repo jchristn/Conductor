@@ -16,6 +16,9 @@ function Sidebar() {
     items: section.items.filter((item) => itemVisible(item, auth))
   })).filter((section) => section.items.length > 0);
 
+  // Injected at build time from package.json by the Vite/Vitest define; guarded for safety.
+  const version = typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ ? String(__APP_VERSION__) : '';
+
   return (
     <nav className="sidebar" aria-label="Primary">
       <div className="sidebar-header">
@@ -43,6 +46,9 @@ function Sidebar() {
           </ul>
         </div>
       ))}
+      {version && (
+        <div className="sidebar-version" aria-label={'Conductor version ' + version}>v{version}</div>
+      )}
     </nav>
   );
 }
