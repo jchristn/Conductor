@@ -268,6 +268,8 @@ describe('heatmap utils', () => {
       expect(summary.peak.startMs).toBe(at('2026-10-24T12:00:00Z'));
       expect(summary.peak.timeText).toBe('2026-10-24 12:00 UTC');
       expect(summary.active).toEqual({ count: 3, total: 4, text: '3 of 4' });
+      expect(summary.peak.text).toBe('8 requests');
+      expect(summarize([{ startMs: 0, RequestCount: 1 }], 'requests').primary.text).toBe('1 request');
     });
 
     it('all-zero data gives Total 0, Peak 0 with no time, Active 0 of m', () => {
@@ -296,7 +298,10 @@ describe('heatmap utils', () => {
     it('ttft all null or zero weight gives No timing data, not NaN', () => {
       const allNull = summarize(buildBuckets(response(900, 86400, [])), 'ttft');
       expect(allNull.primary).toEqual({ label: 'Average', value: null, text: 'No timing data' });
-      expect(allNull.peak).toMatchObject({ value: 0, startMs: null });
+      expect(allNull.peak).toMatchObject({ value: 0, startMs: null, text: 'No timing data', timeText: null });
+      const zeroOnly = summarize([{ startMs: 0, AverageTimeToFirstTokenMs: 0, SuccessfulCompletionCount: 2 }], 'ttft');
+      expect(zeroOnly.peak).toMatchObject({ value: 0, text: '0 ms', timeText: null });
+      expect(zeroOnly.primary.text).toBe('0 ms');
       expect(allNull.active.text).toBe('0 of 97');
       const zeroWeight = summarize([{ startMs: 0, AverageTimeToFirstTokenMs: 120, SuccessfulCompletionCount: 0 }], 'ttft');
       expect(zeroWeight.primary.text).toBe('No timing data');
@@ -325,7 +330,11 @@ describe('heatmap utils', () => {
       expect(labels[2]).not.toContain('0 ms');
       expect(formatBucketRange(at('2026-10-24T23:45:00Z'), 900)).toBe('2026-10-24 23:45-2026-10-25 00:00 UTC');
       expect(cellLabel({ padding: true, startMs: 0 }, 'requests', 60)).toBe('');
-      expect(cellLabel({ TimestampUtc: '2026-10-24T13:00:00', RequestCount: 1 }, 'requests', 3600)).toBe('2026-10-24 13:00-14:00 UTC: 1 requests');
+      expect(cellLabel({ TimestampUtc: '2026-10-24T13:00:00', RequestCount: 1 }, 'requests', 3600)).toBe('2026-10-24 13:00-14:00 UTC: 1 request');
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z'), FailedRequestCount: 1 }, 'errors', 3600)).toBe('2026-10-24 13:00-14:00 UTC: 1 failure');
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z'), PromptTokens: 1 }, 'input', 3600)).toBe('2026-10-24 13:00-14:00 UTC: 1 input token');
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z'), AverageTimeToFirstTokenMs: 1 }, 'ttft', 3600)).toBe('2026-10-24 13:00-14:00 UTC: 1 ms');
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z'), CompletionTokens: 0 }, 'output', 3600)).toBe('2026-10-24 13:00-14:00 UTC: 0 output tokens');
     });
 
     it('produces identical output under TZ=America/Los_Angeles in a child process', () => {

@@ -222,10 +222,15 @@ export function layoutHeatmap(buckets, timeframeKey, bucketSeconds) {
 
 const formatNumber = (value, options) => Number(value).toLocaleString('en-US', options);
 
+// Singular unit text for a value of exactly 1 ('1 request', not '1 requests'). 'ms' never changes.
+const SINGULAR_UNITS = { requests: 'request', tokens: 'token', input: 'input token', output: 'output token', errors: 'failure' };
+
 export function formatMetricValue(value, metricKey) {
   const key = normalizeMetric(metricKey);
   if (key === 'ttft' && value == null) return NO_TIMING_DATA;
-  return `${formatNumber(value ?? 0)} ${HEATMAP_METRICS[key].unit}`;
+  const n = value ?? 0;
+  const unit = Number(n) === 1 && SINGULAR_UNITS[key] ? SINGULAR_UNITS[key] : HEATMAP_METRICS[key].unit;
+  return `${formatNumber(n)} ${unit}`;
 }
 
 // Total (or weighted Average for ttft), Peak with the earliest tied bucket start, and Active 'n of m'
@@ -239,9 +244,11 @@ export function summarize(buckets, metricKey) {
   let active = 0;
   let peakValue = 0;
   let peakStartMs = null;
+  let hasData = false;
   for (const bucket of real) {
     const value = metricValue(bucket, key);
     if (value == null) continue;
+    hasData = true;
     total += value;
     if (key === 'ttft') {
       const successes = Number(bucket.SuccessfulCompletionCount) || 0;
@@ -273,7 +280,8 @@ export function summarize(buckets, metricKey) {
     peak: {
       value: peakValue,
       startMs: peakStartMs,
-      text: formatMetricValue(peakValue, key),
+      // With no TTFT sample at all, the peak tile says 'No timing data' rather than a misleading '0 ms'.
+      text: key === 'ttft' && !hasData ? NO_TIMING_DATA : formatMetricValue(peakValue, key),
       timeText: peakStartMs == null ? null : formatUtcTimestamp(peakStartMs)
     },
     active: { count: active, total: real.length, text: `${active} of ${real.length}` }
