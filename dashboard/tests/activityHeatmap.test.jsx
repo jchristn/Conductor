@@ -271,6 +271,8 @@ describe('loading, error and empty states', () => {
     api.queryAnalytics.mockImplementation(() => Promise.resolve(dayResponse(overrides)));
     renderHeatmap('/?chart=heatmap');
     expect(await screen.findByText('No activity for this time range')).toBeTruthy();
+    // Announced like the other chart tabs' empty message, and the loading status is gone.
+    expect(screen.getByRole('status').textContent).toBe('No activity for this time range');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByRole('grid')).toBeNull();
     expect(screen.getByText('Active buckets').parentElement.textContent).toContain('0 of 96');
@@ -359,6 +361,27 @@ describe('tooltip, aria, summary and legend content', () => {
     const source = readFileSync(resolve(root, 'src/components/ActivityHeatmap.jsx'), 'utf8');
     expect(source).toContain("xLabel: 'Bucket start (UTC)'");
     expect(source).toContain('svgRef={svgRef}');
+  });
+
+  it('Escape dismisses the tooltip without moving focus, and the next focus or hover shows it again', async () => {
+    renderHeatmap('/?chart=heatmap');
+    await screen.findByRole('grid');
+    const text = '2026-10-24 13:00-13:15 UTC: 1,234 requests';
+    const cell = cellNamed(text);
+    act(() => cell.focus());
+    fireEvent.mouseEnter(cell);
+    expect(screen.getByRole('tooltip').textContent).toBe(text);
+    fireEvent.keyDown(cell, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(document.activeElement).toBe(cell);
+
+    fireEvent.keyDown(cell, { key: 'ArrowRight' });
+    expect(document.activeElement).not.toBe(cell);
+    expect(screen.getByRole('tooltip').textContent).toBe(document.activeElement.getAttribute('aria-label'));
+    fireEvent.keyDown(document.activeElement, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.mouseEnter(cell);
+    expect(screen.getByRole('tooltip').textContent).toBe(text);
   });
 });
 

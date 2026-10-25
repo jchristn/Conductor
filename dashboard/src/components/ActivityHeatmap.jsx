@@ -90,6 +90,12 @@ function ActivityHeatmap() {
   };
 
   const moveFocus = (event, key) => {
+    // Escape dismisses the tooltip without moving focus (WCAG 1.4.13); the next hover or focus shows it again.
+    if (event.key === 'Escape') {
+      setHoverKey(null);
+      setFocusKey(null);
+      return;
+    }
     const r = grid.findIndex(row => row.includes(key));
     if (r < 0) return;
     const c = grid[r].indexOf(key);
@@ -179,7 +185,7 @@ function ActivityHeatmap() {
           </div>
           {truncated && <p className="text-muted hm-note">Results may be truncated at 10,000 requests.</p>}
           {isEmpty ? (
-            <p className="hm-empty">No activity for this time range</p>
+            <p className="hm-empty" role="status">No activity for this time range</p>
           ) : (
             <>
               <p className="text-muted hm-note">All times are UTC.</p>
