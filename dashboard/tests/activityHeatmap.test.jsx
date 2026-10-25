@@ -493,3 +493,122 @@ describe('heat map files and styles', () => {
     expect(css).toMatch(/\.hm-cell \{\s*stroke: var\(--hm-cell-stroke\);/);
   });
 });
+
+describe('test engineer gap coverage', () => {
+  it('activating the Heatmap tab from / sends exactly one heat map call and mounts the grid', async () => {
+    renderDashboard('/');
+    await waitFor(() => expect(api.queryAnalytics).toHaveBeenCalledWith({ Range: 'lastDay' }));
+    expect(heatmapCalls()).toEqual([]);
+    fireEvent.click(screen.getByRole('tab', { name: 'Heatmap' }));
+    expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' })).toBeTruthy();
+    expect(heatmapCalls()).toEqual([{ Range: 'lastDay', BucketSeconds: 900 }]);
+    expect(search().get('chart')).toBe('heatmap');
+  });
+
+  it('both selects keep unrelated query params (D10)', async () => {
+    renderHeatmap('/?chart=heatmap&foo=bar&heatmapRange=day');
+    await screen.findByRole('grid');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Metric' }), { target: { value: 'errors' } });
+    expect(search().get('foo')).toBe('bar');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Timeframe' }), { target: { value: 'week' } });
+    // The week fixture has no failures, so the Failures metric is (correctly) the empty state.
+    expect(await screen.findByText('No activity for this time range')).toBeTruthy();
+    expect(heatmapCalls()).toEqual([{ Range: 'lastDay', BucketSeconds: 900 }, { Range: 'lastWeek', BucketSeconds: 3600 }]);
+    expect(Object.fromEntries(search())).toEqual({ chart: 'heatmap', foo: 'bar', heatmapRange: 'week', heatmapMetric: 'errors' });
+  });
+
+  it('a metric change while the timeframe query is pending or failed sends no call', async () => {
+    const d = deferred();
+    api.queryAnalytics.mockImplementation(() => d.promise);
+    renderHeatmap('/?chart=heatmap');
+    fireEvent.change(screen.getByRole('combobox', { name: 'Metric' }), { target: { value: 'tokens' } });
+    expect(screen.getByRole('status').textContent).toBe('Loading analytics…');
+    expect(heatmapCalls()).toHaveLength(1);
+    await act(async () => d.reject(new Error('boom')));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Metric' }), { target: { value: 'ttft' } });
+    expect(screen.getByRole('alert').textContent).toBe('Analytics unavailable: boom');
+    expect(heatmapCalls()).toHaveLength(1);
+  });
+
+  it('the error state renders no grid, tiles, legend or copy button and keeps the selects usable', async () => {
+    api.queryAnalytics.mockImplementation(() => Promise.reject(new Error('HTTP 500')));
+    const { container } = renderHeatmap('/?chart=heatmap');
+    expect((await screen.findByRole('alert')).textContent).toBe('Analytics unavailable: HTTP 500');
+    expect(screen.queryByRole('grid')).toBeNull();
+    expect(container.querySelector('.hm-summary')).toBeNull();
+    expect(container.querySelector('.hm-legend')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy chart as an image' })).toBeNull();
+    expect(screen.queryByText('No activity for this time range')).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Timeframe' }).disabled).toBe(false);
+  });
+
+  it('a non-Error rejection still shows the alert with its text', async () => {
+    api.queryAnalytics.mockImplementation(() => Promise.reject('network down'));
+    renderHeatmap('/?chart=heatmap');
+    expect((await screen.findByRole('alert')).textContent).toBe('Analytics unavailable: network down');
+  });
+
+  it('a null response is treated as empty success, not an error', async () => {
+    api.queryAnalytics.mockImplementation(() => Promise.resolve(null));
+    renderHeatmap('/?chart=heatmap');
+    expect(await screen.findByText('No activity for this time range')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('the empty state hides the grid, legend and copy button but keeps the summary tiles', async () => {
+    api.queryAnalytics.mockImplementation(() => Promise.resolve(dayResponse({ TimeSeries: [] })));
+    const { container } = renderHeatmap('/?chart=heatmap');
+    await screen.findByText('No activity for this time range');
+    expect(container.querySelector('.hm-legend')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy chart as an image' })).toBeNull();
+    expect(screen.getByText('Total', { selector: '.hm-tile-label' }).parentElement.textContent).toBe('Total0 requests');
+  });
+
+  it('a response that resolves after unmount does not throw or log (smoke; the cancelled flag is guarded by the stale-response tests)', async () => {
+    const d = deferred();
+    api.queryAnalytics.mockImplementation(() => d.promise);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { unmount } = renderHeatmap('/?chart=heatmap');
+      unmount();
+      await act(async () => d.resolve(dayResponse()));
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('Ctrl+Home and Ctrl+End jump to the first and last real cells of the whole grid', async () => {
+    renderHeatmap('/?chart=heatmap');
+    await screen.findByRole('grid');
+    act(() => cellNamed(/^2026-10-24 13:00-/).focus());
+    fireEvent.keyDown(document.activeElement, { key: 'End', ctrlKey: true });
+    expect(document.activeElement.getAttribute('aria-label')).toBe('2026-10-25 00:15-00:30 UTC: 0 requests');
+    fireEvent.keyDown(document.activeElement, { key: 'Home', ctrlKey: true });
+    expect(document.activeElement.getAttribute('aria-label')).toBe('2026-10-24 00:30-00:45 UTC: 0 requests');
+    expect(gridCells().filter(cell => cell.getAttribute('tabindex') === '0')).toEqual([document.activeElement]);
+  });
+
+  it('the hovered cell wins the tooltip over the focused cell', async () => {
+    renderHeatmap('/?chart=heatmap');
+    await screen.findByRole('grid');
+    const focusedCell = cellNamed(/^2026-10-24 13:00-/);
+    const hovered = cellNamed(/^2026-10-24 14:15-/);
+    act(() => focusedCell.focus());
+    fireEvent.mouseEnter(hovered);
+    expect(screen.getByRole('tooltip').textContent).toBe('2026-10-24 14:15-14:30 UTC: 26 requests');
+    fireEvent.mouseLeave(hovered);
+    expect(screen.getByRole('tooltip').textContent).toBe('2026-10-24 13:00-13:15 UTC: 1,234 requests');
+  });
+
+  it('the roving tab stop resets to the first real cell after a timeframe change', async () => {
+    renderHeatmap('/?chart=heatmap');
+    await screen.findByRole('grid');
+    act(() => cellNamed(/^2026-10-24 13:00-/).focus());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Timeframe' }), { target: { value: 'week' } });
+    await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last week' });
+    const stops = gridCells().filter(cell => cell.getAttribute('tabindex') === '0');
+    expect(stops).toHaveLength(1);
+    expect(stops[0].getAttribute('aria-label')).toMatch(/^2026-10-17 13:00-14:00 UTC/);
+  });
+});
