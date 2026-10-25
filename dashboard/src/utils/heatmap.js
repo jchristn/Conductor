@@ -257,9 +257,13 @@ export function summarize(buckets, metricKey) {
     }
     if (value > 0) {
       active++;
-      if (value > peakValue) {
+      // Ties keep the earliest bucket start whatever the input order (calendar cells are weekday-major).
+      const parsed = Number.isFinite(bucket.startMs) ? bucket.startMs : parseUtcMs(bucket.TimestampUtc);
+      const startMs = Number.isFinite(parsed) ? parsed : null;
+      const earlier = startMs != null && (peakStartMs == null || startMs < peakStartMs);
+      if (value > peakValue || (value === peakValue && earlier)) {
         peakValue = value;
-        peakStartMs = bucket.startMs ?? null;
+        peakStartMs = startMs;
       }
     }
   }

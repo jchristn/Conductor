@@ -272,6 +272,37 @@ describe('heatmap utils', () => {
       expect(summarize([{ startMs: 0, RequestCount: 1 }], 'requests').primary.text).toBe('1 request');
     });
 
+    it('peak ties keep the earliest bucket start for unsorted and calendar-ordered input', () => {
+      const unsorted = [
+        { startMs: at('2026-10-26T00:00:00Z'), RequestCount: 8 },
+        { startMs: at('2026-10-20T00:00:00Z'), RequestCount: 8 },
+        { startMs: at('2026-10-23T00:00:00Z'), RequestCount: 3 }
+      ];
+      expect(summarize(unsorted, 'requests').peak).toMatchObject({ value: 8, startMs: at('2026-10-20T00:00:00Z'), timeText: '2026-10-20 00:00 UTC' });
+      expect(summarize([...unsorted].reverse(), 'requests').peak.startMs).toBe(at('2026-10-20T00:00:00Z'));
+      // Raw server buckets without startMs use their TimestampUtc (zone-less is UTC) for the tie-break.
+      const raw = [{ TimestampUtc: '2026-10-26T00:00:00', TotalTokens: 5 }, { TimestampUtc: '2026-10-21T00:00:00', TotalTokens: 5 }];
+      expect(summarize(raw, 'tokens').peak.startMs).toBe(at('2026-10-21T00:00:00Z'));
+      const ttft = [
+        { startMs: at('2026-10-24T15:00:00Z'), AverageTimeToFirstTokenMs: 40, SuccessfulCompletionCount: 1 },
+        { startMs: at('2026-10-24T11:00:00Z'), AverageTimeToFirstTokenMs: 40, SuccessfulCompletionCount: 1 }
+      ];
+      expect(summarize(ttft, 'ttft').peak.startMs).toBe(at('2026-10-24T11:00:00Z'));
+
+      // Month calendar cells are weekday-major, so the Sunday 10-04 cell precedes the Monday 09-28 cell.
+      const res = { StartUtc: '2026-09-24T12:07:33Z', EndUtc: '2026-10-24T12:07:33Z', BucketSeconds: 86400,
+        TimeSeries: [{ TimestampUtc: '2026-09-28T00:00:00Z', RequestCount: 9 }, { TimestampUtc: '2026-10-04T00:00:00Z', RequestCount: 9 }] };
+      const buckets = buildBuckets(res);
+      const layout = layoutHeatmap(buckets, 'month', 86400);
+      const cells = layout.rows.flatMap(row => row.cells);
+      const tied = cells.filter(cell => !cell.padding && cell.bucket.RequestCount === 9).map(cell => cell.bucket.startMs);
+      expect(tied).toEqual([at('2026-10-04T00:00:00Z'), at('2026-09-28T00:00:00Z')]);
+      const summary = summarize(cells.map(cell => (cell.padding ? cell : cell.bucket)), 'requests');
+      expect(summary.peak).toMatchObject({ value: 9, startMs: at('2026-09-28T00:00:00Z'), timeText: '2026-09-28 00:00 UTC' });
+      expect(summary.peak).toEqual(summarize(buckets, 'requests').peak);
+      expect(summary.active.text).toBe(`2 of ${buckets.length}`);
+    });
+
     it('all-zero data gives Total 0, Peak 0 with no time, Active 0 of m', () => {
       const zeros = buildBuckets(response(60, 3600, []));
       const summary = summarize(zeros, 'requests');
