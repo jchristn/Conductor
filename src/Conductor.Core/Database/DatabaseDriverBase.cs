@@ -114,6 +114,21 @@ namespace Conductor.Core.Database
         protected bool LogQueries { get; set; }
 
         /// <summary>
+        /// Command timeout in seconds applied to each query (0 means no limit). Populated from
+        /// <see cref="Conductor.Core.Settings.DatabaseSettings.CommandTimeoutSeconds"/>.
+        /// </summary>
+        protected int CommandTimeoutSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Command timeout in seconds that providers should apply to the command they are about to run.
+        /// Returns 0 (no limit) while inside <see cref="ExecuteWithoutCommandTimeoutAsync"/>, otherwise
+        /// <see cref="CommandTimeoutSeconds"/>.
+        /// </summary>
+        protected int EffectiveCommandTimeoutSeconds => _CommandTimeoutOverride.Value ?? CommandTimeoutSeconds;
+
+        private readonly AsyncLocal<int?> _CommandTimeoutOverride = new AsyncLocal<int?>();
+
+        /// <summary>
         /// Instantiate the database driver base.
         /// </summary>
         protected DatabaseDriverBase()
@@ -147,7 +162,7 @@ namespace Conductor.Core.Database
             return Conductor.Core.Telemetry.DatabaseTelemetry.ExecuteAsync(
                 TelemetryDatabaseSystem,
                 query,
-                () => ExecuteQueryCoreAsync(query, isTransaction, token));
+                () => TranslateTimeoutAsync(() => ExecuteQueryCoreAsync(query, isTransaction, token)));
         }
 
         /// <summary>
@@ -164,7 +179,51 @@ namespace Conductor.Core.Database
             return Conductor.Core.Telemetry.DatabaseTelemetry.ExecuteAsync(
                 TelemetryDatabaseSystem,
                 "batch",
-                () => ExecuteQueriesCoreAsync(queries, isTransaction, token));
+                () => TranslateTimeoutAsync(() => ExecuteQueriesCoreAsync(queries, isTransaction, token)));
+        }
+
+        /// <summary>
+        /// Execute a query with no command timeout. Used by schema migrations, such as building an
+        /// index on a large existing table, which can legitimately run longer than the normal timeout.
+        /// </summary>
+        /// <param name="query">SQL query.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>DataTable with results.</returns>
+        protected async Task<DataTable> ExecuteWithoutCommandTimeoutAsync(string query, CancellationToken token = default)
+        {
+            // AsyncLocal changes made inside an async method do not flow back to the caller,
+            // so the override only applies to this call and anything it awaits.
+            _CommandTimeoutOverride.Value = 0;
+            return await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Determine whether an exception thrown by the provider means the command timeout expired.
+        /// The default implementation looks for a <see cref="TimeoutException"/> anywhere in the
+        /// inner-exception chain; providers override this to recognize their own error codes.
+        /// </summary>
+        /// <param name="ex">Exception thrown by the provider.</param>
+        /// <returns>True if the exception represents a command timeout.</returns>
+        protected virtual bool IsCommandTimeout(Exception ex)
+        {
+            for (Exception current = ex; current != null; current = current.InnerException)
+            {
+                if (current is TimeoutException) return true;
+            }
+
+            return false;
+        }
+
+        private async Task<DataTable> TranslateTimeoutAsync(Func<Task<DataTable>> action)
+        {
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (!(ex is OperationCanceledException) && !(ex is DatabaseTimeoutException) && IsCommandTimeout(ex))
+            {
+                throw new DatabaseTimeoutException(EffectiveCommandTimeoutSeconds, ex);
+            }
         }
 
         /// <summary>

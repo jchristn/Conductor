@@ -4,6 +4,7 @@ namespace Conductor.Server.Routing
     using System.Collections.Generic;
     using System.Globalization;
     using System.Threading.Tasks;
+    using Conductor.Core.Database;
     using Conductor.Core.Models;
     using Conductor.Server;
     using Conductor.Server.Controllers;
@@ -45,7 +46,7 @@ namespace Conductor.Server.Routing
             {
                 AnalyticsQueryRequest query = req.Data as AnalyticsQueryRequest ?? new AnalyticsQueryRequest();
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, query.TenantId);
-                return await QueryAsync(tenantId, query).ConfigureAwait(false);
+                return await WithDatabaseTimeoutAsync(req, () => QueryAsync(tenantId, query)).ConfigureAwait(false);
             },
             api => api
                 .WithTag("Analytics")
@@ -54,6 +55,7 @@ namespace Conductor.Server.Routing
                 .WithSecurity("Bearer")
                 .WithRequestBody(Api.JsonRequestBody<AnalyticsQueryRequest>("Analytics query", true))
                 .WithResponse(200, Api.JsonResponse<AnalyticsQueryResult>("Analytics query result"))
+                .WithResponse(504, Api.JsonResponse<Conductor.Core.Models.ApiErrorResponse>("Database query exceeded Database.CommandTimeoutSeconds"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
@@ -62,7 +64,7 @@ namespace Conductor.Server.Routing
             {
                 AnalyticsQueryRequest query = req.Data as AnalyticsQueryRequest ?? new AnalyticsQueryRequest();
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, query.TenantId);
-                return await QueryBucketsAsync(tenantId, query).ConfigureAwait(false);
+                return await WithDatabaseTimeoutAsync(req, () => QueryBucketsAsync(tenantId, query)).ConfigureAwait(false);
             },
             api => api
                 .WithTag("Analytics")
@@ -71,6 +73,7 @@ namespace Conductor.Server.Routing
                 .WithSecurity("Bearer")
                 .WithRequestBody(Api.JsonRequestBody<AnalyticsQueryRequest>("Analytics query", true))
                 .WithResponse(200, Api.JsonResponse<AnalyticsQueryResult>("Analytics aggregate bucket result"))
+                .WithResponse(504, Api.JsonResponse<Conductor.Core.Models.ApiErrorResponse>("Database query exceeded Database.CommandTimeoutSeconds"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
@@ -190,7 +193,7 @@ namespace Conductor.Server.Routing
             {
                 AnalyticsQueryRequest query = BuildQueryFromRequest(req.Http.Request, defaultGroupBy);
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
-                return await QueryAsync(tenantId, query).ConfigureAwait(false);
+                return await WithDatabaseTimeoutAsync(req, () => QueryAsync(tenantId, query)).ConfigureAwait(false);
             },
             api => api
                 .WithTag("Analytics")
@@ -221,6 +224,7 @@ namespace Conductor.Server.Routing
                 .WithParameter(OpenApiParameterMetadata.Query("modelAccessWouldDeny", "Filter would-deny model access monitor results", false, OpenApiSchemaMetadata.Boolean()))
                 .WithParameter(OpenApiParameterMetadata.Query("successfulCompletionsOnly", "Restrict usage-style metrics to successful completions", false, OpenApiSchemaMetadata.Boolean()))
                 .WithResponse(200, Api.JsonResponse<AnalyticsQueryResult>("Analytics query result"))
+                .WithResponse(504, Api.JsonResponse<Conductor.Core.Models.ApiErrorResponse>("Database query exceeded Database.CommandTimeoutSeconds"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
         }
@@ -256,6 +260,25 @@ namespace Conductor.Server.Routing
             }
 
             return await _AnalyticsService.QueryAsync(tenantId, query).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Run an analytics query and turn a database command timeout into 504 Gateway Timeout with a
+        /// clear message, instead of letting it surface as a generic 500.
+        /// </summary>
+        internal static async Task<object> WithDatabaseTimeoutAsync(ApiRequest req, Func<Task<AnalyticsQueryResult>> action)
+        {
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (DatabaseTimeoutException ex)
+            {
+                req.Http.Response.StatusCode = 504;
+                return Conductor.Core.Models.ApiErrorResponse.GatewayTimeout(
+                    ex.Message + " Narrow the time range or filters, or raise Database.CommandTimeoutSeconds in conductor.json.",
+                    "QueryTimeout");
+            }
         }
 
         private async Task<AnalyticsQueryResult> QueryBucketsAsync(string tenantId, AnalyticsQueryRequest query)

@@ -26,6 +26,14 @@ namespace Conductor.Core.Database
             "reservationconflict"
         };
 
+        /// <summary>
+        /// Every requesthistory column the bucket aggregate reads besides the createdutc key. Covering indexes
+        /// created by the database drivers carry these columns so the aggregate never touches the wide table rows.
+        /// Keep this in sync with <see cref="GetTimeBucketsAsync"/>; a column missing here forces a row lookup
+        /// for every matching request.
+        /// </summary>
+        public const string CoveringIndexColumns = "httpstatus, prompttokens, completiontokens, totaltokens, responsetimems, firsttokentimems, modelaccessdecision, denialreasoncode, reservationreasoncode";
+
         private const string SuccessCondition = "httpstatus IS NOT NULL AND httpstatus >= 100 AND httpstatus < 400";
 
         private readonly DatabaseDriverBase _Driver;

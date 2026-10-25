@@ -27,6 +27,7 @@ namespace Conductor.Core.Database.MySql
 
             ConnectionString = settings.GetConnectionString();
             LogQueries = settings.LogQueries;
+            CommandTimeoutSeconds = settings.CommandTimeoutSeconds;
 
             // Initialize method implementations
             Tenant = new TenantMethods(this);
@@ -120,6 +121,7 @@ namespace Conductor.Core.Database.MySql
                 {
                     using (MySqlCommand cmd = new MySqlCommand(query, conn, transaction))
                     {
+                        cmd.CommandTimeout = EffectiveCommandTimeoutSeconds;
                         using (MySqlDataReader reader = (MySqlDataReader)await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
                         {
                             result.Load(reader);
@@ -182,6 +184,7 @@ namespace Conductor.Core.Database.MySql
 
                         using (MySqlCommand cmd = new MySqlCommand(query, conn, transaction))
                         {
+                            cmd.CommandTimeout = EffectiveCommandTimeoutSeconds;
                             using (MySqlDataReader reader = (MySqlDataReader)await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
                             {
                                 result = new DataTable();
@@ -321,8 +324,11 @@ namespace Conductor.Core.Database.MySql
             await EnsureIndexAsync("idx_requesthistory_analyticscaptured", "CREATE INDEX idx_requesthistory_analyticscaptured ON requesthistory(analyticscaptured);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_dominantstagekind", "CREATE INDEX idx_requesthistory_dominantstagekind ON requesthistory(dominantstagekind);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_analyticsfailurecode", "CREATE INDEX idx_requesthistory_analyticsfailurecode ON requesthistory(analyticsfailurecode);", token).ConfigureAwait(false);
-            await EnsureIndexAsync("idx_requesthistory_tenant_created", "CREATE INDEX idx_requesthistory_tenant_created ON requesthistory(tenantguid, createdutc);", token).ConfigureAwait(false);
-            await EnsureIndexAsync("idx_requesthistory_vmr_created", "CREATE INDEX idx_requesthistory_vmr_created ON requesthistory(virtualmodelrunnerguid, createdutc);", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_createdutc_cover", "CREATE INDEX idx_requesthistory_createdutc_cover ON requesthistory(createdutc, " + RequestHistoryAggregateMethods.CoveringIndexColumns + ");", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_tenant_created_cover", "CREATE INDEX idx_requesthistory_tenant_created_cover ON requesthistory(tenantguid, createdutc, " + RequestHistoryAggregateMethods.CoveringIndexColumns + ");", token).ConfigureAwait(false);
+            await EnsureIndexAsync("idx_requesthistory_vmr_created_cover", "CREATE INDEX idx_requesthistory_vmr_created_cover ON requesthistory(virtualmodelrunnerguid, createdutc, " + RequestHistoryAggregateMethods.CoveringIndexColumns + ");", token).ConfigureAwait(false);
+            await DropReplacedIndexAsync("idx_requesthistory_tenant_created", "idx_requesthistory_tenant_created_cover", "DROP INDEX idx_requesthistory_tenant_created ON requesthistory;", token).ConfigureAwait(false);
+            await DropReplacedIndexAsync("idx_requesthistory_vmr_created", "idx_requesthistory_vmr_created_cover", "DROP INDEX idx_requesthistory_vmr_created ON requesthistory;", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_tenant_created", "CREATE INDEX idx_requestanalyticsevents_tenant_created ON requestanalyticsevents(tenantguid, createdutc);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_requesthistoryid", "CREATE INDEX idx_requestanalyticsevents_requesthistoryid ON requestanalyticsevents(requesthistoryid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_traceid", "CREATE INDEX idx_requestanalyticsevents_traceid ON requestanalyticsevents(traceid);", token).ConfigureAwait(false);
@@ -385,11 +391,51 @@ namespace Conductor.Core.Database.MySql
 
             try
             {
-                await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+                await ExecuteWithoutCommandTimeoutAsync(query, token).ConfigureAwait(false);
             }
             catch
             {
             }
+        }
+
+        /// <summary>
+        /// Drop an index made redundant by a covering index with the same leading key columns,
+        /// but only once the replacement exists.
+        /// </summary>
+        private async Task DropReplacedIndexAsync(string indexName, string replacementIndexName, string dropQuery, CancellationToken token = default)
+        {
+            bool replacementExists = await IndexExistsAsync(replacementIndexName, token).ConfigureAwait(false);
+            if (!replacementExists)
+            {
+                return;
+            }
+
+            bool exists = await IndexExistsAsync(indexName, token).ConfigureAwait(false);
+            if (!exists)
+            {
+                return;
+            }
+
+            try
+            {
+                await ExecuteWithoutCommandTimeoutAsync(dropQuery, token).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <inheritdoc/>
+        protected override bool IsCommandTimeout(Exception ex)
+        {
+            for (Exception current = ex; current != null; current = current.InnerException)
+            {
+                // 1317 ER_QUERY_INTERRUPTED is returned when the driver kills a query whose timeout expired;
+                // 3024 ER_QUERY_TIMEOUT is returned when a server-side max_execution_time is exceeded.
+                if (current is MySqlException my && (my.Number == 1317 || my.Number == 3024)) return true;
+            }
+
+            return base.IsCommandTimeout(ex);
         }
     }
 }

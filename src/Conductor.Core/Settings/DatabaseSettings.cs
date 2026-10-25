@@ -69,10 +69,24 @@ namespace Conductor.Core.Settings
         /// </summary>
         public bool LogQueries { get; set; } = false;
 
+        /// <summary>
+        /// Command timeout in seconds for each database query (PostgreSQL, SQL Server, MySQL).
+        /// A query that runs longer is stopped and the API returns 504 Gateway Timeout.
+        /// 0 means no limit. Negative values reset to the default of 30.
+        /// Schema migrations at startup (for example index builds) always run without a limit.
+        /// SQLite is not affected; it has no per-query timeout.
+        /// </summary>
+        public int CommandTimeoutSeconds
+        {
+            get => _CommandTimeoutSeconds;
+            set => _CommandTimeoutSeconds = (value < 0 ? 30 : value);
+        }
+
         private string _Filename = "./conductor.db";
         private string _Hostname = "localhost";
         private int _Port = 5432;
         private string _DatabaseName = "conductor";
+        private int _CommandTimeoutSeconds = 30;
 
         /// <summary>
         /// Instantiate the database settings.

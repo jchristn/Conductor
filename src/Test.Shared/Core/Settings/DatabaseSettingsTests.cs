@@ -99,6 +99,39 @@ namespace Test.Shared.Core.Settings
 
         #endregion
 
+        #region CommandTimeout-Tests
+        public void CommandTimeoutSeconds_DefaultsTo30()
+        {
+            DatabaseSettings settings = new DatabaseSettings();
+            settings.CommandTimeoutSeconds.Should().Be(30);
+        }
+        public void CommandTimeoutSeconds_AcceptsZeroForNoLimit()
+        {
+            DatabaseSettings settings = new DatabaseSettings();
+            settings.CommandTimeoutSeconds = 0;
+            settings.CommandTimeoutSeconds.Should().Be(0);
+        }
+        public void CommandTimeoutSeconds_AcceptsPositiveValue()
+        {
+            DatabaseSettings settings = new DatabaseSettings();
+            settings.CommandTimeoutSeconds = 300;
+            settings.CommandTimeoutSeconds.Should().Be(300);
+        }
+        public void CommandTimeoutSeconds_WhenNegative_FallsBackToDefault()
+        {
+            DatabaseSettings settings = new DatabaseSettings();
+            settings.CommandTimeoutSeconds = 300;
+            settings.CommandTimeoutSeconds = -1;
+            settings.CommandTimeoutSeconds.Should().Be(30);
+        }
+        public void CommandTimeoutSeconds_IsNotAddedToConnectionString()
+        {
+            DatabaseSettings settings = new DatabaseSettings { Type = DatabaseTypeEnum.PostgreSql, CommandTimeoutSeconds = 120 };
+            settings.GetConnectionString().Should().NotContain("Timeout");
+        }
+
+        #endregion
+
         #region Port-Clamping-Tests
         public void Port_WhenValid_UsesProvidedValue()
         {

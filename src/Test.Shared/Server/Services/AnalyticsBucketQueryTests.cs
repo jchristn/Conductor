@@ -382,22 +382,81 @@ namespace Test.Shared.Server.Services
         }
 
         /// <summary>
-        /// Composite (tenantguid, createdutc) and (virtualmodelrunnerguid, createdutc) indexes exist and re-initialization is idempotent.
+        /// Covering (createdutc), (tenantguid, createdutc) and (virtualmodelrunnerguid, createdutc) indexes carry every
+        /// column the bucket aggregate reads, the superseded non-covering composites are gone, and re-initialization is idempotent.
         /// </summary>
         /// <returns>Task.</returns>
-        public async Task Initialize_CreatesCompositeRequestHistoryIndexes_Idempotently()
+        public async Task Initialize_CreatesCoveringRequestHistoryIndexes_Idempotently()
         {
             await Database.InitializeAsync().ConfigureAwait(false);
 
             DataTable result = await Database.ExecuteQueryAsync(
                 "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'requesthistory' " +
-                "AND name IN ('idx_requesthistory_tenant_created', 'idx_requesthistory_vmr_created') ORDER BY name;").ConfigureAwait(false);
+                "AND name LIKE 'idx_requesthistory_%cover' ORDER BY name;").ConfigureAwait(false);
 
-            result.Rows.Count.Should().Be(2);
-            result.Rows[0]["name"].ToString().Should().Be("idx_requesthistory_tenant_created");
-            result.Rows[0]["sql"].ToString().Replace(" ", "").Should().Contain("(tenantguid,createdutc)");
-            result.Rows[1]["name"].ToString().Should().Be("idx_requesthistory_vmr_created");
-            result.Rows[1]["sql"].ToString().Replace(" ", "").Should().Contain("(virtualmodelrunnerguid,createdutc)");
+            result.Rows.Count.Should().Be(3);
+            string coverColumns = "," + Conductor.Core.Database.RequestHistoryAggregateMethods.CoveringIndexColumns.Replace(" ", "") + ")";
+            result.Rows[0]["name"].ToString().Should().Be("idx_requesthistory_createdutc_cover");
+            result.Rows[0]["sql"].ToString().Replace(" ", "").Should().Contain("(createdutc" + coverColumns);
+            result.Rows[1]["name"].ToString().Should().Be("idx_requesthistory_tenant_created_cover");
+            result.Rows[1]["sql"].ToString().Replace(" ", "").Should().Contain("(tenantguid,createdutc" + coverColumns);
+            result.Rows[2]["name"].ToString().Should().Be("idx_requesthistory_vmr_created_cover");
+            result.Rows[2]["sql"].ToString().Replace(" ", "").Should().Contain("(virtualmodelrunnerguid,createdutc" + coverColumns);
+
+            (await CountIndexesAsync("idx_requesthistory_tenant_created", "idx_requesthistory_vmr_created").ConfigureAwait(false)).Should().Be(0);
+        }
+
+        /// <summary>
+        /// A database upgraded from the previous release, which still has the non-covering composite indexes,
+        /// gets them replaced by the covering indexes on the next startup.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task Initialize_UpgradedDatabase_DropsSupersededCompositeIndexes()
+        {
+            await Database.ExecuteQueryAsync("CREATE INDEX idx_requesthistory_tenant_created ON requesthistory(tenantguid, createdutc);").ConfigureAwait(false);
+            await Database.ExecuteQueryAsync("CREATE INDEX idx_requesthistory_vmr_created ON requesthistory(virtualmodelrunnerguid, createdutc);").ConfigureAwait(false);
+            await Database.ExecuteQueryAsync("DROP INDEX idx_requesthistory_vmr_created_cover;").ConfigureAwait(false);
+
+            await Database.InitializeAsync().ConfigureAwait(false);
+
+            (await CountIndexesAsync("idx_requesthistory_tenant_created", "idx_requesthistory_vmr_created").ConfigureAwait(false)).Should().Be(0);
+            (await CountIndexesAsync("idx_requesthistory_tenant_created_cover", "idx_requesthistory_vmr_created_cover").ConfigureAwait(false)).Should().Be(2);
+        }
+
+        /// <summary>
+        /// The aggregate is answered entirely from a covering index, so no wide requesthistory rows are read.
+        /// Guards against the aggregate starting to read a column that the covering indexes do not carry.
+        /// </summary>
+        /// <returns>Task.</returns>
+        public async Task BucketAggregate_GlobalAndScopedPlans_UseCoveringIndex()
+        {
+            DateTime start = AlignedStart();
+            await BulkInsertAsync(TestTenantId, _VmrA, Enumerable.Range(0, 200).Select(i => start.AddMinutes(i)).ToList()).ConfigureAwait(false);
+            await Database.ExecuteQueryAsync("ANALYZE;").ConfigureAwait(false);
+
+            foreach (string scope in new[] { "", " AND tenantguid = '" + TestTenantId + "'", " AND virtualmodelrunnerguid = '" + _VmrA + "'" })
+            {
+                string where = "WHERE createdutc >= '" + Database.FormatDateTime(start) + "' AND createdutc < '" + Database.FormatDateTime(start.AddDays(1)) + "'" + scope;
+                DataTable plan = await Database.ExecuteQueryAsync(
+                    "EXPLAIN QUERY PLAN SELECT COUNT(*), " +
+                    "SUM(CASE WHEN httpstatus >= 100 AND httpstatus < 400 AND firsttokentimems IS NOT NULL THEN firsttokentimems ELSE 0 END), " +
+                    "SUM(responsetimems), SUM(prompttokens), SUM(completiontokens), SUM(totaltokens), " +
+                    "SUM(CASE WHEN LOWER(COALESCE(modelaccessdecision, '')) = 'deny' OR COALESCE(denialreasoncode, '') <> '' THEN 1 ELSE 0 END), " +
+                    "SUM(CASE WHEN LOWER(COALESCE(reservationreasoncode, '')) = 'x' THEN 1 ELSE 0 END) " +
+                    "FROM requesthistory " + where + ";").ConfigureAwait(false);
+
+                string detail = String.Join(" | ", plan.Rows.Cast<DataRow>().Select(row => row["detail"].ToString()));
+                detail.Should().Contain("COVERING INDEX idx_requesthistory_", "scope '" + scope + "' plan was: " + detail);
+                detail.Should().Contain("_cover");
+            }
+        }
+
+        private async Task<long> CountIndexesAsync(params string[] names)
+        {
+            string list = String.Join(", ", names.Select(name => "'" + name + "'"));
+            DataTable result = await Database.ExecuteQueryAsync(
+                "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'index' AND name IN (" + list + ");").ConfigureAwait(false);
+            return Convert.ToInt64(result.Rows[0]["cnt"]);
         }
 
         private async Task<string> CreateVmrAsync(string tenantId, string name)

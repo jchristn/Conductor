@@ -27,6 +27,7 @@ namespace Conductor.Core.Database.PostgreSql
 
             ConnectionString = settings.GetConnectionString();
             LogQueries = settings.LogQueries;
+            CommandTimeoutSeconds = settings.CommandTimeoutSeconds;
 
             // Initialize method implementations
             Tenant = new TenantMethods(this);
@@ -120,6 +121,7 @@ namespace Conductor.Core.Database.PostgreSql
                 {
                     using (NpgsqlCommand cmd = new NpgsqlCommand(query, conn, transaction))
                     {
+                        cmd.CommandTimeout = EffectiveCommandTimeoutSeconds;
                         using (NpgsqlDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
                         {
                             result.Load(reader);
@@ -182,6 +184,7 @@ namespace Conductor.Core.Database.PostgreSql
 
                         using (NpgsqlCommand cmd = new NpgsqlCommand(query, conn, transaction))
                         {
+                            cmd.CommandTimeout = EffectiveCommandTimeoutSeconds;
                             using (NpgsqlDataReader reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
                             {
                                 result = new DataTable();
@@ -331,8 +334,11 @@ namespace Conductor.Core.Database.PostgreSql
             await EnsureIndexAsync("idx_requesthistory_analyticscaptured", "CREATE INDEX IF NOT EXISTS idx_requesthistory_analyticscaptured ON requesthistory(analyticscaptured);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_dominantstagekind", "CREATE INDEX IF NOT EXISTS idx_requesthistory_dominantstagekind ON requesthistory(dominantstagekind);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requesthistory_analyticsfailurecode", "CREATE INDEX IF NOT EXISTS idx_requesthistory_analyticsfailurecode ON requesthistory(analyticsfailurecode);", token).ConfigureAwait(false);
-            await EnsureIndexAsync("idx_requesthistory_tenant_created", "CREATE INDEX IF NOT EXISTS idx_requesthistory_tenant_created ON requesthistory(tenantguid, createdutc);", token).ConfigureAwait(false);
-            await EnsureIndexAsync("idx_requesthistory_vmr_created", "CREATE INDEX IF NOT EXISTS idx_requesthistory_vmr_created ON requesthistory(virtualmodelrunnerguid, createdutc);", token).ConfigureAwait(false);
+            await EnsureCoveringIndexAsync("idx_requesthistory_createdutc_cover", "requesthistory(createdutc)", token).ConfigureAwait(false);
+            await EnsureCoveringIndexAsync("idx_requesthistory_tenant_created_cover", "requesthistory(tenantguid, createdutc)", token).ConfigureAwait(false);
+            await EnsureCoveringIndexAsync("idx_requesthistory_vmr_created_cover", "requesthistory(virtualmodelrunnerguid, createdutc)", token).ConfigureAwait(false);
+            await DropIndexIfValidReplacementAsync("idx_requesthistory_tenant_created", "idx_requesthistory_tenant_created_cover", token).ConfigureAwait(false);
+            await DropIndexIfValidReplacementAsync("idx_requesthistory_vmr_created", "idx_requesthistory_vmr_created_cover", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_tenant_created", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_tenant_created ON requestanalyticsevents(tenantguid, createdutc);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_requesthistoryid", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_requesthistoryid ON requestanalyticsevents(requesthistoryid);", token).ConfigureAwait(false);
             await EnsureIndexAsync("idx_requestanalyticsevents_traceid", "CREATE INDEX IF NOT EXISTS idx_requestanalyticsevents_traceid ON requestanalyticsevents(traceid);", token).ConfigureAwait(false);
@@ -395,11 +401,97 @@ namespace Conductor.Core.Database.PostgreSql
 
             try
             {
-                await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+                await ExecuteWithoutCommandTimeoutAsync(query, token).ConfigureAwait(false);
             }
             catch
             {
             }
+        }
+
+        /// <summary>
+        /// Ensure a covering index for the request history aggregate query exists. The index carries every
+        /// column the aggregate reads as INCLUDE columns, so PostgreSQL can answer it with an index-only scan
+        /// instead of fetching each wide requesthistory row from the heap.
+        /// Built CONCURRENTLY so request logging is not blocked while a large table is indexed. A failed
+        /// concurrent build leaves an INVALID index behind; it is dropped and rebuilt on the next startup.
+        /// </summary>
+        private async Task EnsureCoveringIndexAsync(string indexName, string target, CancellationToken token = default)
+        {
+            bool? valid = await GetIndexValidityAsync(indexName, token).ConfigureAwait(false);
+            if (valid == true)
+            {
+                return;
+            }
+
+            try
+            {
+                if (valid == false)
+                {
+                    await ExecuteWithoutCommandTimeoutAsync("DROP INDEX CONCURRENTLY IF EXISTS " + indexName + ";", token).ConfigureAwait(false);
+                }
+
+                await ExecuteWithoutCommandTimeoutAsync(
+                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS " + indexName + " ON " + target + " INCLUDE (" + RequestHistoryAggregateMethods.CoveringIndexColumns + ");",
+                    token).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// Drop an index that is made redundant by a covering index with the same leading key columns,
+        /// but only once that replacement exists and is valid.
+        /// </summary>
+        private async Task DropIndexIfValidReplacementAsync(string indexName, string replacementIndexName, CancellationToken token = default)
+        {
+            bool? replacementValid = await GetIndexValidityAsync(replacementIndexName, token).ConfigureAwait(false);
+            if (replacementValid != true)
+            {
+                return;
+            }
+
+            bool exists = await IndexExistsAsync(indexName, token).ConfigureAwait(false);
+            if (!exists)
+            {
+                return;
+            }
+
+            try
+            {
+                await ExecuteWithoutCommandTimeoutAsync("DROP INDEX CONCURRENTLY IF EXISTS " + indexName + ";", token).ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// Return null if the index does not exist, otherwise whether PostgreSQL considers it valid.
+        /// </summary>
+        private async Task<bool?> GetIndexValidityAsync(string indexName, CancellationToken token = default)
+        {
+            string query =
+                "SELECT i.indisvalid AS valid FROM pg_index i " +
+                "JOIN pg_class c ON c.oid = i.indexrelid " +
+                "JOIN pg_namespace n ON n.oid = c.relnamespace " +
+                "WHERE n.nspname = ANY(current_schemas(false)) AND c.relname = '" + Sanitize(indexName) + "';";
+            DataTable result = await ExecuteQueryAsync(query, false, token).ConfigureAwait(false);
+
+            if (result == null || result.Rows.Count < 1) return null;
+            return Convert.ToBoolean(result.Rows[0]["valid"]);
+        }
+
+        /// <inheritdoc/>
+        protected override bool IsCommandTimeout(Exception ex)
+        {
+            for (Exception current = ex; current != null; current = current.InnerException)
+            {
+                // 57014 query_canceled: raised when Npgsql cancels a command whose timeout expired.
+                if (current is PostgresException pg && pg.SqlState == PostgresErrorCodes.QueryCanceled) return true;
+            }
+
+            return base.IsCommandTimeout(ex);
         }
     }
 }
