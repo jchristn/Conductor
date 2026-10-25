@@ -495,4 +495,69 @@ describe('heatmap utils', () => {
       expect(cellLabel({ TimestampUtc: 'garbage' }, 'requests', 60)).toBe('');
     });
   });
+
+  describe('rework 1 regression guards', () => {
+    it('ttft average ignores successes on null-TTFT buckets but weights real 0 ms buckets (D14, D17)', () => {
+      const buckets = [
+        { startMs: at('2026-10-24T10:00:00Z'), AverageTimeToFirstTokenMs: 100, SuccessfulCompletionCount: 1 },
+        { startMs: at('2026-10-24T11:00:00Z'), AverageTimeToFirstTokenMs: null, SuccessfulCompletionCount: 5 },
+        { startMs: at('2026-10-24T12:00:00Z'), AverageTimeToFirstTokenMs: 0, SuccessfulCompletionCount: 1 },
+        { padding: true, startMs: at('2026-10-24T09:00:00Z'), AverageTimeToFirstTokenMs: 900, SuccessfulCompletionCount: 9 }
+      ];
+      const summary = summarize(buckets, 'ttft');
+      expect(summary.primary).toEqual({ label: 'Average', value: 50, text: '50 ms' });
+      expect(summary.peak).toMatchObject({ value: 100, startMs: at('2026-10-24T10:00:00Z'), text: '100 ms', timeText: '2026-10-24 10:00 UTC' });
+      expect(summary.active).toEqual({ count: 1, total: 3, text: '1 of 3' });
+      expect(metricPeak(buckets, 'ttft')).toBe(100);
+      expect(buckets.map(b => heatLevel(metricValue(b, 'ttft'), 100)).slice(0, 3)).toEqual([4, 0, 0]);
+    });
+
+    it('heat level quarter boundaries and peak ignore padding, null and negative values (D15)', () => {
+      expect([1, 250, 251, 500, 501, 750, 751, 1000].map(v => heatLevel(v, 1000))).toEqual([1, 1, 2, 2, 3, 3, 4, 4]);
+      expect(heatLevel(5, '10')).toBe(2);
+      expect(metricPeak([{ RequestCount: -8 }, { RequestCount: null }, {}], 'requests')).toBe(0);
+      expect(metricPeak([{ padding: true, TotalTokens: 99 }, { TotalTokens: 3 }, null], 'tokens')).toBe(3);
+      expect(metricPeak(undefined, 'requests')).toBe(0);
+      const negative = summarize([{ startMs: 0, FailedRequestCount: -3 }], 'errors');
+      expect(negative.peak).toMatchObject({ value: 0, startMs: null, timeText: null });
+      expect(negative.active.text).toBe('0 of 1');
+    });
+
+    it('layout cells summarize exactly like the bucket list for every timeframe (D6, D16)', () => {
+      for (const [timeframe, bucketSeconds, rangeSeconds] of [['hour', 60, 3600], ['day', 900, 86400], ['week', 3600, 7 * 86400], ['month', 86400, 30 * 86400]]) {
+        const base = buildBuckets(response(bucketSeconds, rangeSeconds, []));
+        const pick = [base[0], base[Math.floor(base.length / 2)], base[base.length - 1]];
+        const res = response(bucketSeconds, rangeSeconds, pick.map((b, i) => ({ TimestampUtc: b.TimestampUtc, RequestCount: 7, TotalTokens: i + 1, AverageTimeToFirstTokenMs: 10 * (i + 1), SuccessfulCompletionCount: 1 })));
+        const buckets = buildBuckets(res);
+        const layout = layoutHeatmap(buckets, timeframe, res.BucketSeconds);
+        const cells = layout.rows.flatMap(row => row.cells).map(cell => (cell.padding ? { ...cell, RequestCount: 1e6, TotalTokens: 1e6 } : cell.bucket));
+        expect(cells.some(cell => cell.padding), timeframe).toBe(true);
+        for (const metric of ['requests', 'tokens', 'ttft']) {
+          expect(summarize(cells, metric), `${timeframe}/${metric}`).toEqual(summarize(buckets, metric));
+          expect(metricPeak(cells, metric), `${timeframe}/${metric}`).toBe(metricPeak(buckets, metric));
+        }
+        const summary = summarize(buckets, 'requests');
+        expect(summary.primary.value, timeframe).toBe(21);
+        expect(summary.peak.startMs, timeframe).toBe(buckets[0].startMs);
+        expect(summary.active.text, timeframe).toBe(`3 of ${buckets.length}`);
+        expect(summarize(buckets, 'ttft').primary.value, timeframe).toBe(20);
+      }
+    });
+
+    it('labels cross month and year boundaries and follow a coarsened response bucket (D6, D18)', () => {
+      expect(formatBucketRange(at('2026-12-31T23:00:00Z'), 3600)).toBe('2026-12-31 23:00-2027-01-01 00:00 UTC');
+      expect(formatBucketRange(at('2026-10-31T00:00:00Z'), 86400)).toBe('2026-10-31 00:00-2026-11-01 00:00 UTC');
+      expect(formatBucketRange(at('2028-02-28T00:00:00Z'), 86400)).toBe('2028-02-28 00:00-2028-02-29 00:00 UTC');
+      expect(formatBucketRange(at('2026-10-24T00:00:00Z'), 31 * 86400)).toBe('2026-10-24 00:00-2026-11-24 00:00 UTC');
+      const res = response(120, 3600, [{ TimestampUtc: '2026-10-24T12:06:00', RequestCount: 12345678 }]);
+      const layout = layoutHeatmap(buildBuckets(res), 'hour', res.BucketSeconds);
+      const first = layout.rows.flatMap(row => row.cells).find(cell => !cell.padding);
+      expect(first.bucket.startMs).toBe(at('2026-10-24T12:06:00Z'));
+      expect(cellLabel(first.bucket, 'requests', layout.bucketSeconds)).toBe('2026-10-24 12:06-12:08 UTC: 12,345,678 requests');
+      const zero = buildBuckets(res)[1];
+      expect(zero).toMatchObject({ RequestCount: 0, SuccessfulCompletionCount: 0, AverageTimeToFirstTokenMs: null });
+      expect(cellLabel(zero, 'ttft', layout.bucketSeconds)).toBe('2026-10-24 12:08-12:10 UTC: No timing data');
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z') }, 'tokens', 3600)).toBe('2026-10-24 13:00-14:00 UTC: 0 tokens');
+    });
+  });
 });
