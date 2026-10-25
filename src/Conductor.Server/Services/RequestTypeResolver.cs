@@ -192,6 +192,7 @@ namespace Conductor.Server.Services
             // Analytics workspace
             { new RouteKey("GET", "/v1.0/analytics/catalog"), RequestTypeEnum.ReadAnalytics },
             { new RouteKey("POST", "/v1.0/analytics/query"), RequestTypeEnum.ReadAnalytics },
+            { new RouteKey("POST", "/v1.0/analytics/buckets"), RequestTypeEnum.ReadAnalytics },
             { new RouteKey("GET", "/v1.0/analytics/reports"), RequestTypeEnum.ReadAnalytics },
             { new RouteKey("POST", "/v1.0/analytics/reports"), RequestTypeEnum.ReadAnalytics },
             { new RouteKey("GET", "/v1.0/analytics/reports/{id}"), RequestTypeEnum.ReadAnalytics },

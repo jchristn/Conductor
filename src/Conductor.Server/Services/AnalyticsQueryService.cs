@@ -16,7 +16,6 @@ namespace Conductor.Server.Services
         private const int RetentionDays = 30;
         private const int MaxBucketCount = 720;
         private const int MaxLimit = 50000;
-        private const int SearchPageSize = 100;
 
         private static readonly HashSet<string> SupportedMetricIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -188,19 +187,8 @@ namespace Conductor.Server.Services
         public async Task<AnalyticsQueryResult> QueryAsync(string tenantId, AnalyticsQueryRequest request, CancellationToken token = default)
         {
             AnalyticsQueryRequest normalizedRequest = NormalizeRequest(request);
-            DateTime endUtc = normalizedRequest.EndUtc ?? DateTime.UtcNow;
-            DateTime startUtc = normalizedRequest.StartUtc ?? ResolveRangeStart(normalizedRequest.Range, endUtc);
-            if (startUtc >= endUtc)
-            {
-                startUtc = endUtc.AddDays(-1);
-            }
-
-            DateTime earliestAllowedStart = endUtc.AddDays(-RetentionDays);
-            if (startUtc < earliestAllowedStart)
-            {
-                startUtc = earliestAllowedStart;
-            }
-
+            DateTime endUtc = ResolveEndUtc(normalizedRequest);
+            DateTime startUtc = ResolveStartUtc(normalizedRequest, endUtc);
             int bucketSeconds = NormalizeBucketSeconds(startUtc, endUtc, normalizedRequest.BucketSeconds);
             int limit = NormalizeLimit(normalizedRequest.Limit);
             List<RequestHistoryEntry> entries = await SearchEntriesAsync(tenantId, normalizedRequest, startUtc, endUtc, limit, token).ConfigureAwait(false);
@@ -216,6 +204,43 @@ namespace Conductor.Server.Services
                 bucketSeconds);
 
             return result;
+        }
+
+        /// <summary>
+        /// Execute an aggregate-only analytics query. Time buckets and summary totals are computed in the
+        /// database with a single GROUP BY query, so no row cap (Limit) applies and results are never truncated.
+        /// Percentiles, groups, and per-reservation denial counts are not produced; use <see cref="QueryAsync"/> for those.
+        /// Tenant scoping and filters follow the same semantics as <see cref="QueryAsync"/>.
+        /// </summary>
+        /// <param name="tenantId">Tenant ID, or null for global scope.</param>
+        /// <param name="request">Query request. Null is treated as the default lastDay query.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Analytics query result with TimeSeries covering every bucket from the floored start to the end.</returns>
+        /// <exception cref="WebserverException">Thrown with BadRequest when the request is invalid or asks for percentile metrics or grouping.</exception>
+        public async Task<AnalyticsQueryResult> QueryBucketsAsync(string tenantId, AnalyticsQueryRequest request, CancellationToken token = default)
+        {
+            AnalyticsQueryRequest normalizedRequest = NormalizeRequest(request);
+            if (normalizedRequest.Metrics.Any(IsPercentileMetric))
+            {
+                throw BadRequest("Percentile metrics are not available from aggregate buckets; use POST /v1.0/analytics/query.");
+            }
+
+            if (normalizedRequest.GroupBy.Count > 0)
+            {
+                throw BadRequest("GroupBy is not available from aggregate buckets; use POST /v1.0/analytics/query.");
+            }
+
+            DateTime endUtc = ResolveEndUtc(normalizedRequest);
+            DateTime startUtc = ResolveStartUtc(normalizedRequest, endUtc);
+            int bucketSeconds = NormalizeBucketSeconds(startUtc, endUtc, normalizedRequest.BucketSeconds);
+            DateTime anchorUtc = FloorToBucket(startUtc, bucketSeconds);
+
+            RequestHistoryAggregateFilter filter = BuildAggregateFilter(tenantId, normalizedRequest, startUtc, endUtc);
+            filter.AnchorUtc = anchorUtc;
+            filter.BucketSeconds = bucketSeconds;
+
+            List<RequestHistoryTimeBucket> rawBuckets = await _RequestHistoryService.GetTimeBucketsAsync(filter, token).ConfigureAwait(false);
+            return BuildAggregateResult(tenantId, normalizedRequest, rawBuckets, anchorUtc, startUtc, endUtc, bucketSeconds);
         }
 
         /// <summary>
@@ -336,44 +361,11 @@ namespace Conductor.Server.Services
             int limit,
             CancellationToken token)
         {
-            RequestHistorySearchFilter filter = new RequestHistorySearchFilter
-            {
-                TenantGuid = tenantId,
-                VirtualModelRunnerGuid = GetSingleFilterValue(request.Filters.VirtualModelRunnerIds),
-                ModelEndpointGuid = GetSingleFilterValue(request.Filters.ModelRunnerEndpointIds),
-                RequestorUserGuid = GetSingleFilterValue(request.Filters.RequestorUserIds),
-                CredentialGuid = GetSingleFilterValue(request.Filters.CredentialIds),
-                ModelName = GetSingleFilterValue(request.Filters.ModelNames),
-                ReservationGuid = GetSingleFilterValue(request.Filters.ReservationIds),
-                ReservationDecision = GetSingleFilterValue(request.Filters.ReservationDecisions),
-                ReservationReasonCode = GetSingleFilterValue(request.Filters.ReservationReasonCodes),
-                StatusClass = GetSingleFilterValue(request.Filters.StatusClasses),
-                ModelAccessWouldDeny = request.Filters.ModelAccessWouldDeny,
-                CreatedAfterUtc = startUtc,
-                CreatedBeforeUtc = endUtc,
-                Page = 1,
-                PageSize = SearchPageSize
-            };
+            token.ThrowIfCancellationRequested();
 
-            List<RequestHistoryEntry> entries = new List<RequestHistoryEntry>();
-            while (entries.Count < limit)
-            {
-                token.ThrowIfCancellationRequested();
-                filter.PageSize = Math.Min(SearchPageSize, limit - entries.Count);
-                RequestHistorySearchResult page = await _RequestHistoryService.SearchAsync(filter, token).ConfigureAwait(false);
-                if (page == null || page.Data == null || page.Data.Count < 1)
-                {
-                    break;
-                }
-
-                entries.AddRange(page.Data);
-                if (page.Data.Count < filter.PageSize)
-                {
-                    break;
-                }
-
-                filter.Page++;
-            }
+            // Single bounded query with filters pushed into SQL: no per-page COUNT(*) and no OFFSET pagination.
+            RequestHistoryAggregateFilter filter = BuildAggregateFilter(tenantId, request, startUtc, endUtc);
+            List<RequestHistoryEntry> entries = await _RequestHistoryService.ListRangeAsync(filter, limit, token).ConfigureAwait(false);
 
             return entries
                 .Where(item => MatchesList(item.VirtualModelRunnerGuid, request.Filters.VirtualModelRunnerIds))
@@ -388,6 +380,136 @@ namespace Conductor.Server.Services
                 .Where(item => MatchesStatusClassList(item, request.Filters.StatusClasses))
                 .Where(item => MatchesList(item.DominantStageKind, request.Filters.StageKinds))
                 .ToList();
+        }
+
+        private static RequestHistoryAggregateFilter BuildAggregateFilter(
+            string tenantId,
+            AnalyticsQueryRequest request,
+            DateTime startUtc,
+            DateTime endUtc)
+        {
+            return new RequestHistoryAggregateFilter
+            {
+                TenantGuid = tenantId,
+                StartUtc = startUtc,
+                EndUtc = endUtc,
+                AnchorUtc = startUtc,
+                VirtualModelRunnerGuids = request.Filters.VirtualModelRunnerIds,
+                ModelEndpointGuids = request.Filters.ModelRunnerEndpointIds,
+                RequestorUserGuids = request.Filters.RequestorUserIds,
+                CredentialGuids = request.Filters.CredentialIds,
+                ModelNames = request.Filters.ModelNames,
+                ProviderNames = request.Filters.ProviderNames,
+                ReservationGuids = request.Filters.ReservationIds,
+                ReservationDecisions = request.Filters.ReservationDecisions,
+                ReservationReasonCodes = request.Filters.ReservationReasonCodes,
+                StatusClasses = request.Filters.StatusClasses,
+                DominantStageKinds = request.Filters.StageKinds,
+                ModelAccessWouldDeny = request.Filters.ModelAccessWouldDeny
+            };
+        }
+
+        private static AnalyticsQueryResult BuildAggregateResult(
+            string tenantId,
+            AnalyticsQueryRequest request,
+            List<RequestHistoryTimeBucket> rawBuckets,
+            DateTime anchorUtc,
+            DateTime startUtc,
+            DateTime endUtc,
+            int bucketSeconds)
+        {
+            Dictionary<long, RequestHistoryTimeBucket> byIndex = new Dictionary<long, RequestHistoryTimeBucket>();
+            foreach (RequestHistoryTimeBucket bucket in rawBuckets ?? new List<RequestHistoryTimeBucket>())
+            {
+                if (bucket != null && !byIndex.ContainsKey(bucket.BucketIndex))
+                {
+                    byIndex.Add(bucket.BucketIndex, bucket);
+                }
+            }
+
+            List<AnalyticsTimeSeriesBucket> timeSeries = new List<AnalyticsTimeSeriesBucket>();
+            TimeSpan step = TimeSpan.FromSeconds(bucketSeconds);
+            DateTime cursor = anchorUtc;
+            long index = 0;
+            while (cursor < endUtc)
+            {
+                byIndex.TryGetValue(index, out RequestHistoryTimeBucket raw);
+                raw = raw ?? new RequestHistoryTimeBucket { BucketIndex = index };
+                timeSeries.Add(new AnalyticsTimeSeriesBucket
+                {
+                    TimestampUtc = cursor,
+                    RequestCount = raw.RequestCount,
+                    SuccessfulCompletionCount = raw.SuccessfulCompletionCount,
+                    FailedRequestCount = raw.FailedRequestCount,
+                    DeniedRequestCount = raw.DeniedRequestCount,
+                    RateLimitedRequestCount = raw.RateLimitedRequestCount,
+                    AverageTimeToFirstTokenMs = AverageSum(raw.TimeToFirstTokenSumMs, raw.TimeToFirstTokenSampleCount),
+                    AverageResponseTimeMs = AverageSum(raw.ResponseTimeSumMs, raw.ResponseTimeSampleCount),
+                    PromptTokens = raw.PromptTokens,
+                    CompletionTokens = raw.CompletionTokens,
+                    TotalTokens = raw.TotalTokens,
+                    CachedTokens = null,
+                    MultimodalTokens = null,
+                    UnknownTokenUsageCount = raw.UnknownTokenUsageCount,
+                    EstimatedCost = CalculateEstimatedCost(raw.TotalTokens, request.TokenUnitCost)
+                });
+
+                cursor = cursor.Add(step);
+                index++;
+            }
+
+            List<RequestHistoryTimeBucket> all = byIndex.Values.ToList();
+            long totalTokens = all.Sum(item => item.TotalTokens);
+            long ttftSum = all.Sum(item => item.TimeToFirstTokenSumMs);
+            long ttftCount = all.Sum(item => item.TimeToFirstTokenSampleCount);
+
+            return new AnalyticsQueryResult
+            {
+                TenantId = tenantId,
+                IsGlobalScope = String.IsNullOrEmpty(tenantId),
+                StartUtc = startUtc,
+                EndUtc = endUtc,
+                BucketSeconds = bucketSeconds,
+                RetentionDays = RetentionDays,
+                TotalRequests = all.Sum(item => item.RequestCount),
+                SuccessfulCompletionCount = all.Sum(item => item.SuccessfulCompletionCount),
+                FailedRequestCount = all.Sum(item => item.FailedRequestCount),
+                DeniedRequestCount = all.Sum(item => item.DeniedRequestCount),
+                ReservationDeniedCount = all.Sum(item => item.ReservationDeniedCount),
+                RateLimitedRequestCount = all.Sum(item => item.RateLimitedRequestCount),
+                AverageTimeToFirstTokenMs = AverageSum(ttftSum, ttftCount),
+                P50TimeToFirstTokenMs = null,
+                P95TimeToFirstTokenMs = null,
+                P99TimeToFirstTokenMs = null,
+                PromptTokens = all.Sum(item => item.PromptTokens),
+                CompletionTokens = all.Sum(item => item.CompletionTokens),
+                TotalTokens = totalTokens,
+                CachedTokens = null,
+                MultimodalTokens = null,
+                UnknownTokenUsageCount = all.Sum(item => item.UnknownTokenUsageCount),
+                TokenUnitCost = request.TokenUnitCost,
+                CostCurrency = request.CostCurrency,
+                EstimatedCost = CalculateEstimatedCost(totalTokens, request.TokenUnitCost),
+                TimeSeries = timeSeries
+            };
+        }
+
+        private static bool IsPercentileMetric(string metricId)
+        {
+            return String.Equals(metricId, "latency.ttft.p50", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(metricId, "latency.ttft.p90", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(metricId, "latency.ttft.p95", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(metricId, "latency.ttft.p99", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static decimal? AverageSum(long sum, long count)
+        {
+            if (count < 1)
+            {
+                return null;
+            }
+
+            return Decimal.Round((decimal)sum / count, 2);
         }
 
         private static List<string> NormalizeStringList(List<string> values)
@@ -575,16 +697,6 @@ namespace Conductor.Server.Services
                 .OrderByDescending(item => item.TotalTokens)
                 .ThenByDescending(item => item.RequestCount)
                 .ToList();
-        }
-
-        private static string GetSingleFilterValue(List<string> values)
-        {
-            if (values == null || values.Count != 1)
-            {
-                return null;
-            }
-
-            return String.IsNullOrWhiteSpace(values[0]) ? null : values[0];
         }
 
         private static bool MatchesList(string value, List<string> filters)
@@ -867,6 +979,28 @@ namespace Conductor.Server.Services
                 default:
                     return GetDimensionValue(entry, dimension);
             }
+        }
+
+        private static DateTime ResolveEndUtc(AnalyticsQueryRequest request)
+        {
+            return request.EndUtc ?? DateTime.UtcNow;
+        }
+
+        private static DateTime ResolveStartUtc(AnalyticsQueryRequest request, DateTime endUtc)
+        {
+            DateTime startUtc = request.StartUtc ?? ResolveRangeStart(request.Range, endUtc);
+            if (startUtc >= endUtc)
+            {
+                startUtc = endUtc.AddDays(-1);
+            }
+
+            DateTime earliestAllowedStart = endUtc.AddDays(-RetentionDays);
+            if (startUtc < earliestAllowedStart)
+            {
+                startUtc = earliestAllowedStart;
+            }
+
+            return startUtc;
         }
 
         private static DateTime ResolveRangeStart(string range, DateTime endUtc)

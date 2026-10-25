@@ -407,6 +407,47 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
+        /// Aggregate request history into fixed-size time buckets in the database with a single GROUP BY query.
+        /// No row cap is applied.
+        /// </summary>
+        /// <param name="filter">Aggregate filter. Must not be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Non-null list of populated buckets ordered by bucket index.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when filter is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the database driver does not support aggregation.</exception>
+        public async Task<List<RequestHistoryTimeBucket>> GetTimeBucketsAsync(RequestHistoryAggregateFilter filter, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(filter);
+            if (_Database.RequestHistoryAggregate == null)
+            {
+                throw new InvalidOperationException("The configured database driver does not support request history aggregation.");
+            }
+
+            return await _Database.RequestHistoryAggregate.GetTimeBucketsAsync(filter, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Read up to a maximum number of the newest matching request history entries with a single query.
+        /// </summary>
+        /// <param name="filter">Aggregate filter; AnchorUtc and BucketSeconds are ignored. Must not be null.</param>
+        /// <param name="maxRows">Maximum rows to return. Minimum 1.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Non-null list of entries ordered by createdutc descending.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when filter is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when maxRows is less than 1.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the database driver does not support range reads.</exception>
+        public async Task<List<RequestHistoryEntry>> ListRangeAsync(RequestHistoryAggregateFilter filter, int maxRows, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(filter);
+            if (_Database.RequestHistoryAggregate == null)
+            {
+                throw new InvalidOperationException("The configured database driver does not support request history range reads.");
+            }
+
+            return await _Database.RequestHistoryAggregate.ListRangeAsync(filter, maxRows, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Delete a request history entry and its associated file.
         /// </summary>
         /// <param name="id">Entry ID.</param>

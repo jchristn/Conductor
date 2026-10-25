@@ -36,7 +36,7 @@ describe('heatmap utils', () => {
   it('timeframe table maps to backend ranges and bucket sizes', () => {
     expect(Object.keys(HEATMAP_TIMEFRAMES)).toEqual(['hour', 'day', 'week', 'month']);
     expect(HEATMAP_TIMEFRAMES.hour).toEqual({ label: 'Last hour', range: 'lastHour', bucketSeconds: 60, rowSeconds: 900 });
-    expect(HEATMAP_TIMEFRAMES.day).toEqual({ label: 'Last day', range: 'lastDay', bucketSeconds: 900, rowSeconds: 3600 });
+    expect(HEATMAP_TIMEFRAMES.day).toEqual({ label: 'Last day', range: 'lastDay', bucketSeconds: 900, rowSeconds: null, columnSeconds: 3600 });
     expect(HEATMAP_TIMEFRAMES.week).toEqual({ label: 'Last week', range: 'lastWeek', bucketSeconds: 3600, rowSeconds: 86400 });
     expect(HEATMAP_TIMEFRAMES.month).toEqual({ label: 'Last month', range: 'lastMonth', bucketSeconds: 86400, rowSeconds: null });
     expect(Object.keys(HEATMAP_METRICS)).toEqual(['requests', 'tokens', 'input', 'output', 'errors', 'ttft']);
@@ -77,16 +77,44 @@ describe('heatmap utils', () => {
       expect(realCells(layout).map(c => c.bucket.startMs)).toEqual(buckets.map(b => b.startMs));
     });
 
-    it('day: 97 real buckets, 4 per row, 25 rows', () => {
+    it('day: horizontal, 97 real buckets in 25 UTC hour columns (oldest left) by 4 quarter-hour rows', () => {
       const res = response(900, 86400, [{ TimestampUtc: '2026-10-24T18:00:00Z', RequestCount: 9 }]);
       const buckets = buildBuckets(res);
       expect(buckets).toHaveLength(97);
       expect(buckets[0].startMs).toBe(at('2026-10-24T12:00:00Z'));
       expect(buckets.find(b => b.startMs === at('2026-10-24T18:00:00Z')).RequestCount).toBe(9);
       const layout = layoutHeatmap(buckets, 'day', res.BucketSeconds);
-      expect(layout.cellsPerRow).toBe(4);
-      expect(layout.rows).toHaveLength(25);
+      expect(layout.kind).toBe('columns');
+      expect(layout.rows.map(r => r.label)).toEqual([':00', ':15', ':30', ':45']);
+      expect(layout.cellsPerRow).toBe(25);
+      expect(layout.columns).toHaveLength(25);
+      expect(layout.columns[0]).toMatchObject({ startMs: at('2026-10-24T12:00:00Z'), label: '12:00', dateLabel: '10-24' });
+      expect(layout.columns[12]).toMatchObject({ label: '00:00', dateLabel: '10-25' });
+      expect(layout.columns.at(-1)).toMatchObject({ startMs: at('2026-10-25T12:00:00Z'), label: '12:00', dateLabel: '10-25' });
+      expect(layout.rows.every(r => r.cells.length === 25)).toBe(true);
+      // Reads left to right: the next cell in a row is one hour later, the next row is 15 minutes later.
+      expect(layout.rows[0].cells[0].bucket.startMs).toBe(at('2026-10-24T12:00:00Z'));
+      expect(layout.rows[0].cells[1].bucket.startMs).toBe(at('2026-10-24T13:00:00Z'));
+      expect(layout.rows[1].cells[0].bucket.startMs).toBe(at('2026-10-24T12:15:00Z'));
+      expect(layout.rows[3].cells[0].bucket.startMs).toBe(at('2026-10-24T12:45:00Z'));
+      expect(layout.rows[0].cells[6].bucket.RequestCount).toBe(9);
+      expect(layout.rows[0].cells[24].padding).toBe(false);
+      expect(layout.rows.slice(1).every(r => r.cells[24].padding)).toBe(true);
       expect(realCells(layout)).toHaveLength(97);
+      expect(new Set(realCells(layout).map(c => c.bucket.startMs))).toEqual(new Set(buckets.map(b => b.startMs)));
+    });
+
+    it('day with an unaligned window pads the partial first and last hours and keeps every bucket', () => {
+      const res = { StartUtc: '2026-10-23T13:37:00Z', EndUtc: '2026-10-24T13:37:00Z', BucketSeconds: 900, TimeSeries: [] };
+      const buckets = buildBuckets(res);
+      const layout = layoutHeatmap(buckets, 'day', 900);
+      expect(layout.rows.map(r => r.cells.map(c => (c.padding ? '.' : '#')).join(''))).toEqual([
+        '.########################',
+        '.########################',
+        '#########################',
+        '########################.'
+      ]);
+      expect(realCells(layout)).toHaveLength(buckets.length);
     });
 
     it('week: 169 real buckets, 24 per row, 8 rows', () => {
@@ -177,9 +205,9 @@ describe('heatmap utils', () => {
       const res = response(7200, 86400, []);
       const buckets = buildBuckets(res);
       const layout = layoutHeatmap(buckets, 'day', res.BucketSeconds);
-      expect(layout.cellsPerRow).toBe(1);
+      expect(layout.rows).toHaveLength(1);
       expect(realCells(layout)).toHaveLength(buckets.length);
-      expect(layout.rows).toHaveLength(buckets.length);
+      expect(layout.cellsPerRow).toBe(buckets.length);
     });
 
     it('month with a non-daily response bucket falls back to day rows without losing buckets', () => {
@@ -476,8 +504,9 @@ describe('heatmap utils', () => {
     it('layout defaults: unknown timeframe falls back to day, missing bucketSeconds uses the timeframe size', () => {
       const buckets = buildBuckets(response(900, 86400, []));
       expect(layoutHeatmap(buckets, 'Week', 900)).toEqual(layoutHeatmap(buckets, 'day', 900));
-      expect(layoutHeatmap(buckets, 'day', undefined).cellsPerRow).toBe(4);
-      expect(layoutHeatmap(buckets, 'day', 0).cellsPerRow).toBe(4);
+      expect(layoutHeatmap(buckets, 'day', undefined).rows).toHaveLength(4);
+      expect(layoutHeatmap(buckets, 'day', 0).rows).toHaveLength(4);
+      expect(layoutHeatmap([], 'day', 900)).toMatchObject({ kind: 'columns', rows: [], columns: [] });
       expect(layoutHeatmap(undefined, 'month', 86400)).toMatchObject({ kind: 'calendar', rows: [] });
     });
 

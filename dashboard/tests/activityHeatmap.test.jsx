@@ -12,14 +12,16 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const api = vi.hoisted(() => ({
   queryAnalytics: vi.fn(),
+  queryAnalyticsBuckets: vi.fn(),
   getObservabilityMetricsSummary: vi.fn(),
   listVirtualModelRunners: vi.fn(),
   getRequestHistorySummary: vi.fn()
 }));
 vi.mock('../src/context/AppContext', () => ({ useApp: () => ({ api, counts: {}, fetchCounts: () => {}, isAdmin: true, currentUser: null }) }));
 
-// Day window that starts at 00:30 UTC: the first row has two leading padding cells and the last row
-// two trailing ones, so there are 96 real 15-minute buckets laid out in 25 rows of 4.
+// Day window that starts at 00:30 UTC: 96 real 15-minute buckets laid out horizontally in 25 UTC hour
+// columns (00:00 on 10-24 through 00:00 on 10-25) by 4 quarter-hour rows (:00, :15, :30, :45). The first
+// column has two leading padding cells (:00, :15) and the last column two trailing ones (:30, :45).
 function dayResponse(overrides = {}) {
   return {
     StartUtc: '2026-10-24T00:30:00Z',
@@ -68,8 +70,9 @@ function renderDashboard(entry) {
   return render(<MemoryRouter initialEntries={[entry]}><Dashboard /><LocationProbe /></MemoryRouter>);
 }
 
-// Only the heat map sends BucketSeconds; Dashboard's own { Range: 'lastDay' } call does not.
-const heatmapCalls = () => api.queryAnalytics.mock.calls.map(call => call[0]).filter(body => body && 'BucketSeconds' in body);
+// The heat map queries POST /v1.0/analytics/buckets (queryAnalyticsBuckets) with BucketSeconds; Dashboard's own
+// { Range: 'lastDay' } call stays on queryAnalytics.
+const heatmapCalls = () => api.queryAnalyticsBuckets.mock.calls.map(call => call[0]).filter(body => body && 'BucketSeconds' in body);
 const search = () => new URLSearchParams(screen.getByTestId('search').textContent);
 const gridCells = () => screen.getAllByRole('gridcell');
 const cellNamed = name => screen.getByRole('gridcell', { name });
@@ -77,6 +80,8 @@ const cellNamed = name => screen.getByRole('gridcell', { name });
 beforeEach(() => {
   api.queryAnalytics.mockReset();
   api.queryAnalytics.mockImplementation(body => Promise.resolve(byRange[body.Range]()));
+  api.queryAnalyticsBuckets.mockReset();
+  api.queryAnalyticsBuckets.mockImplementation(body => Promise.resolve(byRange[body.Range]()));
   api.getObservabilityMetricsSummary.mockReset().mockResolvedValue(null);
   api.listVirtualModelRunners.mockReset().mockResolvedValue({ Data: [] });
   api.getRequestHistorySummary.mockReset().mockResolvedValue({ Buckets: [], TotalSuccess: 0, TotalFailure: 0, TotalRequests: 0 });
@@ -150,7 +155,7 @@ describe('timeframe switch re-queries with the right Range and persists param', 
 describe('stale responses are ignored', () => {
   function deferredByRange() {
     const pending = {};
-    api.queryAnalytics.mockImplementation(body => {
+    api.queryAnalyticsBuckets.mockImplementation(body => {
       pending[body.Range] = deferred();
       return pending[body.Range].promise;
     });
@@ -253,7 +258,7 @@ describe('metric switch re-renders without re-query', () => {
 describe('loading, error and empty states', () => {
   it('shows loading while pending, then the alert on rejection', async () => {
     const d = deferred();
-    api.queryAnalytics.mockImplementation(() => d.promise);
+    api.queryAnalyticsBuckets.mockImplementation(() => d.promise);
     renderHeatmap('/?chart=heatmap');
     const status = screen.getByRole('status');
     expect(status.textContent).toBe('Loading analytics…');
@@ -268,7 +273,7 @@ describe('loading, error and empty states', () => {
     ['TimeSeries missing', { TimeSeries: undefined }],
     ['all-zero buckets', { TimeSeries: [{ TimestampUtc: '2026-10-24T13:00:00Z', RequestCount: 0, TotalTokens: 0 }] }]
   ])('%s shows the empty message without an alert', async (_, overrides) => {
-    api.queryAnalytics.mockImplementation(() => Promise.resolve(dayResponse(overrides)));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.resolve(dayResponse(overrides)));
     renderHeatmap('/?chart=heatmap');
     expect(await screen.findByText('No activity for this time range')).toBeTruthy();
     // Announced like the other chart tabs' empty message, and the loading status is gone.
@@ -279,14 +284,14 @@ describe('loading, error and empty states', () => {
   });
 
   it('a TTFT metric with only null values shows the empty message', async () => {
-    api.queryAnalytics.mockImplementation(() => Promise.resolve(dayResponse({ TimeSeries: [{ TimestampUtc: '2026-10-24T13:00:00Z', RequestCount: 4, AverageTimeToFirstTokenMs: null }] })));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.resolve(dayResponse({ TimeSeries: [{ TimestampUtc: '2026-10-24T13:00:00Z', RequestCount: 4, AverageTimeToFirstTokenMs: null }] })));
     renderHeatmap('/?chart=heatmap&heatmapMetric=ttft');
     expect(await screen.findByText('No activity for this time range')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('a response with no time window still renders the empty message, not an error', async () => {
-    api.queryAnalytics.mockImplementation(() => Promise.resolve({}));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.resolve({}));
     renderHeatmap('/?chart=heatmap');
     expect(await screen.findByText('No activity for this time range')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
@@ -327,7 +332,7 @@ describe('tooltip, aria, summary and legend content', () => {
       expect(rect.hasAttribute('role')).toBe(false);
       expect(rect.hasAttribute('tabindex')).toBe(false);
     }
-    expect(screen.getAllByRole('row')).toHaveLength(25);
+    expect(screen.getAllByRole('row')).toHaveLength(4);
 
     const legend = container.querySelector('.hm-legend');
     expect(legend.firstElementChild.textContent).toBe('Less');
@@ -396,53 +401,56 @@ describe('keyboard navigation and accessible names', () => {
     expect(screen.getByRole('combobox', { name: 'Timeframe' }).tagName).toBe('SELECT');
     expect(screen.getByRole('combobox', { name: 'Metric' }).tagName).toBe('SELECT');
 
+    // Horizontal day: rows are :00/:15/:30/:45 and columns are UTC hours, so the top-left real cell is
+    // 01:00 (the 00:00 and 00:15 cells of the first column are before the window and are padding).
     expect(tabStops()).toHaveLength(1);
     const first = tabStops()[0];
-    expect(first.getAttribute('aria-label')).toMatch(name('00:30'));
+    expect(first.getAttribute('aria-label')).toMatch(name('01:00'));
     act(() => first.focus());
 
     const press = key => fireEvent.keyDown(document.activeElement, { key });
     const focused = () => document.activeElement.getAttribute('aria-label');
 
-    press('ArrowLeft'); // first real cell: the two cells to its left are padding
+    press('ArrowLeft'); // the 00:00 cell to its left is padding and nothing is beyond it
     expect(document.activeElement).toBe(first);
+    press('ArrowUp'); // top row
+    expect(document.activeElement).toBe(first);
+    press('ArrowRight'); // one hour later
+    expect(focused()).toMatch(name('02:00'));
+    press('ArrowDown'); // 15 minutes later
+    expect(focused()).toMatch(name('02:15'));
+    press('Home'); // the :15 row also starts with padding
+    expect(focused()).toMatch(name('01:15'));
     press('ArrowUp');
-    expect(document.activeElement).toBe(first);
-    press('ArrowRight');
-    expect(focused()).toMatch(name('00:45'));
+    expect(focused()).toMatch(name('01:00'));
+    press('End'); // the :00 row ends at 00:00 on the next UTC day
+    expect(focused()).toBe('2026-10-25 00:00-00:15 UTC: 0 requests');
     press('ArrowRight'); // end of row: stays
-    expect(focused()).toMatch(name('00:45'));
+    expect(focused()).toBe('2026-10-25 00:00-00:15 UTC: 0 requests');
     press('ArrowDown');
-    expect(focused()).toMatch(name('01:45'));
-    press('Home');
-    expect(focused()).toMatch(name('01:00'));
-    press('ArrowUp'); // 00:00 above is padding and nothing is above it
-    expect(focused()).toMatch(name('01:00'));
-    press('End');
-    expect(focused()).toMatch(name('01:45'));
+    expect(focused()).toBe('2026-10-25 00:15-00:30 UTC: 0 requests');
+    press('ArrowDown'); // :30 and :45 of the last column are after the window: focus stays
+    expect(focused()).toBe('2026-10-25 00:15-00:30 UTC: 0 requests');
     expect(tabStops()).toHaveLength(1);
     expect(tabStops()[0]).toBe(document.activeElement);
     expect(screen.getByRole('tooltip').textContent).toBe(focused());
 
-    act(() => cellNamed(name('23:30')).focus());
-    press('ArrowDown'); // the cell below (next day 00:30) is trailing padding: focus stays
+    act(() => cellNamed(name('00:30')).focus());
+    press('ArrowUp'); // 00:15 and 00:00 above are leading padding
+    expect(focused()).toMatch(name('00:30'));
+    press('ArrowLeft');
+    expect(focused()).toMatch(name('00:30'));
+    press('End'); // the :30 row's last column is padding, so End stops at 23:30
     expect(focused()).toBe('2026-10-24 23:30-23:45 UTC: 0 requests');
-    act(() => cellNamed(name('23:00')).focus());
-    press('ArrowDown');
-    expect(focused()).toBe('2026-10-25 00:00-00:15 UTC: 0 requests');
     press('ArrowRight');
-    expect(focused()).toBe('2026-10-25 00:15-00:30 UTC: 0 requests');
-    press('ArrowRight'); // the rest of the last row is padding
-    expect(focused()).toBe('2026-10-25 00:15-00:30 UTC: 0 requests');
-    press('End');
-    expect(focused()).toBe('2026-10-25 00:15-00:30 UTC: 0 requests');
+    expect(focused()).toBe('2026-10-24 23:30-23:45 UTC: 0 requests');
     expect(tabStops()).toHaveLength(1);
   });
 
   it('ArrowDown and ArrowUp skip interior padding left by coarsened buckets', async () => {
     // Server clamped the hour view to 120 s buckets: 15-minute rows hold 7.5 buckets, so row 12:15
     // has no bucket in its last column while the rows above and below do.
-    api.queryAnalytics.mockImplementation(() => Promise.resolve({ StartUtc: '2026-10-24T12:00:00Z', EndUtc: '2026-10-24T13:00:00Z', BucketSeconds: 120, TimeSeries: [{ TimestampUtc: '2026-10-24T12:30:00Z', RequestCount: 2 }] }));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.resolve({ StartUtc: '2026-10-24T12:00:00Z', EndUtc: '2026-10-24T13:00:00Z', BucketSeconds: 120, TimeSeries: [{ TimestampUtc: '2026-10-24T12:30:00Z', RequestCount: 2 }] }));
     const { container } = renderHeatmap('/?chart=heatmap&heatmapRange=hour');
     await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last hour' });
     const middleRow = screen.getAllByRole('row')[1];
@@ -463,21 +471,90 @@ describe('keyboard navigation and accessible names', () => {
     await screen.findByRole('grid');
     screen.getByRole('combobox', { name: 'Metric' }).focus();
     await user.tab(); // copy button sits in the header before the controls, so the next stop is the grid
-    expect(document.activeElement.getAttribute('aria-label')).toMatch(name('00:30'));
+    expect(document.activeElement.getAttribute('aria-label')).toMatch(name('01:00'));
     await user.tab();
     expect(document.activeElement.getAttribute('role')).not.toBe('gridcell');
   });
 });
 
-describe('truncation note threshold', () => {
-  const note = 'Results may be truncated at 10,000 requests.';
-  it.each([[10000, true], [12000, true], [9999, false], [undefined, false]])('TotalRequests %s shows note: %s', async (total, shown) => {
-    api.queryAnalytics.mockImplementation(() => Promise.resolve(dayResponse({ TotalRequests: total })));
+describe('aggregate bucket endpoint (no row cap)', () => {
+  // POST /v1.0/analytics/buckets aggregates in the database, so there is no 10,000-row truncation note.
+  it.each([10000, 12000, 9999, undefined])('TotalRequests %s shows no truncation note', async total => {
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.resolve(dayResponse({ TotalRequests: total })));
     renderHeatmap('/?chart=heatmap');
     await screen.findByRole('grid');
-    expect(screen.queryByText(note) !== null).toBe(shown);
+    expect(screen.queryByText(/truncated/i)).toBeNull();
     expect(heatmapCalls()).toEqual([{ Range: 'lastDay', BucketSeconds: 900 }]);
     expect('Limit' in heatmapCalls()[0]).toBe(false);
+  });
+
+  it('queries queryAnalyticsBuckets, never the raw queryAnalytics, for every timeframe', async () => {
+    renderHeatmap('/?chart=heatmap');
+    await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' });
+    for (const value of ['hour', 'week', 'month']) {
+      fireEvent.change(screen.getByRole('combobox', { name: 'Timeframe' }), { target: { value } });
+      await screen.findByRole('grid', { name: new RegExp(HEATMAP_LABELS[value] + '$') });
+    }
+    expect(heatmapCalls().map(body => body.Range)).toEqual(['lastDay', 'lastHour', 'lastWeek', 'lastMonth']);
+    expect(api.queryAnalytics).not.toHaveBeenCalled();
+  });
+});
+
+const HEATMAP_LABELS = { hour: 'Last hour', day: 'Last day', week: 'Last week', month: 'Last month' };
+
+describe('horizontal Last day layout and 2x responsive cells', () => {
+  it('Last day has :00/:15/:30/:45 rows, UTC hour columns oldest-left, and dates over the first and midnight columns', async () => {
+    const { container } = renderHeatmap('/?chart=heatmap');
+    const grid = await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' });
+    const rows = within(grid).getAllByRole('row');
+    expect(rows.map(row => row.querySelector('text').textContent)).toEqual([':00', ':15', ':30', ':45']);
+    // Every row holds 25 hour positions; within a row, x grows with time.
+    for (const row of rows) expect(row.querySelectorAll('rect')).toHaveLength(25);
+    const x = name => Number(cellNamed(name).getAttribute('x'));
+    expect(x(/^2026-10-24 01:00-/)).toBeLessThan(x(/^2026-10-24 02:00-/));
+    expect(x(/^2026-10-24 23:00-/)).toBeLessThan(x('2026-10-25 00:00-00:15 UTC: 0 requests'));
+    expect(x(/^2026-10-24 13:00-/)).toBe(x(/^2026-10-24 13:45-/));
+    const headerTexts = [...container.querySelectorAll('svg[role="grid"] > g[aria-hidden="true"] text')].map(t => t.textContent);
+    expect(headerTexts).toContain('10-24');
+    expect(headerTexts).toContain('10-25');
+    expect(headerTexts).toContain('00:00');
+    expect(headerTexts).toContain('12:00');
+  });
+
+  it('cells are 28 units with 6-unit gaps and the SVG fills the card width up to 1.5x its natural size', async () => {
+    const { container } = renderHeatmap('/?chart=heatmap');
+    await screen.findByRole('grid');
+    const svg = container.querySelector('svg[role="grid"]');
+    expect(svg.getAttribute('width')).toBe('100%');
+    expect(svg.hasAttribute('height')).toBe(false);
+    // 72 label units + 25 columns x 34; 64 header units + 4 rows x 34.
+    expect(svg.getAttribute('viewBox')).toBe('0 0 922 200');
+    expect(container.querySelector('.hm-chart').style.maxWidth).toBe('1383px');
+    const a = cellNamed(/^2026-10-24 01:00-/);
+    const b = cellNamed(/^2026-10-24 02:00-/);
+    expect(a.getAttribute('width')).toBe('28');
+    expect(a.getAttribute('height')).toBe('28');
+    expect(a.getAttribute('rx')).toBe('4');
+    expect(Number(b.getAttribute('x')) - Number(a.getAttribute('x'))).toBe(34);
+    expect([...container.querySelectorAll('.hm-legend-swatch')].every(swatch => swatch.getAttribute('width') === '28')).toBe(true);
+  });
+
+  it('the tooltip is positioned at the cell center in percent of the scaled SVG', async () => {
+    renderHeatmap('/?chart=heatmap');
+    await screen.findByRole('grid');
+    const cell = cellNamed(/^2026-10-24 13:00-/);
+    fireEvent.mouseEnter(cell);
+    const tip = screen.getByRole('tooltip');
+    const centerX = Number(cell.getAttribute('x')) + 14;
+    expect(parseFloat(tip.style.left)).toBeCloseTo((centerX / 922) * 100, 6);
+    expect(parseFloat(tip.style.top)).toBeCloseTo((Number(cell.getAttribute('y')) / 200) * 100, 6);
+  });
+
+  it.each([['hour', 4], ['week', 8]])('%s keeps its row orientation (%s rows of time)', async (value, rowCount) => {
+    renderHeatmap(`/?chart=heatmap&heatmapRange=${value}`);
+    const grid = await screen.findByRole('grid', { name: `Activity heatmap, Requests, ${HEATMAP_LABELS[value]}` });
+    expect(within(grid).getAllByRole('row').length).toBeGreaterThanOrEqual(rowCount);
+    expect(within(grid).getAllByRole('row')[0].querySelector('text').textContent).not.toMatch(/^:/);
   });
 });
 
@@ -519,7 +596,7 @@ describe('test engineer gap coverage', () => {
 
   it('a metric change while the timeframe query is pending or failed sends no call', async () => {
     const d = deferred();
-    api.queryAnalytics.mockImplementation(() => d.promise);
+    api.queryAnalyticsBuckets.mockImplementation(() => d.promise);
     renderHeatmap('/?chart=heatmap');
     fireEvent.change(screen.getByRole('combobox', { name: 'Metric' }), { target: { value: 'tokens' } });
     expect(screen.getByRole('status').textContent).toBe('Loading analytics…');
@@ -531,7 +608,7 @@ describe('test engineer gap coverage', () => {
   });
 
   it('the error state renders no grid, tiles, legend or copy button and keeps the selects usable', async () => {
-    api.queryAnalytics.mockImplementation(() => Promise.reject(new Error('HTTP 500')));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.reject(new Error('HTTP 500')));
     const { container } = renderHeatmap('/?chart=heatmap');
     expect((await screen.findByRole('alert')).textContent).toBe('Analytics unavailable: HTTP 500');
     expect(screen.queryByRole('grid')).toBeNull();
@@ -543,20 +620,20 @@ describe('test engineer gap coverage', () => {
   });
 
   it('a non-Error rejection still shows the alert with its text', async () => {
-    api.queryAnalytics.mockImplementation(() => Promise.reject('network down'));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.reject('network down'));
     renderHeatmap('/?chart=heatmap');
     expect((await screen.findByRole('alert')).textContent).toBe('Analytics unavailable: network down');
   });
 
   it('a null response is treated as empty success, not an error', async () => {
-    api.queryAnalytics.mockImplementation(() => Promise.resolve(null));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.resolve(null));
     renderHeatmap('/?chart=heatmap');
     expect(await screen.findByText('No activity for this time range')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('the empty state hides the grid, legend and copy button but keeps the summary tiles', async () => {
-    api.queryAnalytics.mockImplementation(() => Promise.resolve(dayResponse({ TimeSeries: [] })));
+    api.queryAnalyticsBuckets.mockImplementation(() => Promise.resolve(dayResponse({ TimeSeries: [] })));
     const { container } = renderHeatmap('/?chart=heatmap');
     await screen.findByText('No activity for this time range');
     expect(container.querySelector('.hm-legend')).toBeNull();
@@ -566,7 +643,7 @@ describe('test engineer gap coverage', () => {
 
   it('a response that resolves after unmount does not throw or log (smoke; the cancelled flag is guarded by the stale-response tests)', async () => {
     const d = deferred();
-    api.queryAnalytics.mockImplementation(() => d.promise);
+    api.queryAnalyticsBuckets.mockImplementation(() => d.promise);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       const { unmount } = renderHeatmap('/?chart=heatmap');
@@ -583,9 +660,9 @@ describe('test engineer gap coverage', () => {
     await screen.findByRole('grid');
     act(() => cellNamed(/^2026-10-24 13:00-/).focus());
     fireEvent.keyDown(document.activeElement, { key: 'End', ctrlKey: true });
-    expect(document.activeElement.getAttribute('aria-label')).toBe('2026-10-25 00:15-00:30 UTC: 0 requests');
+    expect(document.activeElement.getAttribute('aria-label')).toBe('2026-10-24 23:45-2026-10-25 00:00 UTC: 0 requests');
     fireEvent.keyDown(document.activeElement, { key: 'Home', ctrlKey: true });
-    expect(document.activeElement.getAttribute('aria-label')).toBe('2026-10-24 00:30-00:45 UTC: 0 requests');
+    expect(document.activeElement.getAttribute('aria-label')).toBe('2026-10-24 01:00-01:15 UTC: 0 requests');
     expect(gridCells().filter(cell => cell.getAttribute('tabindex') === '0')).toEqual([document.activeElement]);
   });
 

@@ -1559,6 +1559,7 @@ System administrators can query globally or pass `tenantId` to restrict results 
 | --- | --- | --- |
 | `GET` | `/v1.0/analytics/catalog` | Supported metrics, dimensions, named ranges, granularities, retention, and unavailable future export formats. |
 | `POST` | `/v1.0/analytics/query` | General analytics query. Body: `AnalyticsQueryRequest`. |
+| `POST` | `/v1.0/analytics/buckets` | Aggregate-only time-bucket query computed in the database (single `GROUP BY` per request). Body: `AnalyticsQueryRequest`. See below. |
 | `GET` | `/v1.0/analytics/reports` | List saved reports. Query: `tenantId`, `maxResults`, `continuationToken`, `nameFilter`, `ownerUserId`. |
 | `POST` | `/v1.0/analytics/reports` | Create saved report. Body: `AnalyticsSavedReport`. |
 | `GET` | `/v1.0/analytics/reports/{id}` | Read saved report. Query: optional `tenantId` for system administrators. |
@@ -1571,6 +1572,10 @@ System administrators can query globally or pass `tenantId` to restrict results 
 | `GET` | `/v1.0/analytics/costs` | Estimate-only cost query; defaults to grouping by user. |
 | `GET` | `/v1.0/analytics/users` | User-oriented usage query. |
 | `GET` | `/v1.0/analytics/access` | Access/reliability query for success, failure, denied, and rate-limited counts. |
+
+`POST /v1.0/analytics/buckets` takes the same body, tenant scoping and filters as `POST /v1.0/analytics/query`, and returns the same `AnalyticsQueryResult` shape. The difference is that the database computes `TimeSeries` and the summary totals (`TotalRequests`, the successful, failed, denied, reservation-denied and rate-limited counts, `AverageTimeToFirstTokenMs`, prompt/completion/total token sums, `UnknownTokenUsageCount` and `EstimatedCost`) with one `GROUP BY` time-bucket query. No raw rows are loaded. `Limit` is ignored, so busy ranges are never truncated. `TimeSeries` contains every bucket from the start (floored to `BucketSeconds`) to the end, including empty buckets. Percentile fields (`P50`/`P95`/`P99TimeToFirstTokenMs`) are `null`, and `Groups` and `ReservationDenialCounts` are empty. A request that names a percentile metric (`latency.ttft.p50`/`p90`/`p95`/`p99`) or a `GroupBy` dimension returns `400`. Use `/v1.0/analytics/query` for those. The dashboard Heatmap tab uses this route.
+
+The raw `/v1.0/analytics/query` path reads at most `Limit` of the newest matching rows (default 10000, maximum 50000) in a single query, with no `COUNT(*)` and no `OFFSET` paging.
 
 Analytics routes resolve to `RequestTypeEnum.ReadAnalytics`. System administrators can query global scope and may filter to a tenant with `tenantId`. Tenant administrators and tenant users granted `analytics.read` are forced into their authenticated tenant scope. Grant first-release dedicated Analytics access by adding the `analytics.read` user label, or by setting a user tag such as `analytics.read=true` or `permissions=analytics.read`.
 

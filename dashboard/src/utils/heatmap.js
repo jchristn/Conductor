@@ -1,4 +1,5 @@
-// Pure helpers that turn a POST /v1.0/analytics/query response into a laid-out heat map model.
+// Pure helpers that turn a POST /v1.0/analytics/buckets response (same shape as /v1.0/analytics/query)
+// into a laid-out heat map model.
 // Everything here is UTC and deterministic: no Date.now, no DOM, no local-time getters.
 
 const DAY_SECONDS = 86400;
@@ -10,10 +11,12 @@ const NO_TIMING_DATA = 'No timing data';
 export const DEFAULT_HEATMAP_TIMEFRAME = 'day';
 export const DEFAULT_HEATMAP_METRIC = 'requests';
 
-// rowSeconds null means the calendar layout (weekday rows, one column per UTC week).
+// rowSeconds null means the calendar layout (weekday rows, one column per UTC week). columnSeconds
+// means a horizontal layout: one column per columnSeconds of UTC time (oldest left) and one row per
+// bucket offset within it, so Last day reads left to right like Last week.
 export const HEATMAP_TIMEFRAMES = Object.freeze({
   hour: Object.freeze({ label: 'Last hour', range: 'lastHour', bucketSeconds: 60, rowSeconds: 900 }),
-  day: Object.freeze({ label: 'Last day', range: 'lastDay', bucketSeconds: 900, rowSeconds: 3600 }),
+  day: Object.freeze({ label: 'Last day', range: 'lastDay', bucketSeconds: 900, rowSeconds: null, columnSeconds: 3600 }),
   week: Object.freeze({ label: 'Last week', range: 'lastWeek', bucketSeconds: 3600, rowSeconds: 86400 }),
   month: Object.freeze({ label: 'Last month', range: 'lastMonth', bucketSeconds: 86400, rowSeconds: null })
 });
@@ -143,7 +146,6 @@ export function formatUtcTimestamp(ms) {
 
 function rowLabel(timeframeKey, ms) {
   if (timeframeKey === 'hour') return utcTime(ms);
-  if (timeframeKey === 'day') return `${utcDate(ms).slice(5)} ${utcTime(ms)}`;
   return `${WEEKDAY_NAMES[new Date(ms).getUTCDay()]} ${utcDate(ms).slice(5)}`;
 }
 
@@ -178,6 +180,46 @@ function layoutRows(buckets, timeframeKey, rowSeconds, bucketSeconds) {
   return { kind: 'rows', timeframe: timeframeKey, bucketSeconds, cellsPerRow, columns: [], rows };
 }
 
+// Horizontal: one column per columnSeconds of UTC time (oldest left, newest right) and one row per bucket
+// offset inside the column (':00', ':15', ':30', ':45' for 15-minute buckets in hourly columns). Rows are
+// chronological left to right; positions outside the window or not covered by a bucket are padding.
+function layoutColumns(buckets, timeframeKey, columnSeconds, bucketSeconds) {
+  const stepMs = bucketSeconds * 1000;
+  const columnMs = columnSeconds * 1000;
+  const columnSpanMs = Math.max(columnMs, stepMs);
+  const rowCount = Math.max(1, Math.ceil(columnSeconds / bucketSeconds));
+  const anchor = floorTo(buckets[0].startMs, columnMs);
+  const placed = new Map();
+  let lastColumn = 0;
+  for (const bucket of buckets) {
+    const offset = bucket.startMs - anchor;
+    const col = Math.floor(offset / columnSpanMs);
+    const row = Math.min(rowCount - 1, Math.floor((offset - col * columnSpanMs) / stepMs));
+    placed.set(`${row}:${col}`, bucket);
+    lastColumn = Math.max(lastColumn, col);
+  }
+  const columns = [];
+  for (let c = 0; c <= lastColumn; c++) {
+    const startMs = anchor + c * columnSpanMs;
+    columns.push({ key: `h${startMs}`, startMs, label: utcTime(startMs), dateLabel: utcDate(startMs).slice(5) });
+  }
+  const rows = [];
+  for (let r = 0; r < rowCount; r++) {
+    const offsetSeconds = r * bucketSeconds;
+    const label = offsetSeconds % 60 === 0 ? `:${pad2(offsetSeconds / 60)}` : `+${offsetSeconds}s`;
+    rows.push({
+      key: `o${offsetSeconds}`,
+      offsetSeconds,
+      label,
+      cells: columns.map((column, c) => {
+        const bucket = placed.get(`${r}:${c}`);
+        return bucket ? realCell(bucket) : paddingCell(`p${r}:${c}`, column.startMs + r * stepMs);
+      })
+    });
+  }
+  return { kind: 'columns', timeframe: timeframeKey, bucketSeconds, cellsPerRow: columns.length, columns, rows };
+}
+
 // Calendar: 7 UTC weekday rows (Sunday first) by one column per UTC week (each starting on Sunday).
 function layoutCalendar(buckets, timeframeKey) {
   const firstDay = floorTo(buckets[0].startMs, DAY_MS);
@@ -204,15 +246,20 @@ function layoutCalendar(buckets, timeframeKey) {
 }
 
 // Lays out real buckets using the response's bucketSeconds. Positions with no real bucket are padding
-// cells (padding: true, bucket: null). Month uses the calendar unless the response bucket is not daily,
-// in which case it falls back to one UTC day per row so no bucket is lost.
+// cells (padding: true, bucket: null). Day is horizontal (hour columns by quarter-hour rows). Month uses
+// the calendar unless the response bucket is not daily, in which case it falls back to one UTC day per
+// row so no bucket is lost.
 export function layoutHeatmap(buckets, timeframeKey, bucketSeconds) {
   const key = normalizeTimeframe(timeframeKey);
   const timeframe = HEATMAP_TIMEFRAMES[key];
   const seconds = positiveSeconds(bucketSeconds) || timeframe.bucketSeconds;
   const real = (buckets || []).filter(bucket => isReal(bucket) && Number.isFinite(bucket.startMs));
+  const emptyKind = timeframe.columnSeconds ? 'columns' : timeframe.rowSeconds == null ? 'calendar' : 'rows';
   if (real.length === 0) {
-    return { kind: timeframe.rowSeconds == null ? 'calendar' : 'rows', timeframe: key, bucketSeconds: seconds, cellsPerRow: 0, columns: [], rows: [] };
+    return { kind: emptyKind, timeframe: key, bucketSeconds: seconds, cellsPerRow: 0, columns: [], rows: [] };
+  }
+  if (timeframe.columnSeconds) {
+    return layoutColumns(real, key, timeframe.columnSeconds, seconds);
   }
   if (timeframe.rowSeconds == null) {
     return seconds === DAY_SECONDS ? layoutCalendar(real, key) : layoutRows(real, key, DAY_SECONDS, seconds);

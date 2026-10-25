@@ -58,6 +58,23 @@ namespace Conductor.Server.Routing
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 
+            _App.Post<AnalyticsQueryRequest>("/v1.0/analytics/buckets", async (req) =>
+            {
+                AnalyticsQueryRequest query = req.Data as AnalyticsQueryRequest ?? new AnalyticsQueryRequest();
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, query.TenantId);
+                return await QueryBucketsAsync(tenantId, query).ConfigureAwait(false);
+            },
+            api => api
+                .WithTag("Analytics")
+                .WithSummary("Run aggregate analytics bucket query")
+                .WithDescription("Compute time-bucketed request, outcome, token, and average TTFT/response-time aggregates in the database with a single GROUP BY query. No row cap applies (Limit is ignored), so busy ranges are never truncated. Percentile metrics, GroupBy, Groups, and ReservationDenialCounts are not produced; use /v1.0/analytics/query for those.")
+                .WithSecurity("Bearer")
+                .WithRequestBody(Api.JsonRequestBody<AnalyticsQueryRequest>("Analytics query", true))
+                .WithResponse(200, Api.JsonResponse<AnalyticsQueryResult>("Analytics aggregate bucket result"))
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
+
             _App.Get("/v1.0/analytics/reports", async (req) =>
             {
                 string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
@@ -239,6 +256,16 @@ namespace Conductor.Server.Routing
             }
 
             return await _AnalyticsService.QueryAsync(tenantId, query).ConfigureAwait(false);
+        }
+
+        private async Task<AnalyticsQueryResult> QueryBucketsAsync(string tenantId, AnalyticsQueryRequest query)
+        {
+            if (_AnalyticsService == null)
+            {
+                return await QueryAsync(tenantId, query).ConfigureAwait(false);
+            }
+
+            return await _AnalyticsService.QueryBucketsAsync(tenantId, query).ConfigureAwait(false);
         }
 
         private static AnalyticsQueryRequest BuildQueryFromRequest(HttpRequestBase request, string defaultGroupBy)
