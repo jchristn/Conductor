@@ -111,6 +111,7 @@ describe('voyage integration: version footer and heatmap tab together', () => {
     await waitFor(() => expect(screen.getAllByRole('alert').map(node => node.textContent)).toContain('Analytics unavailable: heatmap down'));
     expect(heatmapCalls().at(-1)).toEqual({ Range: 'lastHour', BucketSeconds: 60 });
     expect(screen.queryByRole('grid')).toBeNull();
+    expect(within(screen.getByRole('tablist', { name: 'Dashboard charts' })).getAllByRole('tab')).toHaveLength(5);
     // The sidebar footer is unaffected by either analytics failure.
     expect(document.querySelector('nav.sidebar').lastElementChild.textContent).toBe('v' + pkg.version);
   });
