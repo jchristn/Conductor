@@ -579,13 +579,13 @@ describe('horizontal Last day layout and 2x responsive cells', () => {
 
 describe('heat map files and styles', () => {
   const css = readFileSync(resolve(root, 'src/components/ActivityHeatmap.css'), 'utf8');
-  it('imports its own stylesheet and defines five levels from existing variables', () => {
+  it('imports its own stylesheet and defines five levels: border color, then a fixed light-to-dark green ramp', () => {
     expect(readFileSync(resolve(root, 'src/components/ActivityHeatmap.jsx'), 'utf8')).toContain("import './ActivityHeatmap.css';");
     expect(css).toMatch(/:root,\s*\[data-theme="dark"\]\s*\{/);
     for (let n = 0; n <= 4; n++) expect(css).toContain(`.hm-level-${n} { fill: var(--hm-level-${n}); }`);
     expect(css).toContain('--hm-level-0: var(--border-color);');
-    expect(css).toContain('--hm-level-4: var(--primary-color);');
-    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    expect(css).toMatch(/--hm-level-1: #9be9a8;[\s\S]*--hm-level-2: #40c463;[\s\S]*--hm-level-3: #30a14e;[\s\S]*--hm-level-4: #216e39;/);
+    expect(css).not.toContain('--primary-color');
     expect(css).toMatch(/\.hm-cell \{\s*stroke: var\(--hm-cell-stroke\);/);
   });
 });

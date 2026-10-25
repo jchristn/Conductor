@@ -28,8 +28,10 @@ function ChartCopyButton({ svgRef, getOptions, label = 'Copy chart as an image' 
       : copyState === 'failed' ? 'Could not render chart image. Try again.'
       : label;
 
+  // One flex item, so a space-between chart header pins it to the right edge; the status text sits to its left.
   return (
-    <>
+    <span className="chart-copy-control">
+    <span className="chart-copy-status" role="status" aria-live="polite">{copyState === 'failed' ? 'Image export failed. Try again.' : copyState === 'copied' ? 'Image copied' : ''}</span>
     <button
       type="button"
       className="request-history-refresh-btn"
@@ -48,8 +50,7 @@ function ChartCopyButton({ svgRef, getOptions, label = 'Copy chart as an image' 
         </svg>
       )}
     </button>
-    <span className="chart-copy-status" role="status" aria-live="polite">{copyState === 'failed' ? 'Image export failed. Try again.' : copyState === 'copied' ? 'Image copied' : ''}</span>
-    </>
+    </span>
   );
 }
 

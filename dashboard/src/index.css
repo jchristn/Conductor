@@ -5526,7 +5526,9 @@ input.file-input-hidden {
 .queue-add-button { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
 .queue-editor .modal-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color); }
 .queue-editor p { margin-bottom: 16px; }
+.chart-copy-control { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
 .chart-copy-status { font-size: 12px; color: var(--text-secondary); }
+.chart-copy-status:empty { display: none; }
 @media (max-width: 640px) {
   .queue-editor .queue-form-grid { grid-template-columns: minmax(0, 1fr); }
   .queue-section-heading { align-items: flex-start; }
