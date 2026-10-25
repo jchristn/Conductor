@@ -527,9 +527,9 @@ describe('horizontal Last day layout and 2x responsive cells', () => {
     const svg = container.querySelector('svg[role="grid"]');
     expect(svg.getAttribute('width')).toBe('100%');
     expect(svg.hasAttribute('height')).toBe(false);
-    // 72 label units + 25 columns x 34; 64 header units + 4 rows x 34.
-    expect(svg.getAttribute('viewBox')).toBe('0 0 922 200');
-    expect(container.querySelector('.hm-chart').style.maxWidth).toBe('1383px');
+    // 40 label units + 25 columns x 34; 44 header units + 4 rows x 34.
+    expect(svg.getAttribute('viewBox')).toBe('0 0 890 180');
+    expect(container.querySelector('.hm-chart').style.maxWidth).toBe('1335px');
     const a = cellNamed(/^2026-10-24 01:00-/);
     const b = cellNamed(/^2026-10-24 02:00-/);
     expect(a.getAttribute('width')).toBe('28');
@@ -546,8 +546,27 @@ describe('horizontal Last day layout and 2x responsive cells', () => {
     fireEvent.mouseEnter(cell);
     const tip = screen.getByRole('tooltip');
     const centerX = Number(cell.getAttribute('x')) + 14;
-    expect(parseFloat(tip.style.left)).toBeCloseTo((centerX / 922) * 100, 6);
-    expect(parseFloat(tip.style.top)).toBeCloseTo((Number(cell.getAttribute('y')) / 200) * 100, 6);
+    expect(parseFloat(tip.style.left)).toBeCloseTo((centerX / 890) * 100, 6);
+    expect(parseFloat(tip.style.top)).toBeCloseTo((Number(cell.getAttribute('y')) / 180) * 100, 6);
+  });
+
+  it('axis labels stay 12 screen px when the SVG is scaled up, and match the grid below natural size', async () => {
+    const rect = vi.spyOn(SVGElement.prototype, 'getBoundingClientRect');
+    try {
+      rect.mockReturnValue({ width: 890 * 1.5, height: 270, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0 });
+      const { container, unmount } = renderHeatmap('/?chart=heatmap');
+      await screen.findByRole('grid');
+      const svg = container.querySelector('svg[role="grid"]');
+      await waitFor(() => expect(svg.style.getPropertyValue('--hm-label-size')).toBe('8px'));
+      unmount();
+      rect.mockReturnValue({ width: 445, height: 90, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0 });
+      const second = renderHeatmap('/?chart=heatmap');
+      await screen.findByRole('grid');
+      const svg2 = second.container.querySelector('svg[role="grid"]');
+      await waitFor(() => expect(svg2.style.getPropertyValue('--hm-label-size')).toBe('12px'));
+    } finally {
+      rect.mockRestore();
+    }
   });
 
   it.each([['hour', 4], ['week', 8]])('%s keeps its row orientation (%s rows of time)', async (value, rowCount) => {

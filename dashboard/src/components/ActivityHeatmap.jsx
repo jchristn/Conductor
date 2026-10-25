@@ -23,8 +23,11 @@ const CELL = 28;
 const GAP = 6;
 const PITCH = CELL + GAP;
 const RADIUS = 4;
-const LABEL_GAP = 12;
+const LABEL_GAP = 8;
 const MAX_SCALE = 1.5;
+// Axis labels render at LABEL_PX screen pixels (matching the rest of the page) however far the SVG is
+// scaled up; below natural size they shrink with the grid. Margins are sized for LABEL_PX-unit text.
+const LABEL_PX = 12;
 const pad2 = n => String(n).padStart(2, '0');
 
 // Column header text for row layouts: clock time when rows start at UTC midnight, else a minute offset.
@@ -87,6 +90,28 @@ function ActivityHeatmap() {
   const [focusKey, setFocusKey] = useState(null);
   const cellRefs = useRef(new Map());
   const svgRef = useRef(null);
+  // Rendered px per SVG user unit; keeps axis labels at LABEL_PX on screen.
+  const [svgScale, setSvgScale] = useState(1);
+  const observed = useRef(null);
+  useEffect(() => {
+    const el = svgRef.current;
+    const measure = () => {
+      const unitsWide = Number(el?.getAttribute('viewBox')?.split(' ')[2]);
+      const pxWide = el?.getBoundingClientRect().width;
+      if (unitsWide && pxWide) setSvgScale(Math.round((pxWide / unitsWide) * 1000) / 1000);
+    };
+    if (observed.current?.el !== el) {
+      observed.current?.observer.disconnect();
+      observed.current = null;
+      if (el && typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(measure);
+        observer.observe(el);
+        observed.current = { el, observer };
+      }
+    }
+    measure();
+  });
+  useEffect(() => () => observed.current?.observer.disconnect(), []);
 
   const setParam = (name, value) => {
     const next = new URLSearchParams(searchParams);
@@ -128,11 +153,12 @@ function ActivityHeatmap() {
   const isCalendar = layout.kind === 'calendar';
   const isColumns = layout.kind === 'columns';
   // Horizontal (columns) layouts get a date line above the hour labels and short ':MM' row labels.
-  const left = isCalendar || isColumns ? 72 : 160;
-  const top = isColumns ? 64 : 36;
+  const left = isCalendar || isColumns ? 40 : timeframeKey === 'hour' ? 48 : 80;
+  const top = isColumns ? 44 : 24;
   const headerY = top - LABEL_GAP;
   const width = left + Math.max(1, layout.cellsPerRow) * PITCH;
   const height = top + Math.max(1, layout.rows.length) * PITCH;
+  const labelUnits = LABEL_PX / Math.max(1, svgScale);
   const columnStep = layout.cellsPerRow > 12 ? 3 : 1;
   // Date over every UTC midnight column and over the first column (unless midnight is right next to it,
   // where the two dates would overlap), so the repeated hour at each end of Last day stays unambiguous.
@@ -203,6 +229,7 @@ function ActivityHeatmap() {
                   ref={svgRef}
                   className="hm-svg"
                   viewBox={`0 0 ${width} ${height}`}
+                  style={{ '--hm-label-size': `${labelUnits}px` }}
                   width="100%"
                   preserveAspectRatio="xMinYMin meet"
                   role="grid"
@@ -210,7 +237,7 @@ function ActivityHeatmap() {
                 >
                   <g aria-hidden="true">
                     {isColumns && layout.columns.map((column, c) => (showDate(column, c) ? (
-                      <text key={`d${column.key}`} className="hm-axis-label" x={left + c * PITCH} y={headerY - 26}>{column.dateLabel}</text>
+                      <text key={`d${column.key}`} className="hm-axis-label" x={left + c * PITCH} y={headerY - 16}>{column.dateLabel}</text>
                     ) : null))}
                     {isColumns && layout.columns.map((column, c) => (c % 2 === 0 ? (
                       <text key={column.key} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{column.label}</text>
@@ -224,7 +251,7 @@ function ActivityHeatmap() {
                   </g>
                   {layout.rows.map((row, r) => (
                     <g key={row.key} role="row">
-                      <text className="hm-axis-label" aria-hidden="true" x={left - LABEL_GAP} y={top + r * PITCH + CELL - 8} textAnchor="end">{row.label}</text>
+                      <text className="hm-axis-label" aria-hidden="true" x={left - LABEL_GAP} y={top + r * PITCH + CELL / 2 + 4} textAnchor="end">{row.label}</text>
                       {row.cells.map((cell, c) => {
                         const x = left + c * PITCH;
                         const y = top + r * PITCH;

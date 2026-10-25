@@ -85,9 +85,9 @@
   overflow: visible;
 }
 
-/* SVG user units: the grid scales with the card width, so this tracks the 28-unit cells. */
+/* SVG user units; the component sets --hm-label-size so labels stay 12 screen px as the SVG scales. */
 .activity-heatmap .hm-axis-label {
-  font-size: 20px;
+  font-size: var(--hm-label-size, 12px);
   fill: var(--text-secondary);
 }
 
