@@ -347,6 +347,10 @@ describe('tooltip, aria, summary and legend content', () => {
     await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last month' });
     expect(cellNamed('2026-10-01 00:00-2026-10-02 00:00 UTC: 9 requests')).toBeTruthy();
     expect(gridCells()).toHaveLength(30);
+    // Days run horizontally: weekday column headers, one row per UTC week.
+    const labels = [...document.querySelectorAll('.hm-svg text.hm-axis-label')].map(t => t.textContent);
+    expect(labels.slice(0, 7)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+    expect(screen.getAllByRole('row').length).toBeLessThanOrEqual(6);
   });
 
   it('labels stay in UTC when the process time zone is not UTC', async () => {

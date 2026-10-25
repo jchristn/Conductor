@@ -153,7 +153,7 @@ function ActivityHeatmap() {
   const isCalendar = layout.kind === 'calendar';
   const isColumns = layout.kind === 'columns';
   // Horizontal (columns) layouts get a date line above the hour labels and short ':MM' row labels.
-  const left = isCalendar || isColumns ? 40 : timeframeKey === 'hour' ? 48 : 80;
+  const left = isColumns ? 40 : isCalendar || timeframeKey === 'hour' ? 48 : 80;
   const top = isColumns ? 44 : 24;
   const headerY = top - LABEL_GAP;
   const width = left + Math.max(1, layout.cellsPerRow) * PITCH;
@@ -243,7 +243,7 @@ function ActivityHeatmap() {
                       <text key={column.key} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{column.label}</text>
                     ) : null))}
                     {isCalendar && layout.columns.map((column, c) => (
-                      <text key={column.key} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{c % 2 === 0 ? column.label : ''}</text>
+                      <text key={column.key} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{column.label}</text>
                     ))}
                     {!isCalendar && !isColumns && Array.from({ length: layout.cellsPerRow }, (_, c) => (c % columnStep === 0 ? (
                       <text key={`c${c}`} className="hm-axis-label" x={left + c * PITCH} y={headerY}>{columnLabel(layout, c)}</text>

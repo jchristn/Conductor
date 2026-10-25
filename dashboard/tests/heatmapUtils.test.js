@@ -130,7 +130,7 @@ describe('heatmap utils', () => {
       expect(realCells(layout)).toHaveLength(169);
     });
 
-    it('month: 31 real buckets in 7 Sunday-first weekday rows by UTC week columns', () => {
+    it('month: 31 real buckets in Sunday-first UTC week rows by 7 weekday columns (days run horizontally)', () => {
       // 2026-09-24 is a Thursday; 30 days ends 2026-10-24 (Saturday) 12:07.
       const res = response(86400, 30 * 86400, [{ TimestampUtc: '2026-10-01T00:00:00Z', RequestCount: 3 }], '2026-09-24T12:07:33Z');
       const buckets = buildBuckets(res);
@@ -138,18 +138,22 @@ describe('heatmap utils', () => {
       expect(buckets[0].startMs).toBe(at('2026-09-24T00:00:00Z'));
       const layout = layoutHeatmap(buckets, 'month', res.BucketSeconds);
       expect(layout.kind).toBe('calendar');
-      expect(layout.rows.map(r => r.label)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
-      expect(layout.columns).toHaveLength(5);
-      expect(layout.columns[0].startMs).toBe(at('2026-09-20T00:00:00Z'));
-      layout.rows.forEach(row => expect(row.cells).toHaveLength(5));
+      expect(layout.columns.map(c => c.label)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+      expect(layout.cellsPerRow).toBe(7);
+      expect(layout.rows).toHaveLength(5);
+      expect(layout.rows.map(r => r.label)).toEqual(['09-20', '09-27', '10-04', '10-11', '10-18']);
+      expect(layout.rows[0].startMs).toBe(at('2026-09-20T00:00:00Z'));
+      layout.rows.forEach(row => expect(row.cells).toHaveLength(7));
       const cells = realCells(layout);
       expect(cells).toHaveLength(31);
-      cells.forEach(c => expect(new Date(c.startMs).getUTCDay()).toBe(layout.rows.find(r => r.cells.includes(c)).weekday));
-      // Thursday row, first column: 2026-09-24; Sunday row, first column: padding before the window.
-      expect(layout.rows[4].cells[0].bucket.startMs).toBe(at('2026-09-24T00:00:00Z'));
-      expect(layout.rows[0].cells[0].padding).toBe(true);
-      // Saturday 2026-10-24 is the last real bucket, in column 4.
-      expect(layout.rows[6].cells[4].bucket.startMs).toBe(at('2026-10-24T00:00:00Z'));
+      // Each cell sits in its weekday column, and consecutive days run left to right then wrap to the next row.
+      layout.rows.forEach(row => row.cells.forEach((c, i) => expect(new Date(c.startMs).getUTCDay()).toBe(i)));
+      expect(cells.map(c => c.startMs)).toEqual(buckets.map(b => b.startMs));
+      // First row: Sun-Wed padding before the window, Thursday 2026-09-24 in column 4.
+      expect(layout.rows[0].cells.slice(0, 4).every(c => c.padding)).toBe(true);
+      expect(layout.rows[0].cells[4].bucket.startMs).toBe(at('2026-09-24T00:00:00Z'));
+      // Saturday 2026-10-24 is the last real bucket, at the end of the last row.
+      expect(layout.rows[4].cells[6].bucket.startMs).toBe(at('2026-10-24T00:00:00Z'));
       expect(cells.find(c => c.startMs === at('2026-10-01T00:00:00Z')).bucket.RequestCount).toBe(3);
     });
 
@@ -317,14 +321,14 @@ describe('heatmap utils', () => {
       ];
       expect(summarize(ttft, 'ttft').peak.startMs).toBe(at('2026-10-24T11:00:00Z'));
 
-      // Month calendar cells are weekday-major, so the Sunday 10-04 cell precedes the Monday 09-28 cell.
+      // Month calendar cells are week-major, so the Monday 09-28 cell precedes the Sunday 10-04 cell.
       const res = { StartUtc: '2026-09-24T12:07:33Z', EndUtc: '2026-10-24T12:07:33Z', BucketSeconds: 86400,
         TimeSeries: [{ TimestampUtc: '2026-09-28T00:00:00Z', RequestCount: 9 }, { TimestampUtc: '2026-10-04T00:00:00Z', RequestCount: 9 }] };
       const buckets = buildBuckets(res);
       const layout = layoutHeatmap(buckets, 'month', 86400);
       const cells = layout.rows.flatMap(row => row.cells);
       const tied = cells.filter(cell => !cell.padding && cell.bucket.RequestCount === 9).map(cell => cell.bucket.startMs);
-      expect(tied).toEqual([at('2026-10-04T00:00:00Z'), at('2026-09-28T00:00:00Z')]);
+      expect(tied).toEqual([at('2026-09-28T00:00:00Z'), at('2026-10-04T00:00:00Z')]);
       const summary = summarize(cells.map(cell => (cell.padding ? cell : cell.bucket)), 'requests');
       expect(summary.peak).toMatchObject({ value: 9, startMs: at('2026-09-28T00:00:00Z'), timeText: '2026-09-28 00:00 UTC' });
       expect(summary.peak).toEqual(summarize(buckets, 'requests').peak);
@@ -491,13 +495,13 @@ describe('heatmap utils', () => {
       }
     });
 
-    it('month calendar starting on a Sunday has no leading padding and Sunday-first week columns', () => {
+    it('month calendar starting on a Sunday has no leading padding and a Sunday-first week row', () => {
       // 2026-10-04 is a Sunday.
       const res = { StartUtc: '2026-10-04T00:00:00Z', EndUtc: '2026-10-11T00:00:00Z', BucketSeconds: 86400 };
       const layout = layoutHeatmap(buildBuckets(res), 'month', 86400);
       expect(layout.kind).toBe('calendar');
-      expect(layout.columns.map(c => c.label)).toEqual(['10-04']);
-      expect(layout.rows.map(r => r.cells[0].padding)).toEqual([false, false, false, false, false, false, false]);
+      expect(layout.rows.map(r => r.label)).toEqual(['10-04']);
+      expect(layout.rows[0].cells.map(c => c.padding)).toEqual([false, false, false, false, false, false, false]);
       expect(layout.rows[0].cells[0].bucket.startMs).toBe(at('2026-10-04T00:00:00Z'));
     });
 

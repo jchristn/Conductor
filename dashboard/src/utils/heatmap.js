@@ -11,7 +11,7 @@ const NO_TIMING_DATA = 'No timing data';
 export const DEFAULT_HEATMAP_TIMEFRAME = 'day';
 export const DEFAULT_HEATMAP_METRIC = 'requests';
 
-// rowSeconds null means the calendar layout (weekday rows, one column per UTC week). columnSeconds
+// rowSeconds null means the calendar layout (one row per UTC week, weekday columns). columnSeconds
 // means a horizontal layout: one column per columnSeconds of UTC time (oldest left) and one row per
 // bucket offset within it, so Last day reads left to right like Last week.
 export const HEATMAP_TIMEFRAMES = Object.freeze({
@@ -220,29 +220,30 @@ function layoutColumns(buckets, timeframeKey, columnSeconds, bucketSeconds) {
   return { kind: 'columns', timeframe: timeframeKey, bucketSeconds, cellsPerRow: columns.length, columns, rows };
 }
 
-// Calendar: 7 UTC weekday rows (Sunday first) by one column per UTC week (each starting on Sunday).
+// Calendar: one row per UTC week (each starting on Sunday, oldest on top) by 7 UTC weekday columns
+// (Sunday first), so the days of the month run left to right like a wall calendar.
 function layoutCalendar(buckets, timeframeKey) {
   const firstDay = floorTo(buckets[0].startMs, DAY_MS);
   const firstSunday = firstDay - new Date(firstDay).getUTCDay() * DAY_MS;
   const byDay = new Map(buckets.map(bucket => [floorTo(bucket.startMs, DAY_MS), bucket]));
   const lastDay = floorTo(buckets[buckets.length - 1].startMs, DAY_MS);
-  const columnCount = Math.floor((lastDay - firstSunday) / WEEK_MS) + 1;
-  const columns = [];
-  for (let c = 0; c < columnCount; c++) {
-    const startMs = firstSunday + c * WEEK_MS;
-    columns.push({ key: `w${startMs}`, startMs, label: utcDate(startMs).slice(5) });
+  const weekCount = Math.floor((lastDay - firstSunday) / WEEK_MS) + 1;
+  const columns = WEEKDAY_NAMES.map((label, weekday) => ({ key: `d${weekday}`, weekday, label }));
+  const rows = [];
+  for (let r = 0; r < weekCount; r++) {
+    const startMs = firstSunday + r * WEEK_MS;
+    rows.push({
+      key: `w${startMs}`,
+      startMs,
+      label: utcDate(startMs).slice(5),
+      cells: columns.map(column => {
+        const dayMs = startMs + column.weekday * DAY_MS;
+        const bucket = byDay.get(dayMs);
+        return bucket ? realCell(bucket) : paddingCell(`p${startMs}:${column.weekday}`, dayMs);
+      })
+    });
   }
-  const rows = WEEKDAY_NAMES.map((label, weekday) => ({
-    key: `d${weekday}`,
-    weekday,
-    label,
-    cells: columns.map(column => {
-      const dayMs = column.startMs + weekday * DAY_MS;
-      const bucket = byDay.get(dayMs);
-      return bucket ? realCell(bucket) : paddingCell(`p${weekday}:${column.startMs}`, dayMs);
-    })
-  }));
-  return { kind: 'calendar', timeframe: timeframeKey, bucketSeconds: DAY_SECONDS, cellsPerRow: columnCount, columns, rows };
+  return { kind: 'calendar', timeframe: timeframeKey, bucketSeconds: DAY_SECONDS, cellsPerRow: columns.length, columns, rows };
 }
 
 // Lays out real buckets using the response's bucketSeconds. Positions with no real bucket are padding
@@ -304,7 +305,7 @@ export function summarize(buckets, metricKey) {
     }
     if (value > 0) {
       active++;
-      // Ties keep the earliest bucket start whatever the input order (calendar cells are weekday-major).
+      // Ties keep the earliest bucket start whatever the input order (layouts may reorder cells).
       const parsed = Number.isFinite(bucket.startMs) ? bucket.startMs : parseUtcMs(bucket.TimestampUtc);
       const startMs = Number.isFinite(parsed) ? parsed : null;
       const earlier = startMs != null && (peakStartMs == null || startMs < peakStartMs);
