@@ -4750,6 +4750,15 @@ input.file-input-hidden {
   flex-direction: column;
 }
 
+.sidebar-version {
+  margin-top: auto;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  color: var(--sidebar-text);
+  font-size: 11px;
+  opacity: 0.6;
+}
+
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
