@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -352,6 +352,116 @@ describe('heatmap utils', () => {
       expect(out.day).toBe('2026-10-24 00:00-2026-10-25 00:00 UTC: 0 requests');
       expect(out.rows).toBe(8);
       expect(out.firstRow).toBe('Sat 10-24');
+    });
+  });
+
+  describe('test engineer edge coverage', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('is pure: no Date.now, no input mutation, deterministic output', () => {
+      vi.spyOn(Date, 'now').mockImplementation(() => { throw new Error('Date.now must not be called'); });
+      const deepFreeze = o => { Object.values(o).forEach(v => v && typeof v === 'object' && deepFreeze(v)); return Object.freeze(o); };
+      const res = deepFreeze(response(60, 3600, [{ TimestampUtc: '2026-10-24T12:30:00Z', RequestCount: 3, AverageTimeToFirstTokenMs: 10, SuccessfulCompletionCount: 1 }]));
+      const run = () => {
+        const buckets = buildBuckets(res);
+        const layout = layoutHeatmap(buckets, 'hour', res.BucketSeconds);
+        return { buckets, layout, summary: summarize(buckets, 'ttft'), label: cellLabel(buckets[23], 'requests', 60) };
+      };
+      const first = run();
+      expect(run()).toEqual(first);
+      expect(first.label).toBe('2026-10-24 12:30-12:31 UTC: 3 requests');
+      expect(res.TimeSeries[0]).not.toHaveProperty('startMs');
+      expect(Date.now).not.toHaveBeenCalled();
+    });
+
+    it('matches offsets, 7-digit fractions and epoch timestamps; ignores duplicates and garbage', () => {
+      const base = { StartUtc: '2026-10-24T12:00:00.0000000', EndUtc: '2026-10-24T14:00:00.0000000', BucketSeconds: 3600 };
+      for (const ts of ['2026-10-24T06:00:00-07:00', '2026-10-24T13:00:00+0000', '2026-10-24T13:00:00.0000000', at('2026-10-24T13:00:00Z')]) {
+        const buckets = buildBuckets({ ...base, TimeSeries: [{ TimestampUtc: ts, RequestCount: 7 }] });
+        expect(buckets.map(b => b.RequestCount)).toEqual([0, 7]);
+      }
+      const buckets = buildBuckets({ ...base, TimeSeries: [
+        { TimestampUtc: 'not a date', RequestCount: 50 },
+        null,
+        { RequestCount: 60 },
+        { TimestampUtc: '2026-10-24T13:00:00Z', RequestCount: 1 },
+        { TimestampUtc: '2026-10-24T13:00:00', RequestCount: 99 }
+      ] });
+      expect(buckets.map(b => b.RequestCount)).toEqual([0, 1]);
+      expect(parseUtcMs('   ')).toBeNaN();
+      expect(parseUtcMs(Infinity)).toBeNaN();
+      expect(parseUtcMs('2026-10-24')).toBe(at('2026-10-24T00:00:00Z'));
+    });
+
+    it('aligned window gives exactly n buckets with EndUtc exclusive', () => {
+      const buckets = buildBuckets({ StartUtc: '2026-10-24T12:00:00Z', EndUtc: '2026-10-24T13:00:00Z', BucketSeconds: 60,
+        TimeSeries: [{ TimestampUtc: '2026-10-24T13:00:00Z', RequestCount: 5 }] });
+      expect(buckets).toHaveLength(60);
+      expect(buckets[59].startMs).toBe(at('2026-10-24T12:59:00Z'));
+      expect(summarize(buckets, 'requests').primary.value).toBe(0);
+      const layout = layoutHeatmap(buckets, 'hour', 60);
+      expect(layout.rows).toHaveLength(4);
+      expect(layout.rows.flatMap(r => r.cells).some(c => c.padding)).toBe(false);
+    });
+
+    it('invalid window inputs give an empty list instead of throwing', () => {
+      const ok = { StartUtc: '2026-10-24T12:00:00Z', EndUtc: '2026-10-24T13:00:00Z', BucketSeconds: 60 };
+      for (const patch of [{ BucketSeconds: -60 }, { BucketSeconds: NaN }, { BucketSeconds: 'abc' }, { BucketSeconds: null },
+        { StartUtc: 'garbage' }, { EndUtc: '' }, { EndUtc: '2026-10-24T11:00:00Z' }]) {
+        expect(buildBuckets({ ...ok, ...patch })).toEqual([]);
+      }
+      expect(buildBuckets({ ...ok, BucketSeconds: '60' })).toHaveLength(60);
+    });
+
+    it('every response bucket size lays out each bucket exactly once, in order, with full rows', () => {
+      for (const [timeframe, rangeSeconds] of [['hour', 3600], ['day', 86400], ['week', 7 * 86400], ['month', 30 * 86400]]) {
+        for (const bucketSeconds of [60, 90, 120, 420, 600, 840, 900, 1000, 3600, 5400, 7200, 43200, 86400, 172800]) {
+          if (rangeSeconds / bucketSeconds > 800) continue;
+          const buckets = buildBuckets(response(bucketSeconds, rangeSeconds, []));
+          const layout = layoutHeatmap(buckets, timeframe, bucketSeconds);
+          const cells = layout.rows.flatMap(r => r.cells);
+          const real = cells.filter(c => !c.padding);
+          const context = `${timeframe}/${bucketSeconds}`;
+          const placed = real.map(c => c.bucket.startMs);
+          expect(layout.kind === 'rows' ? placed : [...placed].sort((a, b) => a - b), context).toEqual(buckets.map(b => b.startMs));
+          expect(new Set(real.map(c => c.bucket.startMs)).size, context).toBe(buckets.length);
+          layout.rows.forEach(row => expect(row.cells, context).toHaveLength(layout.cellsPerRow));
+          cells.filter(c => c.padding).forEach(c => expect(c.bucket, context).toBeNull());
+          expect(new Set(cells.map(c => c.key)).size, context).toBe(cells.length);
+        }
+      }
+    });
+
+    it('month calendar starting on a Sunday has no leading padding and Sunday-first week columns', () => {
+      // 2026-10-04 is a Sunday.
+      const res = { StartUtc: '2026-10-04T00:00:00Z', EndUtc: '2026-10-11T00:00:00Z', BucketSeconds: 86400 };
+      const layout = layoutHeatmap(buildBuckets(res), 'month', 86400);
+      expect(layout.kind).toBe('calendar');
+      expect(layout.columns.map(c => c.label)).toEqual(['10-04']);
+      expect(layout.rows.map(r => r.cells[0].padding)).toEqual([false, false, false, false, false, false, false]);
+      expect(layout.rows[0].cells[0].bucket.startMs).toBe(at('2026-10-04T00:00:00Z'));
+    });
+
+    it('layout defaults: unknown timeframe falls back to day, missing bucketSeconds uses the timeframe size', () => {
+      const buckets = buildBuckets(response(900, 86400, []));
+      expect(layoutHeatmap(buckets, 'Week', 900)).toEqual(layoutHeatmap(buckets, 'day', 900));
+      expect(layoutHeatmap(buckets, 'day', undefined).cellsPerRow).toBe(4);
+      expect(layoutHeatmap(buckets, 'day', 0).cellsPerRow).toBe(4);
+      expect(layoutHeatmap(undefined, 'month', 86400)).toMatchObject({ kind: 'calendar', rows: [] });
+    });
+
+    it('ttft text: Average rounds to 1 decimal, labels use en-US separators, string fields are numeric', () => {
+      const summary = summarize([
+        { startMs: 0, AverageTimeToFirstTokenMs: 100, SuccessfulCompletionCount: 1 },
+        { startMs: 1, AverageTimeToFirstTokenMs: '101', SuccessfulCompletionCount: '2' }
+      ], 'ttft');
+      expect(summary.primary.text).toBe('100.7 ms');
+      expect(summary.peak).toMatchObject({ value: 101, startMs: 1 });
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z'), AverageTimeToFirstTokenMs: 1234.5 }, 'ttft', 60)).toBe('2026-10-24 13:00-13:01 UTC: 1,234.5 ms');
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z'), AverageTimeToFirstTokenMs: 'n/a' }, 'ttft', 60)).toBe('2026-10-24 13:00-13:01 UTC: No timing data');
+      expect(cellLabel({ startMs: at('2026-10-24T13:00:00Z'), RequestCount: 1 }, 'bogus', 60)).toBe('2026-10-24 13:00-13:01 UTC: 1 request');
+      expect(cellLabel(null, 'requests', 60)).toBe('');
+      expect(cellLabel({ TimestampUtc: 'garbage' }, 'requests', 60)).toBe('');
     });
   });
 });
