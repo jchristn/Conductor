@@ -609,6 +609,34 @@
           }
         },
         {
+          "name": "Update Credential",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Name\": \"Updated API Key\",\n  \"Active\": true,\n  \"Labels\": [\n    \"ci\"\n  ],\n  \"Tags\": {\n    \"owner\": \"platform\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "credentials",
+                "{{credentialId}}"
+              ]
+            },
+            "description": "Replace a credential's Name, Active, Labels, Tags and Metadata. UserId and CreatedUtc are kept from the stored record. Omit BearerToken (or send an empty string) to keep the existing token; a new BearerToken must be unique. Cross-tenant callers supply TenantId in the body."
+          }
+        },
+        {
           "name": "Delete Credential",
           "request": {
             "method": "DELETE",
@@ -2251,6 +2279,57 @@
               ]
             }
           }
+        },
+        {
+          "name": "Get VMR Keep-Warm Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/keep-warm?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "keep-warm"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            },
+            "description": "Return the VMR's keep-warm schedule and the per-model, per-endpoint results of the last pass (KeepWarmStatus). Status is held in memory and resets on server restart."
+          }
+        },
+        {
+          "name": "Run VMR Keep-Warm",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}/keep-warm/run?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "{{vmrId}}",
+                "keep-warm",
+                "run"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            },
+            "description": "Tenant-admin route that runs a keep-warm pass now, regardless of schedule or KeepWarm.Enabled, and returns the resulting KeepWarmStatus. No request body is required. The call waits for the pass, which can take as long as a cold model load."
+          }
         }
       ]
     },
@@ -3074,6 +3153,42 @@
           }
         },
         {
+          "name": "Delete Selected Request History",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Ids\": [\n    \"{{requestHistoryId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/requesthistory/delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "requesthistory",
+                "delete"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true,
+                  "description": "Optional tenant ID for system administrators or cross-tenant callers"
+                }
+              ]
+            },
+            "description": "Delete selected request history entries by ID after validating tenant access for every entry. Returns a BulkDeleteResult with the number of deleted entries."
+          }
+        },
+        {
           "name": "Bulk Delete Request History",
           "request": {
             "method": "DELETE",
@@ -3254,6 +3369,102 @@
           }
         },
         {
+          "name": "Get Analytics Time Series",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/timeseries?range={{analyticsRange}}&bucketSeconds={{analyticsBucketSeconds}}&timezone={{analyticsTimezone}}&limit={{analyticsLimit}}&tokenUnitCost={{analyticsTokenUnitCost}}&costCurrency={{analyticsCostCurrency}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "timeseries"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true,
+                  "description": "Optional tenant filter for system administrators"
+                },
+                {
+                  "key": "range",
+                  "value": "{{analyticsRange}}",
+                  "description": "lastHour, lastDay, lastWeek, lastMonth, or custom"
+                },
+                {
+                  "key": "startUtc",
+                  "value": "{{analyticsStartUtc}}",
+                  "disabled": true
+                },
+                {
+                  "key": "endUtc",
+                  "value": "{{analyticsEndUtc}}",
+                  "disabled": true
+                },
+                {
+                  "key": "bucketSeconds",
+                  "value": "{{analyticsBucketSeconds}}"
+                },
+                {
+                  "key": "timezone",
+                  "value": "{{analyticsTimezone}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{analyticsLimit}}"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "{{analyticsGroupBy}}",
+                  "disabled": true
+                },
+                {
+                  "key": "vmrGuid",
+                  "value": "{{vmrGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "endpointGuid",
+                  "value": "{{endpointGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "modelName",
+                  "value": "{{modelName}}",
+                  "disabled": true
+                },
+                {
+                  "key": "requestorUserGuid",
+                  "value": "{{analyticsRequestorUserGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "credentialGuid",
+                  "value": "{{analyticsCredentialGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "statusClass",
+                  "value": "2xx",
+                  "disabled": true
+                },
+                {
+                  "key": "tokenUnitCost",
+                  "value": "{{analyticsTokenUnitCost}}"
+                },
+                {
+                  "key": "costCurrency",
+                  "value": "{{analyticsCostCurrency}}"
+                }
+              ]
+            },
+            "description": "Convenience time-series query. Returns the AnalyticsQueryResult with TimeSeries buckets of bucketSeconds; groupBy defaults to RequestorUserId when omitted."
+          }
+        },
+        {
           "name": "Run Analytics Query",
           "request": {
             "method": "POST",
@@ -3279,6 +3490,34 @@
               ]
             },
             "description": "Run a general Analytics workspace query. System administrators can keep TenantId for tenant filtering or remove it for global scope; tenant admins are forced to their authenticated tenant."
+          }
+        },
+        {
+          "name": "Run Analytics Buckets Query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Range\": \"{{analyticsRange}}\",\n  \"StartUtc\": null,\n  \"EndUtc\": null,\n  \"BucketSeconds\": 900,\n  \"Timezone\": \"{{analyticsTimezone}}\",\n  \"TokenUnitCost\": {{analyticsTokenUnitCost}},\n  \"CostCurrency\": \"{{analyticsCostCurrency}}\",\n  \"Metrics\": [\n    \"request.count\",\n    \"latency.ttft.avg\",\n    \"tokens.total\"\n  ],\n  \"GroupBy\": [],\n  \"Filters\": {\n    \"VirtualModelRunnerIds\": [\n      \"{{vmrGuid}}\"\n    ],\n    \"ModelRunnerEndpointIds\": [],\n    \"ModelNames\": [],\n    \"RequestorUserIds\": [],\n    \"CredentialIds\": [],\n    \"ProviderNames\": [],\n    \"ReservationIds\": [],\n    \"ReservationDecisions\": [],\n    \"ReservationReasonCodes\": [],\n    \"StatusClasses\": [],\n    \"StageKinds\": [],\n    \"ModelAccessWouldDeny\": null,\n    \"SuccessfulCompletionsOnly\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/buckets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "buckets"
+              ]
+            },
+            "description": "Aggregate-only time-bucket query computed in the database with one GROUP BY (used by the dashboard Heatmap tab). Same body and tenant scoping as /v1.0/analytics/query; Limit is ignored, so results are never truncated and TimeSeries is zero-filled. Percentiles are null and Groups is empty. GroupBy dimensions or percentile metrics (latency.ttft.p50/p90/p95/p99) return 400. Lay out results using the response BucketSeconds."
           }
         },
         {
@@ -3554,6 +3793,101 @@
               ]
             },
             "description": "Answer: what is the estimate-only token cost for this user over the last day?"
+          }
+        },
+        {
+          "name": "Usage By User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/analytics/users?range={{analyticsRange}}&bucketSeconds={{analyticsBucketSeconds}}&timezone={{analyticsTimezone}}&limit={{analyticsLimit}}&groupBy=RequestorUserId&tokenUnitCost={{analyticsTokenUnitCost}}&costCurrency={{analyticsCostCurrency}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "analytics",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}",
+                  "disabled": true,
+                  "description": "Optional tenant filter for system administrators"
+                },
+                {
+                  "key": "range",
+                  "value": "{{analyticsRange}}",
+                  "description": "lastHour, lastDay, lastWeek, lastMonth, or custom"
+                },
+                {
+                  "key": "startUtc",
+                  "value": "{{analyticsStartUtc}}",
+                  "disabled": true
+                },
+                {
+                  "key": "endUtc",
+                  "value": "{{analyticsEndUtc}}",
+                  "disabled": true
+                },
+                {
+                  "key": "bucketSeconds",
+                  "value": "{{analyticsBucketSeconds}}"
+                },
+                {
+                  "key": "timezone",
+                  "value": "{{analyticsTimezone}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{analyticsLimit}}"
+                },
+                {
+                  "key": "groupBy",
+                  "value": "RequestorUserId"
+                },
+                {
+                  "key": "vmrGuid",
+                  "value": "{{vmrGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "endpointGuid",
+                  "value": "{{endpointGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "modelName",
+                  "value": "{{modelName}}",
+                  "disabled": true
+                },
+                {
+                  "key": "requestorUserGuid",
+                  "value": "{{analyticsRequestorUserGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "credentialGuid",
+                  "value": "{{analyticsCredentialGuid}}",
+                  "disabled": true
+                },
+                {
+                  "key": "statusClass",
+                  "value": "2xx",
+                  "disabled": true
+                },
+                {
+                  "key": "tokenUnitCost",
+                  "value": "{{analyticsTokenUnitCost}}"
+                },
+                {
+                  "key": "costCurrency",
+                  "value": "{{analyticsCostCurrency}}"
+                }
+              ]
+            },
+            "description": "User-oriented usage query; defaults to grouping by RequestorUserId."
           }
         },
         {
@@ -3979,6 +4313,34 @@
                 "administrators"
               ]
             }
+          }
+        },
+        {
+          "name": "Update Administrator",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Email\": \"admin@example.com\",\n  \"Password\": \"\",\n  \"FirstName\": \"System\",\n  \"LastName\": \"Administrator\",\n  \"Active\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/administrators/{{adminId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "administrators",
+                "{{adminId}}"
+              ]
+            },
+            "description": "Update an administrator. Only supplied fields change: an empty or omitted Password keeps the current password, null FirstName/LastName/Active are left unchanged, and a new Email must not belong to another administrator."
           }
         },
         {
