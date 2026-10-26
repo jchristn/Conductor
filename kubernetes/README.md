@@ -25,7 +25,8 @@ older override. The dashboard proxies `/api/` to the internal server, including
 streamed responses. Find the generated admin API key in the local settings file;
 keep that file private. First-run initialization also creates the existing factory
 `admin@conductor` / `password` accounts: change those passwords before exposing
-this deployment. The configure script preserves settings on subsequent runs.
+this deployment. See [Production Hardening](../README.md#production-hardening) in the
+repository README for the full checklist. The configure script preserves settings on subsequent runs.
 
 For an existing PostgreSQL service, replace the Database section in the private
 settings file with your PostgreSql hostname, port, database, username, password and

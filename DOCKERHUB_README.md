@@ -47,11 +47,17 @@ cd Conductor/docker
 docker compose up -d
 ```
 
-The server comes up at `http://localhost:9000`, the dashboard at `http://localhost:9100`, and Grafana at `http://localhost:3000`. On first run the server prints a set of default administrator, tenant, user, and API-key credentials to its logs — save them, because they are not shown again:
+The server comes up at `http://localhost:9000`, the dashboard at `http://localhost:9100`, and Grafana at `http://localhost:3000`. Sign in with the default credentials below. They are fixed, well-known values, not generated secrets, and they are the same on every installation:
 
-```bash
-docker compose logs conductor
-```
+| What | Default | Where it comes from |
+| --- | --- | --- |
+| Administrator (admin dashboard) | `admin@conductor` / `password` | Created on first run |
+| Tenant user in tenant `default` (global admin) | `admin@conductor` / `password` | Created on first run |
+| Admin API key (`x-admin-apikey` header) | `conductoradmin` | `AdminApiKeys` in `docker/conductor.json` (also the built-in default when `AdminApiKeys` is omitted) |
+| Tenant API bearer token | `factory_default_bearer_token_0000000000000000000000000000000000` | Seeded by `docker/factory/schema.sql` in the Compose setup; a standalone server generates a random token and prints it once to the console on first run |
+| PostgreSQL | `conductor` / `conductor` | `docker/compose.yaml` and `docker/conductor.json` |
+
+> **Warning:** anyone who can reach the server can sign in with these defaults. Change the administrator and user passwords, replace the admin API key, and delete or rotate the default bearer token before exposing the server beyond your own machine. See [Production Hardening](https://github.com/jchristn/Conductor#production-hardening) in the repository README for the full checklist.
 
 If you only want the server and are content with a single-file SQLite database, run the image on its own with a mounted configuration. Create `conductor.json`:
 
@@ -72,7 +78,7 @@ docker run -d --name conductor \
   jchristn77/conductor-server:latest
 ```
 
-Watch the logs for the first-run credentials, then either drive the API directly or run the dashboard container against it.
+On first run the server creates the `admin@conductor` / `password` administrator and tenant user and prints a randomly generated tenant bearer token to its console (`docker logs conductor`); the admin API key is `conductoradmin` because this configuration does not set `AdminApiKeys`. Change all of them as described above, then either drive the API directly or run the dashboard container against it.
 
 ## Ports
 
