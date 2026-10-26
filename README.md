@@ -52,6 +52,15 @@ The dashboard container receives `CONDUCTOR_SERVER_URL=http://localhost:9000` fr
 
 The Compose file also brings up the observability stack (OpenTelemetry Collector, Prometheus, Tempo, Loki, and Grafana). Once running, open **Grafana at `http://localhost:3000`** (anonymous admin access is enabled) to view the pre-provisioned per-subsystem dashboards. See [Observability](#observability) for details.
 
+> **Warning: change the default credentials immediately.** The Compose setup starts with fixed, well-known credentials that are the same on every installation:
+>
+> - Administrator and tenant user (tenant `default`, global admin): `admin@conductor` / `password`
+> - Admin API key: `conductoradmin` (`AdminApiKeys` in `docker/conductor.json`)
+> - Tenant API bearer token: `factory_default_bearer_token_0000000000000000000000000000000000` (seeded by `docker/factory/schema.sql`)
+> - PostgreSQL: `conductor` / `conductor`, published on host port `5432`
+>
+> Change them before the server is reachable by anyone else. See [Production Hardening](#production-hardening).
+
 ### Building from Source
 
 #### Prerequisites
@@ -65,6 +74,8 @@ The Compose file also brings up the observability stack (OpenTelemetry Collector
 cd src/Conductor.Server
 dotnet run
 ```
+
+> **Warning: change the default credentials immediately.** On first run against an empty database the server creates an administrator and a global-admin tenant user, both `admin@conductor` / `password`, and prints them together with a randomly generated tenant bearer token to the console (they are not shown again). The admin API key is `conductoradmin` unless you set `AdminApiKeys` in `conductor.json`. Change the passwords and the admin API key before exposing the server. See [Production Hardening](#production-hardening).
 
 #### Build and Run Dashboard
 
@@ -739,6 +750,50 @@ Model configurations can define pinned properties that are automatically merged 
 ```
 
 When a request comes through a virtual model runner, the pinned properties are merged with the request body, allowing you to enforce specific model parameters.
+
+## Production Hardening
+
+Conductor's defaults are tuned for a quick local start, not for an exposed deployment. Work through this checklist before the server, dashboard, or MCP server is reachable by anyone other than you.
+
+### Change the default credentials
+
+Every installation starts with the same well-known credentials (see [Quick Start](#quick-start)). Change all of them:
+
+- **Administrator password** (`admin@conductor` / `password`): sign in to the dashboard as the administrator and edit the account under **Access** > **Administrators**, or call `PUT /v1.0/administrators/{id}` with a new `Password`. Better still, create a new administrator with your own email address and then delete the default one (an administrator cannot delete the account it is signed in with). See [REST_API.md](./REST_API.md#administrators).
+- **Tenant user password** (`admin@conductor` / `password` in tenant `default`, a global admin): edit the user under **Access** > **Users**, or call `PUT /v1.0/users/{id}` with the full user object and a new `Password` (the update replaces the whole record, so read it first). See [REST_API.md](./REST_API.md#users).
+- **Admin API key** (`conductoradmin`): replace the value in the `AdminApiKeys` array of `conductor.json` (`docker/conductor.json` for Compose) with a long random value and restart the server. `conductoradmin` is also the built-in default when `AdminApiKeys` is omitted, so set the array explicitly. Any value in this list grants full administrator access through the `x-admin-apikey` header or a bearer token. See [REST_API.md](./REST_API.md#4-administrator-api-keys).
+- **Tenant bearer tokens**: in the Compose setup the default credential's token is the fixed `factory_default_bearer_token_0000000000000000000000000000000000`. Delete that credential under **Access** > **Credentials** (or through `/v1.0/credentials`) and issue new ones.
+- **Database password**: the Compose PostgreSQL account is `conductor` / `conductor`. Change `POSTGRES_PASSWORD` in `docker/compose.yaml` together with `Database.Password` in `docker/conductor.json`, and stop publishing port `5432` on the host unless you need it.
+
+Note that `docker/factory/reset.sh` and `reset.bat` restore the factory defaults, including all of the credentials above.
+
+### Use TLS behind a reverse proxy
+
+Conductor serves plain HTTP by default (`Webserver.Ssl` is `false`). Terminate TLS in a reverse proxy or ingress controller (nginx, Caddy, Traefik, a cloud load balancer) in front of the server and the dashboard, and do not publish port `9000` or `9100` directly. Credentials travel in headers (`Authorization`, `x-password`, `x-admin-apikey`), so they must never cross an untrusted network unencrypted. Bind `Webserver.Hostname` to a specific interface rather than `*` when the proxy runs on the same host.
+
+### Restrict CORS
+
+The Compose configuration allows every origin (`"AllowedOrigins": ["*"]`). In production, list only the origin that serves your dashboard (for example `https://conductor.example.com`), or disable CORS if no browser client calls the API from another origin. See [CORS Configuration](#cors-configuration).
+
+### Record the real client IP
+
+Behind a reverse proxy, request history, logs, and source-IP session affinity see the proxy's address unless the proxy is listed in `Webserver.TrustedProxies`. List only the proxy's own addresses, since any client connecting from a trusted address can forge the forwarded-for header. See [Client IP Behind a Reverse Proxy](#client-ip-behind-a-reverse-proxy).
+
+### Choose a production database and back it up
+
+Use PostgreSQL, SQL Server, or MySQL for production rather than SQLite, enable `Database.RequireEncryption` when the database is on another host, and use a dedicated database account with a strong password. See [Supported Databases](#supported-databases). Back up the database with your provider's native tooling, and export configuration regularly with **System** > **Backup & Restore** in the dashboard or `GET /v1.0/backup` (see [REST_API.md](./REST_API.md#backup-and-restore)). Backups contain credentials, so store them as secrets.
+
+### Set request-history retention
+
+Request history captures request and response bodies by default, which can include prompts, completions, and other sensitive data. Set `MetadataRetentionDays` and `BodyRetentionDays` to the shortest periods your auditing needs allow, set `CaptureRequestBody` / `CaptureResponseBody` to `false` (or disable `RequestHistoryEnabled` on individual VMRs) where bodies must not be stored, and extend `RedactedHeaders` / `RedactedJsonFields` for any custom secrets. Protect the `RequestHistory.Directory` on disk. See [Request History Configuration](#request-history-configuration).
+
+### Limit network exposure of the MCP server
+
+The optional MCP server (`Conductor.McpServer`) exposes tenant data and management tools and listens on HTTP `localhost:9001` and TCP `127.0.0.1:9002` by default. Keep it bound to the loopback interface, and if remote agents need it, put it behind an authenticating reverse proxy with TLS rather than binding it to a public interface. Disable the transport you do not use (`EnableHttpServer`, `EnableTcpServer`). See [MCP_API.md](./MCP_API.md#transports).
+
+### Keep logs and telemetry
+
+Keep file logging enabled (`Logging.FileLogging`) or ship logs to syslog (`Logging.Servers`) so that authentication failures and administrative changes can be investigated, and keep `OpenTelemetry` export pointed at a collector you monitor. The Compose Grafana instance allows anonymous admin access (`GF_AUTH_ANONYMOUS_ORG_ROLE=Admin`), and Prometheus, Tempo, Loki, and the collector are published on host ports; disable anonymous access and stop publishing those ports before exposing the host. See [Observability](#observability) and [TELEMETRY.md](./TELEMETRY.md).
 
 ## Health Checking & Rate Limiting
 
