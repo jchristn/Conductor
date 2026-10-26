@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import ChartCopyButton from './ChartCopyButton';
+import useChartExportTarget from '../hooks/useChartExportTarget';
 import {
   HEATMAP_METRICS,
   HEATMAP_TIMEFRAMES,
@@ -40,15 +41,18 @@ function columnLabel(layout, column) {
 }
 
 /**
- * UTC activity heat map for the Dashboard chart tabs. The timeframe (?heatmapRange=) and metric
- * (?heatmapMetric=) live in the query string. A timeframe change re-queries POST /v1.0/analytics/buckets
- * (aggregated in the database, never truncated); a metric change re-renders from the cached response.
- * Superseded responses are ignored.
+ * UTC activity heat map. Standalone, the timeframe (?heatmapRange=) and metric (?heatmapMetric=) live in
+ * the query string. A parent that owns a shared time picker passes timeframe (hour, day, week, month),
+ * which hides the Timeframe selector; refreshKey forces a re-query; exportRef moves the copy button to
+ * the parent; query adds extra request fields (TenantId, Filters). A timeframe, refresh, or query change
+ * re-queries POST /v1.0/analytics/buckets (aggregated in the database, never truncated); a metric change
+ * re-renders from the cached response. Superseded responses are ignored.
  */
-function ActivityHeatmap() {
+function ActivityHeatmap({ timeframe: controlledTimeframe, refreshKey = 0, exportRef = null, query = null }) {
   const { api } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
-  const timeframeKey = normalizeTimeframe(searchParams.get('heatmapRange'));
+  const controlled = controlledTimeframe !== undefined && controlledTimeframe !== null;
+  const timeframeKey = normalizeTimeframe(controlled ? controlledTimeframe : searchParams.get('heatmapRange'));
   const metricKey = normalizeMetric(searchParams.get('heatmapMetric'));
   const timeframe = HEATMAP_TIMEFRAMES[timeframeKey];
   const metric = HEATMAP_METRICS[metricKey];
@@ -56,15 +60,17 @@ function ActivityHeatmap() {
   // The result remembers which timeframe it belongs to and is reset whenever a query starts, so a new
   // timeframe shows loading (and drops the previous error) until its own response arrives.
   const [result, setResult] = useState({ timeframe: null, response: null, error: null });
+  const queryKey = query ? JSON.stringify(query) : '';
   useEffect(() => {
     let cancelled = false;
     const { range, bucketSeconds } = HEATMAP_TIMEFRAMES[timeframeKey];
+    const extra = queryKey ? JSON.parse(queryKey) : {};
     setResult({ timeframe: null, response: null, error: null });
-    api.queryAnalyticsBuckets({ Range: range, BucketSeconds: bucketSeconds })
+    api.queryAnalyticsBuckets({ ...extra, Range: range, BucketSeconds: bucketSeconds })
       .then(response => { if (!cancelled) setResult({ timeframe: timeframeKey, response: response || {}, error: null }); })
       .catch(error => { if (!cancelled) setResult({ timeframe: timeframeKey, response: null, error: error?.message || String(error) }); });
     return () => { cancelled = true; };
-  }, [api, timeframeKey]);
+  }, [api, timeframeKey, refreshKey, queryKey]);
 
   const current = result.timeframe === timeframeKey ? result : null;
   const response = current?.response || null;
@@ -173,25 +179,26 @@ function ActivityHeatmap() {
   const tip = tipKey ? cellByKey.get(tipKey) : null;
 
   const gridLabel = `Activity heatmap, ${metric.label}, ${timeframe.label}`;
+  const getCopyOptions = () => ({ title: `Activity heatmap: ${metric.label}, ${timeframe.label} (UTC)`, xLabel: 'Bucket start (UTC)', yLabel: metric.label });
+  useChartExportTarget(exportRef, svgRef, getCopyOptions);
 
   return (
     <div className="dashboard-section activity-heatmap">
       <div className="request-history-chart-header">
         <h3>Activity heatmap</h3>
-        {current?.response && !isEmpty && (
-          <ChartCopyButton
-            svgRef={svgRef}
-            getOptions={() => ({ title: `Activity heatmap: ${metric.label}, ${timeframe.label} (UTC)`, xLabel: 'Bucket start (UTC)', yLabel: metric.label })}
-          />
+        {!exportRef && current?.response && !isEmpty && (
+          <ChartCopyButton svgRef={svgRef} getOptions={getCopyOptions} />
         )}
       </div>
       <div className="hm-controls">
-        <label className="hm-control">
-          <span>Timeframe</span>
-          <select value={timeframeKey} onChange={event => setParam('heatmapRange', event.target.value)}>
-            {Object.entries(HEATMAP_TIMEFRAMES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
-          </select>
-        </label>
+        {!controlled && (
+          <label className="hm-control">
+            <span>Timeframe</span>
+            <select value={timeframeKey} onChange={event => setParam('heatmapRange', event.target.value)}>
+              {Object.entries(HEATMAP_TIMEFRAMES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
+            </select>
+          </label>
+        )}
         <label className="hm-control">
           <span>Metric</span>
           <select value={metricKey} onChange={event => setParam('heatmapMetric', event.target.value)}>

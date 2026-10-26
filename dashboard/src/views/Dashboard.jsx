@@ -1,21 +1,86 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Tabs from '../components/Tabs';
 import AnalyticsTrendChart from '../components/AnalyticsTrendChart';
 import ActivityHeatmap from '../components/ActivityHeatmap';
+import ChartCopyButton from '../components/ChartCopyButton';
 import RequestHistoryChart from '../components/RequestHistoryChart';
 import { hubPath } from '../config/navConfig';
+import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
+
+// One time picker, refresh, and copy control drive every Dashboard chart tab. The selection is shared
+// across tabs and persisted under the key the request history chart has always used.
+const CHART_RANGE_STORAGE_KEY = 'conductor_dashboard_history_range';
+const CHART_RANGES = [
+  { label: 'Last Hour', value: 'hour', analyticsRange: 'lastHour' },
+  { label: 'Last Day', value: 'day', analyticsRange: 'lastDay' },
+  { label: 'Last Week', value: 'week', analyticsRange: 'lastWeek' },
+  { label: 'Last Month', value: 'month', analyticsRange: 'lastMonth' }
+];
 
 function Dashboard() {
   const { api, counts, fetchCounts } = useApp();
+  const [chartRange, setChartRange] = useState(() => readChoicePreference(CHART_RANGE_STORAGE_KEY, CHART_RANGES.map(r => r.value), 'day'));
+  const [refreshKey, setRefreshKey] = useState(0);
   const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [chartError, setChartError] = useState('');
+  const analyticsRange = (CHART_RANGES.find(r => r.value === chartRange) || CHART_RANGES[1]).analyticsRange;
   useEffect(() => {
     let cancelled = false;
-    api.queryAnalytics({ Range: 'lastDay' }).then(result => { if (!cancelled) setAnalytics(result); }).catch(error => { if (!cancelled) setChartError(error.message); });
+    setAnalytics(null);
+    setChartError('');
+    setAnalyticsLoading(true);
+    api.queryAnalytics({ Range: analyticsRange })
+      .then(result => { if (!cancelled) setAnalytics(result); })
+      .catch(error => { if (!cancelled) setChartError(error.message); })
+      .finally(() => { if (!cancelled) setAnalyticsLoading(false); });
     return () => { cancelled = true; };
-  }, [api]);
+  }, [api, analyticsRange, refreshKey]);
+
+  // The mounted chart tab registers its SVG and copy options here (see useChartExportTarget).
+  const chartExportRef = useRef(null);
+  const sharedSvgRef = useMemo(() => ({ get current() { return chartExportRef.current?.svgRef?.current || null; } }), []);
+  const getSharedCopyOptions = () => (chartExportRef.current ? chartExportRef.current.getOptions() : {});
+
+  const selectChartRange = (value) => {
+    setChartRange(value);
+    writePreference(CHART_RANGE_STORAGE_KEY, value);
+  };
+
+  const chartToolbar = (
+    <div className="request-history-chart-controls dashboard-chart-toolbar">
+      <div className="request-history-time-tabs" role="group" aria-label="Chart time range">
+        {CHART_RANGES.map(r => (
+          <button
+            key={r.value}
+            type="button"
+            className={'request-history-time-tab' + (chartRange === r.value ? ' active' : '')}
+            aria-pressed={chartRange === r.value}
+            title={`Show ${r.label.toLowerCase()} in every chart on this page.`}
+            onClick={() => selectChartRange(r.value)}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="request-history-refresh-btn"
+        onClick={() => setRefreshKey(k => k + 1)}
+        title="Refresh charts"
+        aria-label="Refresh charts"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={analyticsLoading ? { animation: 'spin 1s linear infinite' } : undefined}>
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+      </button>
+      <ChartCopyButton svgRef={sharedSvgRef} getOptions={getSharedCopyOptions} />
+    </div>
+  );
   const [observability, setObservability] = useState(null);
 
   useEffect(() => {
@@ -105,10 +170,10 @@ function Dashboard() {
       </div>
 
       {chartError && <p role="alert">Analytics unavailable: {chartError}</p>}
-      <Tabs param="chart" ariaLabel="Dashboard charts" tabs={[
-        { key: 'history', label: 'Request history', tooltip: 'Inspect request outcomes across the selected history range.', render: () => <RequestHistoryChart /> },
-        ...[['volume', 'Volume / TTFT'], ['latency', 'Latency / TTFT'], ['tokens', 'Tokens']].map(([key, label]) => ({ key, label, tooltip: key === 'tokens' ? 'Compare input, output, cached input and other reported token usage.' : key === 'latency' ? 'Track average time until the first token, with gaps for missing timings.' : 'Compare request outcomes with first-token delay on a separate axis.', render: () => analytics ? <AnalyticsTrendChart data={analytics.TimeSeries || []} mode={key} /> : <p role="status">{chartError ? 'Analytics unavailable.' : 'Loading analytics…'}</p> })),
-        { key: 'heatmap', label: 'Heatmap', tooltip: 'See when activity happens across UTC time buckets for the selected timeframe and metric.', render: () => <ActivityHeatmap /> }
+      <Tabs param="chart" ariaLabel="Dashboard charts" actions={chartToolbar} tabs={[
+        { key: 'history', label: 'Request history', tooltip: 'Inspect request outcomes across the selected history range.', render: () => <RequestHistoryChart timeRange={chartRange} refreshKey={refreshKey} exportRef={chartExportRef} /> },
+        ...[['volume', 'Volume / TTFT'], ['latency', 'Latency / TTFT'], ['tokens', 'Tokens']].map(([key, label]) => ({ key, label, tooltip: key === 'tokens' ? 'Compare input, output, cached input and other reported token usage.' : key === 'latency' ? 'Track average time until the first token, with gaps for missing timings.' : 'Compare request outcomes with first-token delay on a separate axis.', render: () => analytics ? <AnalyticsTrendChart data={analytics.TimeSeries || []} mode={key} exportRef={chartExportRef} /> : <p role="status">{chartError ? 'Analytics unavailable.' : 'Loading analytics…'}</p> })),
+        { key: 'heatmap', label: 'Heatmap', tooltip: 'See when activity happens across UTC time buckets for the selected timeframe and metric.', render: () => <ActivityHeatmap timeframe={chartRange} refreshKey={refreshKey} exportRef={chartExportRef} /> }
       ]} />
 
       {observability?.Overall && (

@@ -78,6 +78,7 @@ const gridCells = () => screen.getAllByRole('gridcell');
 const cellNamed = name => screen.getByRole('gridcell', { name });
 
 beforeEach(() => {
+  window.localStorage.clear();
   api.queryAnalytics.mockReset();
   api.queryAnalytics.mockImplementation(body => Promise.resolve(byRange[body.Range]()));
   api.queryAnalyticsBuckets.mockReset();
@@ -122,20 +123,45 @@ describe('heatmap tab is last and lazy', () => {
 });
 
 describe('timeframe switch re-queries with the right Range and persists param', () => {
-  it('loads week from the URL and sends exactly one call per timeframe choice', async () => {
+  it('on the Dashboard the shared time picker drives the heat map and sends exactly one call per choice', async () => {
     renderDashboard('/?chart=heatmap&heatmapRange=week');
-    expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last week' })).toBeTruthy();
-    expect(heatmapCalls()).toEqual([{ Range: 'lastWeek', BucketSeconds: 3600 }]);
-    const expected = [['hour', 'lastHour', 60, 'Last hour'], ['day', 'lastDay', 900, 'Last day'], ['month', 'lastMonth', 86400, 'Last month']];
-    for (const [key, range, bucketSeconds, label] of expected) {
+    // The Dashboard owns the timeframe: ?heatmapRange= is ignored and the heat map has no Timeframe select.
+    expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' })).toBeTruthy();
+    expect(heatmapCalls()).toEqual([{ Range: 'lastDay', BucketSeconds: 900 }]);
+    expect(screen.queryByRole('combobox', { name: 'Timeframe' })).toBeNull();
+    const picker = screen.getByRole('group', { name: 'Chart time range' });
+    const expected = [['Last Week', 'lastWeek', 3600, 'Last week'], ['Last Hour', 'lastHour', 60, 'Last hour'], ['Last Month', 'lastMonth', 86400, 'Last month']];
+    for (const [button, range, bucketSeconds, label] of expected) {
       const before = heatmapCalls().length;
-      fireEvent.change(screen.getByRole('combobox', { name: 'Timeframe' }), { target: { value: key } });
+      fireEvent.click(within(picker).getByRole('button', { name: button }));
       expect(await screen.findByRole('grid', { name: `Activity heatmap, Requests, ${label}` })).toBeTruthy();
       expect(heatmapCalls().slice(before)).toEqual([{ Range: range, BucketSeconds: bucketSeconds }]);
-      expect(search().get('heatmapRange')).toBe(key);
+      expect(api.queryAnalytics).toHaveBeenLastCalledWith({ Range: range });
+      expect(within(picker).getByRole('button', { name: button }).getAttribute('aria-pressed')).toBe('true');
       expect(search().get('chart')).toBe('heatmap');
       expect(screen.getByRole('tab', { name: 'Heatmap' }).getAttribute('aria-selected')).toBe('true');
     }
+  });
+
+  it('the shared refresh button re-queries the heat map with the same timeframe', async () => {
+    renderDashboard('/?chart=heatmap');
+    await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh charts' }));
+    await waitFor(() => expect(heatmapCalls()).toEqual([{ Range: 'lastDay', BucketSeconds: 900 }, { Range: 'lastDay', BucketSeconds: 900 }]));
+    expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' })).toBeTruthy();
+  });
+
+  it('the shared range is kept across chart tabs and restored from the saved preference', async () => {
+    renderDashboard('/?chart=heatmap');
+    await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' });
+    fireEvent.click(screen.getByRole('button', { name: 'Last Week' }));
+    await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last week' });
+    fireEvent.click(screen.getByRole('tab', { name: 'Request history' }));
+    await waitFor(() => expect(api.getRequestHistorySummary).toHaveBeenCalled());
+    expect(api.getRequestHistorySummary.mock.calls.at(-1)[0].interval).toBe('hour');
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Copy chart as an image' })).toHaveLength(1);
+    expect(window.localStorage.getItem('conductor_dashboard_history_range')).toBe('week');
   });
 
   it.each(['Week', '', '%20', 'bogus', '%20day'])('?heatmapRange=%s falls back to lastDay/900', async value => {
@@ -710,5 +736,28 @@ describe('test engineer gap coverage', () => {
     const stops = gridCells().filter(cell => cell.getAttribute('tabindex') === '0');
     expect(stops).toHaveLength(1);
     expect(stops[0].getAttribute('aria-label')).toMatch(/^2026-10-17 13:00-14:00 UTC/);
+  });
+});
+
+describe('parent-controlled heat map (Observability analytics page)', () => {
+  it('uses the parent timeframe and query, hides its Timeframe select, and re-queries on refresh or filter change', async () => {
+    const query = { TenantId: 't1', Filters: { VirtualModelRunnerIds: ['vmr1'] } };
+    const { rerender } = render(<MemoryRouter initialEntries={['/?heatmapRange=hour']}><ActivityHeatmap timeframe="week" query={query} refreshKey={0} /></MemoryRouter>);
+    expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last week' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: 'Timeframe' })).toBeNull();
+    expect(heatmapCalls()).toEqual([{ ...query, Range: 'lastWeek', BucketSeconds: 3600 }]);
+    rerender(<MemoryRouter initialEntries={['/?heatmapRange=hour']}><ActivityHeatmap timeframe="week" query={{ ...query }} refreshKey={0} /></MemoryRouter>);
+    expect(heatmapCalls()).toHaveLength(1);
+    rerender(<MemoryRouter initialEntries={['/?heatmapRange=hour']}><ActivityHeatmap timeframe="week" query={{ ...query }} refreshKey={1} /></MemoryRouter>);
+    await waitFor(() => expect(heatmapCalls()).toHaveLength(2));
+    const narrowed = { TenantId: 't1', Filters: { VirtualModelRunnerIds: ['vmr2'] } };
+    rerender(<MemoryRouter initialEntries={['/?heatmapRange=hour']}><ActivityHeatmap timeframe="week" query={narrowed} refreshKey={1} /></MemoryRouter>);
+    await waitFor(() => expect(heatmapCalls().at(-1)).toEqual({ ...narrowed, Range: 'lastWeek', BucketSeconds: 3600 }));
+  });
+
+  it('a query cannot override the Range or BucketSeconds of the timeframe', async () => {
+    render(<MemoryRouter><ActivityHeatmap timeframe="hour" query={{ Range: 'lastMonth', BucketSeconds: 5 }} /></MemoryRouter>);
+    await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last hour' });
+    expect(heatmapCalls()).toEqual([{ Range: 'lastHour', BucketSeconds: 60 }]);
   });
 });

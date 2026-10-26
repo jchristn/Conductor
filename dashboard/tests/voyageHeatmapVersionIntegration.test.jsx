@@ -54,6 +54,7 @@ const search = () => new URLSearchParams(screen.getByTestId('search').textConten
 const chartTab = name => within(screen.getByRole('tablist', { name: 'Dashboard charts' })).getByRole('tab', { name });
 
 beforeEach(() => {
+  window.localStorage.clear();
   // Capture is installed before every render so the first effect's call is observed.
   api.queryAnalytics.mockReset();
   api.queryAnalyticsBuckets.mockReset();
@@ -91,10 +92,13 @@ describe('voyage integration: version footer and heatmap tab together', () => {
     await waitFor(() => expect(api.getRequestHistorySummary).toHaveBeenCalled());
   });
 
-  it('switching chart tabs resets heatmap params, and returning re-queries with the defaults (D10)', async () => {
-    renderApp('/?chart=heatmap&heatmapRange=week&heatmapMetric=tokens&keep=1');
+  it('switching chart tabs resets heatmap params, and returning re-queries with the shared range (D10)', async () => {
+    renderApp('/?chart=heatmap&heatmapMetric=tokens&keep=1');
+    // The day fixture reports no tokens, so the Total tokens metric renders the empty state.
+    expect(await screen.findByText('No activity for this time range')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Last Week' }));
     await screen.findByRole('grid', { name: 'Activity heatmap, Total tokens, Last week' });
-    expect(heatmapCalls()).toEqual([{ Range: 'lastWeek', BucketSeconds: 3600 }]);
+    expect(heatmapCalls()).toEqual([{ Range: 'lastDay', BucketSeconds: 900 }, { Range: 'lastWeek', BucketSeconds: 3600 }]);
 
     fireEvent.click(chartTab('Tokens'));
     await waitFor(() => expect(search().get('chart')).toBe('tokens'));
@@ -104,9 +108,10 @@ describe('voyage integration: version footer and heatmap tab together', () => {
     expect(screen.queryByRole('grid')).toBeNull();
 
     fireEvent.click(chartTab('Heatmap'));
-    expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last day' })).toBeTruthy();
-    expect(heatmapCalls()).toEqual([{ Range: 'lastWeek', BucketSeconds: 3600 }, { Range: 'lastDay', BucketSeconds: 900 }]);
-    expect(screen.getByLabelText('Timeframe').value).toBe('day');
+    // The metric resets with the URL; the shared time range is page state and stays on Last week.
+    expect(await screen.findByRole('grid', { name: 'Activity heatmap, Requests, Last week' })).toBeTruthy();
+    expect(heatmapCalls().at(-1)).toEqual({ Range: 'lastWeek', BucketSeconds: 3600 });
+    expect(screen.queryByLabelText('Timeframe')).toBeNull();
     expect(screen.getByLabelText('Metric').value).toBe('requests');
   });
 
@@ -117,7 +122,7 @@ describe('voyage integration: version footer and heatmap tab together', () => {
     expect((await screen.findAllByRole('alert')).map(node => node.textContent)).toEqual(['Analytics unavailable: dashboard down']);
 
     routeAnalytics(body => isHeatmapBody(body) ? Promise.reject(new Error('heatmap down')) : Promise.resolve(dashboardResponse()));
-    fireEvent.change(screen.getByLabelText('Timeframe'), { target: { value: 'hour' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Last Hour' }));
     await waitFor(() => expect(screen.getAllByRole('alert').map(node => node.textContent)).toContain('Analytics unavailable: heatmap down'));
     expect(heatmapCalls().at(-1)).toEqual({ Range: 'lastHour', BucketSeconds: 60 });
     expect(screen.queryByRole('grid')).toBeNull();

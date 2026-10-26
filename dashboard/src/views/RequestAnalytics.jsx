@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import Modal from '../components/Modal';
 import ChartCopyButton from '../components/ChartCopyButton';
 import AnalyticsTrendChart from '../components/AnalyticsTrendChart';
+import ActivityHeatmap from '../components/ActivityHeatmap';
 import CopyableId from '../components/CopyableId';
 import RefreshButton from '../components/RefreshButton';
 import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
@@ -30,6 +31,7 @@ const ANALYTICS_TABS = [
   { label: 'Overview', value: 'overview', tooltip: 'Summary, volume, TTFT, endpoint, user, and credential analytics.' },
   { label: 'Latency/TTFT', value: 'latency', tooltip: 'Time-to-first-token percentiles, coverage, stage breakdown, and slow request drill-down.' },
   { label: 'Tokens', value: 'tokens', tooltip: 'Prompt, completion, total, unknown usage, and estimate-only cost analytics.' },
+  { label: 'Heatmap', value: 'heatmap', tooltip: 'When activity happens across UTC time buckets for the selected range, filters, and metric.' },
   { label: 'Users', value: 'users', tooltip: 'User and credential analytics breakdowns.' },
   { label: 'Reliability/Access', value: 'reliability', tooltip: 'Failed, denied, rate-limited, and access-oriented analytics.' },
   { label: 'Reports', value: 'reports', tooltip: 'Saved Analytics workspace reports.' },
@@ -101,6 +103,20 @@ function getInitialQueryParam(name, fallback = '') {
   if (typeof window === 'undefined') return fallback;
   const params = new URLSearchParams(window.location.search);
   return params.get(name) || fallback;
+}
+
+// The heat map lays out fixed preset windows. Presets map directly; a custom range uses the smallest
+// preset window that covers its span.
+const HEATMAP_TIMEFRAME_BY_RANGE = { lastHour: 'hour', lastDay: 'day', lastWeek: 'week', lastMonth: 'month' };
+
+function heatmapTimeframeFor(range, startUtc, endUtc) {
+  if (HEATMAP_TIMEFRAME_BY_RANGE[range]) return HEATMAP_TIMEFRAME_BY_RANGE[range];
+  const spanMs = new Date(endUtc).getTime() - new Date(startUtc).getTime();
+  if (!Number.isFinite(spanMs) || spanMs <= 0) return 'day';
+  if (spanMs <= 3_600_000) return 'hour';
+  if (spanMs <= 86_400_000) return 'day';
+  if (spanMs <= 7 * 86_400_000) return 'week';
+  return 'month';
 }
 
 function getInitialRange() {
@@ -610,7 +626,24 @@ function RequestAnalytics() {
     };
   }, [fetchOverview]);
 
+  const [heatmapRefreshKey, setHeatmapRefreshKey] = useState(0);
+  const heatmapQuery = useMemo(() => ({
+    TenantId: hasGlobalAnalyticsScope ? tenantId || null : null,
+    Filters: {
+      VirtualModelRunnerIds: vmrGuid ? [vmrGuid] : [],
+      ModelRunnerEndpointIds: endpointGuid ? [endpointGuid] : [],
+      ProviderNames: providerName ? [providerName] : [],
+      ModelNames: modelName ? [modelName] : [],
+      RequestorUserIds: requestorUserGuid ? [requestorUserGuid] : [],
+      CredentialIds: credentialGuid ? [credentialGuid] : [],
+      ReservationIds: reservationGuid ? [reservationGuid] : [],
+      ReservationDecisions: reservationDecision ? [reservationDecision] : [],
+      ReservationReasonCodes: reservationReasonCode ? [reservationReasonCode] : []
+    }
+  }), [hasGlobalAnalyticsScope, tenantId, vmrGuid, endpointGuid, providerName, modelName, requestorUserGuid, credentialGuid, reservationGuid, reservationDecision, reservationReasonCode]);
+
   const handleRefreshOverview = useCallback(() => {
+    setHeatmapRefreshKey(key => key + 1);
     if (overviewDebounceRef.current) {
       clearTimeout(overviewDebounceRef.current);
       overviewDebounceRef.current = null;
@@ -1322,6 +1355,21 @@ function RequestAnalytics() {
             <AnalyticsBreakdownTable title="Credential Token Breakdown" tooltip={CREDENTIAL_BREAKDOWN_TOOLTIP} rows={credentialBreakdown} loading={loading} emptyMessage="No credential token analytics in this range." identityFallback="(none)" costCurrency={overview?.CostCurrency} />
           </div>
         </>
+      )}
+
+      {activeTab === 'heatmap' && (
+        <section className="dashboard-section analytics-main-chart" title="Activity heat map for the active range and filters. All times are UTC.">
+          {range === 'custom' && (
+            <p className="text-muted" title="The heat map lays out fixed preset windows.">
+              The heat map shows the last {heatmapTimeframeFor(range, filters.startUtc, filters.endUtc)}, the smallest preset window that covers the custom range.
+            </p>
+          )}
+          <ActivityHeatmap
+            timeframe={heatmapTimeframeFor(range, filters.startUtc, filters.endUtc)}
+            refreshKey={heatmapRefreshKey}
+            query={heatmapQuery}
+          />
+        </section>
       )}
 
       {activeTab === 'users' && (

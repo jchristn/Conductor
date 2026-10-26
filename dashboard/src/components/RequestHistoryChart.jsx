@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ChartCopyButton from './ChartCopyButton';
 import { useApp } from '../context/AppContext';
+import useChartExportTarget from '../hooks/useChartExportTarget';
 import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
 
 const TIME_RANGE_STORAGE_KEY = 'conductor_dashboard_history_range';
@@ -60,14 +61,21 @@ function mergeBuckets(allBuckets, apiData, stepMs) {
   });
 }
 
-function RequestHistoryChart() {
+/**
+ * Request history bar chart. Standalone it owns its time range, refresh and copy controls. When the
+ * parent passes timeRange (hour, day, week, month), the parent owns those controls: the chart hides its
+ * own, re-queries when timeRange or refreshKey changes, and registers for copy through exportRef.
+ */
+function RequestHistoryChart({ timeRange: controlledRange, refreshKey: externalRefreshKey = 0, exportRef = null }) {
   const svgRef = useRef(null);
   const { api } = useApp();
-  const [timeRange, setTimeRange] = useState(() => readChoicePreference(
+  const controlled = controlledRange !== undefined;
+  const [localRange, setTimeRange] = useState(() => readChoicePreference(
     TIME_RANGE_STORAGE_KEY,
     TIME_RANGES.map((r) => r.value),
     'day'
   ));
+  const timeRange = controlled && TIME_RANGES.some(r => r.value === controlledRange) ? controlledRange : localRange;
   const [vmrGuid, setVmrGuid] = useState('');
   const [vmrList, setVmrList] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -117,9 +125,11 @@ function RequestHistoryChart() {
       });
 
     return () => { cancelled = true; };
-  }, [api, timeRange, vmrGuid, refreshKey]);
+  }, [api, timeRange, vmrGuid, refreshKey, externalRefreshKey]);
 
   const range = TIME_RANGES.find(r => r.value === timeRange);
+  const getCopyOptions = () => ({ title: 'Request history', xLabel: 'Request time', yLabel: 'Request count', legend: [{ label: 'Success (1xx–3xx)', color: '#10b981' }, { label: 'Failure (4xx–5xx)', color: '#ef4444' }] });
+  useChartExportTarget(exportRef, svgRef, getCopyOptions);
 
   const buckets = (() => {
     const endMs = Date.now();
@@ -192,7 +202,7 @@ function RequestHistoryChart() {
       <div className="request-history-chart-header">
         <h2>Request History</h2>
         <div className="request-history-chart-controls">
-          <ChartCopyButton svgRef={svgRef} getOptions={() => ({ title: 'Request history', xLabel: 'Request time', yLabel: 'Request count', legend: [{ label: 'Success (1xx–3xx)', color: '#10b981' }, { label: 'Failure (4xx–5xx)', color: '#ef4444' }] })} />
+          {!controlled && <ChartCopyButton svgRef={svgRef} getOptions={getCopyOptions} />}
           <select aria-label="Virtual model runner" title="Limit request history to one virtual runner, or show all runners in the current scope."
             value={vmrGuid}
             onChange={e => setVmrGuid(e.target.value)}
@@ -203,7 +213,7 @@ function RequestHistoryChart() {
               <option key={vmr.Id} value={vmr.Id}>{vmr.Name}</option>
             ))}
           </select>
-          <div className="request-history-time-tabs">
+          {!controlled && <div className="request-history-time-tabs">
             {TIME_RANGES.map(r => (
               <button
                 key={r.value}
@@ -216,8 +226,8 @@ function RequestHistoryChart() {
                 {r.label}
               </button>
             ))}
-          </div>
-          <button
+          </div>}
+          {!controlled && <button
             className="request-history-refresh-btn"
             onClick={() => setRefreshKey(k => k + 1)}
             title="Refresh"
@@ -228,7 +238,7 @@ function RequestHistoryChart() {
               <polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
-          </button>
+          </button>}
         </div>
       </div>
 

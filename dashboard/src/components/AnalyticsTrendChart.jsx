@@ -1,10 +1,12 @@
 import React, { useRef, useState } from 'react';
 import ChartCopyButton from './ChartCopyButton';
+import useChartExportTarget from '../hooks/useChartExportTarget';
 import useClampedTooltip from '../hooks/useClampedTooltip';
 import { chartSeries } from '../utils/analyticsSeries';
 const colors = ['#2563eb', '#e87922', '#16a34a', '#9333ea'];
 const formatValue = (value, label) => value == null ? 'Not reported' : /\(ms/.test(label) ? `${Math.round(value).toLocaleString()} ms` : value.toLocaleString();
-export default function AnalyticsTrendChart({ data = [], mode = 'volume' }) {
+// exportRef: when a parent owns the copy button, the chart registers there and hides its own.
+export default function AnalyticsTrendChart({ data = [], mode = 'volume', exportRef = null }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const tooltipRef = useRef(null);
@@ -24,8 +26,10 @@ export default function AnalyticsTrendChart({ data = [], mode = 'volume' }) {
   const band = 770 / Math.max(1, data.length);
   const hoveredBucket = hovered && data[hovered.index] ? data[hovered.index] : null;
   const counted = series.filter(s => !s.axis);
+  const getCopyOptions = () => ({ title, xLabel: 'Bucket start (local time)', yLabel: mode === 'tokens' ? 'Tokens' : mode === 'latency' ? 'Milliseconds' : 'Requests; TTFT on right axis', legend: series.map((s, i) => ({ label: s.label, color: colors[i] })) });
+  useChartExportTarget(exportRef, svgRef, getCopyOptions);
   return <div className="dashboard-section">
-    <div className="request-history-chart-header"><h3>{title}</h3><ChartCopyButton svgRef={svgRef} getOptions={() => ({ title, xLabel: 'Bucket start (local time)', yLabel: mode === 'tokens' ? 'Tokens' : mode === 'latency' ? 'Milliseconds' : 'Requests; TTFT on right axis', legend: series.map((s, i) => ({ label: s.label, color: colors[i] })) })} /></div>
+    <div className="request-history-chart-header"><h3>{title}</h3>{!exportRef && <ChartCopyButton svgRef={svgRef} getOptions={getCopyOptions} />}</div>
     {!data.length ? <p role="status">No analytics in this range.</p> : <>
       <div className="analytics-trend-chart-container" ref={containerRef} style={{ position: 'relative' }}>
       <svg ref={svgRef} viewBox="0 0 920 320" role="img" aria-label={title} style={{ width: '100%' }}>
