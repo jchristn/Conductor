@@ -4,8 +4,6 @@
 
 Project version: `1.0.0`
 
-NOTE: Conductor is in ALPHA and is v1.0.0. APIs and functionality subject to change.
-
 Conductor is a platform for managing models, model runners, model configurations, and virtualizing combinations into virtual model runners exposed to the network through OpenAI, vLLM, Gemini, and Ollama APIs.
 
 ## Features
