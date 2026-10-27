@@ -32,9 +32,9 @@ describe('Sidebar version footer', () => {
     const last = nav.lastElementChild;
     expect(last.className).toBe('sidebar-version');
     expect(last.textContent).toBe('v' + pkg.version);
-    expect(last.textContent).toBe('v0.6.1');
+    expect(last.textContent).toBe('v1.0.0');
     expect(last.getAttribute('aria-label')).toBe('Conductor version ' + pkg.version);
-    expect(last.getAttribute('aria-label')).toBe('Conductor version 0.6.1');
+    expect(last.getAttribute('aria-label')).toBe('Conductor version 1.0.0');
     const hasAdminAccess = auth.isAdmin || auth.currentUser?.IsAdmin;
     const expected = NAV_SECTIONS.flatMap((s) => s.items)
       .filter((item) => itemVisible(item, { isAdmin: auth.isAdmin, hasAdminAccess }));
@@ -90,7 +90,7 @@ describe('Sidebar version footer', () => {
     expect(footer.className).toBe('sidebar-version');
     expect(footer.textContent).toBe('v9.8.7-test');
     expect(footer.getAttribute('aria-label')).toBe('Conductor version 9.8.7-test');
-    expect(container.textContent).not.toContain('0.6.1');
+    expect(container.textContent).not.toContain(pkg.version);
   });
 
   it('exposes the package.json version as the global through the vitest define', () => {
