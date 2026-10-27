@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.0
+
+- First stable release. The REST API surface documented in REST_API.md (OpenAI and Ollama compatible proxy routes plus the `/v1.0/` management, analytics and observability routes) is now considered stable; breaking changes will require a new major version.
+- Production hardening: README.md has a new Production Hardening section covering default credentials, TLS, CORS, client IPs, database choice and backups, request-history retention, MCP server exposure, and logging, linked from DOCKERHUB_README.md and kubernetes/README.md.
+- Default credential guidance: documented the first-run administrator and tenant user, the generated bearer token, the Docker Compose factory defaults (including `docker/factory/reset.sh`/`reset.bat`) and the default `AdminApiKeys`, with steps to change them before exposing Conductor.
+- Dashboard tests: added vitest coverage for the core CRUD views (tenants, users, administrators, credentials, model definitions, model configurations, endpoint groups, model runner endpoints and virtual model runners) alongside the existing heat map and sidebar version tests.
+- Postman: Conductor.postman_collection.json now has a request for every route in REST_API.md and the server's route modules, apart from the public health routes.
+- Moved QOS_PLAN.md into `archive/`, since the plan it describes has been implemented.
+- Updated project, dashboard, release and deployment image versions to v1.0.0.
+
 ## v0.6.1
 
 - Request timeouts: `TimeoutMs` on virtual model runners and model runner endpoints now defaults to 300,000 ms everywhere (model, setter fallback, data-row loading and all four database schemas). Previously the API, schemas and model defaulted to 60,000 ms while the dashboard used 300,000 ms. A startup warning lists records still at the old 60,000 ms default; they are not changed automatically.
