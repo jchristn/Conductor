@@ -418,8 +418,8 @@ Errors that Conductor itself generates on Anthropic VMRs use the shape `{"type":
 
 - [x] All tests pass: Test.Automated, Test.Xunit and Test.Nunit 1475 of 1475 each, Test.McpServer 36, C# SDK 52, JavaScript SDK 26, Python SDK 30, dashboard 270. Build has 0 warnings and 0 errors.
 - [x] Run `./build-all.sh v1.1.0`. Server and dashboard images were built and pushed as `v1.1.0` and `latest`.
-- [ ] Commit and push `feature/v1.1.0`, merge to `main`, push, verify on GitHub, then delete the feature branch locally and remotely.
-- [ ] Move this plan to `archive/`, then commit and push.
+- [x] Commit and push `feature/v1.1.0`, merge to `main`, push, verify on GitHub, then delete the feature branch locally and remotely. Merge commit `0ee5570` is on `origin/main`.
+- [x] Move this plan to `archive/`, then commit and push.
 
 ---
 
