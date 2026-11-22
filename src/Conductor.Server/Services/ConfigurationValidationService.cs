@@ -9,7 +9,9 @@ namespace Conductor.Server.Services
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Enums;
+    using Conductor.Core.Helpers;
     using Conductor.Core.Models;
+    using Conductor.Core.Settings;
     using SyslogLogging;
 
     /// <summary>
@@ -22,12 +24,19 @@ namespace Conductor.Server.Services
         private readonly LoggingModule _Logging;
         private readonly RoutingDecisionService _RoutingDecisionService;
         private readonly LoadBalancingPolicyEvaluator _PolicyEvaluator = new LoadBalancingPolicyEvaluator();
+        private readonly AnthropicSettings _AnthropicSettings;
 
         /// <summary>
         /// Instantiate the validation service.
         /// </summary>
-        public ConfigurationValidationService(DatabaseDriverBase database, LoggingModule logging, RoutingDecisionService routingDecisionService)
+        /// <param name="database">Database driver. Must not be null.</param>
+        /// <param name="logging">Logging module. Must not be null.</param>
+        /// <param name="routingDecisionService">Routing decision service. Must not be null.</param>
+        /// <param name="anthropicSettings">Anthropic settings used for version checks (optional); when null, defaults are used.</param>
+        /// <exception cref="ArgumentNullException">Thrown when database, logging or routingDecisionService is null.</exception>
+        public ConfigurationValidationService(DatabaseDriverBase database, LoggingModule logging, RoutingDecisionService routingDecisionService, AnthropicSettings anthropicSettings = null)
         {
+            _AnthropicSettings = anthropicSettings ?? new AnthropicSettings();
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _RoutingDecisionService = routingDecisionService ?? throw new ArgumentNullException(nameof(routingDecisionService));
@@ -74,7 +83,7 @@ namespace Conductor.Server.Services
                 }
             }
 
-            if (!vmr.AllowEmbeddings && !vmr.AllowCompletions && !vmr.AllowModelManagement)
+            if (vmr.ApiType != ApiTypeEnum.TypeSafe && !vmr.AllowEmbeddings && !vmr.AllowCompletions && !vmr.AllowModelManagement)
             {
                 AddWarning(result, "NoTrafficAllowed", "Permissions", "This route currently denies embeddings, completions, and model-management traffic.");
             }
@@ -113,6 +122,12 @@ namespace Conductor.Server.Services
             List<ModelRunnerEndpoint> endpoints = new List<ModelRunnerEndpoint>();
             foreach (string endpointId in vmr.ModelRunnerEndpointIds ?? new List<string>())
             {
+                if (String.IsNullOrWhiteSpace(endpointId))
+                {
+                    AddError(result, "EndpointMissing", "ModelRunnerEndpointIds", "ModelRunnerEndpointIds contains an empty endpoint ID; every entry must reference an existing endpoint in the same tenant.");
+                    continue;
+                }
+
                 ModelRunnerEndpoint endpoint = await _Database.ModelRunnerEndpoint.ReadAsync(tenantId, endpointId, token).ConfigureAwait(false);
                 if (endpoint == null)
                 {
@@ -121,11 +136,9 @@ namespace Conductor.Server.Services
                 }
 
                 endpoints.Add(endpoint);
-                if (endpoint.ApiType != vmr.ApiType)
-                {
-                    AddError(result, "EndpointApiTypeMismatch", "ModelRunnerEndpointIds", "Endpoint '" + endpoint.Name + "' uses API type '" + endpoint.ApiType + "', but the route exposes '" + vmr.ApiType + "'.");
-                }
             }
+
+            VirtualModelRunnerTypeRules.Validate(vmr, endpoints, result);
 
             if (endpoints.Count < 1)
             {
@@ -144,6 +157,12 @@ namespace Conductor.Server.Services
             List<ModelDefinition> modelDefinitions = new List<ModelDefinition>();
             foreach (string definitionId in vmr.ModelDefinitionIds ?? new List<string>())
             {
+                if (String.IsNullOrWhiteSpace(definitionId))
+                {
+                    AddError(result, "ModelDefinitionMissing", "ModelDefinitionIds", "ModelDefinitionIds contains an empty model definition ID; every entry must reference an existing model definition in the same tenant.");
+                    continue;
+                }
+
                 ModelDefinition definition = await _Database.ModelDefinition.ReadAsync(tenantId, definitionId, token).ConfigureAwait(false);
                 if (definition == null)
                 {
@@ -162,6 +181,12 @@ namespace Conductor.Server.Services
             Dictionary<string, ModelConfiguration> configurationsById = new Dictionary<string, ModelConfiguration>(StringComparer.InvariantCultureIgnoreCase);
             foreach (string configurationId in vmr.ModelConfigurationIds ?? new List<string>())
             {
+                if (String.IsNullOrWhiteSpace(configurationId))
+                {
+                    AddError(result, "ModelConfigurationMissing", "ModelConfigurationIds", "ModelConfigurationIds contains an empty model configuration ID; every entry must reference an existing model configuration in the same tenant.");
+                    continue;
+                }
+
                 ModelConfiguration configuration = await _Database.ModelConfiguration.ReadAsync(tenantId, configurationId, token).ConfigureAwait(false);
                 if (configuration == null)
                 {
@@ -199,19 +224,40 @@ namespace Conductor.Server.Services
                 }
             }
 
+            if (vmr.ApiType == ApiTypeEnum.Anthropic)
+            {
+                ValidateAnthropicConfigurations(result, configurationsById.Values.ToList(), endpoints);
+            }
+
+            if (vmr.ApiType == ApiTypeEnum.TypeSafe)
+            {
+                foreach (ModelConfiguration configuration in configurationsById.Values)
+                {
+                    AddWarning(result, "TypeSafeConfigurationIgnored", "ModelConfigurationIds", "Configuration '" + configuration.Name + "' is attached to a TypeSafe route; model configurations are never applied to decision requests.");
+                }
+
+                foreach (ModelDefinition definition in modelDefinitions)
+                {
+                    if (!definition.SupportsDecisions)
+                    {
+                        AddWarning(result, "DecisionModelNotEnabled", "ModelDefinitionIds", "Model definition '" + definition.Name + "' does not have SupportsDecisions set; in strict mode its decision requests are rejected with 404.");
+                    }
+                }
+            }
+
             return Finalize(result);
         }
 
         /// <summary>
         /// Validate a model runner endpoint draft.
         /// </summary>
-        public Task<ResourceValidationResult> ValidateModelRunnerEndpointAsync(string tenantId, ModelRunnerEndpoint endpoint, string existingId = null, CancellationToken token = default)
+        public async Task<ResourceValidationResult> ValidateModelRunnerEndpointAsync(string tenantId, ModelRunnerEndpoint endpoint, string existingId = null, CancellationToken token = default)
         {
             ResourceValidationResult result = CreateResult("ModelRunnerEndpoint");
             if (endpoint == null)
             {
                 AddError(result, "InvalidBody", null, "A model runner endpoint payload is required.");
-                return Task.FromResult(Finalize(result));
+                return Finalize(result);
             }
 
             if (String.IsNullOrWhiteSpace(endpoint.Name))
@@ -224,9 +270,21 @@ namespace Conductor.Server.Services
                 AddError(result, "HostnameRequired", "Hostname", "Hostname is required.");
             }
 
-            if (endpoint.HealthCheckUseAuth && String.IsNullOrWhiteSpace(endpoint.ApiKey))
+            // Types that always need a key report that first (below); the generic HealthCheckUseAuth error is only raised
+            // for types where the key is otherwise optional, so the message leads with the real problem.
+            bool typeRequiresApiKey = endpoint.ApiType == ApiTypeEnum.Anthropic
+                || endpoint.ApiType == ApiTypeEnum.TypeSafe
+                || endpoint.ApiType == ApiTypeEnum.OllamaCloud;
+            if (endpoint.HealthCheckUseAuth && String.IsNullOrWhiteSpace(endpoint.ApiKey) && !typeRequiresApiKey)
             {
-                AddError(result, "HealthCheckAuthRequiresApiKey", "HealthCheckUseAuth", "HealthCheckUseAuth requires an ApiKey.");
+                AddError(result, "HealthCheckAuthRequiresApiKey", "HealthCheckUseAuth", "HealthCheckUseAuth is true but the endpoint has no ApiKey; set an ApiKey or set HealthCheckUseAuth to false.");
+            }
+
+            if (String.IsNullOrEmpty(existingId)
+                && ApiTypeDefaults.RequiresExplicitPort(endpoint.ApiType)
+                && !endpoint.WasExplicitlySet(nameof(ModelRunnerEndpoint.Port)))
+            {
+                AddError(result, "PortRequired", "Port", endpoint.ApiType + " endpoints have no default port; set Port to the port the runtime listens on.");
             }
 
             if (endpoint.HealthCheckIntervalMs < endpoint.HealthCheckTimeoutMs)
@@ -239,6 +297,41 @@ namespace Conductor.Server.Services
                 AddWarning(result, "InactiveServiceStateRedundant", "ServiceState", "A non-Normal service state has no runtime effect while Active is false.");
             }
 
+            if (endpoint.ApiType == ApiTypeEnum.Anthropic && String.IsNullOrWhiteSpace(endpoint.ApiKey))
+            {
+                AddError(result, "AnthropicApiKeyMissing", "ApiKey", "Anthropic endpoints require an ApiKey; it is sent upstream in the x-api-key header.");
+            }
+
+            if (endpoint.ApiType == ApiTypeEnum.TypeSafe && String.IsNullOrWhiteSpace(endpoint.ApiKey))
+            {
+                AddError(result, "TypeSafeApiKeyMissing", "ApiKey", "TypeSafe endpoints require an ApiKey; it is sent upstream as a Bearer token.");
+            }
+
+            if (endpoint.ApiType == ApiTypeEnum.OllamaCloud && String.IsNullOrWhiteSpace(endpoint.ApiKey))
+            {
+                AddError(result, "OllamaCloudApiKeyMissing", "ApiKey", "OllamaCloud endpoints require an ApiKey; it is sent upstream as a Bearer token.");
+            }
+
+            if (endpoint.ApiType == ApiTypeEnum.Anthropic && endpoint.HealthCheckEnabled && !endpoint.HealthCheckUseAuth)
+            {
+                AddWarning(result, "AnthropicHealthCheckUnauthenticated", "HealthCheckUseAuth", "Anthropic health checks are enabled without authentication; the Anthropic API rejects unauthenticated requests, so the endpoint will be reported unhealthy.");
+            }
+
+            if (!String.IsNullOrWhiteSpace(endpoint.AnthropicVersion) && !AnthropicSettings.IsValidVersion(endpoint.AnthropicVersion))
+            {
+                AddError(result, "AnthropicVersionInvalid", "AnthropicVersion", "AnthropicVersion must use the format yyyy-MM-dd, for example 2023-06-01.");
+            }
+
+            if (endpoint.HealthCheckMethod == HealthCheckMethodEnum.POST && String.IsNullOrWhiteSpace(endpoint.HealthCheckRequestBody))
+            {
+                AddError(result, "HealthCheckBodyRequired", "HealthCheckRequestBody", "HealthCheckMethod POST requires a HealthCheckRequestBody.");
+            }
+
+            if (endpoint.ApiType == ApiTypeEnum.OllamaCloud && endpoint.RigMonitor != null && endpoint.RigMonitor.Enabled)
+            {
+                AddError(result, "OllamaCloudRigMonitorUnsupported", "RigMonitor", "RigMonitor is not supported for OllamaCloud endpoints.");
+            }
+
             if (endpoint.ApiType == ApiTypeEnum.Gemini && String.IsNullOrWhiteSpace(endpoint.ApiKey))
             {
                 AddWarning(result, "GeminiApiKeyMissing", "ApiKey", "Gemini upstreams usually require an API key. This endpoint will only work if the upstream accepts unauthenticated traffic.");
@@ -249,7 +342,31 @@ namespace Conductor.Server.Services
                 AddWarning(result, "RigMonitorHealthWithoutCollection", "RigMonitor", "RigMonitor health affects readiness, but telemetry collection during health checks is disabled.");
             }
 
-            return Task.FromResult(Finalize(result));
+            await ValidateApiTypeChangeAgainstAttachedRunnersAsync(result, tenantId, endpoint, existingId, token).ConfigureAwait(false);
+
+            return Finalize(result);
+        }
+
+        private async Task ValidateApiTypeChangeAgainstAttachedRunnersAsync(ResourceValidationResult result, string tenantId, ModelRunnerEndpoint endpoint, string existingId, CancellationToken token)
+        {
+            // Re-run the VMR compatibility table when an attached endpoint changes its ApiType, so an update can never leave
+            // a virtual model runner pointing at an endpoint type it does not accept.
+            if (String.IsNullOrWhiteSpace(existingId) || String.IsNullOrWhiteSpace(tenantId)) return;
+
+            ModelRunnerEndpoint stored = await _Database.ModelRunnerEndpoint.ReadAsync(tenantId, existingId, token).ConfigureAwait(false);
+            if (stored == null || stored.ApiType == endpoint.ApiType) return;
+
+            EnumerationResult<VirtualModelRunner> vmrs = await _Database.VirtualModelRunner.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 }, token).ConfigureAwait(false);
+            List<VirtualModelRunner> incompatible = (vmrs?.Data ?? new List<VirtualModelRunner>())
+                .Where(vmr => vmr.ModelRunnerEndpointIds != null
+                    && vmr.ModelRunnerEndpointIds.Contains(existingId)
+                    && !ApiTypeCompatibility.AcceptsEndpoint(vmr.ApiType, endpoint.ApiType))
+                .ToList();
+            if (incompatible.Count < 1) return;
+
+            string runners = String.Join(", ", incompatible.Select(vmr => "'" + vmr.Name + "' (" + vmr.ApiType + ")"));
+            AddError(result, "EndpointApiTypeMismatch", "ApiType", "Endpoint '" + (endpoint.Name ?? stored.Name) + "' cannot change its API type from " + stored.ApiType + " to " + endpoint.ApiType
+                + " because it is attached to virtual model runner(s) " + runners + " that do not accept " + endpoint.ApiType + " endpoints. Detach it from those runners first, or keep API type " + stored.ApiType + ".");
         }
 
         /// <summary>
@@ -451,6 +568,31 @@ namespace Conductor.Server.Services
             IEnumerable<string> metricIds = (policy?.Filters ?? new List<LoadBalancingPolicyFilter>()).Select(item => item.Metric)
                 .Concat((policy?.Ranking ?? new List<LoadBalancingPolicyRankingRule>()).Select(item => item.Metric));
             return metricIds.Any(metric => !String.IsNullOrWhiteSpace(metric) && metric.StartsWith("rig.", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void ValidateAnthropicConfigurations(ResourceValidationResult result, List<ModelConfiguration> configurations, List<ModelRunnerEndpoint> endpoints)
+        {
+            List<string> samplingRemovedVersions = (endpoints ?? new List<ModelRunnerEndpoint>())
+                .Where(item => item.ApiType == ApiTypeEnum.Anthropic)
+                .Select(item => UpstreamAuthHeaders.ResolveAnthropicVersion(null, item, _AnthropicSettings))
+                .Where(version => !_AnthropicSettings.AllowsSamplingParameters(version))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            foreach (ModelConfiguration configuration in configurations)
+            {
+                if (configuration.RepeatPenalty.HasValue || configuration.ContextWindowSize.HasValue)
+                {
+                    AddWarning(result, "AnthropicConfigurationMismatch", "ModelConfigurationIds", "Configuration '" + configuration.Name + "' sets RepeatPenalty or ContextWindowSize, which are never sent to Anthropic.");
+                }
+
+                if (samplingRemovedVersions.Count > 0
+                    && (configuration.Temperature.HasValue || configuration.TopP.HasValue || configuration.TopK.HasValue))
+                {
+                    AddWarning(result, "ModelConfigurationSamplingIgnored", "ModelConfigurationIds", "Configuration '" + configuration.Name + "' sets Temperature, TopP or TopK, which are not sent to Anthropic at anthropic-version "
+                        + String.Join(", ", samplingRemovedVersions) + " (removed from " + _AnthropicSettings.SamplingParametersRemovedFromVersion + ").");
+                }
+            }
         }
 
         private static void ValidateKeepWarm(ResourceValidationResult result, VirtualModelRunner vmr, List<ModelRunnerEndpoint> endpoints)

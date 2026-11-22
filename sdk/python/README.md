@@ -2,6 +2,9 @@
 
 Thin Python client for the management-plane features introduced by roadmap priorities 1 through 5:
 
+- `ApiType` enum for all nine endpoint and VMR types, plus the VMR-to-endpoint compatibility table
+- model runner endpoint, model definition, and VMR CRUD, including Anthropic, TypeSafe, Ollaya, OllamaCloud and OpenAICompatible types
+- endpoint API key reveal (`reveal_model_runner_endpoint_api_key`); endpoint responses return masked keys
 - validation routes for VMRs, endpoints, policies, model definitions, and model configurations
 - effective configuration preview
 - explain-routing simulation
@@ -32,7 +35,7 @@ pip install -e .
 from conductor_client import ConductorClient
 
 client = ConductorClient(
-    base_url="http://localhost:9000",
+    base_url="http://127.0.0.1:9000",
     bearer_token="your-token",
 )
 
@@ -257,12 +260,134 @@ qos_history = client.get_qos_runtime_history("vmr_123", {
 purge_report = client.purge_tenant("tenant_123")
 ```
 
-For hosted providers such as OpenAI and Gemini, `Auto` uses metadata verification where possible. Explicit generation or embedding probes may be billable.
+For hosted providers such as OpenAI, Gemini, Anthropic and OllamaCloud, `Auto` uses metadata verification where possible. On hosted TypeSafe endpoints, `Auto` sends a one-question decision probe, which is billable. Explicit generation, embedding or decision probes against hosted providers may be billable.
 
 Analytics cost output is estimate-only. Conductor multiplies successful reported tokens by the supplied token unit cost and reports missing provider usage as unknown, not zero.
+
+## API types and providers
+
+`ApiType` is a `str` enum whose values are the wire names of the nine endpoint and VMR types. `ApiType.X.number` gives the matching integer (`Ollama` 0, `OpenAI` 1, `Gemini` 2, `vLLM` 3, `Anthropic` 4, `TypeSafe` 5, `Ollaya` 6, `OllamaCloud` 7, `OpenAICompatible` 8), and `ApiType.from_number(n)` converts back. Only the types in `CLIENT_FACING_API_TYPES` can be used as a VMR type. `Ollaya`, `OllamaCloud` and `OpenAICompatible` are endpoint-only types, and the server rejects them as a VMR type with `VmrApiTypeNotClientFacing`. `VMR_ENDPOINT_COMPATIBILITY` and `accepts_endpoint(vmr_type, endpoint_type)` mirror the server's table of which endpoint types each VMR type accepts.
+
+```python
+from conductor_client import ApiType, accepts_endpoint
+
+accepts_endpoint(ApiType.OPENAI, ApiType.OPENAI_COMPATIBLE)  # True
+accepts_endpoint(ApiType.ANTHROPIC, ApiType.OPENAI)  # False
+```
+
+### Create an Anthropic endpoint and VMR
+
+```python
+import os
+
+anthropic_endpoint = client.create_model_runner_endpoint({
+    "TenantId": "tenant_123",
+    "Name": "Anthropic",
+    "Hostname": "api.anthropic.com",
+    "Port": 443,
+    "UseSsl": True,
+    "ApiType": ApiType.ANTHROPIC,
+    "ApiKey": os.environ["ANTHROPIC_API_KEY"],
+    "AnthropicVersion": "2023-06-01",  # None uses the server default
+    "HealthCheckEnabled": True,
+})
+
+claude_model = client.create_model_definition({
+    "TenantId": "tenant_123",
+    "Name": "claude-opus-5-5",
+    "SupportsCompletions": True,
+})
+
+claude_vmr = client.create_virtual_model_runner({
+    "TenantId": "tenant_123",
+    "Name": "claude",
+    "BasePath": "/v1.0/api/claude/",
+    "ApiType": ApiType.ANTHROPIC,
+    "ModelRunnerEndpointIds": [anthropic_endpoint["Id"]],
+    "ModelDefinitionIds": [claude_model["Id"]],
+})
+```
+
+### Create TypeSafe and Ollaya endpoints and a TypeSafe VMR
+
+A `TypeSafe` VMR accepts both hosted `TypeSafe` endpoints and local `Ollaya` endpoints. Health checks on hosted TypeSafe endpoints are off by default, because each probe is a billable decision request.
+
+```python
+typesafe_endpoint = client.create_model_runner_endpoint({
+    "TenantId": "tenant_123",
+    "Name": "TypeSafe hosted",
+    "Hostname": "api.typesafe.ai",
+    "Port": 443,
+    "UseSsl": True,
+    "ApiType": ApiType.TYPESAFE,
+    "ApiKey": os.environ["TYPESAFE_API_KEY"],
+    "HealthCheckEnabled": False,
+})
+
+ollaya_endpoint = client.create_model_runner_endpoint({
+    "TenantId": "tenant_123",
+    "Name": "Ollaya local",
+    "Hostname": "127.0.0.1",
+    "Port": 8080,  # the port your Ollaya runtime listens on
+    "UseSsl": False,
+    "ApiType": ApiType.OLLAYA,
+})
+
+jev_model = client.create_model_definition({
+    "TenantId": "tenant_123",
+    "Name": "jev-latest",
+    "SupportsCompletions": False,
+    "SupportsDecisions": True,
+})
+
+decisions_vmr = client.create_virtual_model_runner({
+    "TenantId": "tenant_123",
+    "Name": "decisions",
+    "BasePath": "/v1.0/api/decisions/",
+    "ApiType": ApiType.TYPESAFE,
+    "AllowDecisions": True,
+    "ModelRunnerEndpointIds": [typesafe_endpoint["Id"], ollaya_endpoint["Id"]],
+    "ModelDefinitionIds": [jev_model["Id"]],
+})
+```
+
+Clients then send System One requests to `POST http://127.0.0.1:9000/v1.0/api/decisions/v1/systemone`.
+
+### Call an Anthropic VMR with the official Anthropic SDK
+
+Point the official Python SDK (`pip install anthropic`) at the VMR base URL and pass a Conductor credential as the auth token. Conductor replaces it with the endpoint's Anthropic key upstream.
+
+```python
+import os
+
+import anthropic
+
+claude = anthropic.Anthropic(
+    base_url="http://127.0.0.1:9000/v1.0/api/claude/",
+    auth_token=os.environ["CONDUCTOR_TOKEN"],
+)
+
+message = claude.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=256,
+    messages=[{"role": "user", "content": "Hello through Conductor"}],
+)
+```
+
+### Masked API keys
+
+Endpoint reads, lists, creates and updates return `ApiKey` masked as `****` plus the last 4 characters, or `None` when no key is set. On update, an omitted, `None` or masked `ApiKey` keeps the stored key, and an empty string clears it. To read the full value, call `reveal_model_runner_endpoint_api_key`. It requires the same permission as updating the endpoint, and the server writes an audit log line for each call.
+
+```python
+full_key = client.reveal_model_runner_endpoint_api_key(anthropic_endpoint["Id"], tenant_id="tenant_123")
+```
 
 ## Test
 
 ```bash
-python -m unittest discover -s tests
+PYTHONPATH=src python -m unittest discover -s tests
+# or run the harness script, which changes to its own directory first and
+# creates a local .venv with requests when the interpreter lacks it
+./run-tests.sh      # Linux, macOS, Git Bash
+run-tests.bat       # Windows
 ```

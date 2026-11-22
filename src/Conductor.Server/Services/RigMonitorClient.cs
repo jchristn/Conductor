@@ -23,7 +23,7 @@ namespace Conductor.Server.Services
         };
 
         private static readonly string _Header = "[RigMonitorClient] ";
-        private readonly HttpClient _HttpClient = new HttpClient();
+        private readonly HttpClient _HttpClient = UpstreamHttpClientFactory.CreateClient();
         private readonly LoggingModule _Logging;
 
         /// <summary>

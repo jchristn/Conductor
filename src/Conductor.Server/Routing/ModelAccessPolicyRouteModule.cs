@@ -18,7 +18,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelAccessPolicy>("/v1.0/modelaccesspolicies", async (req) =>
             {
                 ModelAccessPolicy policy = req.Data as ModelAccessPolicy;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await mapController.Create(tenantId, policy);
             },
@@ -36,7 +36,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelAccessPolicy>("/v1.0/modelaccesspolicies/validate", async (req) =>
             {
                 ModelAccessPolicy policy = req.Data as ModelAccessPolicy;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await mapController.Validate(tenantId, policy, !String.IsNullOrEmpty(existingId) ? existingId : policy?.Id);
             },
@@ -116,7 +116,7 @@ namespace Conductor.Server.Routing
             _App.Put<ModelAccessPolicy>("/v1.0/modelaccesspolicies/{id}", async (req) =>
             {
                 ModelAccessPolicy policy = req.Data as ModelAccessPolicy;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
                 return await mapController.Update(tenantId, req.Parameters["id"], policy);
             },
             api => api
@@ -134,7 +134,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/modelaccesspolicies/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 bool forceDetach = Boolean.TryParse(req.Http.Request.Query.Elements.Get("forceDetach"), out bool parsedForceDetach) && parsedForceDetach;
                 req.Http.Response.StatusCode = 204;
                 await mapController.Delete(tenantId, req.Parameters["id"], forceDetach);

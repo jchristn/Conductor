@@ -38,6 +38,11 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// General model-management requests not covered by a more specific action.
         /// </summary>
-        ModelManagement = 6
+        ModelManagement = 6,
+
+        /// <summary>
+        /// Decision requests (TypeSafe System One). Policies that allow Completions do not also allow Decisions.
+        /// </summary>
+        Decisions = 7
     }
 }

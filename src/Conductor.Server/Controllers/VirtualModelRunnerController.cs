@@ -30,6 +30,7 @@ namespace Conductor.Server.Controllers
         private readonly ModelLoadService _ModelLoadService;
         private readonly EndpointRuntimeStatsService _RuntimeStatsService;
         private readonly KeepWarmService _KeepWarmService;
+        private readonly RequestHistoryService _RequestHistoryService;
 
         /// <summary>
         /// Instantiate the virtual model runner controller.
@@ -45,9 +46,11 @@ namespace Conductor.Server.Controllers
             RoutingDecisionService routingDecisionService = null,
             ModelLoadService modelLoadService = null,
             EndpointRuntimeStatsService runtimeStatsService = null,
-            KeepWarmService keepWarmService = null)
+            KeepWarmService keepWarmService = null,
+            RequestHistoryService requestHistoryService = null)
             : base(database, authService, serializer, logging)
         {
+            _RequestHistoryService = requestHistoryService;
             _HealthCheckService = healthCheckService;
             _SessionAffinityService = sessionAffinityService;
             _ValidationService = validationService;
@@ -141,18 +144,32 @@ namespace Conductor.Server.Controllers
         }
 
         /// <summary>
-        /// Delete a virtual model runner.
+        /// Delete a virtual model runner. Its request history (entries, analytics events and stored detail files) is deleted
+        /// first, because request history rows reference the runner.
         /// </summary>
-        public async Task Delete(string tenantId, string id)
+        /// <param name="tenantId">Tenant identifier. Must not be null or empty.</param>
+        /// <param name="id">Virtual model runner identifier.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <exception cref="WebserverException">Thrown when the tenant or ID is missing or the runner is not found.</exception>
+        public async Task Delete(string tenantId, string id, CancellationToken token = default)
         {
+            if (String.IsNullOrEmpty(tenantId))
+                throw new WebserverException(ApiResultEnum.BadRequest, RequestTenantResolver.TenantRequiredMessage);
+
             if (String.IsNullOrEmpty(id))
                 throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
-            bool exists = await Database.VirtualModelRunner.ExistsAsync(tenantId, id);
+            bool exists = await Database.VirtualModelRunner.ExistsAsync(tenantId, id, token).ConfigureAwait(false);
             if (!exists)
                 throw new WebserverException(ApiResultEnum.NotFound);
 
-            await Database.VirtualModelRunner.DeleteAsync(tenantId, id);
+            long deletedHistory = await RequestHistoryPurger.DeleteForVirtualModelRunnerAsync(Database, _RequestHistoryService, tenantId, id, token).ConfigureAwait(false);
+            if (deletedHistory > 0)
+            {
+                Logging.Info("[VirtualModelRunnerController] deleted " + deletedHistory + " request history entries for virtual model runner " + id);
+            }
+
+            await Database.VirtualModelRunner.DeleteAsync(tenantId, id, token).ConfigureAwait(false);
         }
 
         /// <summary>

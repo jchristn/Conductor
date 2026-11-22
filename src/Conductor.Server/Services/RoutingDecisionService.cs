@@ -51,10 +51,11 @@ namespace Conductor.Server.Services
             OperationalMetricsService metrics = null,
             IModelAccessControlService modelAccessControlService = null,
             ModelAccessControlSettings modelAccessSettings = null,
-            EndpointRuntimeStatsService runtimeStatsService = null)
+            EndpointRuntimeStatsService runtimeStatsService = null,
+            AnthropicSettings anthropicSettings = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
-            _ModelMutationService = new RoutingModelMutationService(_Database);
+            _ModelMutationService = new RoutingModelMutationService(_Database, anthropicSettings);
             _EffectiveConfigurationBuilder = new RoutingEffectiveConfigurationBuilder(_Database, modelAccessSettings);
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _HealthCheckService = healthCheckService;
@@ -66,7 +67,8 @@ namespace Conductor.Server.Services
         }
 
         /// <summary>
-        /// Evaluate a live or simulated request against a specific virtual model runner.
+        /// Evaluate a live or simulated request against a specific virtual model runner. An unclassified URL context is
+        /// classified first by the runner's configured API type.
         /// </summary>
         public async Task<RoutingExecutionResult> EvaluateAsync(
             VirtualModelRunner vmr,
@@ -78,6 +80,12 @@ namespace Conductor.Server.Services
             if (vmr == null) throw new ArgumentNullException(nameof(vmr));
             if (urlContext == null) throw new ArgumentNullException(nameof(urlContext));
             if (requestContext == null) throw new ArgumentNullException(nameof(requestContext));
+
+            // Requests are always classified by the runner's configured API type.
+            if (!urlContext.IsClassified && urlContext.IsValidVmrRequest)
+            {
+                urlContext.Classify(vmr.ApiType, requestContext.HttpMethod);
+            }
 
             DateTime decisionStart = DateTime.UtcNow;
             RoutingExecutionResult result = new RoutingExecutionResult();
@@ -158,6 +166,13 @@ namespace Conductor.Server.Services
                 return FinalizeMetrics(result, vmr, requestContext, decisionStart);
             }
 
+            if (urlContext.IsDecisionRequest && !vmr.AllowDecisions)
+            {
+                Deny(decision, 403, "DecisionsNotAllowed", "Decision requests are not allowed on this virtual model runner.");
+                AddTimeline(decision, "RequestTypeGate", "Request Type Gate", "Denied", decision.Message);
+                return FinalizeMetrics(result, vmr, requestContext, decisionStart);
+            }
+
             if (urlContext.IsModelManagementRequest && !vmr.AllowModelManagement)
             {
                 Deny(decision, 403, "ModelManagementNotAllowed", "Model-management operations are not allowed on this virtual model runner.");
@@ -211,6 +226,26 @@ namespace Conductor.Server.Services
                 return FinalizeMetrics(result, vmr, requestContext, decisionStart);
             }
 
+            // Hosted TypeSafe does not serve GET /v1/models, so on a mixed TypeSafe runner model listing is routed only to the
+            // endpoints that serve it (Ollaya). Without this the answer alternated between 404 and 200 under round robin.
+            if (urlContext.RequestType == RequestTypeEnum.TypeSafeListModels)
+            {
+                List<ModelRunnerEndpoint> listingEndpoints = endpoints.Where(item => item.ApiType != ApiTypeEnum.TypeSafe).ToList();
+                if (listingEndpoints.Count < 1)
+                {
+                    Deny(decision, 404, "ModelListingUnsupported", "No endpoint attached to this TypeSafe virtual model runner serves GET /v1/models; hosted TypeSafe endpoints do not provide a model list. Attach an Ollaya endpoint to list models.");
+                    AddTimeline(decision, "EndpointInventory", "Endpoint Inventory", "Denied", decision.Message);
+                    return FinalizeMetrics(result, vmr, requestContext, decisionStart);
+                }
+
+                if (listingEndpoints.Count < endpoints.Count)
+                {
+                    AddTimeline(decision, "EndpointInventory", "Endpoint Inventory", "Filtered", "Excluded " + (endpoints.Count - listingEndpoints.Count) + " hosted TypeSafe endpoint(s), which do not serve GET /v1/models.");
+                }
+
+                endpoints = listingEndpoints;
+            }
+
             AddTimeline(decision, "EndpointInventory", "Endpoint Inventory", "Passed", "Resolved " + endpoints.Count + " referenced endpoint(s).");
 
             ModelRunnerEndpoint selectedEndpoint = null;
@@ -261,7 +296,7 @@ namespace Conductor.Server.Services
                     {
                         for (int i = 0; i < evaluation.TelemetryFreshnessFailures; i++)
                         {
-                            _Metrics.RecordTelemetryFreshnessFailure(vmr.TenantId, vmr.Id, vmr.Name, GetApiFamily(urlContext.RequestType), policy.Id);
+                            _Metrics.RecordTelemetryFreshnessFailure(vmr.TenantId, vmr.Id, vmr.Name, ApiFamilyResolver.Resolve(urlContext.RequestType), policy.Id);
                         }
                     }
 
@@ -346,7 +381,13 @@ namespace Conductor.Server.Services
             requestContext.SelectedEndpointId = selectedEndpoint.Id;
             _RuntimeStatsService.RecordSelection(vmr, selectedEndpoint);
 
-            RoutingModelMutationResult mutation = await _ModelMutationService.ApplyAsync(vmr, urlContext, requestContext.Data, token).ConfigureAwait(false);
+            RoutingModelMutationResult mutation = await _ModelMutationService.ApplyAsync(
+                vmr,
+                urlContext,
+                requestContext.Data,
+                token,
+                selectedEndpoint,
+                GetHeaderValue(requestContext.Headers, UpstreamAuthHeaders.AnthropicVersionHeader)).ConfigureAwait(false);
             result.RequestBody = mutation.RequestBody;
             result.ModelDefinition = mutation.ModelDefinition;
             result.ModelConfiguration = mutation.ModelConfiguration;
@@ -402,7 +443,7 @@ namespace Conductor.Server.Services
                 fullPath += request.QueryString.StartsWith("?") ? request.QueryString : "?" + request.QueryString;
             }
 
-            UrlContext urlContext = UrlContext.Parse(fullPath, request.Method ?? "POST");
+            UrlContext urlContext = UrlContext.Parse(fullPath, request.Method ?? "POST", vmr.ApiType);
             RequestContext requestContext = new RequestContext
             {
                 HttpMethod = request.Method ?? "POST",
@@ -780,7 +821,7 @@ namespace Conductor.Server.Services
         {
             RoutingDecision decision = result.Decision;
             double routeDecisionDurationMs = (DateTime.UtcNow - decisionStart).TotalMilliseconds;
-            string apiFamily = GetApiFamily(requestContext.RequestType);
+            string apiFamily = ApiFamilyResolver.Resolve(requestContext.RequestType);
 
             if (_Metrics != null)
             {
@@ -1222,46 +1263,36 @@ namespace Conductor.Server.Services
             return tiedCandidates;
         }
 
-        private static string GetApiFamily(RequestTypeEnum requestType)
-        {
-            switch (requestType)
-            {
-                case RequestTypeEnum.OpenAIChatCompletions:
-                case RequestTypeEnum.OpenAICompletions:
-                case RequestTypeEnum.OpenAIEmbeddings:
-                case RequestTypeEnum.OpenAIListModels:
-                    return "OpenAI";
-                case RequestTypeEnum.GeminiGenerateContent:
-                case RequestTypeEnum.GeminiStreamGenerateContent:
-                case RequestTypeEnum.GeminiEmbedContent:
-                case RequestTypeEnum.GeminiListModels:
-                    return "Gemini";
-                case RequestTypeEnum.OllamaGenerate:
-                case RequestTypeEnum.OllamaChat:
-                case RequestTypeEnum.OllamaEmbeddings:
-                case RequestTypeEnum.OllamaListTags:
-                case RequestTypeEnum.OllamaListRunningModels:
-                case RequestTypeEnum.OllamaPullModel:
-                case RequestTypeEnum.OllamaDeleteModel:
-                case RequestTypeEnum.OllamaShowModelInfo:
-                    return "Ollama";
-                default:
-                    return "Management";
-            }
-        }
-
         private static string GetDefaultRelativePath(ApiTypeEnum apiType)
         {
             switch (apiType)
             {
                 case ApiTypeEnum.OpenAI:
+                case ApiTypeEnum.OpenAICompatible:
+                case ApiTypeEnum.vLLM:
                     return "/v1/chat/completions";
+                case ApiTypeEnum.Anthropic:
+                    return "/v1/messages";
+                case ApiTypeEnum.TypeSafe:
+                case ApiTypeEnum.Ollaya:
+                    return "/v1/systemone";
                 case ApiTypeEnum.Gemini:
                     return "/v1beta/models/gemini-1.5-flash:generateContent";
                 case ApiTypeEnum.Ollama:
                 default:
                     return "/api/chat";
             }
+        }
+
+        private static string GetHeaderValue(Dictionary<string, string> headers, string name)
+        {
+            if (headers == null || String.IsNullOrEmpty(name)) return null;
+            foreach (KeyValuePair<string, string> header in headers)
+            {
+                if (String.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase)) return header.Value;
+            }
+
+            return null;
         }
 
         private static string DeriveClientKey(VirtualModelRunner vmr, RequestContext requestContext)

@@ -73,6 +73,13 @@ namespace Conductor.Core.Models
         public bool SupportsCompletions { get; set; } = true;
 
         /// <summary>
+        /// Boolean indicating whether the model answers decision requests (TypeSafe System One). Default: false.
+        /// In strict mode, decision requests for a model without this capability are rejected with 404, and completion or
+        /// embedding requests for a model that supports only decisions are rejected the same way.
+        /// </summary>
+        public bool SupportsDecisions { get; set; } = false;
+
+        /// <summary>
         /// Boolean indicating if the model is active.
         /// </summary>
         public bool Active { get; set; } = true;
@@ -173,6 +180,7 @@ namespace Conductor.Core.Models
                 ContextWindowSize = DataTableHelper.GetNullableIntValue(row, "contextwindowsize"),
                 SupportsEmbeddings = DataTableHelper.GetBooleanValue(row, "supportsembeddings"),
                 SupportsCompletions = DataTableHelper.GetBooleanValue(row, "supportscompletions"),
+                SupportsDecisions = DataTableHelper.GetBooleanValue(row, "supportsdecisions"),
                 Active = DataTableHelper.GetBooleanValue(row, "active"),
                 CreatedUtc = DataTableHelper.GetDateTimeValue(row, "createdutc"),
                 LastUpdateUtc = DataTableHelper.GetDateTimeValue(row, "lastupdateutc")

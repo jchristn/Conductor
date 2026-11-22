@@ -134,6 +134,73 @@ namespace Test.Shared.Server.Services
             Encoding.UTF8.GetString(filtered).Should().Be(Encoding.UTF8.GetString(upstream));
         }
 
+        public async Task Apply_FilterMode_RemovesDeniedAnthropicModelsAndRecomputesPageIds()
+        {
+            ModelAccessListModelsResponseFilter filter = CreateFilter(ModelAccessListModelsBehaviorEnum.Filter);
+            byte[] upstream = Encoding.UTF8.GetBytes(
+                "{\"data\":[{\"type\":\"model\",\"id\":\"denied-model\",\"display_name\":\"Denied\",\"created_at\":\"2025-01-01T00:00:00Z\"},"
+                + "{\"type\":\"model\",\"id\":\"allowed-model\",\"display_name\":\"Allowed\",\"created_at\":\"2025-02-01T00:00:00Z\"}],"
+                + "\"has_more\":true,\"first_id\":\"denied-model\",\"last_id\":\"allowed-model\"}");
+
+            byte[] filtered = await filter.ApplyAsync(_Vmr, CreateRoutingResult(), CreateRequestContext(RequestTypeEnum.AnthropicListModels, ApiTypeEnum.Anthropic), upstream).ConfigureAwait(false);
+
+            JsonNode root = JsonNode.Parse(Encoding.UTF8.GetString(filtered));
+            root["data"].AsArray().Select(item => item["id"].GetValue<string>()).Should().Equal("allowed-model");
+            root["data"][0]["display_name"].GetValue<string>().Should().Be("Allowed");
+            root["data"][0]["type"].GetValue<string>().Should().Be("model");
+            root["has_more"].GetValue<bool>().Should().BeTrue();
+            root["first_id"].GetValue<string>().Should().Be("allowed-model");
+            root["last_id"].GetValue<string>().Should().Be("allowed-model");
+        }
+
+        public async Task Apply_SynthesizeMode_ReturnsAllowedAnthropicModels()
+        {
+            ModelAccessListModelsResponseFilter filter = CreateFilter(ModelAccessListModelsBehaviorEnum.Synthesize);
+            byte[] upstream = Encoding.UTF8.GetBytes("{\"data\":[],\"has_more\":false}");
+
+            byte[] filtered = await filter.ApplyAsync(_Vmr, CreateRoutingResult(), CreateRequestContext(RequestTypeEnum.AnthropicListModels, ApiTypeEnum.Anthropic), upstream).ConfigureAwait(false);
+
+            JsonNode root = JsonNode.Parse(Encoding.UTF8.GetString(filtered));
+            root["data"].AsArray().Select(item => item["id"].GetValue<string>()).Should().Equal("allowed-model");
+            root["data"][0]["type"].GetValue<string>().Should().Be("model");
+            root["has_more"].GetValue<bool>().Should().BeFalse();
+        }
+
+        public async Task Apply_FilterMode_UnparseableAnthropicResponse_ReturnsEmptyAnthropicList()
+        {
+            ModelAccessListModelsResponseFilter filter = CreateFilter(ModelAccessListModelsBehaviorEnum.Filter);
+
+            byte[] filtered = await filter.ApplyAsync(_Vmr, CreateRoutingResult(), CreateRequestContext(RequestTypeEnum.AnthropicListModels, ApiTypeEnum.Anthropic), Encoding.UTF8.GetBytes("not json")).ConfigureAwait(false);
+
+            JsonNode root = JsonNode.Parse(Encoding.UTF8.GetString(filtered));
+            root["data"].AsArray().Should().BeEmpty();
+            root["has_more"].GetValue<bool>().Should().BeFalse();
+        }
+
+        public async Task Apply_FilterMode_RemovesDeniedTypeSafeModels()
+        {
+            ModelAccessListModelsResponseFilter filter = CreateFilter(ModelAccessListModelsBehaviorEnum.Filter);
+            byte[] upstream = Encoding.UTF8.GetBytes(
+                "{\"object\":\"list\",\"data\":[{\"id\":\"allowed-model\",\"object\":\"model\"},{\"id\":\"denied-model\",\"object\":\"model\"}]}");
+
+            byte[] filtered = await filter.ApplyAsync(_Vmr, CreateRoutingResult(), CreateRequestContext(RequestTypeEnum.TypeSafeListModels, ApiTypeEnum.TypeSafe), upstream).ConfigureAwait(false);
+
+            JsonNode root = JsonNode.Parse(Encoding.UTF8.GetString(filtered));
+            root["object"].GetValue<string>().Should().Be("list");
+            root["data"].AsArray().Select(item => item["id"].GetValue<string>()).Should().Equal("allowed-model");
+        }
+
+        public async Task Apply_SynthesizeMode_ReturnsAllowedTypeSafeModels()
+        {
+            ModelAccessListModelsResponseFilter filter = CreateFilter(ModelAccessListModelsBehaviorEnum.Synthesize);
+
+            byte[] filtered = await filter.ApplyAsync(_Vmr, CreateRoutingResult(), CreateRequestContext(RequestTypeEnum.TypeSafeListModels, ApiTypeEnum.TypeSafe), Encoding.UTF8.GetBytes("{}")).ConfigureAwait(false);
+
+            JsonNode root = JsonNode.Parse(Encoding.UTF8.GetString(filtered));
+            root["data"].AsArray().Select(item => item["id"].GetValue<string>()).Should().Equal("allowed-model");
+            root["data"][0]["object"].GetValue<string>().Should().Be("model");
+        }
+
         private ModelAccessListModelsResponseFilter CreateFilter(ModelAccessListModelsBehaviorEnum behavior)
         {
             ModelAccessControlSettings settings = new ModelAccessControlSettings

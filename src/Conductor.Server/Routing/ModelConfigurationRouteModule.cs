@@ -23,7 +23,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelConfiguration>("/v1.0/modelconfigurations", async (req) =>
             {
                 ModelConfiguration mc = req.Data as ModelConfiguration;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await mcController.Create(tenantId, mc);
             },
@@ -41,7 +41,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelConfiguration>("/v1.0/modelconfigurations/validate", async (req) =>
             {
                 ModelConfiguration mc = req.Data as ModelConfiguration;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await mcController.Validate(tenantId, mc, !String.IsNullOrEmpty(existingId) ? existingId : mc?.Id);
             },
@@ -74,7 +74,7 @@ namespace Conductor.Server.Routing
             _App.Put<ModelConfiguration>("/v1.0/modelconfigurations/{id}", async (req) =>
             {
                 ModelConfiguration mc = req.Data as ModelConfiguration;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, mc?.TenantId);
                 return await mcController.Update(tenantId, req.Parameters["id"], mc);
             },
             api => api
@@ -91,7 +91,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/modelconfigurations/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await mcController.Delete(tenantId, req.Parameters["id"]);
                 return null;

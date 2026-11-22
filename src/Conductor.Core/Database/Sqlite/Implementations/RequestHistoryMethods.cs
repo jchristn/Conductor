@@ -42,7 +42,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "sessionaffinityoutcome, mutationsummary, explanationsummary, requestbodyretained, requestbodyredacted, requestheadersredacted, " +
                            "responsebodyretained, responsebodyredacted, responseheadersredacted, requestorsourceip, httpmethod, httpurl, requestbodylength, responsebodylength, " +
                            "httpstatus, firsttokentimems, responsetimems, traceid, providerrequestid, providername, prompttokens, completiontokens, totaltokens, " +
-                           "tokenspersecondoverall, tokenspersecondgeneration, analyticscaptured, analyticsversion, dominantstagekind, dominantstagedurationms, analyticsfailurecode, " +
+                           "tokenspersecondoverall, tokenspersecondgeneration, cachecreationinputtokens, cachereadinputtokens, decisionquestioncount, analyticscaptured, analyticsversion, dominantstagekind, dominantstagedurationms, analyticsfailurecode, " +
                            "objectkey, requesttransfertype, responsetransfertype, createdutc, completedutc) " +
                            "VALUES ('" + _Driver.Sanitize(entry.Id) + "', " +
                            "'" + _Driver.Sanitize(entry.TenantGuid) + "', " +
@@ -109,6 +109,9 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            _Driver.FormatNullable(entry.TotalTokens) + ", " +
                            _Driver.FormatNullable(entry.TokensPerSecondOverall) + ", " +
                            _Driver.FormatNullable(entry.TokensPerSecondGeneration) + ", " +
+                           _Driver.FormatNullable(entry.CacheCreationInputTokens) + ", " +
+                           _Driver.FormatNullable(entry.CacheReadInputTokens) + ", " +
+                           _Driver.FormatNullable(entry.DecisionQuestionCount) + ", " +
                            _Driver.FormatBoolean(entry.AnalyticsCaptured) + ", " +
                            entry.AnalyticsVersion + ", " +
                            _Driver.FormatNullableString(entry.DominantStageKind) + ", " +
@@ -189,6 +192,9 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "totaltokens = " + _Driver.FormatNullable(entry.TotalTokens) + ", " +
                            "tokenspersecondoverall = " + _Driver.FormatNullable(entry.TokensPerSecondOverall) + ", " +
                            "tokenspersecondgeneration = " + _Driver.FormatNullable(entry.TokensPerSecondGeneration) + ", " +
+                           "cachecreationinputtokens = " + _Driver.FormatNullable(entry.CacheCreationInputTokens) + ", " +
+                           "cachereadinputtokens = " + _Driver.FormatNullable(entry.CacheReadInputTokens) + ", " +
+                           "decisionquestioncount = " + _Driver.FormatNullable(entry.DecisionQuestionCount) + ", " +
                            "analyticscaptured = " + _Driver.FormatBoolean(entry.AnalyticsCaptured) + ", " +
                            "analyticsversion = " + entry.AnalyticsVersion + ", " +
                            "dominantstagekind = " + _Driver.FormatNullableString(entry.DominantStageKind) + ", " +

@@ -406,17 +406,26 @@ namespace Test.Shared.Core.Helpers
         }
         public void GetEnumValue_WithUndefinedInt_ReturnsDefault()
         {
-            // When the int value is not defined in the enum, IsDefined returns false
-            // and TryParse with the string "999" succeeds (enums can have undefined values)
-            // This test verifies the actual helper behavior
+            // An integer that the enum does not define (for example one written by a newer version) returns the
+            // default value and raises the unknown-value warning callback.
             DataTable table = CreateTestTable();
             DataRow row = table.NewRow();
             row["intcol"] = 999;
             table.Rows.Add(row);
 
-            TestEnum result = DataTableHelper.GetEnumValue(row, "intcol", TestEnum.Value1);
-            // TryParse succeeds for numeric strings even if not defined
-            result.Should().Be((TestEnum)999);
+            System.Collections.Generic.List<string> warnings = new System.Collections.Generic.List<string>();
+            System.Action<string> previous = DataTableHelper.UnknownEnumValueWarning;
+            DataTableHelper.UnknownEnumValueWarning = message => { lock (warnings) warnings.Add(message); };
+            try
+            {
+                TestEnum result = DataTableHelper.GetEnumValue(row, "intcol", TestEnum.Value1);
+                result.Should().Be(TestEnum.Value1);
+                warnings.Should().ContainSingle(item => item.Contains("intcol") && item.Contains("999"));
+            }
+            finally
+            {
+                DataTableHelper.UnknownEnumValueWarning = previous;
+            }
         }
         public void GetEnumValue_WithNullRow_ReturnsDefault()
         {

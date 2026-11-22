@@ -266,6 +266,11 @@ namespace Conductor.Server.Services
 
         private static void EnsureOllamaEndpoint(ModelRunnerEndpoint endpoint)
         {
+            if (endpoint.ApiType == ApiTypeEnum.OllamaCloud)
+            {
+                throw new WebserverException(ApiResultEnum.BadRequest, "Ollama model management (list, pull, delete) is not supported for OllamaCloud endpoints.");
+            }
+
             if (endpoint.ApiType != ApiTypeEnum.Ollama)
             {
                 throw new WebserverException(ApiResultEnum.BadRequest, "Ollama model management is only supported for Ollama endpoints.");

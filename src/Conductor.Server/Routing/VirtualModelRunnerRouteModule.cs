@@ -25,7 +25,7 @@ namespace Conductor.Server.Routing
             _App.Post<VirtualModelRunner>("/v1.0/virtualmodelrunners", async (req) =>
             {
                 VirtualModelRunner vmr = req.Data as VirtualModelRunner;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await vmrController.Create(tenantId, vmr);
             },
@@ -43,7 +43,7 @@ namespace Conductor.Server.Routing
             _App.Post<VirtualModelRunner>("/v1.0/virtualmodelrunners/validate", async (req) =>
             {
                 VirtualModelRunner vmr = req.Data as VirtualModelRunner;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await vmrController.Validate(tenantId, vmr, !String.IsNullOrEmpty(existingId) ? existingId : vmr?.Id);
             },
@@ -59,7 +59,7 @@ namespace Conductor.Server.Routing
 
             _App.Post<ModelLoadRequest>("/v1.0/virtualmodelrunners/{id}/load-model", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await vmrController.LoadModel(
                     tenantId,
                     req.Parameters["id"],
@@ -99,7 +99,7 @@ namespace Conductor.Server.Routing
 
             _App.Post<object>("/v1.0/virtualmodelrunners/{id}/keep-warm/run", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await vmrController.RunKeepWarm(tenantId, req.Parameters["id"]);
             },
             api => api
@@ -133,7 +133,7 @@ namespace Conductor.Server.Routing
             _App.Put<VirtualModelRunner>("/v1.0/virtualmodelrunners/{id}", async (req) =>
             {
                 VirtualModelRunner vmr = req.Data as VirtualModelRunner;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, vmr?.TenantId);
                 return await vmrController.Update(tenantId, req.Parameters["id"], vmr);
             },
             api => api
@@ -150,7 +150,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/virtualmodelrunners/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await vmrController.Delete(tenantId, req.Parameters["id"]);
                 return null;
@@ -246,7 +246,7 @@ namespace Conductor.Server.Routing
 
             _App.Post<object>("/v1.0/virtualmodelrunners/{id}/runtime-stats/reset", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await vmrController.ResetRuntimeStats(tenantId, req.Parameters["id"], req.Http.Request.Query.Elements.Get("endpointId"));
             },
             api => api
@@ -264,7 +264,7 @@ namespace Conductor.Server.Routing
 
             _App.Post<object>("/v1.0/virtualmodelrunners/{id}/runtime-backoff/clear", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await vmrController.ClearRuntimeBackoff(tenantId, req.Parameters["id"], req.Http.Request.Query.Elements.Get("endpointId"));
             },
             api => api

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getAvailableLanguages, generateCode } from '../utils/codeGenerators';
+import { buildExplorerHeaders } from '../utils/providers';
 import CopyButton from './CopyButton';
+import DecisionAnswersTable from './DecisionAnswersTable';
 
 /**
  * Simple markdown parser for rendering response content.
@@ -56,7 +58,7 @@ function ApiExplorerResponse({ explorer, credentials }) {
     apiType,
     operationId,
     operation,
-    streamEnabled,
+    isStreaming,
     fullUrl,
     requestBody,
     selectedCredentialId,
@@ -65,6 +67,7 @@ function ApiExplorerResponse({ explorer, credentials }) {
     responseHeaders,
     responseStatus,
     isSending,
+    decisionAnswers,
     clearResponse
   } = explorer;
 
@@ -85,8 +88,8 @@ function ApiExplorerResponse({ explorer, credentials }) {
 
   // Get available code languages based on current configuration
   const availableLanguages = useMemo(() => {
-    return getAvailableLanguages(apiType, streamEnabled);
-  }, [apiType, streamEnabled]);
+    return getAvailableLanguages(apiType, isStreaming);
+  }, [apiType, isStreaming]);
 
   // Ensure selected language is available
   useEffect(() => {
@@ -100,12 +103,8 @@ function ApiExplorerResponse({ explorer, credentials }) {
   const generatedCode = useMemo(() => {
     if (!fullUrl || !operation) return '';
 
-    const headers = {
-      'Content-Type': 'application/json'
-    };
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
+    // Same header builder the explorer uses to send the request
+    const headers = buildExplorerHeaders(apiType, apiKey);
 
     return generateCode(codeLanguage, {
       url: fullUrl,
@@ -113,9 +112,10 @@ function ApiExplorerResponse({ explorer, credentials }) {
       headers,
       body: requestBody,
       apiType,
-      operationId
+      operationId,
+      streaming: isStreaming
     });
-  }, [codeLanguage, fullUrl, operation, requestBody, apiKey, apiType, operationId]);
+  }, [codeLanguage, fullUrl, operation, requestBody, apiKey, apiType, operationId, isStreaming]);
 
   // Format JSON for display
   const formattedBody = useMemo(() => {
@@ -201,7 +201,7 @@ function ApiExplorerResponse({ explorer, credentials }) {
         )}
         <div className="metric">
           <span className="metric-label">Type</span>
-          <span className="metric-value">{streamEnabled && operation?.supportsStreaming ? 'Streaming' : 'Non-streaming'}</span>
+          <span className="metric-value">{isStreaming ? 'Streaming' : 'Non-streaming'}</span>
         </div>
       </div>
     );
@@ -257,7 +257,18 @@ function ApiExplorerResponse({ explorer, credentials }) {
                 Streaming...
               </div>
             )}
-            {responsePreview ? (
+            {operation?.decision && decisionAnswers.length > 0 ? (
+              <div className="decision-preview">
+                <DecisionAnswersTable answers={decisionAnswers} />
+                <div className="decision-raw">
+                  <div className="decision-raw-header">
+                    <span>Raw JSON</span>
+                    <CopyButton value={formattedBody} title="Copy JSON" />
+                  </div>
+                  <pre className="response-body-code">{formattedBody}</pre>
+                </div>
+              </div>
+            ) : responsePreview ? (
               <div
                 className="markdown-content"
                 dangerouslySetInnerHTML={{ __html: parseMarkdown(responsePreview) }}
@@ -267,7 +278,7 @@ function ApiExplorerResponse({ explorer, credentials }) {
                 Send a request to see the response preview
               </div>
             ) : null}
-            {responsePreview && (
+            {responsePreview && !(operation?.decision && decisionAnswers.length > 0) && (
               <div className="preview-actions">
                 <CopyButton value={responsePreview} title="Copy response" />
               </div>

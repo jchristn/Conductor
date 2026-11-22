@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Conductor - Unified AI Model Infrastructure Platform</title>
-    <meta name="description" content="Conductor is an enterprise-grade platform for managing AI model runners, virtualizing endpoints, and orchestrating inference across OpenAI and Ollama compatible APIs.">
-    <meta name="keywords" content="AI infrastructure, model orchestration, load balancing, Ollama, OpenAI, LLM, inference, multi-tenant, virtual model runner">
+    <meta name="description" content="Conductor is an enterprise-grade platform for managing AI model runners, virtualizing endpoints, and orchestrating inference across OpenAI, Ollama, Gemini, vLLM, Anthropic, and TypeSafe decision model APIs.">
+    <meta name="keywords" content="AI infrastructure, model orchestration, load balancing, Ollama, Ollama Cloud, OpenAI, OpenAI-compatible, vLLM, Gemini, Anthropic, Claude Code, TypeSafe, Jev, Ollaya, decision models, LLM, inference, multi-tenant, virtual model runner">
     <link rel="icon" id="favicon" href="icon-dark.ico" type="image/x-icon">
     <link rel="shortcut icon" href="icon-dark.ico" type="image/x-icon">
     <link rel="stylesheet" href="styles.css">
@@ -82,7 +82,7 @@
             <p class="hero-subtitle">
                 Transform multiple AI model runners into a unified, high-availability platform. Intelligent load balancing,
                 multi-tenant isolation, comprehensive API support, and enterprise-grade configuration management for
-                OpenAI and Ollama compatible endpoints.
+                OpenAI, Ollama, Gemini, vLLM, Anthropic, and TypeSafe decision model endpoints.
             </p>
             <div class="hero-buttons">
                 <a href="#get-started" class="btn btn-primary">
@@ -154,8 +154,16 @@
                             <span class="node-label">OpenAI</span>
                         </div>
                         <div class="diagram-node backend">
-                            <span class="node-icon">+</span>
-                            <span class="node-label">Others</span>
+                            <span class="node-icon">A</span>
+                            <span class="node-label">Anthropic</span>
+                        </div>
+                        <div class="diagram-node backend">
+                            <span class="node-icon">G</span>
+                            <span class="node-label">Gemini</span>
+                        </div>
+                        <div class="diagram-node backend">
+                            <span class="node-icon">TS</span>
+                            <span class="node-label">TypeSafe</span>
                         </div>
                     </div>
                 </div>
@@ -180,7 +188,7 @@
                         </svg>
                     </div>
                     <h3>Virtual Model Runners</h3>
-                    <p>Create unified virtual endpoints that abstract multiple physical model runners. Expose consistent OpenAI or Ollama APIs regardless of backend implementation.</p>
+                    <p>Create unified virtual endpoints that abstract multiple physical model runners. Expose consistent OpenAI, Ollama, Gemini, vLLM, Anthropic, or TypeSafe decision APIs regardless of backend implementation.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -253,7 +261,7 @@
                         <h3>How It Works</h3>
                         <ul class="vmr-list">
                             <li>
-                                <strong>Endpoint Aggregation:</strong> Combine multiple Ollama, vLLM, or OpenAI endpoints into one virtual endpoint
+                                <strong>Endpoint Aggregation:</strong> Combine multiple compatible endpoints (for example Ollama and Ollama Cloud, or OpenAI, OpenAI-compatible servers, and vLLM) into one virtual endpoint
                             </li>
                             <li>
                                 <strong>Transparent Routing:</strong> Conductor routes requests to healthy backends based on your load balancing strategy
@@ -269,7 +277,7 @@
                     <div class="vmr-card">
                         <h3>Configuration Options</h3>
                         <ul class="vmr-list">
-                            <li><strong>API Type:</strong> Expose as OpenAI or Ollama compatible API</li>
+                            <li><strong>API Type:</strong> Expose an Ollama, OpenAI, vLLM, Gemini, Anthropic, or TypeSafe API, chosen explicitly and never guessed from a hostname</li>
                             <li><strong>Load Balancing:</strong> Round-robin, random, or first-available</li>
                             <li><strong>Capabilities:</strong> Enable/disable embeddings, completions, model management</li>
                             <li><strong>Strict Mode:</strong> Restrict to explicitly defined models only</li>
@@ -338,7 +346,8 @@
                         <div class="backend-list">
                             <a href="https://openai.com" target="_blank" rel="noopener">OpenAI</a>
                             <a href="https://azure.microsoft.com/products/ai-services/openai-service" target="_blank" rel="noopener">Azure OpenAI</a>
-                            <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>
+                            <a href="https://lmstudio.ai" target="_blank" rel="noopener">LM Studio</a>
+                            <a href="https://ollama.com" target="_blank" rel="noopener">Ollama (OpenAI-compatible)</a>
                             <a href="https://vllm.ai" target="_blank" rel="noopener">vLLM</a>
                         </div>
                     </div>
@@ -366,7 +375,69 @@
                         <span class="backend-label">Compatible Backends:</span>
                         <div class="backend-list">
                             <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>
+                            <a href="https://ollama.com" target="_blank" rel="noopener">Ollama Cloud</a>
                             <a href="https://github.com/jchristn/sharpai" target="_blank" rel="noopener">SharpAI</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="api-card">
+                    <div class="api-header">
+                        <div class="api-logo anthropic">
+                            <span class="api-logo-text">A</span>
+                        </div>
+                        <h3>Anthropic API</h3>
+                    </div>
+                    <p class="api-description">Anthropic Messages API, streaming, token counting, and models. Point Claude Code or the Anthropic SDKs at an Anthropic virtual model runner and authenticate with a Conductor credential; your Anthropic key stays on the server.</p>
+                    <ul class="api-endpoints">
+                        <li><code>/v1/messages</code></li>
+                        <li><code>/v1/messages/count_tokens</code></li>
+                        <li><code>/v1/models</code></li>
+                    </ul>
+                    <div class="api-backends">
+                        <span class="backend-label">Compatible Backends:</span>
+                        <div class="backend-list">
+                            <a href="https://www.anthropic.com" target="_blank" rel="noopener">Anthropic</a>
+                            <a href="https://www.anthropic.com/claude-code" target="_blank" rel="noopener">Claude Code</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="api-card">
+                    <div class="api-header">
+                        <div class="api-logo gemini">
+                            <span class="api-logo-text">G</span>
+                        </div>
+                        <h3>Gemini API</h3>
+                    </div>
+                    <p class="api-description">Gemini-style generate, streaming generate, embeddings, and model listing, authenticated upstream with x-goog-api-key.</p>
+                    <ul class="api-endpoints">
+                        <li><code>/v1beta/models/{model}:generateContent</code></li>
+                        <li><code>/v1beta/models/{model}:streamGenerateContent</code></li>
+                        <li><code>/v1beta/models/{model}:embedContent</code></li>
+                    </ul>
+                    <div class="api-backends">
+                        <span class="backend-label">Compatible Backends:</span>
+                        <div class="backend-list">
+                            <a href="https://ai.google.dev" target="_blank" rel="noopener">Google Gemini</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="api-card">
+                    <div class="api-header">
+                        <div class="api-logo decision">
+                            <span class="api-logo-text">?</span>
+                        </div>
+                        <h3>Decision Models</h3>
+                    </div>
+                    <p class="api-description">The TypeSafe System One API for decision models that answer structured questions (yes or no, choice, score) instead of generating text. Route to hosted Jev models or a local Ollaya runtime, with decision capability flags and access control.</p>
+                    <ul class="api-endpoints">
+                        <li><code>/v1/systemone</code></li>
+                        <li><code>/v1/models</code></li>
+                    </ul>
+                    <div class="api-backends">
+                        <span class="backend-label">Compatible Backends:</span>
+                        <div class="backend-list">
+                            <a href="https://typesafe.ai" target="_blank" rel="noopener">TypeSafe (hosted Jev)</a>
+                            <span>Ollaya (local)</span>
                         </div>
                     </div>
                 </div>
@@ -377,7 +448,7 @@
                     <line x1="12" y1="16" x2="12" y2="12"></line>
                     <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
-                <p><strong>Cross-API Routing:</strong> Expose an OpenAI-compatible API while routing to Ollama backends, or vice versa. Conductor handles protocol translation transparently.</p>
+                <p><strong>Explicit Compatibility:</strong> Each virtual model runner type accepts a fixed set of endpoint types. An OpenAI runner can route to OpenAI, OpenAI-compatible servers (including Ollama's OpenAI-compatible API), and vLLM; an Ollama runner to Ollama and Ollama Cloud; a TypeSafe runner to hosted TypeSafe and local Ollaya. Conductor passes each wire format through unchanged rather than translating between them.</p>
             </div>
         </div>
     </section>
@@ -690,7 +761,7 @@
                         </svg>
                     </div>
                     <h3>Unified Inference API</h3>
-                    <p>Consolidate multiple Ollama instances, vLLM servers, and OpenAI endpoints behind a single API. Applications connect to one endpoint regardless of backend topology.</p>
+                    <p>Consolidate Ollama instances, vLLM servers, OpenAI, Gemini, and Anthropic endpoints behind stable virtual endpoints. Applications, Claude Code, and the provider SDKs connect to one URL regardless of backend topology.</p>
                 </div>
                 <div class="use-case-card">
                     <div class="use-case-icon">
@@ -781,7 +852,7 @@
                         <li>Model definitions with metadata</li>
                         <li>Configuration pinning</li>
                         <li>Strict mode validation</li>
-                        <li>Model capability tracking</li>
+                        <li>Completion, embedding, and decision capabilities</li>
                         <li>Family/size/quantization info</li>
                         <li>Request parameter injection</li>
                     </ul>
@@ -918,6 +989,9 @@ dotnet run</code></pre>
                         <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>
                         <a href="https://openai.com" target="_blank" rel="noopener">OpenAI</a>
                         <a href="https://vllm.ai" target="_blank" rel="noopener">vLLM</a>
+                        <a href="https://ai.google.dev" target="_blank" rel="noopener">Gemini</a>
+                        <a href="https://www.anthropic.com" target="_blank" rel="noopener">Anthropic</a>
+                        <a href="https://typesafe.ai" target="_blank" rel="noopener">TypeSafe</a>
                         <a href="https://github.com/jchristn/sharpai" target="_blank" rel="noopener">SharpAI</a>
                     </div>
                 </div>

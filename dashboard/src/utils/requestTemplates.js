@@ -1,7 +1,10 @@
 /**
  * Request body templates for different API operations.
  * Each template provides sensible defaults for common parameters.
+ * The operation set used for a VMR type comes from the provider registry (providers.js).
  */
+import { getProvider, DEFAULT_TYPESAFE_MODEL } from './providers';
+import { buildDecisionBody, createDecisionQuestion } from './typeSafeDecisions';
 
 /**
  * OpenAI API request templates
@@ -97,6 +100,50 @@ export const ollamaTemplates = {
 
   delete: (modelName) => ({
     name: modelName || 'llama2'
+  })
+};
+
+/**
+ * Anthropic Messages API request templates
+ */
+export const anthropicTemplates = {
+  messages: (modelName) => ({
+    model: modelName || 'claude-opus-5-5',
+    max_tokens: 1024,
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ]
+  }),
+
+  messagesStream: (modelName) => ({
+    model: modelName || 'claude-opus-5-5',
+    max_tokens: 1024,
+    stream: true,
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ]
+  }),
+
+  countTokens: (modelName) => ({
+    model: modelName || 'claude-opus-5-5',
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ]
+  })
+};
+
+/**
+ * TypeSafe System One request templates
+ */
+export const typeSafeTemplates = {
+  decide: (modelName) => buildDecisionBody({
+    model: modelName || DEFAULT_TYPESAFE_MODEL,
+    state: 'Hi, my invoice was charged twice this month. Can you refund the duplicate?',
+    questions: [
+      createDecisionQuestion('noul', 'is_question'),
+      createDecisionQuestion('choice', 'category'),
+      createDecisionQuestion('score', 'urgency')
+    ]
   })
 };
 
@@ -230,20 +277,92 @@ export const ollamaOperations = [
   }
 ];
 
-function isOpenAICompatibleApiType(apiType) {
-  return apiType === 'OpenAI' || apiType === 'vLLM';
-}
+/**
+ * API operation definitions for Anthropic
+ */
+export const anthropicOperations = [
+  {
+    id: 'messages',
+    label: 'Messages',
+    endpoint: '/v1/messages',
+    method: 'POST',
+    supportsStreaming: false,
+    getTemplate: anthropicTemplates.messages
+  },
+  {
+    id: 'messagesStream',
+    label: 'Messages (stream)',
+    endpoint: '/v1/messages',
+    method: 'POST',
+    supportsStreaming: true,
+    forceStream: true,
+    getTemplate: anthropicTemplates.messagesStream
+  },
+  {
+    id: 'countTokens',
+    label: 'Count Tokens',
+    endpoint: '/v1/messages/count_tokens',
+    method: 'POST',
+    supportsStreaming: false,
+    getTemplate: anthropicTemplates.countTokens
+  },
+  {
+    id: 'listModels',
+    label: 'List Models',
+    endpoint: '/v1/models',
+    method: 'GET',
+    supportsStreaming: false,
+    getTemplate: null
+  },
+  {
+    id: 'getModel',
+    label: 'Get Model',
+    endpoint: '/v1/models/{model}',
+    method: 'GET',
+    supportsStreaming: false,
+    getTemplate: null
+  }
+];
 
 /**
- * Get operations list based on API type
- * @param {string} apiType - 'OpenAI', 'vLLM', 'Gemini', or 'Ollama'
- * @returns {Array} List of operation definitions
+ * API operation definitions for TypeSafe (System One)
+ */
+export const typeSafeOperations = [
+  {
+    id: 'decide',
+    label: 'Decide',
+    endpoint: '/v1/systemone',
+    method: 'POST',
+    supportsStreaming: false,
+    decision: true,
+    getTemplate: typeSafeTemplates.decide
+  },
+  {
+    id: 'listModels',
+    label: 'List Models',
+    endpoint: '/v1/models',
+    method: 'GET',
+    supportsStreaming: false,
+    getTemplate: null
+  }
+];
+
+const OPERATION_SETS = {
+  openai: openaiOperations,
+  gemini: geminiOperations,
+  ollama: ollamaOperations,
+  anthropic: anthropicOperations,
+  typesafe: typeSafeOperations
+};
+
+/**
+ * Get operations list based on API type. The operation set is named by the provider registry.
+ * @param {string} apiType - provider API type (see providers.js)
+ * @returns {Array} List of operation definitions; the OpenAI set when the type is unknown
  */
 export function getOperationsForApiType(apiType) {
-  if (apiType === 'Ollama') return ollamaOperations;
-  if (apiType === 'Gemini') return geminiOperations;
-  if (isOpenAICompatibleApiType(apiType)) return openaiOperations;
-  return openaiOperations;
+  const key = getProvider(apiType)?.explorerOperations;
+  return OPERATION_SETS[key] || openaiOperations;
 }
 
 /**
@@ -273,4 +392,33 @@ export function generateRequestBody(apiType, operationId, modelName, streamEnabl
 
   const template = operation.getTemplate(modelName, streamEnabled);
   return JSON.stringify(template, null, 2);
+}
+
+/**
+ * Whether the operation streams with the current settings. Operations with forceStream always stream.
+ * @param {Object|null} operation
+ * @param {boolean} streamEnabled
+ * @returns {boolean}
+ */
+export function isOperationStreaming(operation, streamEnabled) {
+  if (!operation || !operation.supportsStreaming) return false;
+  return operation.forceStream === true || streamEnabled === true;
+}
+
+/**
+ * Resolve the path of an operation relative to the VMR base path, substituting {model}.
+ * @param {string} apiType - VMR API type
+ * @param {Object} operation - operation definition
+ * @param {string} modelName - model name; the registry default for the type is used when empty
+ * @param {boolean} streamEnabled - whether streaming is enabled
+ * @returns {string} Path beginning with /
+ */
+export function resolveOperationPath(apiType, operation, modelName, streamEnabled) {
+  if (!operation) return '';
+  let endpointTemplate = operation.endpoint.startsWith('/') ? operation.endpoint : '/' + operation.endpoint;
+  if (getProvider(apiType)?.streamFormat === 'gemini-sse' && operation.id === 'generateContent' && streamEnabled) {
+    endpointTemplate = '/v1beta/models/{model}:streamGenerateContent?alt=sse';
+  }
+  const resolvedModel = encodeURIComponent(modelName || getProvider(apiType)?.explorerDefaultModel || 'model');
+  return endpointTemplate.replace('{model}', resolvedModel);
 }

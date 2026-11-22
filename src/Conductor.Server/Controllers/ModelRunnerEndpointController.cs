@@ -47,12 +47,19 @@ namespace Conductor.Server.Controllers
         }
 
         /// <summary>
-        /// Create a model runner endpoint.
+        /// Create a model runner endpoint. Type defaults for the selected ApiType are applied to every defaulted field the
+        /// request omits (see ApiTypeDefaults). The response masks ApiKey.
         /// </summary>
+        /// <param name="tenantId">Tenant identifier.</param>
+        /// <param name="endpoint">Endpoint to create.</param>
+        /// <returns>The created endpoint with ApiKey masked.</returns>
+        /// <exception cref="WebserverException">Thrown when the body is missing or validation fails.</exception>
         public async Task<ModelRunnerEndpoint> Create(string tenantId, ModelRunnerEndpoint endpoint)
         {
             if (endpoint == null)
                 throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
+
+            ApiTypeDefaults.ApplyToUnsetFields(endpoint);
 
             if (String.IsNullOrEmpty(endpoint.Name) || String.IsNullOrEmpty(endpoint.Hostname))
                 throw new WebserverException(ApiResultEnum.BadRequest, "Name and Hostname are required");
@@ -65,22 +72,53 @@ namespace Conductor.Server.Controllers
             // Notify health check service
             _HealthCheckService?.OnEndpointCreated(endpoint);
 
-            return endpoint;
+            return ApiKeyMasking.CloneMasked(endpoint);
         }
 
         /// <summary>
-        /// Read a model runner endpoint by ID.
+        /// Reveal the full upstream API key of an endpoint. Writes an audit log line that does not contain the key.
+        /// Tenant scoped; callers need the same permission as updating the endpoint.
         /// </summary>
+        /// <param name="tenantId">Tenant identifier. Null for cross-tenant administrator callers.</param>
+        /// <param name="id">Endpoint identifier.</param>
+        /// <param name="requester">Description of the caller for the audit line (for example a user or admin identifier). Null allowed.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The full key. ApiKey is null when the endpoint has no key.</returns>
+        /// <exception cref="WebserverException">Thrown when the ID is missing or the endpoint is not found.</exception>
+        public async Task<ModelRunnerEndpointApiKeyResponse> RevealApiKey(string tenantId, string id, string requester = null, CancellationToken token = default)
+        {
+            ModelRunnerEndpoint endpoint = await ReadStored(tenantId, id, token).ConfigureAwait(false);
+            Logging.Info(
+                "[ModelRunnerEndpointController] api key revealed"
+                + " tenant=" + (endpoint.TenantId ?? String.Empty)
+                + " endpoint=" + (endpoint.Id ?? String.Empty)
+                + " requester=" + (requester ?? "unknown")
+                + " present=" + (!String.IsNullOrEmpty(endpoint.ApiKey) ? "true" : "false"));
+            return new ModelRunnerEndpointApiKeyResponse { ApiKey = endpoint.ApiKey };
+        }
+
+        /// <summary>
+        /// Read a model runner endpoint by ID. The response masks ApiKey.
+        /// </summary>
+        /// <param name="tenantId">Tenant identifier. Null for cross-tenant administrator callers.</param>
+        /// <param name="id">Endpoint identifier.</param>
+        /// <returns>The endpoint with ApiKey masked.</returns>
+        /// <exception cref="WebserverException">Thrown when the ID is missing or the endpoint is not found.</exception>
         public async Task<ModelRunnerEndpoint> Read(string tenantId, string id)
+        {
+            return ApiKeyMasking.CloneMasked(await ReadStored(tenantId, id).ConfigureAwait(false));
+        }
+
+        private async Task<ModelRunnerEndpoint> ReadStored(string tenantId, string id, CancellationToken token = default)
         {
             if (String.IsNullOrEmpty(id))
                 throw new WebserverException(ApiResultEnum.BadRequest, "ID is required");
 
             ModelRunnerEndpoint endpoint;
             if (String.IsNullOrEmpty(tenantId))
-                endpoint = await Database.ModelRunnerEndpoint.ReadByIdAsync(id);
+                endpoint = await Database.ModelRunnerEndpoint.ReadByIdAsync(id, token).ConfigureAwait(false);
             else
-                endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id);
+                endpoint = await Database.ModelRunnerEndpoint.ReadAsync(tenantId, id, token).ConfigureAwait(false);
 
             if (endpoint == null)
                 throw new WebserverException(ApiResultEnum.NotFound);
@@ -89,8 +127,14 @@ namespace Conductor.Server.Controllers
         }
 
         /// <summary>
-        /// Update a model runner endpoint.
+        /// Update a model runner endpoint. When ApiKey is omitted, null, or equal to the masked stored key, the stored key
+        /// is kept; an empty string clears it; any other value replaces it. The response masks ApiKey.
         /// </summary>
+        /// <param name="tenantId">Tenant identifier.</param>
+        /// <param name="id">Endpoint identifier.</param>
+        /// <param name="endpoint">Updated endpoint.</param>
+        /// <returns>The updated endpoint with ApiKey masked.</returns>
+        /// <exception cref="WebserverException">Thrown when the endpoint is not found, the body is missing or validation fails.</exception>
         public async Task<ModelRunnerEndpoint> Update(string tenantId, string id, ModelRunnerEndpoint endpoint)
         {
             if (String.IsNullOrEmpty(id))
@@ -106,6 +150,13 @@ namespace Conductor.Server.Controllers
             endpoint.Id = id;
             endpoint.TenantId = tenantId;
             endpoint.CreatedUtc = existing.CreatedUtc;
+            endpoint.ApiKey = ApiKeyMasking.ResolveUpdatedKey(endpoint.ApiKey, existing.ApiKey);
+
+            // Types without a default port never fall back to 11434: an update that omits Port keeps the stored port.
+            if (ApiTypeDefaults.RequiresExplicitPort(endpoint.ApiType) && !endpoint.WasExplicitlySet(nameof(ModelRunnerEndpoint.Port)))
+            {
+                endpoint.Port = existing.Port;
+            }
             if (endpoint.ServiceState == 0 && existing.ServiceState != 0 && endpoint.ServiceState != existing.ServiceState)
             {
                 endpoint.ServiceState = existing.ServiceState;
@@ -116,7 +167,7 @@ namespace Conductor.Server.Controllers
             // Notify health check service
             _HealthCheckService?.OnEndpointUpdated(endpoint);
 
-            return endpoint;
+            return ApiKeyMasking.CloneMasked(endpoint);
         }
 
         /// <summary>
@@ -255,14 +306,45 @@ namespace Conductor.Server.Controllers
             if (activeFilter.HasValue)
                 request.ActiveFilter = activeFilter.Value;
 
-            return await Database.ModelRunnerEndpoint.EnumerateAsync(tenantId, request);
+            EnumerationResult<ModelRunnerEndpoint> result = await Database.ModelRunnerEndpoint.EnumerateAsync(tenantId, request);
+            if (result?.Data != null)
+            {
+                result.Data = result.Data.Select(ApiKeyMasking.CloneMasked).ToList();
+            }
+
+            return result;
         }
 
         /// <summary>
-        /// Validate a model runner endpoint draft.
+        /// Validate a model runner endpoint draft. When existingId is null or empty, or names an endpoint that does not exist
+        /// yet (a new draft carries a generated Id), the draft is validated as a create: the type defaults for its ApiType are
+        /// applied to the fields it omits first, exactly as Create does, and the draft instance is updated in place. Updates of
+        /// an existing endpoint are validated as sent, because updates do not apply type defaults.
         /// </summary>
+        /// <param name="tenantId">Tenant identifier. Null for cross-tenant administrator callers.</param>
+        /// <param name="endpoint">Endpoint draft. Null yields an InvalidBody error.</param>
+        /// <param name="existingId">Identifier of the endpoint being updated, or null for a create.</param>
+        /// <returns>The validation result. Never null.</returns>
         public async Task<ResourceValidationResult> Validate(string tenantId, ModelRunnerEndpoint endpoint, string existingId = null)
         {
+            if (endpoint != null)
+            {
+                bool isCreate = String.IsNullOrEmpty(existingId);
+                if (!isCreate)
+                {
+                    ModelRunnerEndpoint stored = String.IsNullOrEmpty(tenantId)
+                        ? await Database.ModelRunnerEndpoint.ReadByIdAsync(existingId).ConfigureAwait(false)
+                        : await Database.ModelRunnerEndpoint.ReadAsync(tenantId, existingId).ConfigureAwait(false);
+                    isCreate = stored == null;
+                }
+
+                if (isCreate)
+                {
+                    ApiTypeDefaults.ApplyToUnsetFields(endpoint);
+                    existingId = null;
+                }
+            }
+
             if (_ValidationService == null)
             {
                 return new ResourceValidationResult
@@ -420,7 +502,7 @@ namespace Conductor.Server.Controllers
             await ValidateAsync(tenantId, endpoint, id).ConfigureAwait(false);
             endpoint = await Database.ModelRunnerEndpoint.UpdateAsync(endpoint).ConfigureAwait(false);
             _HealthCheckService?.OnEndpointUpdated(endpoint);
-            return endpoint;
+            return ApiKeyMasking.CloneMasked(endpoint);
         }
     }
 }

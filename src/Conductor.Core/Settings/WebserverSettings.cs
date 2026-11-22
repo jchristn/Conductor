@@ -69,6 +69,18 @@ namespace Conductor.Core.Settings
             set => _ForwardedForHeader = (String.IsNullOrWhiteSpace(value) ? "X-Forwarded-For" : value);
         }
 
+        /// <summary>
+        /// How long, in milliseconds, startup waits for the webserver to start listening before the server exits with an
+        /// error (for example when the port cannot be bound). Default 10000, minimum 1000, maximum 300000; values outside
+        /// the range are clamped.
+        /// </summary>
+        public int StartupTimeoutMs
+        {
+            get => _StartupTimeoutMs;
+            set => _StartupTimeoutMs = (value < 1000 ? 1000 : (value > 300000 ? 300000 : value));
+        }
+
+        private int _StartupTimeoutMs = 10000;
         private string _Hostname = "localhost";
         private int _Port = 9000;
         private CorsSettings _Cors = new CorsSettings();

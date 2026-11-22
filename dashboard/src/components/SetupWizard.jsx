@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useOnboarding } from '../context/OnboardingContext';
 import Modal from './Modal';
 import { hubPath } from '../config/navConfig';
+import { formatProviderList } from '../utils/providers';
 
 const WIZARD_STEPS = [
   {
@@ -38,7 +39,7 @@ const WIZARD_STEPS = [
   {
     key: 'endpoint',
     title: 'Add a Model Runner Endpoint',
-    description: 'Connect Conductor to a backend inference server such as Ollama, OpenAI, vLLM, Gemini, or another compatible service. This is where your AI models actually run.',
+    description: `Connect Conductor to a backend inference server. Supported endpoint types: ${formatProviderList()}. Pick the type explicitly; its defaults are filled in for you. This is where your AI models actually run.`,
     entityType: 'endpoint',
     route: hubPath('endpoints', 'endpoints'),
     buttonLabel: 'Add Endpoint'

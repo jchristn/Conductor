@@ -36,7 +36,7 @@ namespace Conductor.Server.Routing
             _App.Post<LoadBalancingPolicy>("/v1.0/loadbalancingpolicies", async (req) =>
             {
                 LoadBalancingPolicy policy = req.Data as LoadBalancingPolicy;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await lbpController.Create(tenantId, policy);
             },
@@ -54,7 +54,7 @@ namespace Conductor.Server.Routing
             _App.Post<LoadBalancingPolicy>("/v1.0/loadbalancingpolicies/validate", async (req) =>
             {
                 LoadBalancingPolicy policy = req.Data as LoadBalancingPolicy;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await lbpController.Validate(tenantId, policy, !String.IsNullOrEmpty(existingId) ? existingId : policy?.Id);
             },
@@ -87,7 +87,7 @@ namespace Conductor.Server.Routing
             _App.Put<LoadBalancingPolicy>("/v1.0/loadbalancingpolicies/{id}", async (req) =>
             {
                 LoadBalancingPolicy policy = req.Data as LoadBalancingPolicy;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, policy?.TenantId);
                 return await lbpController.Update(tenantId, req.Parameters["id"], policy);
             },
             api => api
@@ -105,7 +105,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/loadbalancingpolicies/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await lbpController.Delete(tenantId, req.Parameters["id"]);
                 return null;

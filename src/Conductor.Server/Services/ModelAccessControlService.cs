@@ -258,9 +258,14 @@ namespace Conductor.Server.Services
                 case RequestTypeEnum.GeminiListModels:
                 case RequestTypeEnum.OllamaListTags:
                 case RequestTypeEnum.OllamaListRunningModels:
+                case RequestTypeEnum.AnthropicListModels:
+                case RequestTypeEnum.TypeSafeListModels:
                     return ModelAccessActionEnum.ListModels;
                 case RequestTypeEnum.OllamaShowModelInfo:
+                case RequestTypeEnum.AnthropicGetModel:
                     return ModelAccessActionEnum.ShowModel;
+                case RequestTypeEnum.TypeSafeDecide:
+                    return ModelAccessActionEnum.Decisions;
                 case RequestTypeEnum.LoadModelRunnerEndpointModel:
                 case RequestTypeEnum.LoadVirtualModelRunnerModel:
                 case RequestTypeEnum.OllamaPullModel:
@@ -273,6 +278,8 @@ namespace Conductor.Server.Services
                 case RequestTypeEnum.GeminiStreamGenerateContent:
                 case RequestTypeEnum.OllamaGenerate:
                 case RequestTypeEnum.OllamaChat:
+                case RequestTypeEnum.AnthropicMessages:
+                case RequestTypeEnum.AnthropicCountTokens:
                     return ModelAccessActionEnum.Completions;
                 default:
                     return fallback;
@@ -356,6 +363,7 @@ namespace Conductor.Server.Services
         {
             return action == ModelAccessActionEnum.Completions
                 || action == ModelAccessActionEnum.Embeddings
+                || action == ModelAccessActionEnum.Decisions
                 || action == ModelAccessActionEnum.ShowModel
                 || action == ModelAccessActionEnum.LoadModel
                 || action == ModelAccessActionEnum.UnloadModel;

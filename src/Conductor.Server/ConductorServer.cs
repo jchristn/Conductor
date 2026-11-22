@@ -125,9 +125,25 @@ namespace Conductor.Server
 
             _Logging.Debug(_Header + "logging initialized");
 
+            // Fail fast when the listener port is already in use (for example by another Conductor instance), before any
+            // background service starts probing endpoints or touching the database.
+            if (!WebserverStartup.IsPortAvailable(_Settings.Webserver.Hostname, _Settings.Webserver.Port))
+            {
+                string portMessage = "port " + _Settings.Webserver.Port + " on " + _Settings.Webserver.Hostname
+                    + " is already in use; stop the other process or change Webserver.Port in " + settingsFile + ". Exiting.";
+                _Logging.Error(_Header + portMessage);
+                Console.Error.WriteLine("ERROR: " + portMessage);
+                Environment.ExitCode = 1;
+                _Logging.Dispose();
+                return;
+            }
+
             // Initialize telemetry (OpenTelemetry metrics and traces). A null host means telemetry
             // is disabled or unavailable; instrumentation then degrades to cheap no-ops.
             _TelemetryHost = Telemetry.ConductorTelemetryHost.Start(_Settings.OpenTelemetry, _Logging);
+
+            // Warn when a stored enum value is unknown to this version (for example a newer API type).
+            DataTableHelper.UnknownEnumValueWarning = message => _Logging.Warn(_Header + "database read: " + message);
 
             // Initialize database
             _Logging.Info(_Header + "initializing database");
@@ -156,10 +172,10 @@ namespace Conductor.Server
             _AuthService = new AuthenticationService(_Database, _Logging, _Settings.AdminApiKeys);
             _Logging.Debug(_Header + "authentication service initialized");
 
-            // Initialize health check service
-            _HealthCheckService = new HealthCheckService(_Database, _Logging);
-            await _HealthCheckService.StartAsync(_TokenSource.Token).ConfigureAwait(false);
-            _Logging.Info(_Header + "health check service started");
+            // Initialize health check service. It starts probing only after the webserver listener is verified (see
+            // StartBackgroundServicesAsync), so a server that fails to listen never begins health checks.
+            _HealthCheckService = new HealthCheckService(_Database, _Logging, null, _Settings.Anthropic);
+            _Logging.Info(_Header + "health check service initialized");
 
             // Initialize session affinity service
             _SessionAffinityService = new SessionAffinityService(_Logging);
@@ -177,18 +193,21 @@ namespace Conductor.Server
                 _OperationalMetricsService,
                 _ModelAccessControlService,
                 _Settings.ModelAccessControl,
-                _RuntimeStatsService);
-            _ConfigurationValidationService = new ConfigurationValidationService(_Database, _Logging, _RoutingDecisionService);
+                _RuntimeStatsService,
+                _Settings.Anthropic);
+            _ConfigurationValidationService = new ConfigurationValidationService(_Database, _Logging, _RoutingDecisionService, _Settings.Anthropic);
             _VirtualModelRunnerReservationService = new VirtualModelRunnerReservationService(_Database, _Logging);
             _ModelLoadService = new ModelLoadService(
                 _Database,
                 _Logging,
                 _RoutingDecisionService,
                 _HealthCheckService,
-                _OperationalMetricsService);
+                _OperationalMetricsService,
+                null,
+                _Settings.Anthropic,
+                _Settings.TypeSafe);
             _OllamaModelManagementService = new OllamaModelManagementService();
             _KeepWarmService = new KeepWarmService(_Database, _Logging, _ModelLoadService);
-            await _KeepWarmService.StartAsync(_TokenSource.Token).ConfigureAwait(false);
             _Logging.Info(_Header + "routing, validation, and observability services initialized");
 
             // Initialize request history service
@@ -196,8 +215,7 @@ namespace Conductor.Server
             {
                 _RequestHistoryService = new RequestHistoryService(_Database, _Logging, _Settings.RequestHistory);
                 _RequestHistoryCleanupService = new RequestHistoryCleanupService(_Database, _Logging, _Settings.RequestHistory);
-                await _RequestHistoryCleanupService.StartAsync(_TokenSource.Token).ConfigureAwait(false);
-                _Logging.Info(_Header + "request history service started");
+                _Logging.Info(_Header + "request history service initialized");
             }
             else
             {
@@ -220,7 +238,9 @@ namespace Conductor.Server
             _ProxyController = new Controllers.ProxyController(
                 _Database, _AuthService, _Serializer, _Logging,
                 _HealthCheckService, _SessionAffinityService, _RequestHistoryService, _RoutingDecisionService, _OperationalMetricsService, _Settings.ModelAccessControl, _ModelAccessControlService, _RuntimeStatsService, _QosAdmissionService,
-                new ClientIpResolver(_Settings.Webserver.TrustedProxies, _Settings.Webserver.ForwardedForHeader));
+                new ClientIpResolver(_Settings.Webserver.TrustedProxies, _Settings.Webserver.ForwardedForHeader),
+                _Settings.Anthropic,
+                _Settings.TypeSafe);
 
             WatsonWebserver.Core.WebserverSettings webSettings = new WatsonWebserver.Core.WebserverSettings(
                 _Settings.Webserver.Hostname,
@@ -228,6 +248,10 @@ namespace Conductor.Server
                 _Settings.Webserver.Ssl);
 
             _App = new Webserver(webSettings, DefaultRoute);
+
+            // Watson's defaults echo request-only headers (Host, Accept, Accept-Language, Accept-Charset) on every response.
+            // The Webserver constructor sets Host, so the cleanup runs after construction.
+            WebserverStartup.RemoveRequestOnlyDefaultHeaders(_App.Settings);
 
             // Wire Conductor's serializer (includes JsonStringEnumConverter and case-insensitive
             // property matching) into Watson's API-route pipeline.
@@ -277,7 +301,24 @@ namespace Conductor.Server
             RegisterRoutes();
 
             _Logging.Info(_Header + "starting webserver on " + _Settings.Webserver.Hostname + ":" + _Settings.Webserver.Port);
-            _ = Task.Run(() => _App.StartAsync(_TokenSource.Token), _TokenSource.Token);
+            try
+            {
+                // Background services (health checks, keep-warm, request history cleanup) start only once the listener is
+                // verified. The health check service still probes every endpoint immediately when it starts (UT-007).
+                await WebserverStartup.StartAndVerifyAsync(
+                    _App,
+                    TimeSpan.FromMilliseconds(_Settings.Webserver.StartupTimeoutMs),
+                    StartBackgroundServicesAsync,
+                    _TokenSource.Token).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                string startMessage = "unable to listen on " + _Settings.Webserver.Hostname + ":" + _Settings.Webserver.Port + ": " + ex.Message + " Exiting.";
+                _Logging.Error(_Header + startMessage);
+                Console.Error.WriteLine("ERROR: " + startMessage);
+                Environment.ExitCode = 1;
+                _TokenSource.Cancel();
+            }
 
             Console.WriteLine("Press CTRL+C to exit");
             Console.CancelKeyPress += (sender, e) =>
@@ -423,6 +464,21 @@ namespace Conductor.Server
                 + ctx.Response.StatusCode + " "
                 + "Proxy "
                 + "(" + elapsedMs.ToString("F2") + "ms)");
+        }
+
+        private static async Task StartBackgroundServicesAsync(CancellationToken token)
+        {
+            await _HealthCheckService.StartAsync(token).ConfigureAwait(false);
+            _Logging.Info(_Header + "health check service started");
+
+            await _KeepWarmService.StartAsync(token).ConfigureAwait(false);
+            _Logging.Info(_Header + "keep-warm service started");
+
+            if (_RequestHistoryCleanupService != null)
+            {
+                await _RequestHistoryCleanupService.StartAsync(token).ConfigureAwait(false);
+                _Logging.Info(_Header + "request history service started");
+            }
         }
 
         private static async Task WaitForExitAsync()

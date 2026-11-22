@@ -68,6 +68,7 @@ namespace Conductor.Server.Services
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}"), RequestTypeEnum.ReadModelRunnerEndpoint },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}/health"), RequestTypeEnum.ReadModelRunnerEndpointHealth },
             { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}/rigmonitor"), RequestTypeEnum.ReadModelRunnerEndpointRigMonitor },
+            { new RouteKey("GET", "/v1.0/modelrunnerendpoints/{id}/apikey"), RequestTypeEnum.ReadModelRunnerEndpointApiKey },
             { new RouteKey("POST", "/v1.0/modelrunnerendpoints/{id}/drain"), RequestTypeEnum.DrainModelRunnerEndpoint },
             { new RouteKey("POST", "/v1.0/modelrunnerendpoints/{id}/resume"), RequestTypeEnum.ResumeModelRunnerEndpoint },
             { new RouteKey("POST", "/v1.0/modelrunnerendpoints/{id}/quarantine"), RequestTypeEnum.QuarantineModelRunnerEndpoint },
@@ -216,7 +217,8 @@ namespace Conductor.Server.Services
         /// </summary>
         /// <param name="method">HTTP method (GET, POST, PUT, DELETE).</param>
         /// <param name="path">URL path (e.g., /v1.0/users/usr_123).</param>
-        /// <returns>The resolved RequestTypeEnum, or Unknown if not matched.</returns>
+        /// <returns>The resolved RequestTypeEnum, or Unknown if not matched. Proxied virtual model runner paths always
+        /// return Unknown because they are classified by the runner's configured API type.</returns>
         public static RequestTypeEnum Resolve(string method, string path)
         {
             if (String.IsNullOrEmpty(method) || String.IsNullOrEmpty(path))
@@ -239,10 +241,8 @@ namespace Conductor.Server.Services
             if (_RouteMap.TryGetValue(new RouteKey(method, pattern), out RequestTypeEnum patternMatch))
                 return patternMatch;
 
-            // Check for proxied API paths (OpenAI/Gemini/Ollama)
-            if (path.Contains("/v1.0/api/"))
-                return ResolveProxiedApiType(method, path);
-
+            // Proxied API paths (/v1.0/api/{vmr}/...) are not classified here. A proxied request's type depends on the
+            // virtual model runner's configured API type, so the proxy classifies it after loading the runner.
             return RequestTypeEnum.Unknown;
         }
 
@@ -278,38 +278,6 @@ namespace Conductor.Server.Services
                 return true;
 
             return false;
-        }
-
-        /// <summary>
-        /// Resolve the RequestTypeEnum for proxied API requests (OpenAI/Gemini/Ollama).
-        /// </summary>
-        private static RequestTypeEnum ResolveProxiedApiType(string method, string path)
-        {
-            string normalizedPath = path.ToLowerInvariant();
-
-            // OpenAI API patterns
-            if (normalizedPath.EndsWith("/v1/chat/completions")) return RequestTypeEnum.OpenAIChatCompletions;
-            if (normalizedPath.EndsWith("/v1/completions")) return RequestTypeEnum.OpenAICompletions;
-            if (normalizedPath.EndsWith("/v1/models")) return RequestTypeEnum.OpenAIListModels;
-            if (normalizedPath.EndsWith("/v1/embeddings")) return RequestTypeEnum.OpenAIEmbeddings;
-
-            // Gemini API patterns
-            if (normalizedPath.Contains("/v1beta/models/") && normalizedPath.EndsWith(":streamgeneratecontent")) return RequestTypeEnum.GeminiStreamGenerateContent;
-            if (normalizedPath.Contains("/v1beta/models/") && normalizedPath.EndsWith(":generatecontent")) return RequestTypeEnum.GeminiGenerateContent;
-            if (normalizedPath.Contains("/v1beta/models/") && normalizedPath.EndsWith(":embedcontent")) return RequestTypeEnum.GeminiEmbedContent;
-            if (normalizedPath.EndsWith("/v1beta/models")) return RequestTypeEnum.GeminiListModels;
-
-            // Ollama API patterns
-            if (normalizedPath.EndsWith("/api/generate")) return RequestTypeEnum.OllamaGenerate;
-            if (normalizedPath.EndsWith("/api/chat")) return RequestTypeEnum.OllamaChat;
-            if (normalizedPath.EndsWith("/api/tags")) return RequestTypeEnum.OllamaListTags;
-            if (normalizedPath.EndsWith("/api/embed") || normalizedPath.EndsWith("/api/embeddings")) return RequestTypeEnum.OllamaEmbeddings;
-            if (normalizedPath.EndsWith("/api/pull")) return RequestTypeEnum.OllamaPullModel;
-            if (normalizedPath.EndsWith("/api/delete")) return RequestTypeEnum.OllamaDeleteModel;
-            if (normalizedPath.EndsWith("/api/ps")) return RequestTypeEnum.OllamaListRunningModels;
-            if (normalizedPath.EndsWith("/api/show")) return RequestTypeEnum.OllamaShowModelInfo;
-
-            return RequestTypeEnum.Unknown;
         }
     }
 }

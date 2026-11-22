@@ -5,6 +5,7 @@ namespace Conductor.Server.Controllers
     using System.Net.Http;
     using System.Threading;
     using Conductor.Core.Models;
+    using Conductor.Server.Services;
 
     internal static class ProxyHttpClientCache
     {
@@ -28,10 +29,9 @@ namespace Conductor.Server.Controllers
                     return existing;
                 }
 
-                HttpClient client = new HttpClient
-                {
-                    Timeout = Timeout.InfiniteTimeSpan
-                };
+                // Cookies are disabled: a Set-Cookie from one caller's upstream response must never be replayed on
+                // another caller's request through the shared per-endpoint client.
+                HttpClient client = UpstreamHttpClientFactory.CreateClient(Timeout.InfiniteTimeSpan);
 
                 _HttpClients[endpoint.Id] = client;
                 return client;

@@ -37,6 +37,18 @@ namespace Conductor.Server.Controllers
         private readonly ModelAccessControlSettings _ModelAccessControlSettings;
         private readonly ClientIpResolver _ClientIpResolver;
         private readonly ModelAccessListModelsResponseFilter _ModelAccessListModelsResponseFilter;
+        private readonly AnthropicSettings _AnthropicSettings;
+        private readonly TypeSafeSettings _TypeSafeSettings;
+        private static readonly HashSet<string> _NeverForwardedRequestHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "authorization",
+            "x-api-key",
+            "anthropic-api-key",
+            "x-goog-api-key",
+            "host",
+            "content-length",
+            "content-type"
+        };
 
         /// <summary>
         /// Buffer size for streaming responses. Default is 8KB.
@@ -74,6 +86,8 @@ namespace Conductor.Server.Controllers
         /// <param name="runtimeStatsService">Runtime stats service (optional).</param>
         /// <param name="qosAdmissionService">QoS admission service (optional); when null, requests bypass QoS admission control.</param>
         /// <param name="clientIpResolver">Client IP resolver (optional); when null, forwarded-for headers are ignored and the connecting peer address is used.</param>
+        /// <param name="anthropicSettings">Anthropic settings (optional); when null, defaults are used.</param>
+        /// <param name="typeSafeSettings">TypeSafe settings (optional); when null, defaults are used.</param>
         public ProxyController(
             DatabaseDriverBase database,
             AuthenticationService authService,
@@ -88,9 +102,13 @@ namespace Conductor.Server.Controllers
             IModelAccessControlService modelAccessControlService = null,
             EndpointRuntimeStatsService runtimeStatsService = null,
             Services.QosAdmissionService qosAdmissionService = null,
-            ClientIpResolver clientIpResolver = null)
+            ClientIpResolver clientIpResolver = null,
+            AnthropicSettings anthropicSettings = null,
+            TypeSafeSettings typeSafeSettings = null)
             : base(database, authService, serializer, logging)
         {
+            _AnthropicSettings = anthropicSettings ?? new AnthropicSettings();
+            _TypeSafeSettings = typeSafeSettings ?? new TypeSafeSettings();
             _QosAdmissionService = qosAdmissionService;
             _HealthCheckService = healthCheckService;
             _RequestHistoryService = requestHistoryService;
@@ -137,14 +155,14 @@ namespace Conductor.Server.Controllers
                 UrlContext urlContext = UrlContext.Parse(ctx.Request.Url.RawWithQuery, ctx.Request.Method.ToString());
                 if (urlContext == null || String.IsNullOrEmpty(urlContext.BasePath))
                 {
-                    await SendNotFound(ctx);
+                    await SendNotFound(ctx, null).ConfigureAwait(false);
                     return;
                 }
 
-                vmr = await Database.VirtualModelRunner.ReadByBasePathAsync(urlContext.BasePath);
+                vmr = await Database.VirtualModelRunner.ReadByBasePathAsync(urlContext.BasePath, cancellationToken).ConfigureAwait(false);
                 if (vmr == null || !vmr.Active)
                 {
-                    await SendNotFound(ctx);
+                    await SendNotFound(ctx, null).ConfigureAwait(false);
                     return;
                 }
 
@@ -153,6 +171,41 @@ namespace Conductor.Server.Controllers
                 if (IsHealthProbe(ctx.Request.Method, urlContext))
                 {
                     await SendHealthProbeResponseAsync(ctx, vmr, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                // Route-level authentication defers failures on Anthropic runners so they can be answered in Anthropic shape.
+                if (ctx.Metadata is ProxyAuthenticationFailure deferredFailure)
+                {
+                    AuditModelAccessAuthenticationFailure(ctx, vmr, "AuthenticationFailed");
+                    await SendUnauthorized(ctx, vmr, deferredFailure.Message, "AuthenticationFailed").ConfigureAwait(false);
+                    return;
+                }
+
+                // Classification uses the runner's configured API type: nothing is inferred from the path. A path outside
+                // the type's namespace, or an unsupported stateful route, is answered with 404 and never forwarded.
+                urlContext.Classify(vmr.ApiType, ctx.Request.Method.ToString());
+                if (urlContext.IsNotFound)
+                {
+                    string notFoundMessage;
+                    string notFoundCode;
+                    if (urlContext.HasUnsafePathSegments)
+                    {
+                        notFoundMessage = "The path contains dot segments or encoded path separators, which Conductor does not forward.";
+                        notFoundCode = "UnsafePath";
+                    }
+                    else if (urlContext.IsUnsupportedRoute)
+                    {
+                        notFoundMessage = "Message Batches and Files are not supported through Conductor.";
+                        notFoundCode = "UnsupportedRoute";
+                    }
+                    else
+                    {
+                        notFoundMessage = "The path '" + urlContext.RelativePath + "' is outside the '" + UrlContext.GetApiNamespace(vmr.ApiType) + "' namespace of this " + vmr.ApiType + " virtual model runner.";
+                        notFoundCode = "OutsideApiNamespace";
+                    }
+
+                    await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.NotFound(notFoundMessage), vmr, notFoundCode).ConfigureAwait(false);
                     return;
                 }
 
@@ -169,7 +222,7 @@ namespace Conductor.Server.Controllers
                     proxyActivity.SetTag("conductor.vmr", vmr.Name);
                     proxyActivity.SetTag("conductor.vmr_id", vmr.Id);
                     proxyActivity.SetTag("conductor.tenant_id", vmr.TenantId);
-                    proxyActivity.SetTag("conductor.api_family", GetApiFamily(requestContext.RequestType));
+                    proxyActivity.SetTag("conductor.api_family", ApiFamilyResolver.Resolve(requestContext.RequestType));
                     proxyActivity.SetTag("conductor.request_type", requestContext.RequestType.ToString());
                     proxyActivity.SetTag("conductor.model", requestContext.ModelName);
                     proxyActivity.SetTag("http.request.method", ctx.Request.Method.ToString());
@@ -189,6 +242,32 @@ namespace Conductor.Server.Controllers
                         cancellationToken).ConfigureAwait(false);
                 }
 
+                if (urlContext.IsDecisionRequest)
+                {
+                    string decisionError = ValidateDecisionRequest(requestContext.Data, out int questionCount);
+                    analyticsCapture.DecisionQuestionCount = questionCount > 0 ? questionCount : (int?)null;
+                    if (questionCount > 0)
+                    {
+                        proxyActivity?.SetTag(ConductorTelemetry.MetricDecisionQuestionCount, questionCount);
+                        ConductorTelemetry.DecisionQuestionCount.Record(questionCount, new KeyValuePair<string, object>(ConductorTelemetry.TagVmr, vmr.Name));
+                    }
+
+                    if (decisionError != null)
+                    {
+                        analyticsCapture.ErrorType = "DecisionRequestInvalid";
+                        analyticsCapture.ErrorMessage = decisionError;
+                        Conductor.Core.Models.ApiErrorResponse badRequest = new Conductor.Core.Models.ApiErrorResponse
+                        {
+                            Error = decisionError,
+                            StatusCode = 400,
+                            Code = "DecisionRequestInvalid"
+                        };
+                        await SendErrorResponse(ctx, badRequest, vmr, "DecisionRequestInvalid").ConfigureAwait(false);
+                        await RecordDenialAsync(historyDetail, null, null, 400, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+                }
+
                 routingResult = await EvaluateRoutingAsync(vmr, urlContext, requestContext, cancellationToken).ConfigureAwait(false);
                 analyticsCapture.RoutingDurationMs = (int)stopwatch.ElapsedMilliseconds;
                 endpoint = routingResult.Endpoint;
@@ -196,7 +275,7 @@ namespace Conductor.Server.Controllers
                 // A capacity-only denial is not final when QoS is active: the request queues for admission instead.
                 if (!IsRouted(routingResult) && !(IsCapacityDenial(routingResult) && _QosAdmissionService != null))
                 {
-                    await DenyWithRoutingDecisionAsync(ctx, routingResult, null, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
+                    await DenyWithRoutingDecisionAsync(ctx, vmr, routingResult, null, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
@@ -224,7 +303,7 @@ namespace Conductor.Server.Controllers
                         analyticsCapture.ErrorMessage = qosAdmission.Reason;
                         string qosMessage = GetQosRejectionMessage(qosAdmission);
                         ApplyQosDenial(routingResult.Decision, qosAdmission, qosMessage);
-                        await SendQosRejection(ctx, qosAdmission, qosMessage).ConfigureAwait(false);
+                        await SendQosRejection(ctx, vmr, qosAdmission, qosMessage).ConfigureAwait(false);
                         await RecordDenialAsync(historyDetail, routingResult, null, qosAdmission.StatusCode, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                         return;
                     }
@@ -252,7 +331,7 @@ namespace Conductor.Server.Controllers
                     {
                         // While waiting, routing changed to a non-capacity denial (for example, the endpoint became unhealthy).
                         analyticsCapture.EndpointLimiterWaitMs = Math.Max(0, (int)stopwatch.ElapsedMilliseconds - limiterStartMs);
-                        await DenyWithRoutingDecisionAsync(ctx, routingResult, null, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
+                        await DenyWithRoutingDecisionAsync(ctx, vmr, routingResult, null, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                         return;
                     }
 
@@ -266,7 +345,7 @@ namespace Conductor.Server.Controllers
                         }
 
                         ApplyEndpointAtCapacityDenial(routingResult);
-                        await DenyWithRoutingDecisionAsync(ctx, routingResult, routingResult.Endpoint, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
+                        await DenyWithRoutingDecisionAsync(ctx, vmr, routingResult, routingResult.Endpoint, historyDetail, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
                         return;
                     }
 
@@ -285,6 +364,11 @@ namespace Conductor.Server.Controllers
                 {
                     _RuntimeStatsService.RecordAdmission(vmr, endpoint);
                     runtimeStatsAdmitted = true;
+                }
+
+                if (proxyActivity != null)
+                {
+                    proxyActivity.SetTag(ConductorTelemetry.AttributeEndpointApiType, endpoint.ApiType.ToString());
                 }
 
                 string targetUrl = BuildTargetUrl(endpoint, routingResult.UrlContext);
@@ -362,7 +446,7 @@ namespace Conductor.Server.Controllers
 
                 TagList errorTags = new TagList
                 {
-                    { ConductorTelemetry.TagApiFamily, GetApiFamily(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown) },
+                    { ConductorTelemetry.TagApiFamily, ApiFamilyResolver.Resolve(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown) },
                     { ConductorTelemetry.TagVmr, vmr != null ? vmr.Name : "unknown" },
                     { "exception_type", ex.GetType().Name }
                 };
@@ -377,7 +461,7 @@ namespace Conductor.Server.Controllers
                 }
 
                 ctx.Response.Headers.Add(ConductorConstants.HeaderErrorCode, _UpstreamTimeoutErrorCode);
-                await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.GatewayTimeout(ex.Message, _UpstreamTimeoutErrorCode)).ConfigureAwait(false);
+                await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.GatewayTimeout(ex.Message, _UpstreamTimeoutErrorCode), vmr, _UpstreamTimeoutErrorCode).ConfigureAwait(false);
 
                 if (historyDetail != null && _RequestHistoryService != null)
                 {
@@ -415,7 +499,7 @@ namespace Conductor.Server.Controllers
 
                 TagList errorTags = new TagList
                 {
-                    { ConductorTelemetry.TagApiFamily, GetApiFamily(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown) },
+                    { ConductorTelemetry.TagApiFamily, ApiFamilyResolver.Resolve(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown) },
                     { ConductorTelemetry.TagVmr, vmr != null ? vmr.Name : "unknown" },
                     { "exception_type", ex.GetType().Name }
                 };
@@ -427,7 +511,7 @@ namespace Conductor.Server.Controllers
                     proxyActivity.SetStatus(ActivityStatusCode.Error, ex.Message);
                 }
 
-                await SendBadGateway(ctx, "Proxy error: " + ex.Message);
+                await SendBadGateway(ctx, vmr, "Proxy error: " + ex.Message).ConfigureAwait(false);
 
                 if (historyDetail != null && _RequestHistoryService != null)
                 {
@@ -486,7 +570,7 @@ namespace Conductor.Server.Controllers
             {
                 Headers = rc?.Headers,
                 Model = rc?.ModelName,
-                ApiFamily = GetApiFamily(rc != null ? rc.RequestType : RequestTypeEnum.Unknown),
+                ApiFamily = ApiFamilyResolver.Resolve(rc != null ? rc.RequestType : RequestTypeEnum.Unknown),
                 RequestType = rc != null ? rc.RequestType.ToString() : null,
                 TenantId = rc?.TenantId ?? vmr?.TenantId,
                 CredentialId = rc?.CredentialId,
@@ -545,7 +629,7 @@ namespace Conductor.Server.Controllers
             return values;
         }
 
-        private async Task SendQosRejection(HttpContextBase ctx, Services.QosAdmissionResult admission, string message)
+        private async Task SendQosRejection(HttpContextBase ctx, VirtualModelRunner vmr, Services.QosAdmissionResult admission, string message)
         {
             try
             {
@@ -556,7 +640,7 @@ namespace Conductor.Server.Controllers
 
                 Conductor.Core.Models.ApiErrorResponse error = Conductor.Core.Models.ApiErrorResponse.TooManyRequests(message);
                 error.StatusCode = admission.StatusCode;
-                await SendErrorResponse(ctx, error).ConfigureAwait(false);
+                await SendErrorResponse(ctx, error, vmr, "Qos" + admission.Outcome).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -663,6 +747,7 @@ namespace Conductor.Server.Controllers
 
         private async Task DenyWithRoutingDecisionAsync(
             HttpContextBase ctx,
+            VirtualModelRunner vmr,
             RoutingExecutionResult routingResult,
             ModelRunnerEndpoint historyEndpoint,
             RequestHistoryDetail historyDetail,
@@ -672,7 +757,7 @@ namespace Conductor.Server.Controllers
         {
             analyticsCapture.ErrorType = routingResult?.Decision?.DenialReasonCode ?? "RoutingDenied";
             analyticsCapture.ErrorMessage = routingResult?.Decision?.DenialReason;
-            await SendRoutingDecisionResponse(ctx, routingResult?.Decision).ConfigureAwait(false);
+            await SendRoutingDecisionResponse(ctx, vmr, routingResult?.Decision).ConfigureAwait(false);
             await RecordDenialAsync(historyDetail, routingResult, historyEndpoint, routingResult?.Decision?.HttpStatusCode ?? 502, stopwatch, analyticsCapture, cancellationToken).ConfigureAwait(false);
         }
 
@@ -756,16 +841,24 @@ namespace Conductor.Server.Controllers
                 request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
             }
 
-            // Add API key if configured
-            if (!String.IsNullOrEmpty(endpoint.ApiKey))
+            // Add the endpoint's upstream credential and per-family headers. Inbound credentials (authorization, x-api-key,
+            // anthropic-api-key) are never copied upstream for any family.
+            string anthropicVersion = UpstreamAuthHeaders.Apply(request, endpoint, _AnthropicSettings, name => ctx.Request.Headers.Get(name));
+            if (anthropicVersion != null)
             {
-                if (endpoint.ApiType == ApiTypeEnum.Gemini)
+                Activity.Current?.SetTag(ConductorTelemetry.AttributeAnthropicVersion, anthropicVersion);
+            }
+
+            if (endpoint.ApiType == ApiTypeEnum.Anthropic)
+            {
+                foreach (string headerName in _AnthropicSettings.ForwardedRequestHeaders)
                 {
-                    request.Headers.Add("x-goog-api-key", endpoint.ApiKey);
-                }
-                else
-                {
-                    request.Headers.Add("Authorization", "Bearer " + endpoint.ApiKey);
+                    if (String.IsNullOrWhiteSpace(headerName)) continue;
+                    if (_NeverForwardedRequestHeaders.Contains(headerName)) continue;
+                    if (String.Equals(headerName, "anthropic-version", StringComparison.OrdinalIgnoreCase)) continue;
+                    string headerValue = ctx.Request.Headers.Get(headerName);
+                    if (String.IsNullOrEmpty(headerValue)) continue;
+                    request.Headers.TryAddWithoutValidation(headerName, headerValue);
                 }
             }
 
@@ -897,6 +990,9 @@ namespace Conductor.Server.Controllers
 
             // Add session affinity header
             ctx.Response.Headers.Add(ConductorConstants.HeaderSessionPinned, decision.SessionPinUsed ? "true" : "false");
+
+            // Copy allowlisted upstream response headers (Anthropic request-id, retry-after, rate-limit headers).
+            CopyAllowlistedResponseHeaders(ctx, response, endpoint);
 
             // Copy content type
             if (response.Content?.Headers?.ContentType != null)
@@ -1030,13 +1126,13 @@ namespace Conductor.Server.Controllers
                     vmr.TenantId,
                     vmr.Id,
                     vmr.Name,
-                    GetApiFamily(requestContext.RequestType),
+                    ApiFamilyResolver.Resolve(requestContext.RequestType),
                     stopwatch.Elapsed.TotalMilliseconds,
                     firstTokenTimeMs);
             }
 
             // Emit OpenTelemetry inference metrics and annotate the active proxy span.
-            string apiFamily = GetApiFamily(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown);
+            string apiFamily = ApiFamilyResolver.Resolve(requestContext != null ? requestContext.RequestType : RequestTypeEnum.Unknown);
             string vmrTag = vmr != null ? vmr.Name : "unknown";
             int statusCode = (int)response.StatusCode;
             TagList inferenceTags = new TagList
@@ -1230,32 +1326,136 @@ namespace Conductor.Server.Controllers
             }
         }
 
-        private async Task SendErrorResponse(HttpContextBase ctx, Conductor.Core.Models.ApiErrorResponse error)
+        private async Task SendErrorResponse(HttpContextBase ctx, Conductor.Core.Models.ApiErrorResponse error, VirtualModelRunner vmr, string reasonCode = null)
         {
             ctx.Response.StatusCode = error.StatusCode;
             ctx.Response.ContentType = "application/json";
-            string json = Serializer.SerializeJson(error, true);
-            await ctx.Response.Send(json);
+
+            // The X-Conductor-Error-Code header carries Conductor's own reason code on every API family, so clients can
+            // tell, for example, ModelDoesNotSupportDecisions apart from other 404s without reading request history.
+            string code = reasonCode ?? error.Code;
+            if (!String.IsNullOrEmpty(code) && String.IsNullOrEmpty(ctx.Response.Headers.Get(ConductorConstants.HeaderErrorCode)))
+            {
+                ctx.Response.Headers.Add(ConductorConstants.HeaderErrorCode, code);
+            }
+
+            string json;
+            if (vmr != null && vmr.ApiType == ApiTypeEnum.Anthropic)
+            {
+                // Errors Conductor generates on Anthropic runners use the Anthropic error shape so Anthropic SDKs can parse them.
+                json = Serializer.SerializeJson(AnthropicErrorMapper.Build(error, reasonCode), false);
+            }
+            else
+            {
+                json = Serializer.SerializeJson(error, true);
+            }
+
+            await ctx.Response.Send(json).ConfigureAwait(false);
         }
 
-        private async Task SendBadGateway(HttpContextBase ctx, string message)
+        private async Task SendBadGateway(HttpContextBase ctx, VirtualModelRunner vmr, string message, string reasonCode = null)
         {
-            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.BadGateway(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.BadGateway(message), vmr, reasonCode).ConfigureAwait(false);
         }
 
-        private async Task SendForbidden(HttpContextBase ctx, string message)
+        private async Task SendForbidden(HttpContextBase ctx, VirtualModelRunner vmr, string message, string reasonCode = null)
         {
-            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Forbidden(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Forbidden(message), vmr, reasonCode).ConfigureAwait(false);
         }
 
-        private async Task SendNotFound(HttpContextBase ctx)
+        private async Task SendNotFound(HttpContextBase ctx, VirtualModelRunner vmr, string message = null, string reasonCode = null)
         {
-            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.NotFound());
+            Conductor.Core.Models.ApiErrorResponse error = message != null
+                ? Conductor.Core.Models.ApiErrorResponse.NotFound(message)
+                : Conductor.Core.Models.ApiErrorResponse.NotFound();
+            await SendErrorResponse(ctx, error, vmr, reasonCode).ConfigureAwait(false);
         }
 
-        private async Task SendTooManyRequests(HttpContextBase ctx, string message)
+        private async Task SendTooManyRequests(HttpContextBase ctx, VirtualModelRunner vmr, string message, string reasonCode = null)
         {
-            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.TooManyRequests(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.TooManyRequests(message), vmr, reasonCode).ConfigureAwait(false);
+        }
+
+        private void CopyAllowlistedResponseHeaders(HttpContextBase ctx, HttpResponseMessage response, ModelRunnerEndpoint endpoint)
+        {
+            if (endpoint == null || endpoint.ApiType != ApiTypeEnum.Anthropic || response == null) return;
+
+            try
+            {
+                foreach (KeyValuePair<string, IEnumerable<string>> header in response.Headers)
+                {
+                    if (!IsAllowlistedResponseHeader(header.Key)) continue;
+                    ctx.Response.Headers.Add(header.Key, String.Join(", ", header.Value));
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.Warn(_Header + "failed to copy upstream response headers: " + ex.Message);
+            }
+        }
+
+        private bool IsAllowlistedResponseHeader(string headerName)
+        {
+            if (String.IsNullOrEmpty(headerName)) return false;
+
+            foreach (string allowed in _AnthropicSettings.ForwardedResponseHeaders)
+            {
+                if (String.Equals(allowed, headerName, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            foreach (string prefix in _AnthropicSettings.ForwardedResponseHeaderPrefixes)
+            {
+                if (!String.IsNullOrEmpty(prefix) && headerName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            return false;
+        }
+
+        private string ValidateDecisionRequest(byte[] body, out int questionCount)
+        {
+            questionCount = 0;
+            if (body == null || body.Length < 1) return "The decision request body is required.";
+
+            try
+            {
+                using (System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(body))
+                {
+                    if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                    {
+                        return "The decision request body must be a JSON object.";
+                    }
+
+                    if (document.RootElement.TryGetProperty("questions", out System.Text.Json.JsonElement questions)
+                        && questions.ValueKind != System.Text.Json.JsonValueKind.Object
+                        && questions.ValueKind != System.Text.Json.JsonValueKind.Null)
+                    {
+                        return "'questions' must be an object keyed by question id, for example {\"q1\":{\"type\":\"noul\",\"instructions\":\"...\"}}.";
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return "The decision request body is not valid JSON.";
+            }
+
+            Conductor.Core.ThirdParty.TypeSafe.Models.TypeSafeDecisionRequest parsed;
+            try
+            {
+                parsed = System.Text.Json.JsonSerializer.Deserialize<Conductor.Core.ThirdParty.TypeSafe.Models.TypeSafeDecisionRequest>(body);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                return "The decision request body does not match the System One request shape: " + (ex.Path != null ? "the value at '" + ex.Path + "' has the wrong type." : "a field has the wrong type.");
+            }
+
+            questionCount = parsed?.Questions?.Count ?? 0;
+            if (questionCount < 1) return "The decision request must include at least one question in 'questions'.";
+            if (questionCount > _TypeSafeSettings.MaxQuestionsPerRequest)
+            {
+                return "The decision request has " + questionCount + " questions; the maximum is " + _TypeSafeSettings.MaxQuestionsPerRequest + ".";
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -1292,12 +1492,12 @@ namespace Conductor.Server.Controllers
             }
 
             await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.ServiceUnavailable(
-                "No healthy endpoint is available for virtual model runner '" + vmr.Name + "'.")).ConfigureAwait(false);
+                "No healthy endpoint is available for virtual model runner '" + vmr.Name + "'."), vmr, "NoHealthyEndpoint").ConfigureAwait(false);
         }
 
-        private async Task SendUnauthorized(HttpContextBase ctx, string message)
+        private async Task SendUnauthorized(HttpContextBase ctx, VirtualModelRunner vmr, string message, string reasonCode = null)
         {
-            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Unauthorized(message));
+            await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.Unauthorized(message), vmr, reasonCode).ConfigureAwait(false);
         }
 
         private async Task<bool> AuthenticateProxyForModelAccessAsync(HttpContextBase ctx, VirtualModelRunner vmr, CancellationToken cancellationToken)
@@ -1306,24 +1506,24 @@ namespace Conductor.Server.Controllers
                 || !_ModelAccessControlSettings.Enabled
                 || _ModelAccessControlSettings.Mode == ModelAccessEnforcementModeEnum.Disabled)
             {
-                await TryPopulateProxyIdentityAsync(ctx, vmr, cancellationToken).ConfigureAwait(false);
-                return true;
+                return await TryPopulateProxyIdentityAsync(ctx, vmr, cancellationToken).ConfigureAwait(false);
             }
 
             bool requireCredential = _ModelAccessControlSettings.RequireCredentialForProxy;
-            bool credentialPresented = HasProxyCredential(ctx);
+            bool acceptApiKeyHeader = vmr.ApiType == ApiTypeEnum.Anthropic;
+            bool credentialPresented = HasProxyCredential(ctx, acceptApiKeyHeader);
             if (!requireCredential && !credentialPresented)
             {
                 return true;
             }
 
-            AuthenticationResult authResult = await AuthService.AuthenticateAsync(ctx, cancellationToken).ConfigureAwait(false);
+            AuthenticationResult authResult = await AuthService.AuthenticateAsync(ctx, acceptApiKeyHeader, cancellationToken).ConfigureAwait(false);
             if (!authResult.IsAuthenticated)
             {
                 if (requireCredential)
                 {
                     AuditModelAccessAuthenticationFailure(ctx, vmr, "AuthenticationFailed");
-                    await SendUnauthorized(ctx, authResult.ErrorMessage ?? "Proxy credential authentication failed.").ConfigureAwait(false);
+                    await SendUnauthorized(ctx, vmr, authResult.ErrorMessage ?? "Proxy credential authentication failed.", "AuthenticationFailed").ConfigureAwait(false);
                     return false;
                 }
 
@@ -1333,14 +1533,14 @@ namespace Conductor.Server.Controllers
             if (requireCredential && authResult.Credential == null)
             {
                 AuditModelAccessAuthenticationFailure(ctx, vmr, "CredentialMissing");
-                await SendUnauthorized(ctx, "A valid API credential is required for proxy model access.").ConfigureAwait(false);
+                await SendUnauthorized(ctx, vmr, "A valid API credential is required for proxy model access.", "CredentialMissing").ConfigureAwait(false);
                 return false;
             }
 
             if (!String.Equals(authResult.Tenant?.Id, vmr.TenantId, StringComparison.Ordinal))
             {
                 AuditModelAccessAuthenticationFailure(ctx, vmr, "CredentialTenantMismatch");
-                await SendForbidden(ctx, "The proxy credential belongs to a different tenant.").ConfigureAwait(false);
+                await SendForbidden(ctx, vmr, "The proxy credential belongs to a different tenant than this virtual model runner.", "CredentialTenantMismatch").ConfigureAwait(false);
                 return false;
             }
 
@@ -1348,26 +1548,34 @@ namespace Conductor.Server.Controllers
             return true;
         }
 
-        private async Task TryPopulateProxyIdentityAsync(HttpContextBase ctx, VirtualModelRunner vmr, CancellationToken cancellationToken)
+        // Resolve the caller identity when model access control is disabled. A tenant credential (including a global admin
+        // user's credential) may only use virtual model runners in its own tenant: any other tenant is answered with 403
+        // CredentialTenantMismatch, regardless of model access settings. System administrator API keys carry no tenant and
+        // are not subject to the check.
+        private async Task<bool> TryPopulateProxyIdentityAsync(HttpContextBase ctx, VirtualModelRunner vmr, CancellationToken cancellationToken)
         {
-            if (!HasProxyCredential(ctx))
+            AuthenticationResult authResult = ctx.Metadata as AuthenticationResult;
+            bool acceptApiKeyHeader = vmr.ApiType == ApiTypeEnum.Anthropic;
+            if ((authResult == null || !authResult.IsAuthenticated) && HasProxyCredential(ctx, acceptApiKeyHeader))
             {
-                return;
+                AuthenticationResult resolved = await AuthService.AuthenticateAsync(ctx, acceptApiKeyHeader, cancellationToken).ConfigureAwait(false);
+                if (resolved != null && resolved.IsAuthenticated) authResult = resolved;
             }
 
-            AuthenticationResult authResult = await AuthService.AuthenticateAsync(ctx, cancellationToken).ConfigureAwait(false);
-            if (!authResult.IsAuthenticated)
+            if (authResult == null || !authResult.IsAuthenticated)
             {
-                return;
+                return true;
             }
 
             if (!String.Equals(authResult.Tenant?.Id, vmr.TenantId, StringComparison.Ordinal))
             {
                 AuditModelAccessAuthenticationFailure(ctx, vmr, "CredentialTenantMismatch");
-                return;
+                await SendForbidden(ctx, vmr, "The proxy credential belongs to a different tenant than this virtual model runner.", "CredentialTenantMismatch").ConfigureAwait(false);
+                return false;
             }
 
             ctx.Metadata = authResult;
+            return true;
         }
 
         private void AuditModelAccessAuthenticationFailure(HttpContextBase ctx, VirtualModelRunner vmr, string reasonCode)
@@ -1381,10 +1589,15 @@ namespace Conductor.Server.Controllers
                 + " reason=" + (reasonCode ?? String.Empty));
         }
 
-        private static bool HasProxyCredential(HttpContextBase ctx)
+        private static bool HasProxyCredential(HttpContextBase ctx, bool acceptApiKeyHeader)
         {
             string authHeader = ctx.Request.Headers.Get("Authorization");
             if (!String.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (acceptApiKeyHeader && !String.IsNullOrWhiteSpace(ctx.Request.Headers.Get("x-api-key")))
             {
                 return true;
             }
@@ -1461,62 +1674,38 @@ namespace Conductor.Server.Controllers
             }
         }
 
-        private async Task SendRoutingDecisionResponse(HttpContextBase ctx, RoutingDecision decision)
+        private async Task SendRoutingDecisionResponse(HttpContextBase ctx, VirtualModelRunner vmr, RoutingDecision decision)
         {
             if (decision == null)
             {
-                await SendBadGateway(ctx, "Conductor could not evaluate the request.");
+                await SendBadGateway(ctx, vmr, "Conductor could not evaluate the request.").ConfigureAwait(false);
                 return;
             }
 
+            string reasonCode = decision.DenialReasonCode;
             switch (decision.HttpStatusCode)
             {
+                case 400:
+                    await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.BadRequest(decision.Message ?? decision.DenialReason ?? "The request is invalid.", reasonCode ?? "BadRequest"), vmr, reasonCode).ConfigureAwait(false);
+                    break;
                 case 401:
-                    await SendUnauthorized(ctx, decision.Message ?? decision.DenialReason ?? "Unauthorized");
+                    await SendUnauthorized(ctx, vmr, decision.Message ?? decision.DenialReason ?? "Unauthorized", reasonCode).ConfigureAwait(false);
                     break;
                 case 403:
-                    await SendForbidden(ctx, decision.Message ?? decision.DenialReason ?? "Forbidden");
+                    await SendForbidden(ctx, vmr, decision.Message ?? decision.DenialReason ?? "Forbidden", reasonCode).ConfigureAwait(false);
                     break;
                 case 404:
-                    await SendNotFound(ctx);
+                    await SendNotFound(ctx, vmr, decision.Message ?? decision.DenialReason, reasonCode).ConfigureAwait(false);
                     break;
                 case 429:
-                    await SendTooManyRequests(ctx, decision.Message ?? decision.DenialReason ?? "All endpoints at capacity");
+                    await SendTooManyRequests(ctx, vmr, decision.Message ?? decision.DenialReason ?? "All endpoints at capacity", reasonCode).ConfigureAwait(false);
                     break;
                 case 503:
-                    await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.ServiceUnavailable(decision.Message ?? decision.DenialReason ?? "Service unavailable"));
+                    await SendErrorResponse(ctx, Conductor.Core.Models.ApiErrorResponse.ServiceUnavailable(decision.Message ?? decision.DenialReason ?? "Service unavailable"), vmr, reasonCode).ConfigureAwait(false);
                     break;
                 default:
-                    await SendBadGateway(ctx, decision.Message ?? decision.DenialReason ?? "Routing denied.");
+                    await SendBadGateway(ctx, vmr, decision.Message ?? decision.DenialReason ?? "Routing denied.", reasonCode).ConfigureAwait(false);
                     break;
-            }
-        }
-
-        private static string GetApiFamily(RequestTypeEnum requestType)
-        {
-            switch (requestType)
-            {
-                case RequestTypeEnum.OpenAIChatCompletions:
-                case RequestTypeEnum.OpenAICompletions:
-                case RequestTypeEnum.OpenAIEmbeddings:
-                case RequestTypeEnum.OpenAIListModels:
-                    return "OpenAI";
-                case RequestTypeEnum.GeminiGenerateContent:
-                case RequestTypeEnum.GeminiStreamGenerateContent:
-                case RequestTypeEnum.GeminiEmbedContent:
-                case RequestTypeEnum.GeminiListModels:
-                    return "Gemini";
-                case RequestTypeEnum.OllamaGenerate:
-                case RequestTypeEnum.OllamaChat:
-                case RequestTypeEnum.OllamaEmbeddings:
-                case RequestTypeEnum.OllamaListTags:
-                case RequestTypeEnum.OllamaListRunningModels:
-                case RequestTypeEnum.OllamaPullModel:
-                case RequestTypeEnum.OllamaDeleteModel:
-                case RequestTypeEnum.OllamaShowModelInfo:
-                    return "Ollama";
-                default:
-                    return "Management";
             }
         }
 

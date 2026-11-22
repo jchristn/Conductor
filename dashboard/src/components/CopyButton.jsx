@@ -20,6 +20,7 @@ function CopyButton({ value, title = 'Copy to clipboard' }) {
       className={`copy-btn ${copied ? 'copied' : ''}`}
       onClick={handleCopy}
       title={copied ? 'Copied!' : title}
+      aria-label={copied ? 'Copied' : title}
     >
       {copied ? (
         <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">

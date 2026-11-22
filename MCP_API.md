@@ -24,6 +24,12 @@ that names an unknown protocol version is answered with the newest supported han
 
 For example, to connect Claude Code: `claude mcp add --transport http conductor http://localhost:9001/mcp`.
 
+The HTTP examples use `localhost` on purpose, while other Conductor documents use `127.0.0.1` for loopback
+addresses. The HTTP transports are served by .NET `HttpListener` bound to `HttpHostname` (default `localhost`),
+which can bind `localhost` to IPv6 `::1` only (on macOS, `http://127.0.0.1:9001/mcp` is refused) and matches the
+request's host name against the binding. Use the same host name that `HttpHostname` names; to connect with
+`127.0.0.1`, set `HttpHostname` to `127.0.0.1`. The TCP transport binds `127.0.0.1` directly.
+
 ## Results and errors
 
 A successful call returns a text content block holding the JSON result object described for each tool.
@@ -58,13 +64,15 @@ Get a model definition by ID. Params: `tenant_id` (req), `model_id` (req). Retur
 ## Endpoints
 
 ### `conductor_list_endpoints`
-List model runner endpoints. Params: `tenant_id` (req), `active_only` (default `true`). Returns `{ endpoints, count }`.
+List model runner endpoints. Params: `tenant_id` (req), `active_only` (default `true`). Returns `{ endpoints, count }`; each endpoint has `id`, `hostname`, `port`, `apiType`, `apiKey` (masked), `useSsl`, `maxParallelRequests`, `weight`, and `active`.
 
 ### `conductor_get_endpoint`
-Get an endpoint by ID. Params: `tenant_id` (req), `endpoint_id` (req).
+Get an endpoint by ID. Params: `tenant_id` (req), `endpoint_id` (req). The result includes `apiType`, `apiKey` (masked), `anthropicVersion`, `healthCheckEnabled`, and `healthCheckMethod`.
+
+`apiType` is one of `Ollama`, `OpenAI`, `Gemini`, `vLLM`, `Anthropic`, `TypeSafe`, `Ollaya`, `OllamaCloud`, or `OpenAICompatible`. Upstream API keys are never returned in full: `apiKey` is `****` followed by the last four characters, `****` for keys of four characters or fewer, or `null` when no key is set. There is no MCP tool to reveal a key; use the audited REST route `GET /v1.0/modelrunnerendpoints/{id}/apikey`.
 
 ### `conductor_get_endpoint_health`
-Get endpoint health (state, in-flight, uptime). Params: `tenant_id` (req), `endpoint_id` (optional — all endpoints if omitted).
+Get endpoint health (state, in-flight, uptime). Params: `tenant_id` (req), `endpoint_id` (optional; all endpoints are returned when it is omitted).
 
 ## Virtual model runners
 
@@ -72,10 +80,38 @@ Get endpoint health (state, in-flight, uptime). Params: `tenant_id` (req), `endp
 List VMRs. Params: `tenant_id` (req), `active_only` (default `true`).
 
 ### `conductor_get_vmr`
-Get a VMR by ID. Params: `tenant_id` (req), `vmr_id` (req).
+Get a VMR by ID. Params: `tenant_id` (req), `vmr_id` (req). The result includes `allowDecisions`.
 
 ### `conductor_create_vmr`
-Create a VMR. Params: `tenant_id` (req), `name` (req), `api_type` (`Ollama`/`OpenAI`/`vLLM`/`Gemini`), `endpoint_ids` (array), `configuration_ids` (array), `load_balancing`, `allow_completions`, `allow_embeddings`.
+Create a VMR.
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `tenant_id` | string | yes | Tenant that owns the VMR. |
+| `name` | string | yes | VMR name. |
+| `api_type` | string | no | The API clients call: `Ollama` (default), `OpenAI`, `Gemini`, `vLLM`, `Anthropic`, or `TypeSafe`. `Ollaya`, `OllamaCloud`, and `OpenAICompatible` are endpoint-only types and are rejected. Numeric values and unknown names are rejected. |
+| `endpoint_ids` | array | no | Endpoint IDs in the same tenant. Each endpoint's type must be accepted by `api_type`. |
+| `configuration_ids` | array | no | Model configuration IDs. |
+| `load_balancing` | string | no | Load-balancing mode. |
+| `allow_completions` | boolean | no | Allow completion requests (default `true`). |
+| `allow_embeddings` | boolean | no | Allow embedding requests (default `true`). |
+| `allow_decisions` | boolean | no | Allow decision requests (default `true`). Must be `true` on a `TypeSafe` VMR. |
+
+Endpoint compatibility: `Ollama` accepts `Ollama` and `OllamaCloud`; `OpenAI` accepts `OpenAI`, `OpenAICompatible`, and `vLLM`; `vLLM`, `Gemini`, and `Anthropic` accept only their own type; `TypeSafe` accepts `TypeSafe` and `Ollaya`.
+
+The tool applies the same API type rules as the REST API and backup restore before it saves anything. A violation returns a tool error (`"isError": true`) whose text holds:
+
+```json
+{
+  "error": true,
+  "message": "Validation failed: API type 'OllamaCloud' is an endpoint-only type and cannot be used for a virtual model runner. Use one of: Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe.",
+  "errors": [
+    { "code": "VmrApiTypeNotClientFacing", "field": "ApiType", "message": "API type 'OllamaCloud' is an endpoint-only type and cannot be used for a virtual model runner. Use one of: Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe." }
+  ]
+}
+```
+
+The possible codes are `VmrApiTypeNotClientFacing`, `EndpointApiTypeMismatch`, `DecisionsDisabledOnDecisionRoute`, and `EndpointMissing` (an `endpoint_ids` entry that is empty or not found in the tenant). When `api_type` is an endpoint-only type, only `VmrApiTypeNotClientFacing` is reported, not a mismatch for each endpoint. An invalid `api_type` returns `{ "error": true, "message": "api_type '<value>' is not a valid API type." }`. Before v1.1.0 an unknown `api_type` silently fell back to `Ollama` and these rules were not checked.
 
 ## Model configurations
 
@@ -109,7 +145,7 @@ List a tenant's QoS profiles (which classify and queue VMR traffic).
 Returns `{ profiles: [{ id, name, isDefault, active, tailNode, ingressMode }], count }`.
 
 ### `conductor_get_qos_profile`
-Get a QoS profile's full definition — classification rules, queue nodes and their classes, links, and limits.
+Get a QoS profile's full definition: classification rules, queue nodes and their classes, links, and limits.
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -136,7 +172,7 @@ Create a QoS profile from a full JSON definition.
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `tenant_id` | string | yes | Tenant. |
-| `profile_json` | string | yes | The full profile as a JSON object string — scalar fields plus `Rules`, `Nodes` (each with `Classes`), `Links`, `IngressRoutes`. Enum values are names (e.g. `Discipline: "Fifo"`, `Operator: "Equals"`). |
+| `profile_json` | string | yes | The full profile as a JSON object string: scalar fields plus `Rules`, `Nodes` (each with `Classes`), `Links`, `IngressRoutes`. Enum values are names (e.g. `Discipline: "Fifo"`, `Operator: "Equals"`). |
 
 The server assigns the id, forces `IsDefault=false`, structurally validates (node names, tail/ingress/link references), and persists it. Returns `{ id, name, tenantId }`.
 

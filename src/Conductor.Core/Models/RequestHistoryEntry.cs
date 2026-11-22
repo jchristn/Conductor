@@ -362,6 +362,23 @@ namespace Conductor.Core.Models
         public decimal? TokensPerSecondGeneration { get; set; } = null;
 
         /// <summary>
+        /// Input tokens written to the provider prompt cache (Anthropic cache_creation_input_tokens). Null when the
+        /// provider did not report it.
+        /// </summary>
+        public int? CacheCreationInputTokens { get; set; } = null;
+
+        /// <summary>
+        /// Input tokens read from the provider prompt cache (Anthropic cache_read_input_tokens). Null when the provider
+        /// did not report it.
+        /// </summary>
+        public int? CacheReadInputTokens { get; set; } = null;
+
+        /// <summary>
+        /// Number of questions in a decision request (TypeSafe System One). Null for other request types.
+        /// </summary>
+        public int? DecisionQuestionCount { get; set; } = null;
+
+        /// <summary>
         /// Whether detailed request analytics events were captured.
         /// </summary>
         public bool AnalyticsCaptured { get; set; } = false;
@@ -508,6 +525,9 @@ namespace Conductor.Core.Models
                 TotalTokens = DataTableHelper.GetNullableIntValue(row, "totaltokens"),
                 TokensPerSecondOverall = DataTableHelper.GetNullableDecimalValue(row, "tokenspersecondoverall"),
                 TokensPerSecondGeneration = DataTableHelper.GetNullableDecimalValue(row, "tokenspersecondgeneration"),
+                CacheCreationInputTokens = DataTableHelper.GetNullableIntValue(row, "cachecreationinputtokens"),
+                CacheReadInputTokens = DataTableHelper.GetNullableIntValue(row, "cachereadinputtokens"),
+                DecisionQuestionCount = DataTableHelper.GetNullableIntValue(row, "decisionquestioncount"),
                 AnalyticsCaptured = DataTableHelper.GetBooleanValue(row, "analyticscaptured"),
                 AnalyticsVersion = DataTableHelper.GetIntValue(row, "analyticsversion") > 0 ? DataTableHelper.GetIntValue(row, "analyticsversion") : 1,
                 DominantStageKind = DataTableHelper.GetStringValue(row, "dominantstagekind"),

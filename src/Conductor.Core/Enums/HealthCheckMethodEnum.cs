@@ -15,6 +15,11 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// HTTP HEAD method.
         /// </summary>
-        HEAD = 1
+        HEAD = 1,
+
+        /// <summary>
+        /// HTTP POST method. The endpoint's HealthCheckRequestBody is sent with Content-Type application/json.
+        /// </summary>
+        POST = 2
     }
 }

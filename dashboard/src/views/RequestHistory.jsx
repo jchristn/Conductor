@@ -12,6 +12,7 @@ import RequestHistorySummaryChart from '../components/RequestHistorySummaryChart
 import { copyToClipboard } from '../utils/clipboard';
 import { DEFAULT_TIME_RANGE, TIME_RANGES, applyTimeRange, getTimeRange } from '../utils/requestHistoryTimeRanges';
 import { PAGE_SIZE_OPTIONS, readChoicePreference, readPageSizePreference, writePreference } from '../utils/persistedPreferences';
+import { getProviderLabel } from '../utils/providers';
 
 const TIME_RANGE_STORAGE_KEY = 'conductor_request_history_range';
 const PAGE_SIZE_STORAGE_KEY = 'conductor_request_history_page_size';
@@ -550,8 +551,8 @@ function RequestHistory() {
           <DetailItem label="Trace" tooltip="Trace identifier that correlates this request history entry with analytics events, logs, and provider metadata">
             {detailData.TraceId ? <CopyableId value={detailData.TraceId} /> : '-'}
           </DetailItem>
-          <DetailItem label="Provider" tooltip="Normalized upstream provider family inferred from the selected endpoint or provider response">
-            {detailData.ProviderName || '-'}
+          <DetailItem label="Provider" tooltip="Upstream API type of the endpoint that served this request">
+            {detailData.ProviderName ? getProviderLabel(detailData.ProviderName) : '-'}
           </DetailItem>
           <DetailItem label="Provider Request" tooltip="Provider-native request identifier captured from safe response headers or response body when available">
             {detailData.ProviderRequestId ? <CopyableId value={detailData.ProviderRequestId} /> : '-'}
@@ -559,6 +560,21 @@ function RequestHistory() {
           <DetailItem label="Tokens" tooltip="Total provider-reported prompt and completion token count when the provider returned usage metrics">
             {detailData.TotalTokens != null ? `${detailData.TotalTokens} total` : '-'}
           </DetailItem>
+          {detailData.CacheCreationInputTokens != null && (
+            <DetailItem label="Cache Write" tooltip="Input tokens written to the provider prompt cache (Anthropic cache_creation_input_tokens)">
+              {Number(detailData.CacheCreationInputTokens).toLocaleString()}
+            </DetailItem>
+          )}
+          {detailData.CacheReadInputTokens != null && (
+            <DetailItem label="Cache Read" tooltip="Input tokens read from the provider prompt cache (Anthropic cache_read_input_tokens)">
+              {Number(detailData.CacheReadInputTokens).toLocaleString()}
+            </DetailItem>
+          )}
+          {detailData.DecisionQuestionCount != null && (
+            <DetailItem label="Decision Questions" tooltip="Number of questions in this decision request (TypeSafe System One)">
+              {Number(detailData.DecisionQuestionCount).toLocaleString()}
+            </DetailItem>
+          )}
           <DetailItem label="TPS" tooltip="Generation tokens per second when available, otherwise overall tokens per second for the request">
             {detailData.TokensPerSecondGeneration ?? detailData.TokensPerSecondOverall ?? '-'}
           </DetailItem>
@@ -760,6 +776,30 @@ function RequestHistory() {
         )
         : <span className="text-muted">-</span>,
       filterValue: (item) => item.ModelAccessWouldDeny ? 'would-deny' : item.ModelAccessDecision || 'none'
+    },
+    {
+      key: 'CacheCreationInputTokens',
+      defaultHidden: true,
+      label: 'Cache Write',
+      tooltip: 'Input tokens written to the provider prompt cache (Anthropic cache_creation_input_tokens). Empty when the provider did not report it.',
+      width: '110px',
+      render: (item) => item.CacheCreationInputTokens != null ? Number(item.CacheCreationInputTokens).toLocaleString() : '-'
+    },
+    {
+      key: 'CacheReadInputTokens',
+      defaultHidden: true,
+      label: 'Cache Read',
+      tooltip: 'Input tokens read from the provider prompt cache (Anthropic cache_read_input_tokens). Empty when the provider did not report it.',
+      width: '110px',
+      render: (item) => item.CacheReadInputTokens != null ? Number(item.CacheReadInputTokens).toLocaleString() : '-'
+    },
+    {
+      key: 'DecisionQuestionCount',
+      defaultHidden: true,
+      label: 'Questions',
+      tooltip: 'Number of questions in a decision request (TypeSafe System One). Empty for other request types.',
+      width: '100px',
+      render: (item) => item.DecisionQuestionCount != null ? Number(item.DecisionQuestionCount).toLocaleString() : '-'
     },
     {
       key: 'RequestorSourceIp',

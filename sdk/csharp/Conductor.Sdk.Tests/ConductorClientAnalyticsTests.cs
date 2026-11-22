@@ -17,7 +17,7 @@ namespace Conductor.Sdk.Tests
         {
             RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", bearerToken: "token-123", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", bearerToken: "token-123", httpClient: httpClient);
 
             using JsonDocument response = await client.GetAnalyticsSummaryAsync(new Dictionary<string, string>
             {
@@ -30,7 +30,7 @@ namespace Conductor.Sdk.Tests
 
             RecordedRequest request = Assert.Single(handler.Requests);
             Assert.Equal(HttpMethod.Get, request.Method);
-            Assert.Equal("https://conductor.local/v1.0/analytics/summary?range=lastDay&tenantId=ten_1&reservationGuid=vmrr_1&reservationReasonCode=ReservationDenied", request.Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/analytics/summary?range=lastDay&tenantId=ten_1&reservationGuid=vmrr_1&reservationReasonCode=ReservationDenied", request.Uri.ToString());
             Assert.Equal("Bearer", request.AuthorizationScheme);
             Assert.Equal("token-123", request.AuthorizationParameter);
         }
@@ -40,7 +40,7 @@ namespace Conductor.Sdk.Tests
         {
             RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{\"TotalRequests\":1}"));
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", httpClient: httpClient);
 
             using JsonDocument response = await client.QueryAnalyticsAsync(new
             {
@@ -55,7 +55,7 @@ namespace Conductor.Sdk.Tests
 
             RecordedRequest request = Assert.Single(handler.Requests);
             Assert.Equal(HttpMethod.Post, request.Method);
-            Assert.Equal("https://conductor.local/v1.0/analytics/query", request.Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/analytics/query", request.Uri.ToString());
             Assert.Contains("\"TokenUnitCost\":0.01", request.Body);
             Assert.Contains("\"RequestorUserIds\":[\"usr_1\"]", request.Body);
             Assert.Contains("\"ReservationReasonCodes\":[\"ReservationDenied\"]", request.Body);
@@ -70,7 +70,7 @@ namespace Conductor.Sdk.Tests
                 return JsonResponse("{}");
             });
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", httpClient: httpClient);
 
             var group = new { Name = "Primary", EndpointIds = new[] { "mre_1" } };
             using JsonDocument list = await client.ListEndpointGroupsAsync(new Dictionary<string, string> { ["tenantId"] = "ten_1", ["activeFilter"] = "true" });
@@ -80,16 +80,16 @@ namespace Conductor.Sdk.Tests
             await client.DeleteEndpointGroupAsync("egp_1", "ten_1");
             using JsonDocument validate = await client.ValidateEndpointGroupAsync(group, "egp_1");
 
-            Assert.Equal("https://conductor.local/v1.0/endpointgroups?tenantId=ten_1&activeFilter=true", handler.Requests[0].Uri.ToString());
-            Assert.Equal("https://conductor.local/v1.0/endpointgroups/egp_1?tenantId=ten_1", handler.Requests[1].Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/endpointgroups?tenantId=ten_1&activeFilter=true", handler.Requests[0].Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/endpointgroups/egp_1?tenantId=ten_1", handler.Requests[1].Uri.ToString());
             Assert.Equal(HttpMethod.Post, handler.Requests[2].Method);
-            Assert.Equal("https://conductor.local/v1.0/endpointgroups", handler.Requests[2].Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/endpointgroups", handler.Requests[2].Uri.ToString());
             Assert.Contains("\"Name\":\"Primary\"", handler.Requests[2].Body);
             Assert.Equal(HttpMethod.Put, handler.Requests[3].Method);
-            Assert.Equal("https://conductor.local/v1.0/endpointgroups/egp_1", handler.Requests[3].Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/endpointgroups/egp_1", handler.Requests[3].Uri.ToString());
             Assert.Equal(HttpMethod.Delete, handler.Requests[4].Method);
-            Assert.Equal("https://conductor.local/v1.0/endpointgroups/egp_1?tenantId=ten_1", handler.Requests[4].Uri.ToString());
-            Assert.Equal("https://conductor.local/v1.0/endpointgroups/validate?existingId=egp_1", handler.Requests[5].Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/endpointgroups/egp_1?tenantId=ten_1", handler.Requests[4].Uri.ToString());
+            Assert.Equal("http://127.0.0.1:9000/v1.0/endpointgroups/validate?existingId=egp_1", handler.Requests[5].Uri.ToString());
         }
 
         [Fact]
@@ -101,7 +101,7 @@ namespace Conductor.Sdk.Tests
                 return JsonResponse("{}");
             });
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", httpClient: httpClient);
 
             using JsonDocument list = await client.ListAnalyticsSavedReportsAsync(new Dictionary<string, string> { ["tenantId"] = "ten_1" });
             using JsonDocument create = await client.CreateAnalyticsSavedReportAsync(new { Name = "TTFT report" });
@@ -114,29 +114,29 @@ namespace Conductor.Sdk.Tests
                 request =>
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/analytics/reports?tenantId=ten_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/analytics/reports?tenantId=ten_1", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Post, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/analytics/reports", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/analytics/reports", request.Uri.ToString());
                     Assert.Contains("\"Name\":\"TTFT report\"", request.Body);
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/analytics/reports/asr_1?tenantId=ten_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/analytics/reports/asr_1?tenantId=ten_1", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Put, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/analytics/reports/asr_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/analytics/reports/asr_1", request.Uri.ToString());
                     Assert.Contains("\"Name\":\"Updated\"", request.Body);
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Delete, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/analytics/reports/asr_1?tenantId=ten_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/analytics/reports/asr_1?tenantId=ten_1", request.Uri.ToString());
                 });
         }
 
@@ -149,7 +149,7 @@ namespace Conductor.Sdk.Tests
                 return JsonResponse("{}");
             });
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", httpClient: httpClient);
 
             object reservation = new
             {
@@ -181,43 +181,43 @@ namespace Conductor.Sdk.Tests
                 request =>
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/vmrreservations?tenantId=ten_1&vmrId=vmr_1&state=upcoming", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/vmrreservations?tenantId=ten_1&vmrId=vmr_1&state=upcoming", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/vmrr_1?tenantId=ten_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/vmrreservations/vmrr_1?tenantId=ten_1", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Post, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/vmrreservations", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/vmrreservations", request.Uri.ToString());
                     Assert.Contains("\"VirtualModelRunnerId\":\"vmr_1\"", request.Body);
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Put, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/vmrr_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/vmrreservations/vmrr_1", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Delete, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/vmrr_1?tenantId=ten_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/vmrreservations/vmrr_1?tenantId=ten_1", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Post, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/vmrreservations/validate", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/vmrreservations/validate", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/reservations?tenantId=ten_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_1/reservations?tenantId=ten_1", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/reservation-effective?tenantId=ten_1&credentialId=cred_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_1/reservation-effective?tenantId=ten_1&credentialId=cred_1", request.Uri.ToString());
                 });
         }
 
@@ -226,7 +226,7 @@ namespace Conductor.Sdk.Tests
         {
             RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{\"Endpoints\":[]}"));
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", httpClient: httpClient);
 
             Dictionary<string, string> filters = new Dictionary<string, string>
             {
@@ -243,18 +243,18 @@ namespace Conductor.Sdk.Tests
                 request =>
                 {
                     Assert.Equal(HttpMethod.Get, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/runtime-stats?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_1/runtime-stats?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Post, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/runtime-stats/reset?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_1/runtime-stats/reset?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
                     Assert.Equal("{}", request.Body);
                 },
                 request =>
                 {
                     Assert.Equal(HttpMethod.Post, request.Method);
-                    Assert.Equal("https://conductor.local/v1.0/virtualmodelrunners/vmr_1/runtime-backoff/clear?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
+                    Assert.Equal("http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_1/runtime-backoff/clear?tenantId=ten_1&endpointId=mre_1", request.Uri.ToString());
                     Assert.Equal("{}", request.Body);
                 });
         }
@@ -301,7 +301,7 @@ namespace Conductor.Sdk.Tests
         {
             RecordingHandler handler = new RecordingHandler(_ => JsonResponse("{}"));
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", httpClient: httpClient);
             using CancellationTokenSource cts = new CancellationTokenSource();
 
             using JsonDocument response = await client.GetAnalyticsCatalogAsync(cts.Token);
@@ -318,7 +318,7 @@ namespace Conductor.Sdk.Tests
                 Content = new StringContent("{\"error\":\"denied\"}", Encoding.UTF8, "application/json")
             });
             using HttpClient httpClient = new HttpClient(handler);
-            using ConductorClient client = new ConductorClient("https://conductor.local", httpClient: httpClient);
+            using ConductorClient client = new ConductorClient("http://127.0.0.1:9000", httpClient: httpClient);
 
             ConductorApiException exception = await Assert.ThrowsAsync<ConductorApiException>(
                 async () => await client.GetAnalyticsCatalogAsync());

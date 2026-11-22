@@ -4,10 +4,12 @@ import { useApiExplorer } from '../hooks/useApiExplorer';
 import ApiExplorerConfig from '../components/ApiExplorerConfig';
 import ApiExplorerRequest from '../components/ApiExplorerRequest';
 import ApiExplorerResponse from '../components/ApiExplorerResponse';
+import { getProvider } from '../utils/providers';
 
 /**
  * API Explorer page component.
- * Allows users to test and interact with Virtual Model Runners through OpenAI, vLLM, Gemini, or Ollama compatible APIs.
+ * Allows users to test and interact with Virtual Model Runners through the API of each
+ * client-facing type in the provider registry (utils/providers.js).
  */
 function ApiExplorer() {
   const { api, setError, serverUrl } = useApp();
@@ -66,12 +68,8 @@ function ApiExplorer() {
 
   const getDefaultModelName = useCallback((vmr, defs) => {
     if (!vmr) return '';
-    if (vmr.ApiType === 'Gemini') {
-      const explicitGeminiModel = defs.find(def =>
-        typeof def.Name === 'string' && def.Name.toLowerCase().startsWith('gemini-'));
-      return explicitGeminiModel?.Name || 'gemini-2.5-flash';
-    }
-    return defs[0]?.Name || '';
+    // First attached definition, then the registry default for the VMR's type.
+    return defs[0]?.Name || getProvider(vmr.ApiType)?.explorerDefaultModel || '';
   }, []);
 
   // Track previous VMR ID to detect changes

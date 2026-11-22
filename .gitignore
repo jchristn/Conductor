@@ -75,9 +75,26 @@ logs/
 # Conductor specific
 conductor.db
 conductor.log
+conductor.log.*
+# Files the server writes to its working directory when run from the source tree
+# (settings with admin API keys and database credentials, request-history bodies).
+# docker/conductor.json and docker/factory/conductor.json are tracked and unaffected.
+/conductor.json
+src/*/conductor.json
+request-history/
+!docker/data/request-history/
 docker/data/request-history/*
 !docker/data/request-history/.gitkeep
 docker/logs/*.log*
 
 # Private cluster settings generated locally
 kubernetes/conductor.json
+
+# Simulated user testing evidence (screenshots, captures, raw logs)
+user-testing/evidence/
+
+# Test harness outputs
+/results.json
+/mcp-output.txt
+/test-results/
+sdk/python/.venv/

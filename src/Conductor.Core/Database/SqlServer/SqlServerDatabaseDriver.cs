@@ -107,9 +107,14 @@ namespace Conductor.Core.Database.SqlServer
             await EnsureColumnAsync("virtualmodelrunners", "keepwarm", TableQueries.AddKeepWarmColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroupids", TableQueries.AddEndpointGroupIdsColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "allowdecisions", "ALTER TABLE virtualmodelrunners ADD allowdecisions BIT NOT NULL DEFAULT 1;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modeldefinitions", "supportsdecisions", "ALTER TABLE modeldefinitions ADD supportsdecisions BIT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
 
             await EnsureColumnAsync("modelrunnerendpoints", "rigmonitor", TableQueries.AddRigMonitorColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("modelrunnerendpoints", "servicestate", "ALTER TABLE modelrunnerendpoints ADD servicestate INT NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "healthcheckenabled", "ALTER TABLE modelrunnerendpoints ADD healthcheckenabled BIT NOT NULL DEFAULT 1;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "healthcheckrequestbody", "ALTER TABLE modelrunnerendpoints ADD healthcheckrequestbody NVARCHAR(MAX);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "anthropicversion", "ALTER TABLE modelrunnerendpoints ADD anthropicversion NVARCHAR(32);", token).ConfigureAwait(false);
 
             await EnsureColumnAsync("requesthistory", "requesttransfertype", TableQueries.AddRequestTransferTypeColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "responsetransfertype", TableQueries.AddResponseTransferTypeColumn, token).ConfigureAwait(false);
@@ -166,6 +171,9 @@ namespace Conductor.Core.Database.SqlServer
             await EnsureColumnAsync("requesthistory", "dominantstagekind", "ALTER TABLE requesthistory ADD dominantstagekind NVARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "dominantstagedurationms", "ALTER TABLE requesthistory ADD dominantstagedurationms INT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "analyticsfailurecode", "ALTER TABLE requesthistory ADD analyticsfailurecode NVARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "cachecreationinputtokens", "ALTER TABLE requesthistory ADD cachecreationinputtokens INT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "cachereadinputtokens", "ALTER TABLE requesthistory ADD cachereadinputtokens INT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "decisionquestioncount", "ALTER TABLE requesthistory ADD decisionquestioncount INT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationguid", "ALTER TABLE requestanalyticsevents ADD reservationguid NVARCHAR(48);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationname", "ALTER TABLE requestanalyticsevents ADD reservationname NVARCHAR(255);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationdecision", "ALTER TABLE requestanalyticsevents ADD reservationdecision NVARCHAR(32);", token).ConfigureAwait(false);

@@ -72,6 +72,24 @@ namespace Conductor.Core.Settings
         }
 
         /// <summary>
+        /// Anthropic provider settings. Null resets to defaults.
+        /// </summary>
+        public AnthropicSettings Anthropic
+        {
+            get => _Anthropic;
+            set => _Anthropic = (value != null ? value : new AnthropicSettings());
+        }
+
+        /// <summary>
+        /// TypeSafe System One provider settings. Null resets to defaults.
+        /// </summary>
+        public TypeSafeSettings TypeSafe
+        {
+            get => _TypeSafe;
+            set => _TypeSafe = (value != null ? value : new TypeSafeSettings());
+        }
+
+        /// <summary>
         /// Administrator API keys for initial access.
         /// </summary>
         public List<string> AdminApiKeys
@@ -87,6 +105,8 @@ namespace Conductor.Core.Settings
         private RequestHistorySettings _RequestHistory = new RequestHistorySettings();
         private ModelAccessControlSettings _ModelAccessControl = new ModelAccessControlSettings();
         private OpenTelemetrySettings _OpenTelemetry = new OpenTelemetrySettings();
+        private AnthropicSettings _Anthropic = new AnthropicSettings();
+        private TypeSafeSettings _TypeSafe = new TypeSafeSettings();
 
         private List<string> _AdminApiKeys = new List<string> { "conductoradmin" };
 

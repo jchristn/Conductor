@@ -335,6 +335,18 @@ class ConductorApi {
     return this.request('GET', `/v1.0/modelrunnerendpoints/${id}${query}`);
   }
 
+  /**
+   * Reveal the full upstream API key of a model runner endpoint. Endpoint reads
+   * return the key masked (****abcd); this audited route returns {"ApiKey": "..."}.
+   * @param {string} id - Endpoint ID
+   * @param {string|null} tenantId - Optional tenant scope
+   * @returns {Promise<{ApiKey: string|null}>}
+   */
+  async revealModelRunnerEndpointApiKey(id, tenantId = null) {
+    const query = tenantId ? `?tenantId=${tenantId}` : '';
+    return this.request('GET', `/v1.0/modelrunnerendpoints/${encodeURIComponent(id)}/apikey${query}`);
+  }
+
   async createModelRunnerEndpoint(endpoint) {
     return this.request('POST', '/v1.0/modelrunnerendpoints', endpoint);
   }

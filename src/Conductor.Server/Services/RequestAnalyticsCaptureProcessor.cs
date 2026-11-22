@@ -3,9 +3,13 @@ namespace Conductor.Server.Services
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Text.Json;
     using System.Text.Json.Nodes;
+    using Conductor.Core.Enums;
     using Conductor.Core.Models;
     using Conductor.Core.Settings;
+    using Conductor.Core.ThirdParty.Anthropic.Models;
+    using Conductor.Core.ThirdParty.TypeSafe.Models;
 
     internal sealed class RequestAnalyticsCaptureProcessor
     {
@@ -23,13 +27,33 @@ namespace Conductor.Server.Services
             string responseBody,
             RequestAnalyticsCapture analyticsCapture)
         {
-            RequestProviderMetrics metrics = ExtractProviderMetrics(responseBody);
+            // The parser is chosen by the endpoint's configured API type; nothing is inferred from the response shape.
+            RequestProviderMetrics metrics;
+            ApiTypeEnum? apiType = endpoint?.ApiType;
+            if (apiType == ApiTypeEnum.Anthropic)
+            {
+                metrics = ExtractAnthropicMetrics(responseBody);
+                // Anthropic's request-id header wins over the message id.
+                string headerRequestId = GetHeaderValue(responseHeaders, "request-id");
+                if (!String.IsNullOrWhiteSpace(headerRequestId)) metrics.ProviderRequestId = headerRequestId;
+            }
+            else if (apiType == ApiTypeEnum.TypeSafe || apiType == ApiTypeEnum.Ollaya)
+            {
+                metrics = ExtractTypeSafeMetrics(responseBody);
+            }
+            else
+            {
+                metrics = ExtractProviderMetrics(responseBody);
+            }
 
             detail.ProviderName = endpoint != null ? endpoint.ApiType.ToString() : detail.ProviderName;
             detail.ProviderRequestId = metrics.ProviderRequestId ?? GetProviderRequestId(responseHeaders);
             detail.PromptTokens = metrics.PromptTokens;
             detail.CompletionTokens = metrics.CompletionTokens;
             detail.TotalTokens = metrics.TotalTokens;
+            detail.CacheCreationInputTokens = metrics.CacheCreationInputTokens;
+            detail.CacheReadInputTokens = metrics.CacheReadInputTokens;
+            detail.DecisionQuestionCount = analyticsCapture?.DecisionQuestionCount ?? detail.DecisionQuestionCount;
 
             if (detail.TotalTokens.HasValue && detail.ResponseTimeMs.HasValue && detail.ResponseTimeMs.Value > 0)
             {
@@ -236,6 +260,100 @@ namespace Conductor.Server.Services
             return metrics;
         }
 
+        internal static RequestProviderMetrics ExtractAnthropicMetrics(string responseBody)
+        {
+            RequestProviderMetrics metrics = new RequestProviderMetrics();
+            if (String.IsNullOrWhiteSpace(responseBody)) return metrics;
+
+            string trimmed = responseBody.Trim();
+            bool isEventStream = !(trimmed.StartsWith("{") && trimmed.EndsWith("}"));
+            foreach (string candidate in ExtractJsonCandidates(responseBody))
+            {
+                if (!isEventStream)
+                {
+                    AnthropicMessageResponse message = TryDeserialize<AnthropicMessageResponse>(candidate);
+                    if (message == null) continue;
+                    metrics.ProviderRequestId ??= String.IsNullOrWhiteSpace(message.Id) ? null : message.Id;
+                    ApplyAnthropicUsage(metrics, message.Usage, true);
+                    continue;
+                }
+
+                AnthropicStreamEvent streamEvent = TryDeserialize<AnthropicStreamEvent>(candidate);
+                if (streamEvent == null || String.IsNullOrEmpty(streamEvent.Type)) continue;
+
+                if (String.Equals(streamEvent.Type, "message_start", StringComparison.Ordinal) && streamEvent.Message != null)
+                {
+                    metrics.ProviderRequestId ??= String.IsNullOrWhiteSpace(streamEvent.Message.Id) ? null : streamEvent.Message.Id;
+                    ApplyAnthropicUsage(metrics, streamEvent.Message.Usage, true);
+                }
+                else if (String.Equals(streamEvent.Type, "message_delta", StringComparison.Ordinal) && streamEvent.Usage?.OutputTokens != null)
+                {
+                    // message_delta carries the cumulative output count; the last one wins.
+                    metrics.CompletionTokens = streamEvent.Usage.OutputTokens;
+                }
+            }
+
+            if (metrics.PromptTokens.HasValue || metrics.CompletionTokens.HasValue)
+            {
+                metrics.TotalTokens = (metrics.PromptTokens ?? 0) + (metrics.CompletionTokens ?? 0);
+            }
+
+            metrics.RawProviderMetrics = BuildRawProviderMetrics(metrics);
+            return metrics;
+        }
+
+        internal static RequestProviderMetrics ExtractTypeSafeMetrics(string responseBody)
+        {
+            RequestProviderMetrics metrics = new RequestProviderMetrics();
+            if (String.IsNullOrWhiteSpace(responseBody)) return metrics;
+
+            TypeSafeDecisionResponse response = TryDeserialize<TypeSafeDecisionResponse>(responseBody.Trim());
+            if (response?.Usage != null)
+            {
+                metrics.PromptTokens = response.Usage.InputTokens;
+                metrics.CompletionTokens = response.Usage.OutputTokens;
+                if (metrics.PromptTokens.HasValue || metrics.CompletionTokens.HasValue)
+                {
+                    metrics.TotalTokens = (metrics.PromptTokens ?? 0) + (metrics.CompletionTokens ?? 0);
+                }
+            }
+
+            metrics.RawProviderMetrics = BuildRawProviderMetrics(metrics);
+            return metrics;
+        }
+
+        private static void ApplyAnthropicUsage(RequestProviderMetrics metrics, AnthropicUsage usage, bool includeOutput)
+        {
+            if (usage == null) return;
+            metrics.PromptTokens = usage.InputTokens ?? metrics.PromptTokens;
+            metrics.CacheCreationInputTokens = usage.CacheCreationInputTokens ?? metrics.CacheCreationInputTokens;
+            metrics.CacheReadInputTokens = usage.CacheReadInputTokens ?? metrics.CacheReadInputTokens;
+            if (includeOutput && usage.OutputTokens.HasValue) metrics.CompletionTokens = usage.OutputTokens;
+        }
+
+        private static T TryDeserialize<T>(string json) where T : class
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<T>(json);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static string GetHeaderValue(Dictionary<string, string> headers, string name)
+        {
+            if (headers == null) return null;
+            foreach (KeyValuePair<string, string> header in headers)
+            {
+                if (String.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase)) return header.Value;
+            }
+
+            return null;
+        }
+
         private static List<string> ExtractJsonCandidates(string responseBody)
         {
             List<string> candidates = new List<string>();
@@ -324,6 +442,8 @@ namespace Conductor.Server.Services
             AddJsonNumber(obj, "promptTokens", metrics.PromptTokens);
             AddJsonNumber(obj, "completionTokens", metrics.CompletionTokens);
             AddJsonNumber(obj, "totalTokens", metrics.TotalTokens);
+            AddJsonNumber(obj, "cacheCreationInputTokens", metrics.CacheCreationInputTokens);
+            AddJsonNumber(obj, "cacheReadInputTokens", metrics.CacheReadInputTokens);
             AddJsonNumber(obj, "providerLoadDurationMs", metrics.ProviderLoadDurationMs);
             AddJsonNumber(obj, "providerPromptEvalDurationMs", metrics.ProviderPromptEvalDurationMs);
             AddJsonNumber(obj, "providerGenerationDurationMs", metrics.ProviderGenerationDurationMs);

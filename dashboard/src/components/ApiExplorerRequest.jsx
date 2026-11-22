@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import CopyButton from './CopyButton';
+import DecisionQuestionBuilder from './DecisionQuestionBuilder';
 
 /**
  * Request builder component for the API Explorer.
@@ -162,6 +163,13 @@ function ApiExplorerRequest({ explorer, credentials }) {
         <code className="endpoint-url">{fullUrl || 'Select a VMR to see the endpoint URL'}</code>
         {fullUrl && <CopyButton value={fullUrl} title="Copy URL" />}
       </div>
+
+      {operation?.decision && (
+        <details className="decision-builder-panel" open>
+          <summary title="Build the System One questions without editing JSON. The request body below updates as you edit.">Question builder</summary>
+          <DecisionQuestionBuilder requestBody={requestBody} onChange={setRequestBody} disabled={isSending} />
+        </details>
+      )}
 
       {operation?.method !== 'GET' && (
         <div className="request-body">

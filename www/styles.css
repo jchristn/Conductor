@@ -787,6 +787,27 @@ section {
     color: var(--bg-primary);
 }
 
+.api-logo.anthropic {
+    background-color: #cc785c;
+    color: white;
+}
+
+.api-logo.gemini {
+    background-color: #4285f4;
+    color: white;
+}
+
+.api-logo.decision {
+    background-color: #6d28d9;
+    color: white;
+}
+
+.api-logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
 .api-header h3 {
     font-size: 1.25rem;
     font-weight: 700;
@@ -848,7 +869,8 @@ section {
     gap: var(--space-sm);
 }
 
-.backend-list a {
+.backend-list a,
+.backend-list span {
     font-size: 0.875rem;
     padding: 0.25rem 0.625rem;
     background-color: var(--bg-secondary);

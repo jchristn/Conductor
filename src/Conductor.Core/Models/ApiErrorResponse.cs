@@ -56,6 +56,22 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
+        /// Create a BadRequest (400) error response, used when the client request itself is malformed.
+        /// </summary>
+        /// <param name="message">Error message describing what is wrong with the request.</param>
+        /// <param name="code">Error code for programmatic handling. Default is "BadRequest".</param>
+        /// <returns>A new error response. Never null.</returns>
+        public static ApiErrorResponse BadRequest(string message = "The request is invalid.", string code = "BadRequest")
+        {
+            return new ApiErrorResponse
+            {
+                Error = message,
+                StatusCode = 400,
+                Code = code
+            };
+        }
+
+        /// <summary>
         /// Create a NotFound error response.
         /// </summary>
         public static ApiErrorResponse NotFound(string message = "Not found")

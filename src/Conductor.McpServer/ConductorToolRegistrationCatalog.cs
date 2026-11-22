@@ -180,12 +180,13 @@ namespace Conductor.McpServer
                     {
                         tenant_id = new { type = "string", description = "Tenant ID" },
                         name = new { type = "string", description = "Name for the VMR" },
-                        api_type = new { type = "string", description = "API type: 'Ollama', 'OpenAI', 'vLLM', or 'Gemini' (default: Ollama)" },
+                        api_type = new { type = "string", description = "API type clients call: 'Ollama', 'OpenAI', 'Gemini', 'vLLM', 'Anthropic' or 'TypeSafe' (default: Ollama). 'Ollaya', 'OllamaCloud' and 'OpenAICompatible' are endpoint-only types and are rejected (VmrApiTypeNotClientFacing). Attached endpoints must match the compatibility table: Ollama accepts Ollama and OllamaCloud; OpenAI accepts OpenAI, OpenAICompatible and vLLM; vLLM accepts vLLM; Gemini accepts Gemini; Anthropic accepts Anthropic; TypeSafe accepts TypeSafe and Ollaya (EndpointApiTypeMismatch)." },
                         endpoint_ids = new { type = "array", items = new { type = "string" }, description = "List of endpoint IDs to include" },
                         configuration_ids = new { type = "array", items = new { type = "string" }, description = "List of configuration IDs to apply (optional)" },
                         load_balancing = new { type = "string", description = "Load balancing mode: 'RoundRobin', 'Random', 'FirstAvailable', or 'LeastRecentlyUsed' (default: RoundRobin)" },
                         allow_completions = new { type = "boolean", description = "Allow completion requests (default: true)" },
-                        allow_embeddings = new { type = "boolean", description = "Allow embedding requests (default: true)" }
+                        allow_embeddings = new { type = "boolean", description = "Allow embedding requests (default: true)" },
+                        allow_decisions = new { type = "boolean", description = "Allow decision requests (default: true). Must be true on a TypeSafe VMR (DecisionsDisabledOnDecisionRoute)." }
                     },
                     required = new[] { "tenant_id", "name" }
                 },

@@ -1,15 +1,19 @@
 /**
  * Code generation utilities for different programming languages.
- * Generates code snippets based on the current API request configuration.
+ * Generates code snippets from the exact request the API Explorer composes: the same URL,
+ * method, headers (see buildExplorerHeaders in providers.js) and body.
+ *
+ * Config shape: { url, method, headers, body, apiType, operationId, streaming }
  */
+import { getProvider, getProviderSdk, getStreamFormat } from './providers';
 
 /**
- * Escape special characters in a string for use in code
+ * Escape special characters in a string for use inside a double-quoted code string
  * @param {string} str - The string to escape
  * @returns {string} Escaped string
  */
 function escapeString(str) {
-  return str
+  return String(str)
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
     .replace(/"/g, '\\"')
@@ -18,27 +22,78 @@ function escapeString(str) {
     .replace(/\t/g, '\\t');
 }
 
-function isOpenAICompatibleApiType(apiType) {
-  return apiType === 'OpenAI' || apiType === 'vLLM';
+function parseBody(body) {
+  if (!body) return { ok: false, value: null };
+  try {
+    return { ok: true, value: JSON.parse(body) };
+  } catch {
+    return { ok: false, value: null };
+  }
+}
+
+function hasBody(config) {
+  return Boolean(config.body) && config.method !== 'GET' && config.method !== 'HEAD';
+}
+
+function family(apiType) {
+  return getProvider(apiType)?.explorerOperations || 'openai';
 }
 
 /**
- * Format JSON for display in code with proper indentation
- * @param {string} json - JSON string
- * @param {number} baseIndent - Base indentation level
- * @param {string} indentChar - Character(s) to use for indentation
- * @returns {string} Formatted JSON
+ * Format a JSON value as a JavaScript literal with indentation continuing at baseIndent.
  */
-function formatJsonForCode(json, baseIndent = 0, indentChar = '  ') {
-  try {
-    const obj = JSON.parse(json);
-    const formatted = JSON.stringify(obj, null, 2);
-    const lines = formatted.split('\n');
-    const prefix = indentChar.repeat(baseIndent);
-    return lines.map((line, i) => i === 0 ? line : prefix + line).join('\n');
-  } catch {
-    return json;
+function jsLiteral(value, baseIndent = 0) {
+  const prefix = '  '.repeat(baseIndent);
+  return JSON.stringify(value, null, 2)
+    .split('\n')
+    .map((line, i) => (i === 0 ? line : prefix + line))
+    .join('\n');
+}
+
+/**
+ * Format a JSON value as a Python literal (None/True/False, double-quoted strings).
+ * @param {*} value
+ * @param {number} indent - current indentation level (4 spaces per level)
+ * @returns {string}
+ */
+export function toPythonLiteral(value, indent = 0) {
+  const pad = '    '.repeat(indent);
+  const innerPad = '    '.repeat(indent + 1);
+  if (value === null || value === undefined) return 'None';
+  if (value === true) return 'True';
+  if (value === false) return 'False';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'None';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    return `[\n${value.map((item) => innerPad + toPythonLiteral(item, indent + 1)).join(',\n')}\n${pad}]`;
   }
+  const entries = Object.entries(value);
+  if (entries.length === 0) return '{}';
+  return `{\n${entries.map(([key, item]) => `${innerPad}${JSON.stringify(key)}: ${toPythonLiteral(item, indent + 1)}`).join(',\n')}\n${pad}}`;
+}
+
+/**
+ * Format a C# verbatim string literal (@"...") holding the given text.
+ */
+function csharpVerbatim(text) {
+  return `@"${String(text).replace(/"/g, '""')}"`;
+}
+
+/**
+ * Base URL for SDK clients: the VMR URL without the operation path.
+ */
+function sdkBaseUrl(url, apiType) {
+  const fam = family(apiType);
+  if (fam === 'anthropic' || fam === 'openai' || fam === 'typesafe') {
+    return url.replace(/\/v1(\/.*)?$/, fam === 'openai' ? '/v1' : '');
+  }
+  return url;
+}
+
+function bearerToken(headers) {
+  const auth = headers?.Authorization || headers?.authorization || '';
+  return auth.startsWith('Bearer ') ? auth.slice(7) : '';
 }
 
 /**
@@ -47,27 +102,38 @@ function formatJsonForCode(json, baseIndent = 0, indentChar = '  ') {
  * @returns {string} cURL command
  */
 export function generateCurl(config) {
-  const { url, method, headers, body } = config;
+  const { url, method, headers, body, streaming } = config;
 
-  let curl = `curl -X ${method} "${url}"`;
+  let curl = `curl${streaming ? ' -N' : ''} -X ${method} "${url}"`;
 
-  // Add headers
-  Object.entries(headers).forEach(([key, value]) => {
+  Object.entries(headers || {}).forEach(([key, value]) => {
     curl += ` \\\n  -H "${key}: ${escapeString(value)}"`;
   });
 
-  // Add body for non-GET requests
-  if (body && method !== 'GET') {
-    try {
-      const parsed = JSON.parse(body);
-      const formatted = JSON.stringify(parsed, null, 2);
-      curl += ` \\\n  -d '${formatted.replace(/'/g, "'\\''")}'`;
-    } catch {
-      curl += ` \\\n  -d '${body.replace(/'/g, "'\\''")}'`;
-    }
+  if (hasBody(config)) {
+    const parsed = parseBody(body);
+    const text = parsed.ok ? JSON.stringify(parsed.value, null, 2) : body;
+    curl += ` \\\n  -d '${text.replace(/'/g, "'\\''")}'`;
   }
 
   return curl;
+}
+
+function javascriptLogStatement(apiType, operationId) {
+  const fam = family(apiType);
+  if (fam === 'openai' && operationId === 'chatCompletions') return 'console.log(data.choices[0].message.content);';
+  if (fam === 'openai' && operationId === 'completions') return 'console.log(data.choices[0].text);';
+  if (fam === 'gemini' && (operationId === 'generateContent' || operationId === 'streamGenerateContent')) {
+    return 'console.log((data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join(""));';
+  }
+  if (fam === 'ollama' && operationId === 'chat') return 'console.log(data.message.content);';
+  if (fam === 'ollama' && operationId === 'generate') return 'console.log(data.response);';
+  if (fam === 'anthropic' && operationId === 'messages') {
+    return 'console.log(data.content.filter(block => block.type === "text").map(block => block.text).join(""));';
+  }
+  if (fam === 'anthropic' && operationId === 'countTokens') return 'console.log(data.input_tokens);';
+  if (fam === 'typesafe' && operationId === 'decide') return 'console.log(data.answers);';
+  return 'console.log(data);';
 }
 
 /**
@@ -77,43 +143,59 @@ export function generateCurl(config) {
  */
 export function generateJavaScript(config) {
   const { url, method, headers, body, apiType, operationId } = config;
-
-  let code = '';
-
-  if (method === 'GET') {
-    code = `const response = await fetch('${url}', {
-  method: '${method}',
-  headers: ${formatJsonForCode(JSON.stringify(headers), 1)}
-});
-
-const data = await response.json();
-console.log(data);`;
-  } else {
-    // Determine what to log based on operation
-    let logStatement = 'console.log(data);';
-    if (isOpenAICompatibleApiType(apiType) && (operationId === 'chatCompletions' || operationId === 'completions')) {
-      logStatement = operationId === 'chatCompletions'
-        ? 'console.log(data.choices[0].message.content);'
-        : 'console.log(data.choices[0].text);';
-    } else if (apiType === 'Gemini' && (operationId === 'generateContent' || operationId === 'streamGenerateContent')) {
-      logStatement = 'console.log((data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join(""));';
-    } else if (apiType === 'Ollama' && (operationId === 'chat' || operationId === 'generate')) {
-      logStatement = operationId === 'chat'
-        ? 'console.log(data.message.content);'
-        : 'console.log(data.response);';
-    }
-
-    code = `const response = await fetch('${url}', {
-  method: '${method}',
-  headers: ${formatJsonForCode(JSON.stringify(headers), 1)},
-  body: JSON.stringify(${formatJsonForCode(body, 1)})
-});
-
-const data = await response.json();
-${logStatement}`;
+  const lines = [
+    `const response = await fetch(${JSON.stringify(url)}, {`,
+    `  method: '${method}',`,
+    `  headers: ${jsLiteral(headers || {}, 1)}${hasBody(config) ? ',' : ''}`
+  ];
+  if (hasBody(config)) {
+    const parsed = parseBody(body);
+    lines.push(parsed.ok
+      ? `  body: JSON.stringify(${jsLiteral(parsed.value, 1)})`
+      : `  body: ${JSON.stringify(body)}`);
   }
+  lines.push('});', '', 'const data = await response.json();', javascriptLogStatement(apiType, operationId));
+  return lines.join('\n');
+}
 
-  return code;
+function javascriptStreamHandler(streamFormat) {
+  switch (streamFormat) {
+    case 'anthropic-sse':
+      return `// Anthropic SSE format: "event: <name>" then "data: {json}"
+      if (line.startsWith('data: ')) {
+        const parsed = JSON.parse(line.slice(6));
+        if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+          process.stdout.write(parsed.delta.text);
+        } else if (parsed.type === 'error') {
+          console.error(parsed.error);
+        }
+      }`;
+    case 'gemini-sse':
+      return `// Gemini SSE format
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        const parsed = JSON.parse(data);
+        const content = (parsed.candidates?.[0]?.content?.parts || [])
+          .map(part => part.text || '')
+          .join('');
+        process.stdout.write(content);
+      }`;
+    case 'ndjson':
+      return `// Ollama JSON lines format
+      const parsed = JSON.parse(line);
+      const content = parsed.message?.content || parsed.response || '';
+      process.stdout.write(content);`;
+    default:
+      return `// OpenAI SSE format
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        const parsed = JSON.parse(data);
+        const content = parsed.choices?.[0]?.delta?.content || '';
+        process.stdout.write(content);
+      }`;
+  }
 }
 
 /**
@@ -123,36 +205,14 @@ ${logStatement}`;
  */
 export function generateJavaScriptStreaming(config) {
   const { url, method, headers, body, apiType } = config;
+  const parsed = parseBody(body);
+  const bodyLine = hasBody(config)
+    ? (parsed.ok ? `,\n  body: JSON.stringify(${jsLiteral(parsed.value, 1)})` : `,\n  body: ${JSON.stringify(body)}`)
+    : '';
 
-  const extractContent = isOpenAICompatibleApiType(apiType)
-    ? `// OpenAI SSE format
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content || '';
-          process.stdout.write(content);
-        }`
-    : apiType === 'Gemini'
-    ? `// Gemini SSE format
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
-          const parsed = JSON.parse(data);
-          const content = (parsed.candidates?.[0]?.content?.parts || [])
-            .map(part => part.text || '')
-            .join('');
-          process.stdout.write(content);
-        }`
-    : `// Ollama JSON lines format
-        const parsed = JSON.parse(line);
-        const content = parsed.message?.content || parsed.response || '';
-        process.stdout.write(content);`;
-
-  return `const response = await fetch('${url}', {
+  return `const response = await fetch(${JSON.stringify(url)}, {
   method: '${method}',
-  headers: ${formatJsonForCode(JSON.stringify(headers), 1)},
-  body: JSON.stringify(${formatJsonForCode(body, 1)})
+  headers: ${jsLiteral(headers || {}, 1)}${bodyLine}
 });
 
 const reader = response.body.getReader();
@@ -170,12 +230,29 @@ while (true) {
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      ${extractContent}
+      ${javascriptStreamHandler(getStreamFormat(apiType))}
     } catch (e) {
       // Skip non-JSON lines
     }
   }
 }`;
+}
+
+function pythonPrintStatement(apiType, operationId) {
+  const fam = family(apiType);
+  if (fam === 'openai' && operationId === 'chatCompletions') return "print(response.json()['choices'][0]['message']['content'])";
+  if (fam === 'openai' && operationId === 'completions') return "print(response.json()['choices'][0]['text'])";
+  if (fam === 'gemini' && (operationId === 'generateContent' || operationId === 'streamGenerateContent')) {
+    return "print(''.join(part.get('text', '') for part in response.json()['candidates'][0]['content'].get('parts', [])))";
+  }
+  if (fam === 'ollama' && operationId === 'chat') return "print(response.json()['message']['content'])";
+  if (fam === 'ollama' && operationId === 'generate') return "print(response.json()['response'])";
+  if (fam === 'anthropic' && operationId === 'messages') {
+    return "print(''.join(block['text'] for block in response.json()['content'] if block['type'] == 'text'))";
+  }
+  if (fam === 'anthropic' && operationId === 'countTokens') return "print(response.json()['input_tokens'])";
+  if (fam === 'typesafe' && operationId === 'decide') return "print(response.json()['answers'])";
+  return 'print(response.json())';
 }
 
 /**
@@ -184,207 +261,249 @@ while (true) {
  * @returns {string} Python code
  */
 export function generatePython(config) {
-  const { url, method, headers, body, apiType, operationId } = config;
+  const { url, method, headers, body, apiType, operationId, streaming } = config;
+  const methodName = method.toLowerCase();
+  const args = [`    ${JSON.stringify(url)}`, `    headers=${toPythonLiteral(headers || {}, 1)}`];
 
-  // Format headers for Python
-  const headersStr = JSON.stringify(headers, null, 4)
-    .replace(/"/g, "'")
-    .split('\n')
-    .map((line, i) => i === 0 ? line : '    ' + line)
-    .join('\n');
-
-  let code = 'import requests\n\n';
-
-  if (method === 'GET') {
-    code += `response = requests.get(
-    '${url}',
-    headers=${headersStr}
-)
-
-print(response.json())`;
-  } else {
-    // Parse and format body
-    let bodyStr = '{}';
-    try {
-      const parsed = JSON.parse(body);
-      bodyStr = JSON.stringify(parsed, null, 4)
-        .replace(/"/g, "'")
-        .replace(/true/g, 'True')
-        .replace(/false/g, 'False')
-        .replace(/null/g, 'None')
-        .split('\n')
-        .map((line, i) => i === 0 ? line : '    ' + line)
-        .join('\n');
-    } catch {
-      bodyStr = body;
-    }
-
-    // Determine what to print based on operation
-    let printStatement = 'print(response.json())';
-    if (isOpenAICompatibleApiType(apiType) && (operationId === 'chatCompletions' || operationId === 'completions')) {
-      printStatement = operationId === 'chatCompletions'
-        ? "print(response.json()['choices'][0]['message']['content'])"
-        : "print(response.json()['choices'][0]['text'])";
-    } else if (apiType === 'Gemini' && (operationId === 'generateContent' || operationId === 'streamGenerateContent')) {
-      printStatement = "print(''.join(part.get('text', '') for part in response.json()['candidates'][0]['content'].get('parts', [])))";
-    } else if (apiType === 'Ollama' && (operationId === 'chat' || operationId === 'generate')) {
-      printStatement = operationId === 'chat'
-        ? "print(response.json()['message']['content'])"
-        : "print(response.json()['response'])";
-    }
-
-    const methodName = method.toLowerCase();
-    code += `response = requests.${methodName}(
-    '${url}',
-    headers=${headersStr},
-    json=${bodyStr}
-)
-
-${printStatement}`;
+  if (hasBody(config)) {
+    const parsed = parseBody(body);
+    args.push(parsed.ok ? `    json=${toPythonLiteral(parsed.value, 1)}` : `    data=${JSON.stringify(body)}`);
   }
 
-  return code;
+  if (streaming) {
+    args.push('    stream=True');
+    return `import requests
+
+with requests.${methodName}(
+${args.join(',\n')}
+) as response:
+    for line in response.iter_lines(decode_unicode=True):
+        if line:
+            print(line)`;
+  }
+
+  return `import requests
+
+response = requests.${methodName}(
+${args.join(',\n')}
+)
+
+${pythonPrintStatement(apiType, operationId)}`;
 }
 
 /**
- * Generate Python (OpenAI SDK) code - for OpenAI-compatible API types
+ * Generate Python (OpenAI SDK) code - for VMR types whose registry sdk is openai
  * @param {Object} config - Request configuration
  * @returns {string} Python code using OpenAI SDK
  */
 export function generatePythonOpenAI(config) {
-  const { url, headers, body, operationId } = config;
+  const { url, headers, body, operationId, apiType } = config;
 
-  // Extract base URL (remove the endpoint path)
-  const baseUrl = url.replace(/\/v1\/.*$/, '/v1');
-  const apiKey = headers['Authorization']?.replace('Bearer ', '') || 'YOUR_API_KEY';
+  const baseUrl = sdkBaseUrl(url, apiType);
+  const apiKey = bearerToken(headers) || 'YOUR_API_KEY';
 
   let code = `from openai import OpenAI
 
 client = OpenAI(
-    base_url='${baseUrl}',
-    api_key='${apiKey}'
+    base_url=${JSON.stringify(baseUrl)},
+    api_key=${JSON.stringify(apiKey)}
 )
 
 `;
 
-  try {
-    const parsed = JSON.parse(body);
+  if (operationId === 'listModels') {
+    return `${code}for model in client.models.list():
+    print(model.id)`;
+  }
 
-    if (operationId === 'chatCompletions') {
-      const messages = JSON.stringify(parsed.messages || [], null, 4)
-        .replace(/"/g, "'")
-        .split('\n')
-        .map((line, i) => i === 0 ? line : '    ' + line)
-        .join('\n');
+  const parsed = parseBody(body);
+  if (!parsed.ok) return `${code}# Unable to parse request body`;
+  const kwargs = Object.entries(parsed.value).map(([key, value]) => `    ${key}=${toPythonLiteral(value, 1)}`).join(',\n');
 
-      code += `response = client.chat.completions.create(
-    model='${parsed.model || 'gpt-3.5-turbo'}',
-    messages=${messages},
-    stream=${parsed.stream ? 'True' : 'False'}${parsed.temperature !== undefined ? `,\n    temperature=${parsed.temperature}` : ''}${parsed.max_tokens !== undefined ? `,\n    max_tokens=${parsed.max_tokens}` : ''}
+  if (operationId === 'chatCompletions') {
+    return `${code}response = client.chat.completions.create(
+${kwargs}
 )
 
-print(response.choices[0].message.content)`;
-    } else if (operationId === 'completions') {
-      code += `response = client.completions.create(
-    model='${parsed.model || 'gpt-3.5-turbo-instruct'}',
-    prompt='${escapeString(parsed.prompt || '')}',
-    stream=${parsed.stream ? 'True' : 'False'}${parsed.temperature !== undefined ? `,\n    temperature=${parsed.temperature}` : ''}${parsed.max_tokens !== undefined ? `,\n    max_tokens=${parsed.max_tokens}` : ''}
+${parsed.value.stream ? 'for chunk in response:\n    print(chunk.choices[0].delta.content or "", end="")' : 'print(response.choices[0].message.content)'}`;
+  }
+  if (operationId === 'completions') {
+    return `${code}response = client.completions.create(
+${kwargs}
 )
 
-print(response.choices[0].text)`;
-    } else if (operationId === 'embeddings') {
-      code += `response = client.embeddings.create(
-    model='${parsed.model || 'text-embedding-ada-002'}',
-    input='${escapeString(typeof parsed.input === 'string' ? parsed.input : JSON.stringify(parsed.input))}'
+${parsed.value.stream ? 'for chunk in response:\n    print(chunk.choices[0].text, end="")' : 'print(response.choices[0].text)'}`;
+  }
+  if (operationId === 'embeddings') {
+    return `${code}response = client.embeddings.create(
+${kwargs}
 )
 
 print(response.data[0].embedding)`;
-    } else {
-      code += '# This operation is not supported by the OpenAI SDK';
-    }
-  } catch {
-    code += '# Unable to parse request body';
   }
+  return `${code}# This operation is not supported by the OpenAI SDK`;
+}
 
-  return code;
+function modelFromUrl(url) {
+  const match = url.match(/\/v1\/models\/([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : 'MODEL_ID';
 }
 
 /**
- * Generate C# (HttpClient) code
+ * Generate Python (Anthropic SDK) code. The SDK sends auth_token as Authorization: Bearer and
+ * sets anthropic-version itself, so the request matches what the explorer sends.
+ * @param {Object} config - Request configuration
+ * @returns {string} Python code using the Anthropic SDK
+ */
+export function generatePythonAnthropic(config) {
+  const { url, headers, body, operationId, apiType } = config;
+  const baseUrl = sdkBaseUrl(url, apiType);
+  const token = bearerToken(headers) || 'YOUR_CONDUCTOR_CREDENTIAL';
+
+  const code = `import anthropic
+
+# ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN work the same way.
+client = anthropic.Anthropic(
+    base_url=${JSON.stringify(baseUrl)},
+    auth_token=${JSON.stringify(token)}
+)
+
+`;
+
+  if (operationId === 'listModels') {
+    return `${code}for model in client.models.list():
+    print(model.id)`;
+  }
+  if (operationId === 'getModel') {
+    return `${code}model = client.models.retrieve(${JSON.stringify(modelFromUrl(url))})
+print(model)`;
+  }
+
+  const parsed = parseBody(body);
+  if (!parsed.ok) return `${code}# Unable to parse request body`;
+  const params = { ...parsed.value };
+  const streaming = params.stream === true;
+  delete params.stream;
+  const kwargs = Object.entries(params).map(([key, value]) => `    ${key}=${toPythonLiteral(value, 1)}`).join(',\n');
+
+  if (operationId === 'countTokens') {
+    return `${code}result = client.messages.count_tokens(
+${kwargs}
+)
+
+print(result.input_tokens)`;
+  }
+  if (streaming) {
+    return `${code}with client.messages.stream(
+${kwargs}
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)`;
+  }
+  return `${code}message = client.messages.create(
+${kwargs}
+)
+
+print("".join(block.text for block in message.content if block.type == "text"))`;
+}
+
+/**
+ * Generate TypeScript (Anthropic SDK) code.
+ * @param {Object} config - Request configuration
+ * @returns {string} TypeScript code using @anthropic-ai/sdk
+ */
+export function generateTypeScriptAnthropic(config) {
+  const { url, headers, body, operationId, apiType } = config;
+  const baseUrl = sdkBaseUrl(url, apiType);
+  const token = bearerToken(headers) || 'YOUR_CONDUCTOR_CREDENTIAL';
+
+  const code = `import Anthropic from '@anthropic-ai/sdk';
+
+// ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN work the same way.
+const client = new Anthropic({
+  baseURL: ${JSON.stringify(baseUrl)},
+  authToken: ${JSON.stringify(token)}
+});
+
+`;
+
+  if (operationId === 'listModels') {
+    return `${code}for await (const model of client.models.list()) {
+  console.log(model.id);
+}`;
+  }
+  if (operationId === 'getModel') {
+    return `${code}const model = await client.models.retrieve(${JSON.stringify(modelFromUrl(url))});
+console.log(model);`;
+  }
+
+  const parsed = parseBody(body);
+  if (!parsed.ok) return `${code}// Unable to parse request body`;
+  const params = { ...parsed.value };
+  const streaming = params.stream === true;
+  delete params.stream;
+
+  if (operationId === 'countTokens') {
+    return `${code}const result = await client.messages.countTokens(${jsLiteral(params, 0)});
+console.log(result.input_tokens);`;
+  }
+  if (streaming) {
+    return `${code}const stream = client.messages.stream(${jsLiteral(params, 0)});
+stream.on('text', (text) => process.stdout.write(text));
+await stream.finalMessage();`;
+  }
+  return `${code}const message = await client.messages.create(${jsLiteral(params, 0)});
+for (const block of message.content) {
+  if (block.type === 'text') console.log(block.text);
+}`;
+}
+
+/**
+ * Generate C# (HttpClient) code. The body is sent as the exact JSON text the explorer sends.
  * @param {Object} config - Request configuration
  * @returns {string} C# code
  */
 export function generateCSharp(config) {
-  const { url, method, headers, body, apiType, operationId } = config;
+  const { url, method, headers, body, streaming } = config;
 
-  let code = `using System.Net.Http;
+  let code = `using System;
+using System.IO;
+using System.Net.Http;
 using System.Text;
-using System.Text.Json;
 
-using var client = new HttpClient();
+using HttpClient client = new HttpClient();
+using HttpRequestMessage request = new HttpRequestMessage(new HttpMethod("${method}"), "${url}");
 `;
 
-  // Add headers
-  Object.entries(headers).forEach(([key, value]) => {
-    if (key !== 'Content-Type') {
-      code += `client.DefaultRequestHeaders.Add("${key}", "${escapeString(value)}");\n`;
+  Object.entries(headers || {}).forEach(([key, value]) => {
+    if (key.toLowerCase() !== 'content-type') {
+      code += `request.Headers.TryAddWithoutValidation("${key}", "${escapeString(value)}");\n`;
     }
   });
 
-  code += '\n';
+  if (hasBody(config)) {
+    const parsed = parseBody(body);
+    const json = parsed.ok ? JSON.stringify(parsed.value, null, 2) : body;
+    code += `
+string json = ${csharpVerbatim(json)};
+request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+`;
+  }
 
-  if (method === 'GET') {
-    code += `var response = await client.GetAsync("${url}");
-var result = await response.Content.ReadAsStringAsync();
-Console.WriteLine(result);`;
+  if (streaming) {
+    code += `
+using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+using Stream stream = await response.Content.ReadAsStreamAsync();
+using StreamReader reader = new StreamReader(stream);
+string? line;
+while ((line = await reader.ReadLineAsync()) != null)
+{
+    if (line.Length > 0) Console.WriteLine(line);
+}`;
   } else {
-    // Format body for C#
-    let bodyObj = {};
-    try {
-      bodyObj = JSON.parse(body);
-    } catch {
-      bodyObj = {};
-    }
-
-    // Convert to C# anonymous object
-    const formatCSharpObject = (obj, indent = 0) => {
-      const spaces = '    '.repeat(indent);
-      if (Array.isArray(obj)) {
-        if (obj.length === 0) return 'Array.Empty<object>()';
-        const items = obj.map(item => formatCSharpObject(item, indent + 1));
-        return `new[] {\n${spaces}    ${items.join(`,\n${spaces}    `)}\n${spaces}}`;
-      } else if (typeof obj === 'object' && obj !== null) {
-        const entries = Object.entries(obj);
-        if (entries.length === 0) return 'new { }';
-        const props = entries.map(([k, v]) => `${k} = ${formatCSharpObject(v, indent + 1)}`);
-        return `new {\n${spaces}    ${props.join(`,\n${spaces}    `)}\n${spaces}}`;
-      } else if (typeof obj === 'string') {
-        return `"${escapeString(obj)}"`;
-      } else if (typeof obj === 'boolean') {
-        return obj.toString();
-      } else if (obj === null) {
-        return 'null';
-      }
-      return String(obj);
-    };
-
-    const csharpBody = formatCSharpObject(bodyObj, 0);
-
-    const httpMethod = method === 'POST' ? 'PostAsync' :
-                       method === 'PUT' ? 'PutAsync' :
-                       method === 'DELETE' ? 'DeleteAsync' : 'SendAsync';
-
-    code += `var content = new StringContent(
-    JsonSerializer.Serialize(${csharpBody}),
-    Encoding.UTF8,
-    "application/json"
-);
-
-var response = await client.${httpMethod}(
-    "${url}",
-    content
-);
-var result = await response.Content.ReadAsStringAsync();
+    code += `
+using HttpResponseMessage response = await client.SendAsync(request);
+string result = await response.Content.ReadAsStringAsync();
 Console.WriteLine(result);`;
   }
 
@@ -392,7 +511,8 @@ Console.WriteLine(result);`;
 }
 
 /**
- * Available code generator languages
+ * Available code generator languages.
+ * openaiOnly / anthropicOnly entries appear only for VMR types whose registry sdk matches.
  */
 export const codeGeneratorLanguages = [
   { id: 'curl', label: 'cURL', generate: generateCurl },
@@ -400,18 +520,22 @@ export const codeGeneratorLanguages = [
   { id: 'javascript-stream', label: 'JavaScript (Streaming)', generate: generateJavaScriptStreaming, streamingOnly: true },
   { id: 'python', label: 'Python (requests)', generate: generatePython },
   { id: 'python-openai', label: 'Python (OpenAI SDK)', generate: generatePythonOpenAI, openaiOnly: true },
+  { id: 'python-anthropic', label: 'Python (Anthropic SDK)', generate: generatePythonAnthropic, anthropicOnly: true },
+  { id: 'typescript-anthropic', label: 'TypeScript (Anthropic SDK)', generate: generateTypeScriptAnthropic, anthropicOnly: true },
   { id: 'csharp', label: 'C#', generate: generateCSharp }
 ];
 
 /**
  * Get available languages based on configuration
- * @param {string} apiType - provider API type
- * @param {boolean} streamEnabled - Whether streaming is enabled
+ * @param {string} apiType - VMR API type
+ * @param {boolean} streamEnabled - Whether the current request streams
  * @returns {Array} List of available languages
  */
 export function getAvailableLanguages(apiType, streamEnabled) {
+  const sdk = getProviderSdk(apiType);
   return codeGeneratorLanguages.filter(lang => {
-    if (lang.openaiOnly && !isOpenAICompatibleApiType(apiType)) return false;
+    if (lang.openaiOnly && sdk !== 'openai') return false;
+    if (lang.anthropicOnly && sdk !== 'anthropic') return false;
     if (lang.streamingOnly && !streamEnabled) return false;
     return true;
   });

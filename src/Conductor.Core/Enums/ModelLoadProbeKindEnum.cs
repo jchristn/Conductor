@@ -33,6 +33,11 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// Use a provider-native generation endpoint when available.
         /// </summary>
-        NativeGenerate = 5
+        NativeGenerate = 5,
+
+        /// <summary>
+        /// Use a one-question decision request (TypeSafe System One) to verify the model. Billable on hosted TypeSafe.
+        /// </summary>
+        Decision = 6
     }
 }

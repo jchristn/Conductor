@@ -23,7 +23,7 @@ namespace Conductor.Server.Routing
             _App.Post<UserMaster>("/v1.0/users", async (req) =>
             {
                 UserMaster user = req.Data as UserMaster;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, user?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, user?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await userController.Create(tenantId, user);
             },
@@ -57,7 +57,7 @@ namespace Conductor.Server.Routing
             _App.Put<UserMaster>("/v1.0/users/{id}", async (req) =>
             {
                 UserMaster user = req.Data as UserMaster;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, user?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, user?.TenantId);
                 return await userController.Update(tenantId, req.Parameters["id"], user);
             },
             api => api
@@ -74,7 +74,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/users/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await userController.Delete(tenantId, req.Parameters["id"]);
                 return null;

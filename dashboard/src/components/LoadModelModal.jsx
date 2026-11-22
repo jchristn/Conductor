@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from './Modal';
+import {
+  PROBE_KINDS,
+  getProviderLabel,
+  getUnsupportedProbeReason,
+  hasCapability,
+  isProbeBillable
+} from '../utils/providers';
 
-const PROBE_KINDS = ['Auto', 'MetadataOnly', 'ChatCompletion', 'Completion', 'Embeddings', 'NativeGenerate'];
 const TARGET_MODES = ['SelectedEndpoint', 'AllEligibleEndpoints', 'AllConfiguredEndpoints', 'SpecificEndpointIds'];
 const EMPTY_DEFINITIONS = [];
 const EMPTY_ENDPOINTS = [];
@@ -108,7 +114,19 @@ function LoadModelModal({
   const attachedEndpoints = useMemo(() => getAttachedEndpoints(target, endpoints), [target, endpoints]);
   const apiType = target?.ApiType || '';
   const title = targetType === 'vmr' ? 'Load VMR Model' : 'Load Endpoint Model';
-  const hostedPaidProbe = ['OpenAI', 'Gemini'].includes(apiType) && !['Auto', 'MetadataOnly'].includes(formData.ProbeKind);
+  // Types the probe reaches: for a VMR, its attached endpoints' types (an Ollama VMR may front
+  // Ollama Cloud, a TypeSafe VMR may front Ollaya); otherwise the target's own type.
+  const probeTypes = useMemo(() => {
+    const endpointTypes = targetType === 'vmr'
+      ? attachedEndpoints.map((endpoint) => endpoint.ApiType).filter(Boolean)
+      : [];
+    return Array.from(new Set(endpointTypes.length > 0 ? endpointTypes : [apiType])).filter(Boolean);
+  }, [apiType, targetType, attachedEndpoints]);
+  const billableTypes = probeTypes.filter((type) => isProbeBillable(type, formData.ProbeKind));
+  const hostedPaidProbe = billableTypes.length > 0;
+  // Decision probes are only offered where a decision model can answer them.
+  const probeKinds = PROBE_KINDS.filter((probe) => probe !== 'Decision' || hasCapability(apiType, 'decisions'));
+  const selectedProbeUnsupported = getUnsupportedProbeReason(apiType, formData.ProbeKind);
   const submitBlockReason = getSubmitBlockReason(targetType, formData, activeDefinitions);
 
   const targetId = target?.Id || '';
@@ -205,7 +223,7 @@ function LoadModelModal({
             <span className="load-model-label">Target</span>
             <strong>{target.Name || target.Id}</strong>
           </div>
-          <span className="service-state-badge neutral">{apiType || 'Unknown'}</span>
+          <span className="service-state-badge neutral">{getProviderLabel(apiType)}</span>
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
@@ -231,8 +249,28 @@ function LoadModelModal({
                 value={formData.ProbeKind}
                 onChange={(event) => updateField('ProbeKind', event.target.value)}
               >
-                {PROBE_KINDS.map((probe) => <option key={probe} value={probe}>{probe}</option>)}
+                {probeKinds.map((probe) => {
+                  const reason = getUnsupportedProbeReason(apiType, probe);
+                  return (
+                    <option key={probe} value={probe} disabled={Boolean(reason)} title={reason || undefined}>
+                      {reason ? `${probe} (not supported)` : probe}
+                    </option>
+                  );
+                })}
               </select>
+              {selectedProbeUnsupported ? (
+                <small className="error-text">{selectedProbeUnsupported}</small>
+              ) : (
+                probeKinds.some((probe) => getUnsupportedProbeReason(apiType, probe)) && (
+                  <small className="form-help">
+                    {probeKinds
+                      .filter((probe) => getUnsupportedProbeReason(apiType, probe))
+                      .map((probe) => getUnsupportedProbeReason(apiType, probe))
+                      .filter((reason, index, all) => all.indexOf(reason) === index)
+                      .join(' ')}
+                  </small>
+                )
+              )}
             </div>
           </div>
 
@@ -362,8 +400,11 @@ function LoadModelModal({
           </div>
 
           {hostedPaidProbe && (
-            <div className="load-model-warning">
-              This probe sends the input text to the hosted provider and may be billable. Use MetadataOnly for availability verification without generation or embedding traffic.
+            <div className="load-model-warning" role="note">
+              {formData.ProbeKind === 'Auto' || formData.ProbeKind === 'Decision'
+                ? `This probe sends a real request to the hosted ${billableTypes.map(getProviderLabel).join(', ')} API and is billable.`
+                : `This probe sends the input text to the hosted ${billableTypes.map(getProviderLabel).join(', ')} API and may be billable.`}
+              {' '}Use MetadataOnly for availability verification without generation traffic where the type supports it.
             </div>
           )}
 
@@ -414,7 +455,7 @@ function LoadModelModal({
                   {(result.EndpointResults || []).map((endpointResult) => (
                     <tr key={endpointResult.EndpointId || endpointResult.EndpointName}>
                       <td title={endpointResult.EndpointId}>{endpointResult.EndpointName || endpointResult.EndpointId}</td>
-                      <td>{endpointResult.ApiType}</td>
+                      <td>{getProviderLabel(endpointResult.ApiType)}</td>
                       <td>
                         <span className={`service-state-badge ${getOutcomeTone(endpointResult.OutcomeCode, endpointResult.Success)}`}>
                           {endpointResult.OutcomeCode}

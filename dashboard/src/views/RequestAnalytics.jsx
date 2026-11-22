@@ -7,6 +7,7 @@ import ActivityHeatmap from '../components/ActivityHeatmap';
 import CopyableId from '../components/CopyableId';
 import RefreshButton from '../components/RefreshButton';
 import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
+import { API_TYPES, getProviderLabel } from '../utils/providers';
 
 const RANGE_STORAGE_KEY = 'conductor_request_analytics_range';
 
@@ -46,7 +47,8 @@ const EXPORT_FORMATS = [
   { label: 'Dashboard Link', value: 'dashboardLink', tooltip: 'Export-specific dashboard links are deferred; saved-report links are available in the Reports controls.' }
 ];
 
-const PROVIDERS = ['', 'OpenAI', 'vLLM', 'Gemini', 'Ollama'];
+// Provider filter values are endpoint ApiType names from the provider registry.
+const PROVIDERS = ['', ...API_TYPES];
 const PAGE_TOOLTIP = 'Analytics workspace for time-to-first-token, token usage, estimated cost, users, endpoints, and request outcomes.';
 const FILTER_SECTION_TOOLTIP = 'Filters applied to every metric, chart, table, and analytics detail on this page. Analytics data is retained for 30 days.';
 const CHART_TOOLTIP = 'Combined time-series chart. Grouped bars show successful and failed request volume per bucket, and the line shows average time-to-first-token.';
@@ -1011,7 +1013,7 @@ function RequestAnalytics() {
           <div className="filter-group" title="Limit analytics to one normalized upstream provider family.">
             <label title="Provider filter applied to all analytics panels.">Provider:</label>
             <select value={providerName} onChange={(e) => setProviderName(e.target.value)} title="Choose a provider family, or All to include every provider.">
-              {PROVIDERS.map(provider => <option key={provider || 'all'} value={provider} title={provider ? `Limit analytics to ${provider} requests.` : 'Include requests for every provider.'}>{provider || 'All'}</option>)}
+              {PROVIDERS.map(provider => <option key={provider || 'all'} value={provider} title={provider ? `Limit analytics to ${getProviderLabel(provider)} requests.` : 'Include requests for every provider.'}>{provider ? getProviderLabel(provider) : 'All'}</option>)}
             </select>
           </div>
           <div className="filter-group" title="Limit analytics to requests whose effective upstream model matches this text.">
@@ -1239,7 +1241,7 @@ function RequestAnalytics() {
               ) : (overview.EndpointSummaries || []).map(item => (
                 <tr key={item.ModelEndpointGuid || item.ModelEndpointName} title="One endpoint analytics group for the active filters.">
                   <td title="Endpoint name or endpoint identifier selected by routing. Unrouted means Conductor did not select an endpoint.">{item.ModelEndpointName || item.ModelEndpointGuid || 'Unrouted'}</td>
-                  <td title="Normalized upstream provider family for this endpoint group.">{item.ProviderName || '-'}</td>
+                  <td title="Upstream API type of the endpoints in this group.">{item.ProviderName ? getProviderLabel(item.ProviderName) : '-'}</td>
                   <td title="Total filtered requests routed to this endpoint group.">{formatNumber(item.RequestCount)}</td>
                   <td title="Filtered requests in this endpoint group counted as failures.">{formatNumber(item.FailureCount)}</td>
                   <td title="95th percentile time-to-first-token for this endpoint group.">{formatMs(item.P95DurationMs)}</td>

@@ -34,6 +34,7 @@ function ModelDefinitions() {
     QuantizationLevel: '',
     SupportsEmbeddings: false,
     SupportsCompletions: true,
+    SupportsDecisions: false,
     Active: true,
     Labels: labelsFromValue([]),
     Tags: tagsFromValue({})
@@ -83,6 +84,7 @@ function ModelDefinitions() {
       QuantizationLevel: '',
       SupportsEmbeddings: false,
       SupportsCompletions: true,
+      SupportsDecisions: false,
       Active: true,
       Labels: labelsFromValue([]),
       Tags: tagsFromValue({})
@@ -102,6 +104,7 @@ function ModelDefinitions() {
       QuantizationLevel: definition.QuantizationLevel || '',
       SupportsEmbeddings: definition.SupportsEmbeddings === true,
       SupportsCompletions: definition.SupportsCompletions !== false,
+      SupportsDecisions: definition.SupportsDecisions === true,
       Active: definition.Active !== false,
       Labels: labelsFromValue(definition.Labels),
       Tags: tagsFromValue(definition.Tags)
@@ -121,6 +124,7 @@ function ModelDefinitions() {
       QuantizationLevel: definition.QuantizationLevel || '',
       SupportsEmbeddings: definition.SupportsEmbeddings === true,
       SupportsCompletions: definition.SupportsCompletions !== false,
+      SupportsDecisions: definition.SupportsDecisions === true,
       Active: definition.Active !== false,
       Labels: labelsFromValue(definition.Labels),
       Tags: tagsFromValue(definition.Tags)
@@ -172,6 +176,7 @@ function ModelDefinitions() {
         QuantizationLevel: formData.QuantizationLevel,
         SupportsEmbeddings: formData.SupportsEmbeddings,
         SupportsCompletions: formData.SupportsCompletions,
+        SupportsDecisions: formData.SupportsDecisions,
         Active: formData.Active,
         Labels: labelsToPayload(formData.Labels),
         Tags: tagsToPayload(formData.Tags)
@@ -224,18 +229,20 @@ function ModelDefinitions() {
     {
       key: 'ModelType',
       label: 'Type',
-      tooltip: 'Supported inference types (completions and/or embeddings)',
+      tooltip: 'Supported inference types (completions, embeddings and/or decisions)',
       width: '120px',
       render: (item) => {
         const types = [];
         if (item.SupportsCompletions) types.push('Completions');
         if (item.SupportsEmbeddings) types.push('Embeddings');
+        if (item.SupportsDecisions) types.push('Decisions');
         return types.length > 0 ? types.join(', ') : 'None';
       },
       filterValue: (item) => {
         const types = [];
         if (item.SupportsCompletions) types.push('completions');
         if (item.SupportsEmbeddings) types.push('embeddings');
+        if (item.SupportsDecisions) types.push('decisions');
         return types.join(' ');
       }
     },
@@ -386,6 +393,17 @@ function ModelDefinitions() {
               />
               Supports Embeddings
             </label>
+          </div>
+          <div className="form-group checkbox-group">
+            <label title="Model answers structured decision requests (TypeSafe System One /v1/systemone). Required for TypeSafe VMRs in strict mode: a decision request for a definition without this setting is rejected with 404.">
+              <input
+                type="checkbox"
+                checked={formData.SupportsDecisions}
+                onChange={(e) => setFormData({ ...formData, SupportsDecisions: e.target.checked })}
+              />
+              Supports Decisions
+            </label>
+            <small className="form-help">Turn this on for decision models such as Jev served through TypeSafe or Ollaya. A definition that only supports decisions is not offered for completion or embedding requests.</small>
           </div>
 
           <LabelsTagsEditor

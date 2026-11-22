@@ -36,7 +36,7 @@ namespace Conductor.Core.Database.Sqlite.Implementations
 
             string query = "INSERT INTO modelrunnerendpoints (id, tenantid, name, hostname, port, apikey, apitype, usessl, timeoutms, active, " +
                            "healthcheckurl, healthcheckmethod, healthcheckintervalms, healthchecktimeoutms, healthcheckexpectedstatuscode, " +
-                           "unhealthythreshold, healthythreshold, healthcheckuseauth, maxparallelrequests, weight, servicestate, rigmonitor, " +
+                           "unhealthythreshold, healthythreshold, healthcheckuseauth, healthcheckenabled, healthcheckrequestbody, anthropicversion, maxparallelrequests, weight, servicestate, rigmonitor, " +
                            "createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(endpoint.Id) + "', " +
                            "'" + _Driver.Sanitize(endpoint.TenantId) + "', " +
@@ -56,6 +56,9 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            endpoint.UnhealthyThreshold + ", " +
                            endpoint.HealthyThreshold + ", " +
                            _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
+                           _Driver.FormatBoolean(endpoint.HealthCheckEnabled) + ", " +
+                           _Driver.FormatNullableString(endpoint.HealthCheckRequestBody) + ", " +
+                           _Driver.FormatNullableString(endpoint.AnthropicVersion) + ", " +
                            endpoint.MaxParallelRequests + ", " +
                            endpoint.Weight + ", " +
                            (int)endpoint.ServiceState + ", " +
@@ -125,6 +128,9 @@ namespace Conductor.Core.Database.Sqlite.Implementations
                            "unhealthythreshold = " + endpoint.UnhealthyThreshold + ", " +
                            "healthythreshold = " + endpoint.HealthyThreshold + ", " +
                            "healthcheckuseauth = " + _Driver.FormatBoolean(endpoint.HealthCheckUseAuth) + ", " +
+                           "healthcheckenabled = " + _Driver.FormatBoolean(endpoint.HealthCheckEnabled) + ", " +
+                           "healthcheckrequestbody = " + _Driver.FormatNullableString(endpoint.HealthCheckRequestBody) + ", " +
+                           "anthropicversion = " + _Driver.FormatNullableString(endpoint.AnthropicVersion) + ", " +
                            "maxparallelrequests = " + endpoint.MaxParallelRequests + ", " +
                            "weight = " + endpoint.Weight + ", " +
                            "servicestate = " + (int)endpoint.ServiceState + ", " +

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useApp } from '../context/AppContext';
 import TourTooltip from './TourTooltip';
+import { formatProviderList } from '../utils/providers';
 
 function Tour() {
   const { tourActive, tourStep, nextTourStep, prevTourStep, endTour, startWizard } = useOnboarding();
@@ -33,7 +34,7 @@ function Tour() {
       {
         selector: '[data-tour-id="nav-endpoints"]',
         title: 'Endpoints',
-        description: 'Backend inference servers like Ollama, OpenAI, vLLM, or Gemini that Conductor proxies requests to, plus reusable Endpoint Groups and Load Balancing Policies.',
+        description: `Backend inference servers (${formatProviderList()}) that Conductor proxies requests to, plus reusable Endpoint Groups and Load Balancing Policies.`,
         position: 'right'
       },
       {
@@ -172,7 +173,7 @@ function Tour() {
             <li>Session affinity for stateful conversations</li>
             <li>Multi-tenancy for resource isolation</li>
             <li>Full observability and request history</li>
-            <li>OpenAI, vLLM, Gemini, and Ollama support</li>
+            <li>{formatProviderList({ clientFacingOnly: true })} client APIs</li>
           </ul>
           <p className="tour-welcome-subtext">Let's take a quick tour of the interface to get you oriented.</p>
           <div className="tour-welcome-actions">

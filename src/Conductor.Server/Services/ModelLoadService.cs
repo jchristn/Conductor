@@ -14,6 +14,7 @@ namespace Conductor.Server.Services
     using Conductor.Core.Requests;
     using Conductor.Core.Responses;
     using Conductor.Core.Serialization;
+    using Conductor.Core.Settings;
     using SyslogLogging;
     using WatsonWebserver.Core;
 
@@ -44,23 +45,27 @@ namespace Conductor.Server.Services
         /// <param name="healthCheckService">Health check service.</param>
         /// <param name="metrics">Operational metrics service.</param>
         /// <param name="transport">Optional transport override for tests.</param>
+        /// <param name="anthropicSettings">Anthropic settings for the default transport's anthropic-version header (optional).</param>
+        /// <param name="typeSafeSettings">TypeSafe settings for the decision probe (optional).</param>
         public ModelLoadService(
             DatabaseDriverBase database,
             LoggingModule logging,
             RoutingDecisionService routingDecisionService = null,
             HealthCheckService healthCheckService = null,
             OperationalMetricsService metrics = null,
-            IModelLoadTransport transport = null)
+            IModelLoadTransport transport = null,
+            AnthropicSettings anthropicSettings = null,
+            TypeSafeSettings typeSafeSettings = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _RoutingDecisionService = routingDecisionService;
             _HealthCheckService = healthCheckService;
             _Metrics = metrics;
-            _Transport = transport ?? new DefaultModelLoadTransport();
+            _Transport = transport ?? new DefaultModelLoadTransport { AnthropicSettings = anthropicSettings };
             _ReservationService = new VirtualModelRunnerReservationService(_Database, _Logging);
             _OwnsTransport = transport == null;
-            _ProbeBuilder = new ModelLoadProbeBuilder();
+            _ProbeBuilder = new ModelLoadProbeBuilder { TypeSafeSettings = typeSafeSettings };
             _VerificationService = new ModelLoadVerificationService(_Transport, _ProbeBuilder);
         }
 
@@ -426,7 +431,7 @@ namespace Conductor.Server.Services
                 }
 
                 bool verified = false;
-                if (request.VerifyLoaded)
+                if (request.VerifyLoaded && endpoint.ApiType != ApiTypeEnum.TypeSafe)
                 {
                     verified = await _VerificationService.VerifyAsync(endpoint, model, request.TimeoutMs, token).ConfigureAwait(false);
                 }
@@ -434,6 +439,13 @@ namespace Conductor.Server.Services
                 result.Success = true;
                 result.VerifiedLoaded = verified;
                 result.OutcomeCode = DetermineProbeSuccessOutcome(endpoint.ApiType);
+                return FinalizeEndpointResult(result, stopwatch);
+            }
+            catch (NotSupportedException ex)
+            {
+                result.Success = false;
+                result.OutcomeCode = ModelLoadOutcomeEnum.UnsupportedApiType;
+                result.ErrorMessage = ex.Message;
                 return FinalizeEndpointResult(result, stopwatch);
             }
             catch (OperationCanceledException)
@@ -564,7 +576,7 @@ namespace Conductor.Server.Services
 
             RoutingSimulationRequest simulation = BuildRoutingSimulation(vmr, request, model);
             string fullPath = vmr.BasePath.TrimEnd('/') + simulation.RelativePath;
-            UrlContext urlContext = UrlContext.Parse(fullPath, simulation.Method);
+            UrlContext urlContext = UrlContext.Parse(fullPath, simulation.Method, vmr.ApiType);
             RequestContext requestContext = new RequestContext
             {
                 HttpMethod = simulation.Method,
@@ -734,6 +746,31 @@ namespace Conductor.Server.Services
                     return BuildOllamaRoutingSimulation(probe, model, request.InputText);
                 case ApiTypeEnum.Gemini:
                     return BuildGeminiRoutingSimulation(probe, model, request.InputText);
+                case ApiTypeEnum.Anthropic:
+                    return new RoutingSimulationRequest
+                    {
+                        Method = "POST",
+                        RelativePath = "/v1/messages",
+                        SourceIp = "127.0.0.1",
+                        Body = _Serializer.SerializeJson(new Dictionary<string, object>
+                        {
+                            { "model", model },
+                            { "max_tokens", 1 },
+                            { "messages", new List<Dictionary<string, object>>
+                                {
+                                    new Dictionary<string, object> { { "role", "user" }, { "content", request.InputText } }
+                                }
+                            }
+                        }, false)
+                    };
+                case ApiTypeEnum.TypeSafe:
+                    return new RoutingSimulationRequest
+                    {
+                        Method = "POST",
+                        RelativePath = "/v1/systemone",
+                        SourceIp = "127.0.0.1",
+                        Body = _ProbeBuilder.BuildDecisionProbeBody(model)
+                    };
                 case ApiTypeEnum.OpenAI:
                 case ApiTypeEnum.vLLM:
                 default:
@@ -968,7 +1005,9 @@ namespace Conductor.Server.Services
 
         private static ModelLoadOutcomeEnum DetermineMetadataSuccessOutcome(ApiTypeEnum apiType)
         {
-            if (apiType == ApiTypeEnum.OpenAI || apiType == ApiTypeEnum.Gemini)
+            // Hosted providers (OpenAI, Gemini, Anthropic, TypeSafe, OllamaCloud) report VerifiedRemote; local runtimes
+            // and OpenAI-compatible servers report Verified.
+            if (ApiTypeCompatibility.IsHostedProvider(apiType))
             {
                 return ModelLoadOutcomeEnum.VerifiedRemote;
             }
@@ -983,7 +1022,7 @@ namespace Conductor.Server.Services
                 return ModelLoadOutcomeEnum.Loaded;
             }
 
-            if (apiType == ApiTypeEnum.OpenAI || apiType == ApiTypeEnum.Gemini)
+            if (ApiTypeCompatibility.IsHostedProvider(apiType))
             {
                 return ModelLoadOutcomeEnum.VerifiedRemote;
             }

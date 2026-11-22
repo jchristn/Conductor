@@ -44,7 +44,11 @@ namespace Conductor.Core.Models
         public string Hostname
         {
             get => _Hostname;
-            set => _Hostname = (String.IsNullOrEmpty(value) ? throw new ArgumentNullException(nameof(Hostname)) : value);
+            set
+            {
+                _Hostname = (String.IsNullOrEmpty(value) ? throw new ArgumentNullException(nameof(Hostname)) : value);
+                MarkSet(nameof(Hostname));
+            }
         }
 
         /// <summary>
@@ -53,23 +57,48 @@ namespace Conductor.Core.Models
         public int Port
         {
             get => _Port;
-            set => _Port = (value < 1 || value > 65535 ? 11434 : value);
+            set
+            {
+                _Port = (value < 1 || value > 65535 ? 11434 : value);
+                MarkSet(nameof(Port));
+            }
         }
 
         /// <summary>
-        /// API key for authentication.
+        /// Upstream API key. Null when unset. Management API responses mask this value as four asterisks followed by the
+        /// last four characters; use the reveal route to read the full value.
         /// </summary>
         public string ApiKey { get; set; } = null;
 
         /// <summary>
-        /// API type (Ollama or OpenAI).
+        /// Endpoint API type. Determines the wire API, upstream authentication headers and type defaults.
+        /// Default: Ollama.
         /// </summary>
         public ApiTypeEnum ApiType { get; set; } = ApiTypeEnum.Ollama;
 
         /// <summary>
-        /// Use SSL/TLS.
+        /// Use SSL/TLS. Default: false (type defaults may set it on create when omitted).
         /// </summary>
-        public bool UseSsl { get; set; } = false;
+        public bool UseSsl
+        {
+            get => _UseSsl;
+            set
+            {
+                _UseSsl = value;
+                MarkSet(nameof(UseSsl));
+            }
+        }
+
+        /// <summary>
+        /// The anthropic-version header value sent upstream when the client does not send one. Anthropic endpoints only.
+        /// Must use the format yyyy-MM-dd. Null (the default) means the server setting Anthropic.DefaultVersion.
+        /// Empty or whitespace values are stored as null; values in other formats are rejected by validation.
+        /// </summary>
+        public string AnthropicVersion
+        {
+            get => _AnthropicVersion;
+            set => _AnthropicVersion = (String.IsNullOrWhiteSpace(value) ? null : value.Trim());
+        }
 
         /// <summary>
         /// Time to first byte, in milliseconds: how long Conductor waits for this endpoint to return response headers
@@ -128,16 +157,53 @@ namespace Conductor.Core.Models
         public string HealthCheckUrl
         {
             get => _HealthCheckUrl;
-            set => _HealthCheckUrl = (String.IsNullOrEmpty(value) ? "/" : value);
+            set
+            {
+                _HealthCheckUrl = (String.IsNullOrEmpty(value) ? "/" : value);
+                MarkSet(nameof(HealthCheckUrl));
+            }
         }
 
         /// <summary>
-        /// Health check HTTP method.
+        /// Health check HTTP method. POST sends HealthCheckRequestBody with Content-Type application/json.
+        /// Default: GET.
         /// </summary>
         public HealthCheckMethodEnum HealthCheckMethod
         {
             get => _HealthCheckMethod;
-            set => _HealthCheckMethod = value;
+            set
+            {
+                _HealthCheckMethod = value;
+                MarkSet(nameof(HealthCheckMethod));
+            }
+        }
+
+        /// <summary>
+        /// Boolean indicating whether Conductor sends health check probes to this endpoint. When false, no probe is sent
+        /// and the endpoint is treated as healthy. Default: true (the TypeSafe type default is false).
+        /// </summary>
+        public bool HealthCheckEnabled
+        {
+            get => _HealthCheckEnabled;
+            set
+            {
+                _HealthCheckEnabled = value;
+                MarkSet(nameof(HealthCheckEnabled));
+            }
+        }
+
+        /// <summary>
+        /// Request body sent with health checks when HealthCheckMethod is POST. Null (the default) when unset; empty or
+        /// whitespace values are stored as null. Validation requires a body when HealthCheckMethod is POST.
+        /// </summary>
+        public string HealthCheckRequestBody
+        {
+            get => _HealthCheckRequestBody;
+            set
+            {
+                _HealthCheckRequestBody = (String.IsNullOrWhiteSpace(value) ? null : value);
+                MarkSet(nameof(HealthCheckRequestBody));
+            }
         }
 
         /// <summary>
@@ -146,7 +212,11 @@ namespace Conductor.Core.Models
         public int HealthCheckIntervalMs
         {
             get => _HealthCheckIntervalMs;
-            set => _HealthCheckIntervalMs = (value < 1 ? 5000 : value);
+            set
+            {
+                _HealthCheckIntervalMs = (value < 1 ? 5000 : value);
+                MarkSet(nameof(HealthCheckIntervalMs));
+            }
         }
 
         /// <summary>
@@ -187,8 +257,17 @@ namespace Conductor.Core.Models
 
         /// <summary>
         /// Boolean indicating whether to include authentication material (API key) in health check requests.
+        /// Default: false (type defaults may set it on create when omitted).
         /// </summary>
-        public bool HealthCheckUseAuth { get; set; } = false;
+        public bool HealthCheckUseAuth
+        {
+            get => _HealthCheckUseAuth;
+            set
+            {
+                _HealthCheckUseAuth = value;
+                MarkSet(nameof(HealthCheckUseAuth));
+            }
+        }
 
         /// <summary>
         /// Maximum number of concurrent requests (0 = unlimited).
@@ -279,12 +358,41 @@ namespace Conductor.Core.Models
         private int _MaxParallelRequests = 4;
         private int _Weight = 1;
         private RigMonitorConfiguration _RigMonitor = new RigMonitorConfiguration();
+        private bool _UseSsl = false;
+        private string _AnthropicVersion = null;
+        private bool _HealthCheckEnabled = true;
+        private string _HealthCheckRequestBody = null;
+        private bool _HealthCheckUseAuth = false;
+        private readonly HashSet<string> _ExplicitlySetProperties = new HashSet<string>(StringComparer.Ordinal);
 
         /// <summary>
         /// Instantiate the model runner endpoint.
         /// </summary>
         public ModelRunnerEndpoint()
         {
+        }
+
+        /// <summary>
+        /// Determine whether a property that participates in type defaults was assigned since this instance was created
+        /// or since ClearExplicitlySetProperties was called. Tracked properties: Hostname, Port, UseSsl, HealthCheckUrl,
+        /// HealthCheckMethod, HealthCheckEnabled, HealthCheckRequestBody, HealthCheckIntervalMs and HealthCheckUseAuth.
+        /// JSON deserialization assigns only the properties present in the payload, so this reports what a client sent.
+        /// Not thread safe.
+        /// </summary>
+        /// <param name="propertyName">Property name, for example nameof(ModelRunnerEndpoint.Port). Null returns false.</param>
+        /// <returns>True when the property was assigned.</returns>
+        public bool WasExplicitlySet(string propertyName)
+        {
+            if (String.IsNullOrEmpty(propertyName)) return false;
+            return _ExplicitlySetProperties.Contains(propertyName);
+        }
+
+        /// <summary>
+        /// Forget which tracked properties were assigned. Not thread safe.
+        /// </summary>
+        public void ClearExplicitlySetProperties()
+        {
+            _ExplicitlySetProperties.Clear();
         }
 
         /// <summary>
@@ -328,10 +436,16 @@ namespace Conductor.Core.Models
                 UnhealthyThreshold = DataTableHelper.GetIntValue(row, "unhealthythreshold"),
                 HealthyThreshold = DataTableHelper.GetIntValue(row, "healthythreshold"),
                 HealthCheckUseAuth = DataTableHelper.GetBooleanValue(row, "healthcheckuseauth"),
+                AnthropicVersion = DataTableHelper.GetStringValue(row, "anthropicversion"),
+                HealthCheckRequestBody = DataTableHelper.GetStringValue(row, "healthcheckrequestbody"),
                 MaxParallelRequests = DataTableHelper.GetIntValue(row, "maxparallelrequests"),
                 Weight = DataTableHelper.GetIntValue(row, "weight"),
                 ServiceState = DataTableHelper.GetEnumValue<EndpointServiceStateEnum>(row, "servicestate", EndpointServiceStateEnum.Normal)
             };
+
+            obj.HealthCheckEnabled = !row.Table.Columns.Contains("healthcheckenabled")
+                || row["healthcheckenabled"] == DBNull.Value
+                || DataTableHelper.GetBooleanValue(row, "healthcheckenabled");
 
             if (obj.Port == 0) obj.Port = 11434;
             if (obj.TimeoutMs == 0) obj.TimeoutMs = Constants.DefaultRequestTimeoutMs;
@@ -367,6 +481,7 @@ namespace Conductor.Core.Models
                 obj.RigMonitorJson = rigMonitorJson;
             }
 
+            obj.ClearExplicitlySetProperties();
             return obj;
         }
 
@@ -387,6 +502,11 @@ namespace Conductor.Core.Models
                 if (obj != null) ret.Add(obj);
             }
             return ret;
+        }
+
+        private void MarkSet(string propertyName)
+        {
+            _ExplicitlySetProperties?.Add(propertyName);
         }
     }
 }
