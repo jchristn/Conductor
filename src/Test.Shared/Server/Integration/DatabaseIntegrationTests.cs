@@ -43,7 +43,7 @@ namespace Test.Shared.Server.Integration
                 LogQueries = false
             };
 
-            _Database = new SqliteDatabaseDriver(settings);
+            _Database = Test.Shared.Server.Fakes.TestDatabaseFactory.Create(settings.Filename);
             await _Database.InitializeAsync().ConfigureAwait(false);
 
             // Create test tenant

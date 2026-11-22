@@ -8,6 +8,7 @@ jobs:
   test:
     name: Full suite (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
@@ -21,6 +22,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Each database-backed test creates its own SQLite file in the temp directory.
+      # On Windows runners the system drive is slow, so use the runner temp disk.
+      - name: Use the runner temp disk for test databases (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "TMP=${{ runner.temp }}" >> "$GITHUB_ENV"
+          echo "TEMP=${{ runner.temp }}" >> "$GITHUB_ENV"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -98,3 +108,79 @@ jobs:
             results.json
             mcp-output.txt
             test-results/
+
+  provider-matrix:
+    name: Provider matrix (${{ matrix.db }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: PostgreSql
+            port: 15432
+            user: postgres
+            run: docker run -d --name conductor-test-db -e POSTGRES_PASSWORD=ConductorTest1! -p 127.0.0.1:15432:5432 postgres:17 -c max_connections=3000
+            ready: docker exec conductor-test-db pg_isready -U postgres
+          - db: MySql
+            port: 13306
+            user: root
+            run: docker run -d --name conductor-test-db -e MYSQL_ROOT_PASSWORD=ConductorTest1! -p 127.0.0.1:13306:3306 mysql:8.4 --max-connections=5000
+            ready: docker exec conductor-test-db mysql -uroot -pConductorTest1! -h 127.0.0.1 -e "SELECT 1"
+          - db: SqlServer
+            port: 11433
+            user: sa
+            run: docker run -d --name conductor-test-db -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=ConductorTest1! -p 127.0.0.1:11433:1433 mcr.microsoft.com/mssql/server:2022-latest
+            ready: docker exec conductor-test-db /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P ConductorTest1! -C -Q "SELECT 1"
+    defaults:
+      run:
+        shell: bash
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+      # The whole shared suite runs against this server. Each test creates its own database.
+      # The password is a throwaway value for a container that exists only for this job.
+      CONDUCTOR_TEST_DB_TYPE: ${{ matrix.db }}
+      CONDUCTOR_TEST_DB_HOST: 127.0.0.1
+      CONDUCTOR_TEST_DB_PORT: ${{ matrix.port }}
+      CONDUCTOR_TEST_DB_USER: ${{ matrix.user }}
+      CONDUCTOR_TEST_DB_PASSWORD: ConductorTest1!
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Start the database container
+        run: ${{ matrix.run }}
+
+      - name: Build
+        run: dotnet build src/Conductor.sln
+
+      - name: Wait for the database
+        run: |
+          for attempt in $(seq 1 60); do
+            if ${{ matrix.ready }} > /dev/null 2>&1; then
+              echo "Database is ready."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Database did not become ready in time." >&2
+          docker logs conductor-test-db | tail -50
+          exit 1
+
+      - name: Run console tests (Test.Automated)
+        run: dotnet run --project src/Test.Automated --no-build -- --results results-${{ matrix.db }}.json
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-results-${{ matrix.db }}
+          path: results-${{ matrix.db }}.json
+          if-no-files-found: warn
+

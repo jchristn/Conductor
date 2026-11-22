@@ -41,7 +41,7 @@ namespace Test.Shared.Server.Integration
                 Filename = _DatabaseFile,
                 LogQueries = false
             };
-            _Database = new SqliteDatabaseDriver(settings);
+            _Database = Test.Shared.Server.Fakes.TestDatabaseFactory.Create(settings.Filename);
             await _Database.InitializeAsync().ConfigureAwait(false);
 
             TenantMetadata tenant = new TenantMetadata { Name = "QoS Test Tenant", Active = true };

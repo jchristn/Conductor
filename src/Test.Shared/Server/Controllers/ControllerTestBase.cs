@@ -68,7 +68,7 @@ namespace Test.Shared.Server.Controllers
                 LogQueries = false
             };
 
-            Database = new SqliteDatabaseDriver(dbSettings);
+            Database = Test.Shared.Server.Fakes.TestDatabaseFactory.Create(dbSettings.Filename);
             Serializer = new Serializer();
             Logging = new LoggingModule();
 

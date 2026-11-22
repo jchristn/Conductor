@@ -128,7 +128,7 @@ namespace Test.Shared.Server.Integration
         /// <returns>Task.</returns>
         public async Task InitializeAsync()
         {
-            Database = new SqliteDatabaseDriver(new DatabaseSettings { Type = DatabaseTypeEnum.Sqlite, Filename = _DatabaseFile, LogQueries = false });
+            Database = Test.Shared.Server.Fakes.TestDatabaseFactory.Create(_DatabaseFile);
             await Database.InitializeAsync().ConfigureAwait(false);
 
             TenantMetadata tenant = await Database.Tenant.CreateAsync(new TenantMetadata { Name = "Rest Primary Tenant", Active = true }).ConfigureAwait(false);

@@ -64,7 +64,7 @@ namespace Test.Shared.Server.Mcp
                 Filename = _DatabaseFile,
                 LogQueries = false
             };
-            _Database = new SqliteDatabaseDriver(dbSettings);
+            _Database = Test.Shared.Server.Fakes.TestDatabaseFactory.Create(dbSettings.Filename);
             await _Database.InitializeAsync().ConfigureAwait(false);
 
             TenantMetadata tenant = await _Database.Tenant.CreateAsync(new TenantMetadata { Name = "MCP Test Tenant", Active = true }).ConfigureAwait(false);

@@ -177,6 +177,26 @@ dotnet test src/Conductor.sln
 dotnet run --project src/Test.Automated/Test.Automated.csproj
 ```
 
+By default every database-backed test creates its own SQLite file. To run the same suite against PostgreSQL, MySQL, or SQL Server, set these environment variables before running any test host. Each test then creates its own database on that server (and drops older ones as the run proceeds), so the user must be allowed to create and drop databases:
+
+| Variable | Value |
+|----------|-------|
+| `CONDUCTOR_TEST_DB_TYPE` | `PostgreSql`, `MySql`, or `SqlServer` (unset means SQLite) |
+| `CONDUCTOR_TEST_DB_HOST` | Server host. Default `127.0.0.1` |
+| `CONDUCTOR_TEST_DB_PORT` | Server port (required) |
+| `CONDUCTOR_TEST_DB_USER` | User name |
+| `CONDUCTOR_TEST_DB_PASSWORD` | Password |
+
+```bash
+# Example: run the suite against a throwaway PostgreSQL container
+docker run -d --rm --name conductor-test-db -e POSTGRES_PASSWORD=ConductorTest1! -p 127.0.0.1:15432:5432 postgres:17 -c max_connections=3000
+CONDUCTOR_TEST_DB_TYPE=PostgreSql CONDUCTOR_TEST_DB_PORT=15432 CONDUCTOR_TEST_DB_USER=postgres CONDUCTOR_TEST_DB_PASSWORD='ConductorTest1!' \
+  dotnet run --project src/Test.Automated/Test.Automated.csproj
+docker rm -f conductor-test-db
+```
+
+The GitHub Actions workflow (`.github/workflows/tests.yml`) runs every test host, the MCP tests, the three SDK harnesses, and the dashboard tests on Ubuntu, Windows, and macOS, and runs the shared suite against PostgreSQL, MySQL, and SQL Server containers in a provider matrix.
+
 See [TESTING.md](./archive/TESTING.md) for the full testing guide.
 
 ## AOT support
@@ -229,6 +249,7 @@ v1.1.0 adds new endpoint types and makes API type handling explicit. Database co
 - **Strict-mode rejections no longer return 401.** `StrictModeModelRejected`, `ModelNotAttached`, and `StrictModeNoModels` now return `404`, and `StrictModeModelRequired` returns `400`. All four used to return `401`, which clients read as a bad credential.
 - **`Ollaya` and `OpenAICompatible` endpoints need a port.** A create request without `Port` fails with `PortRequired`. These endpoints used to fall back to port 11434, which is Ollama's port. An update that omits `Port` keeps the stored port, and existing endpoints are not changed.
 - **Deleting a VMR or a tenant deletes its request history.** Conductor first removes the request history rows, analytics events, and detail files of the VMR (or of every VMR in the tenant), then returns `204`. Export anything you need to keep before deleting. Before this change the delete failed with `500` once the VMR had request history.
+- **SQL Server databases can now be initialized.** Before v1.1.0, Conductor could not create its schema on a new SQL Server database: the `modelaccessrules` table declared two cascading delete paths from `tenants`, which SQL Server rejects. The table now cascades only through its policy. No action is needed; the table is created on the next start.
 - **Tenant routes require authentication.** Before v1.1.0, every tenant route except purge accepted requests without credentials. Now creating, updating, deleting, and purging a tenant require a system administrator. Reading one tenant requires a global admin or a system administrator. Listing tenants works for any authenticated caller, but users who are not global admins see only their own tenant.
 - **User responses no longer contain passwords.** Create, read, list, and update responses leave out `Password`. An update that omits `Password` keeps the stored one, so a client can send back a user it read without resetting the password.
 - **Creating a user requires a password.** `POST /v1.0/users` without a non-empty `Password` now returns `400`. Before this change the user was created with the password `password`. Existing users are not changed.

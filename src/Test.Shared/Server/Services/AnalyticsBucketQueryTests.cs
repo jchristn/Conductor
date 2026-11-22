@@ -388,6 +388,7 @@ namespace Test.Shared.Server.Services
         /// <returns>Task.</returns>
         public async Task Initialize_CreatesCoveringRequestHistoryIndexes_Idempotently()
         {
+            if (Test.Shared.Server.Fakes.TestDatabaseFactory.SelectedType != Conductor.Core.Enums.DatabaseTypeEnum.Sqlite) return; // Inspects SQLite catalog tables and query plans.
             await Database.InitializeAsync().ConfigureAwait(false);
 
             DataTable result = await Database.ExecuteQueryAsync(
@@ -413,6 +414,7 @@ namespace Test.Shared.Server.Services
         /// <returns>Task.</returns>
         public async Task Initialize_UpgradedDatabase_DropsSupersededCompositeIndexes()
         {
+            if (Test.Shared.Server.Fakes.TestDatabaseFactory.SelectedType != Conductor.Core.Enums.DatabaseTypeEnum.Sqlite) return; // Inspects SQLite catalog tables and query plans.
             await Database.ExecuteQueryAsync("CREATE INDEX idx_requesthistory_tenant_created ON requesthistory(tenantguid, createdutc);").ConfigureAwait(false);
             await Database.ExecuteQueryAsync("CREATE INDEX idx_requesthistory_vmr_created ON requesthistory(virtualmodelrunnerguid, createdutc);").ConfigureAwait(false);
             await Database.ExecuteQueryAsync("DROP INDEX idx_requesthistory_vmr_created_cover;").ConfigureAwait(false);
@@ -430,6 +432,7 @@ namespace Test.Shared.Server.Services
         /// <returns>Task.</returns>
         public async Task BucketAggregate_GlobalAndScopedPlans_UseCoveringIndex()
         {
+            if (Test.Shared.Server.Fakes.TestDatabaseFactory.SelectedType != Conductor.Core.Enums.DatabaseTypeEnum.Sqlite) return; // Inspects SQLite catalog tables and query plans.
             DateTime start = AlignedStart();
             await BulkInsertAsync(TestTenantId, _VmrA, Enumerable.Range(0, 200).Select(i => start.AddMinutes(i)).ToList()).ConfigureAwait(false);
             await Database.ExecuteQueryAsync("ANALYZE;").ConfigureAwait(false);
@@ -535,7 +538,7 @@ namespace Test.Shared.Server.Services
             string effectiveModel)
         {
             _Sequence++;
-            string id = "req_bucket_" + _Sequence.ToString(CultureInfo.InvariantCulture) + "_" + Guid.NewGuid().ToString("N");
+            string id = "req_bkt_" + _Sequence.ToString(CultureInfo.InvariantCulture) + "_" + Guid.NewGuid().ToString("N").Substring(0, 20);
             return "('" + id + "', '" + tenantId + "', '" + vmrId + "', 'Bucket VMR', '127.0.0.1', 'POST', '/v1/chat/completions', 0, " +
                    "'" + id + ".json', '" + Database.FormatDateTime(createdUtc) + "', " +
                    Database.FormatNullable(httpStatus) + ", " +

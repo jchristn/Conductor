@@ -82,7 +82,7 @@ namespace Test.Shared.Server.Integration
         /// <returns>Task.</returns>
         public async Task InitializeAsync(ModelAccessControlSettings accessSettings = null, AnthropicSettings anthropicSettings = null, TypeSafeSettings typeSafeSettings = null)
         {
-            Database = new SqliteDatabaseDriver(new DatabaseSettings { Type = DatabaseTypeEnum.Sqlite, Filename = _DatabaseFile, LogQueries = false });
+            Database = Test.Shared.Server.Fakes.TestDatabaseFactory.Create(_DatabaseFile);
             await Database.InitializeAsync().ConfigureAwait(false);
 
             TenantMetadata tenant = await Database.Tenant.CreateAsync(new TenantMetadata { Name = "Proxy Test Tenant", Active = true }).ConfigureAwait(false);

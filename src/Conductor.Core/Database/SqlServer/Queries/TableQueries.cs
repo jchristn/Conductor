@@ -490,7 +490,7 @@ namespace Conductor.Core.Database.SqlServer.Queries
                 active BIT NOT NULL DEFAULT 1,
                 createdutc DATETIME2 NOT NULL,
                 lastupdateutc DATETIME2 NOT NULL,
-                FOREIGN KEY (tenantid) REFERENCES tenants(id) ON DELETE CASCADE,
+                FOREIGN KEY (tenantid) REFERENCES tenants(id),
                 FOREIGN KEY (policyid) REFERENCES modelaccesspolicies(id) ON DELETE CASCADE
             );
             IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_mar_tenantid')
