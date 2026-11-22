@@ -27,6 +27,8 @@ namespace Test.McpServer
             PropertyNameCaseInsensitive = true
         };
 
+        private static readonly string _AnthropicApiKey = "sk-ant-mcp-test-key-9876";
+        private static string _AnthropicEndpointId;
         private static DatabaseDriverBase _Database;
         private static ConductorMcpServer _McpServer;
         private static McpHttpClient _McpClient;
@@ -58,11 +60,16 @@ namespace Test.McpServer
                 // Step 5: Run all tests
                 await RunAllTestsAsync();
 
-                // Step 6: Interactive mode
-                await InteractiveModeAsync();
+                // Step 6: Interactive mode (skipped with --non-interactive, used by CI)
+                bool nonInteractive = args != null && Array.Exists(args, arg => String.Equals(arg, "--non-interactive", StringComparison.OrdinalIgnoreCase));
+                if (!nonInteractive)
+                {
+                    await InteractiveModeAsync(Console.In, Console.Out);
+                }
             }
             catch (Exception ex)
             {
+                Environment.ExitCode = 1;
                 Console.WriteLine();
                 Console.WriteLine("ERROR: " + ex.Message);
                 Console.WriteLine(ex.StackTrace);
@@ -195,6 +202,19 @@ namespace Test.McpServer
             };
             await _Database.ModelRunnerEndpoint.CreateAsync(endpoint2).ConfigureAwait(false);
             Console.WriteLine("      Created endpoint: " + endpoint2.Hostname + ":" + endpoint2.Port);
+
+            ModelRunnerEndpoint anthropicEndpoint = new ModelRunnerEndpoint
+            {
+                TenantId = _TenantId,
+                Name = "Anthropic",
+                Hostname = "127.0.0.1",
+                Port = 443,
+                ApiType = ApiTypeEnum.Anthropic,
+                ApiKey = _AnthropicApiKey
+            };
+            await _Database.ModelRunnerEndpoint.CreateAsync(anthropicEndpoint).ConfigureAwait(false);
+            _AnthropicEndpointId = anthropicEndpoint.Id;
+            Console.WriteLine("      Created endpoint: Anthropic " + anthropicEndpoint.Id);
 
             // Create model configuration
             ModelConfiguration config1 = new ModelConfiguration
@@ -372,7 +392,7 @@ namespace Test.McpServer
             {
                 JsonElement result = await CallToolAsync("conductor_list_endpoints", new { tenant_id = _TenantId }).ConfigureAwait(false);
                 PrintResult(result);
-                return result.GetProperty("count").GetInt32() == 2;
+                return result.GetProperty("count").GetInt32() == 3;
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Test: conductor_get_endpoint
@@ -472,12 +492,8 @@ namespace Test.McpServer
             // Test: conductor_create_vmr
             if (await RunTestAsync("conductor_create_vmr", async () =>
             {
-                JsonElement listResult = await CallToolAsync("conductor_list_endpoints", new { tenant_id = _TenantId }).ConfigureAwait(false);
-                string endpointId = null;
-                if (listResult.TryGetProperty("endpoints", out JsonElement endpoints) && endpoints.GetArrayLength() > 0)
-                {
-                    endpointId = endpoints[0].GetProperty("id").GetString();
-                }
+                // An Ollama VMR must reference an Ollama-compatible endpoint (compatibility table), so pick one explicitly.
+                string endpointId = await GetFirstEndpointIdAsync().ConfigureAwait(false);
 
                 object result = await CallToolAsync("conductor_create_vmr", new
                 {
@@ -491,6 +507,60 @@ namespace Test.McpServer
                 }).ConfigureAwait(false);
                 PrintResult(result);
                 return true;
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            // v1.1.0: VMR writes through MCP go through the API type validation rules.
+            if (await RunTestAsync("conductor_create_vmr (OllamaCloud) -> VmrApiTypeNotClientFacing", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_create_vmr", new { tenant_id = _TenantId, name = "Cloud VMR", api_type = "OllamaCloud" }, "VmrApiTypeNotClientFacing").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            if (await RunTestAsync("conductor_create_vmr (OpenAI over Ollama endpoint) -> EndpointApiTypeMismatch", async () =>
+            {
+                string ollamaEndpointId = await GetFirstEndpointIdAsync().ConfigureAwait(false);
+                return await ExpectToolErrorAsync("conductor_create_vmr", new { tenant_id = _TenantId, name = "Mismatch VMR", api_type = "OpenAI", endpoint_ids = new[] { ollamaEndpointId } }, "EndpointApiTypeMismatch").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            if (await RunTestAsync("conductor_create_vmr (TypeSafe, allow_decisions false) -> DecisionsDisabledOnDecisionRoute", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_create_vmr", new { tenant_id = _TenantId, name = "Decision VMR", api_type = "TypeSafe", allow_decisions = false }, "DecisionsDisabledOnDecisionRoute").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            if (await RunTestAsync("conductor_create_vmr (unknown api_type) -> isError", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_create_vmr", new { tenant_id = _TenantId, name = "Bad VMR", api_type = "NotAType" }, "is not a valid API type").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            if (await RunTestAsync("conductor_create_vmr (missing endpoint) -> EndpointMissing", async () =>
+            {
+                return await ExpectToolErrorAsync("conductor_create_vmr", new { tenant_id = _TenantId, name = "Missing VMR", api_type = "Ollama", endpoint_ids = new[] { "mre_does_not_exist" } }, "EndpointMissing").ConfigureAwait(false);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            if (await RunTestAsync("conductor_create_vmr (Anthropic over Anthropic endpoint) -> created", async () =>
+            {
+                JsonElement result = await CallToolAsync("conductor_create_vmr", new { tenant_id = _TenantId, name = "Anthropic VMR", api_type = "Anthropic", endpoint_ids = new[] { _AnthropicEndpointId } }).ConfigureAwait(false);
+                PrintResult(result);
+                VirtualModelRunner created = await _Database.VirtualModelRunner.ReadAsync(_TenantId, result.GetProperty("id").GetString()).ConfigureAwait(false);
+                return created != null && created.ApiType == ApiTypeEnum.Anthropic;
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            if (await RunTestAsync("conductor_get_endpoint masks apiKey", async () =>
+            {
+                JsonElement result = await CallToolAsync("conductor_get_endpoint", new { tenant_id = _TenantId, endpoint_id = _AnthropicEndpointId }).ConfigureAwait(false);
+                PrintResult(result);
+                return result.GetProperty("apiKey").GetString() == "****9876"
+                    && !result.GetRawText().Contains(_AnthropicApiKey, StringComparison.Ordinal);
+            }).ConfigureAwait(false)) passed++; else failed++;
+
+            if (await RunTestAsync("tools/list api_type description lists every type", async () =>
+            {
+                JsonElement tools = await _McpClient.CallAsync<JsonElement>("tools/list", new { }).ConfigureAwait(false);
+                string raw = tools.GetRawText();
+                return raw.Contains("Anthropic", StringComparison.Ordinal)
+                    && raw.Contains("TypeSafe", StringComparison.Ordinal)
+                    && raw.Contains("Ollaya", StringComparison.Ordinal)
+                    && raw.Contains("OllamaCloud", StringComparison.Ordinal)
+                    && raw.Contains("OpenAICompatible", StringComparison.Ordinal);
             }).ConfigureAwait(false)) passed++; else failed++;
 
             // Negative: conductor_get_endpoint_health with no health service configured is flagged isError
@@ -647,12 +717,36 @@ namespace Test.McpServer
                 return await ExpectRpcErrorAsync("conductor_does_not_exist", new { }, "was not found").ConfigureAwait(false);
             }).ConfigureAwait(false)) passed++; else failed++;
 
+            // Regression (UT-025): interactive mode must return on end of input (closed stdin) instead of spinning.
+            if (await RunTestAsync("interactive mode exits on end of input", async () =>
+            {
+                Task interactive = InteractiveModeAsync(new StringReader(String.Empty), TextWriter.Null);
+                Task finished = await Task.WhenAny(interactive, Task.Delay(5000)).ConfigureAwait(false);
+                if (finished != interactive) return false;
+                await interactive.ConfigureAwait(false);
+
+                Task afterPrompt = InteractiveModeAsync(new StringReader("t" + Environment.NewLine), TextWriter.Null);
+                finished = await Task.WhenAny(afterPrompt, Task.Delay(5000)).ConfigureAwait(false);
+                return finished == afterPrompt;
+            }).ConfigureAwait(false)) passed++; else failed++;
+
             Console.WriteLine();
             Console.WriteLine("-".PadRight(70, '-'));
             Console.WriteLine("  Test Results: " + passed + " passed, " + failed + " failed");
             if (failed > 0) Environment.ExitCode = 1;
             Console.WriteLine("-".PadRight(70, '-'));
             Console.WriteLine();
+        }
+
+        private static async Task<string> GetFirstEndpointIdAsync()
+        {
+            JsonElement listResult = await CallToolAsync("conductor_list_endpoints", new { tenant_id = _TenantId }).ConfigureAwait(false);
+            foreach (JsonElement endpoint in listResult.GetProperty("endpoints").EnumerateArray())
+            {
+                if (endpoint.GetProperty("apiType").GetString() == "Ollama") return endpoint.GetProperty("id").GetString();
+            }
+
+            return null;
         }
 
         private static async Task<bool> RunTestAsync(string testName, Func<Task<bool>> test)
@@ -766,76 +860,85 @@ namespace Test.McpServer
             }
         }
 
-        private static async Task InteractiveModeAsync()
+        private static async Task InteractiveModeAsync(TextReader input, TextWriter output)
         {
-            Console.WriteLine("[6/6] Interactive mode");
-            Console.WriteLine();
-            Console.WriteLine("The MCP server is running. You can:");
-            Console.WriteLine("  - Connect an MCP client (e.g. Claude Code) to http://127.0.0.1:9001/mcp");
-            Console.WriteLine("  - Legacy JSON-RPC endpoint at http://127.0.0.1:9001/mcp/rpc");
-            Console.WriteLine("  - SSE events available at http://127.0.0.1:9001/mcp/events");
-            Console.WriteLine();
-            Console.WriteLine("Press 'q' to quit, 'l' to list tools, or 't' to run a tool...");
-            Console.WriteLine();
+            output.WriteLine("[6/6] Interactive mode");
+            output.WriteLine();
+            output.WriteLine("The MCP server is running. You can:");
+            output.WriteLine("  - Connect an MCP client (e.g. Claude Code) to http://127.0.0.1:9001/mcp");
+            output.WriteLine("  - Legacy JSON-RPC endpoint at http://127.0.0.1:9001/mcp/rpc");
+            output.WriteLine("  - SSE events available at http://127.0.0.1:9001/mcp/events");
+            output.WriteLine();
+            output.WriteLine("Press 'q' to quit, 'l' to list tools, or 't' to run a tool...");
+            output.WriteLine();
 
             while (true)
             {
-                Console.Write("> ");
-                string input = Console.ReadLine()?.Trim().ToLower();
+                output.Write("> ");
+                string line = input.ReadLine();
 
-                if (String.IsNullOrEmpty(input)) continue;
+                // End of input (closed or redirected stdin): exit instead of reading empty lines forever.
+                if (line == null)
+                {
+                    output.WriteLine();
+                    output.WriteLine("End of input; leaving interactive mode.");
+                    break;
+                }
 
-                if (input == "q" || input == "quit" || input == "exit")
+                string command = line.Trim().ToLower();
+                if (String.IsNullOrEmpty(command)) continue;
+
+                if (command == "q" || command == "quit" || command == "exit")
                 {
                     break;
                 }
-                else if (input == "l" || input == "list")
+                else if (command == "l" || command == "list")
                 {
                     try
                     {
                         object result = await _McpClient.CallAsync<object>("tools/list").ConfigureAwait(false);
-                        Console.WriteLine(JsonSerializer.Serialize(result, _JsonOptions));
+                        output.WriteLine(JsonSerializer.Serialize(result, _JsonOptions));
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine("Error: " + ex.Message);
+                        output.WriteLine("Error: " + ex.Message);
                     }
                 }
-                else if (input == "t" || input == "tool")
+                else if (command == "t" || command == "tool")
                 {
-                    Console.Write("Tool name: ");
-                    string toolName = Console.ReadLine()?.Trim();
+                    output.Write("Tool name: ");
+                    string toolName = input.ReadLine()?.Trim();
                     if (String.IsNullOrEmpty(toolName)) continue;
 
-                    Console.Write("Arguments (JSON): ");
-                    string argsJson = Console.ReadLine()?.Trim();
+                    output.Write("Arguments (JSON): ");
+                    string argsJson = input.ReadLine()?.Trim();
                     if (String.IsNullOrEmpty(argsJson)) argsJson = "{}";
 
                     try
                     {
                         object args = JsonSerializer.Deserialize<object>(argsJson);
                         JsonElement result = await CallToolAsync(toolName, args).ConfigureAwait(false);
-                        Console.WriteLine(JsonSerializer.Serialize(result, _JsonOptions));
+                        output.WriteLine(JsonSerializer.Serialize(result, _JsonOptions));
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine("Error: " + ex.Message);
+                        output.WriteLine("Error: " + ex.Message);
                     }
                 }
-                else if (input == "h" || input == "help")
+                else if (command == "h" || command == "help")
                 {
-                    Console.WriteLine("Commands:");
-                    Console.WriteLine("  q, quit, exit - Quit the application");
-                    Console.WriteLine("  l, list       - List available MCP tools");
-                    Console.WriteLine("  t, tool       - Call an MCP tool interactively");
-                    Console.WriteLine("  h, help       - Show this help");
+                    output.WriteLine("Commands:");
+                    output.WriteLine("  q, quit, exit - Quit the application");
+                    output.WriteLine("  l, list       - List available MCP tools");
+                    output.WriteLine("  t, tool       - Call an MCP tool interactively");
+                    output.WriteLine("  h, help       - Show this help");
                 }
                 else
                 {
-                    Console.WriteLine("Unknown command. Type 'h' for help.");
+                    output.WriteLine("Unknown command. Type 'h' for help.");
                 }
 
-                Console.WriteLine();
+                output.WriteLine();
             }
         }
     }

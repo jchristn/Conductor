@@ -23,7 +23,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelDefinition>("/v1.0/modeldefinitions", async (req) =>
             {
                 ModelDefinition md = req.Data as ModelDefinition;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await mdController.Create(tenantId, md);
             },
@@ -41,7 +41,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelDefinition>("/v1.0/modeldefinitions/validate", async (req) =>
             {
                 ModelDefinition md = req.Data as ModelDefinition;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await mdController.Validate(tenantId, md, !String.IsNullOrEmpty(existingId) ? existingId : md?.Id);
             },
@@ -74,7 +74,7 @@ namespace Conductor.Server.Routing
             _App.Put<ModelDefinition>("/v1.0/modeldefinitions/{id}", async (req) =>
             {
                 ModelDefinition md = req.Data as ModelDefinition;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, md?.TenantId);
                 return await mdController.Update(tenantId, req.Parameters["id"], md);
             },
             api => api
@@ -91,7 +91,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/modeldefinitions/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await mdController.Delete(tenantId, req.Parameters["id"]);
                 return null;

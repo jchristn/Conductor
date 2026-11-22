@@ -8,6 +8,7 @@ import ChartCopyButton from '../components/ChartCopyButton';
 import RequestHistoryChart from '../components/RequestHistoryChart';
 import { hubPath } from '../config/navConfig';
 import { readChoicePreference, writePreference } from '../utils/persistedPreferences';
+import { formatProviderList } from '../utils/providers';
 
 // One time picker, refresh, and copy control drive every Dashboard chart tab. The selection is shared
 // across tabs and persisted under the key the request history chart has always used.
@@ -111,7 +112,7 @@ function Dashboard() {
     { label: 'Tenants', count: counts.tenants, path: hubPath('access', 'tenants'), color: '#3b82f6', tooltip: 'Organizational units for grouping resources' },
     { label: 'Users', count: counts.users, path: hubPath('access', 'users'), color: '#10b981', tooltip: 'User accounts that authenticate via API credentials' },
     { label: 'Credentials', count: counts.credentials, path: hubPath('access', 'credentials'), color: '#f59e0b', tooltip: 'API bearer tokens used for authentication' },
-    { label: 'Model Runner Endpoints', count: counts.modelRunnerEndpoints, path: hubPath('endpoints', 'endpoints'), color: '#8b5cf6', tooltip: 'Backend inference servers (Ollama, OpenAI, vLLM, Gemini, etc.)' },
+    { label: 'Model Runner Endpoints', count: counts.modelRunnerEndpoints, path: hubPath('endpoints', 'endpoints'), color: '#8b5cf6', tooltip: `Backend inference servers (${formatProviderList()})` },
     { label: 'Endpoint Groups', count: counts.endpointGroups, path: hubPath('endpoints', 'groups'), color: '#14b8a6', tooltip: 'Reusable endpoint collections for virtual model runners' },
     { label: 'Model Definitions', count: counts.modelDefinitions, path: hubPath('models', 'definitions'), color: '#ec4899', tooltip: 'Model metadata describing available models' },
     { label: 'Model Configurations', count: counts.modelConfigurations, path: hubPath('models', 'configurations'), color: '#06b6d4', tooltip: 'Parameter presets applied to inference requests' },
@@ -125,13 +126,13 @@ function Dashboard() {
   const observabilityServices = [
     {
       name: 'Grafana',
-      description: 'Dashboards for metrics, traces, and logs — the primary observability UI.',
+      description: 'Dashboards for metrics, traces, and logs: the primary observability UI.',
       url: `http://${serviceHost}:3000`,
       credentials: 'No login required (anonymous Admin). Default account: admin / admin.',
       color: '#f97316'
     },
     {
-      name: 'Grafana — QoS & Queueing',
+      name: 'Grafana: QoS & Queueing',
       description: 'Per-class queue wait, admissions, rejections, drops, and policer health for QoS.',
       url: `http://${serviceHost}:3000/d/conductor-qos`,
       credentials: 'No login required (anonymous Admin). Default account: admin / admin.',
@@ -218,7 +219,7 @@ function Dashboard() {
               <span className="action-icon">+</span>
               <span>Create Virtual Model Runner</span>
             </Link>
-            <Link to={hubPath('endpoints', 'endpoints')} className="action-card" title="Register a new backend inference server (Ollama, OpenAI, vLLM, Gemini, etc.)">
+            <Link to={hubPath('endpoints', 'endpoints')} className="action-card" title={`Register a new backend inference server (${formatProviderList()})`}>
               <span className="action-icon">+</span>
               <span>Add Model Runner Endpoint</span>
             </Link>

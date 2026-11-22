@@ -16,7 +16,7 @@ namespace Conductor.Server.Routing
             _App.Post<EndpointGroup>("/v1.0/endpointgroups", async (req) =>
             {
                 EndpointGroup group = req.Data as EndpointGroup;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, group?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, group?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await endpointGroupController.Create(tenantId, group);
             },
@@ -34,7 +34,7 @@ namespace Conductor.Server.Routing
             _App.Post<EndpointGroup>("/v1.0/endpointgroups/validate", async (req) =>
             {
                 EndpointGroup group = req.Data as EndpointGroup;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, group?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, group?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await endpointGroupController.Validate(tenantId, group, !string.IsNullOrEmpty(existingId) ? existingId : group?.Id);
             },
@@ -67,7 +67,7 @@ namespace Conductor.Server.Routing
             _App.Put<EndpointGroup>("/v1.0/endpointgroups/{id}", async (req) =>
             {
                 EndpointGroup group = req.Data as EndpointGroup;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, group?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, group?.TenantId);
                 return await endpointGroupController.Update(tenantId, req.Parameters["id"], group);
             },
             api => api
@@ -84,7 +84,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/endpointgroups/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await endpointGroupController.Delete(tenantId, req.Parameters["id"]);
                 return null;

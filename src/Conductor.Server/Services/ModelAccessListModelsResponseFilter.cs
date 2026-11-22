@@ -4,6 +4,7 @@ namespace Conductor.Server.Services
     using System.Collections.Generic;
     using System.Linq;
     using System.Text;
+    using System.Text.Json;
     using System.Text.Json.Nodes;
     using System.Threading;
     using System.Threading.Tasks;
@@ -11,6 +12,8 @@ namespace Conductor.Server.Services
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
     using Conductor.Core.Settings;
+    using Conductor.Core.ThirdParty.Anthropic.Models;
+    using Conductor.Core.ThirdParty.TypeSafe.Models;
     using SyslogLogging;
 
     /// <summary>
@@ -94,6 +97,16 @@ namespace Conductor.Server.Services
             Dictionary<string, ModelDefinition> definitionsByName,
             CancellationToken token)
         {
+            if (requestContext.RequestType == RequestTypeEnum.AnthropicListModels)
+            {
+                return await FilterAnthropicAsync(vmr, requestContext, responseBody, definitionsByName, token).ConfigureAwait(false);
+            }
+
+            if (requestContext.RequestType == RequestTypeEnum.TypeSafeListModels)
+            {
+                return await FilterTypeSafeAsync(vmr, requestContext, responseBody, definitionsByName, token).ConfigureAwait(false);
+            }
+
             JsonNode root = TryParse(responseBody);
             if (root == null)
             {
@@ -116,6 +129,113 @@ namespace Conductor.Server.Services
                 default:
                     return responseBody;
             }
+        }
+
+        private async Task<byte[]> FilterAnthropicAsync(
+            VirtualModelRunner vmr,
+            RequestContext requestContext,
+            byte[] responseBody,
+            Dictionary<string, ModelDefinition> definitionsByName,
+            CancellationToken token)
+        {
+            AnthropicModelList list = TryDeserialize<AnthropicModelList>(responseBody);
+            if (list == null)
+            {
+                _Logging?.Warn(_Header + "could not parse Anthropic list-model response; returning empty provider-shaped list");
+                return CreateEmptyResponse(requestContext.RequestType);
+            }
+
+            List<AnthropicModelInfo> kept = new List<AnthropicModelInfo>();
+            foreach (AnthropicModelInfo model in list.Data ?? new List<AnthropicModelInfo>())
+            {
+                if (model == null || String.IsNullOrWhiteSpace(model.Id)) continue;
+                if (await IsModelAllowedAsync(vmr, requestContext, model.Id, definitionsByName, token).ConfigureAwait(false)) kept.Add(model);
+            }
+
+            return SerializeObject(BuildAnthropicList(kept, list.HasMore));
+        }
+
+        private async Task<byte[]> FilterTypeSafeAsync(
+            VirtualModelRunner vmr,
+            RequestContext requestContext,
+            byte[] responseBody,
+            Dictionary<string, ModelDefinition> definitionsByName,
+            CancellationToken token)
+        {
+            TypeSafeModelList list = TryDeserialize<TypeSafeModelList>(responseBody);
+            if (list == null)
+            {
+                _Logging?.Warn(_Header + "could not parse TypeSafe list-model response; returning empty provider-shaped list");
+                return CreateEmptyResponse(requestContext.RequestType);
+            }
+
+            List<TypeSafeModelInfo> kept = new List<TypeSafeModelInfo>();
+            foreach (TypeSafeModelInfo model in list.Data ?? new List<TypeSafeModelInfo>())
+            {
+                if (model == null || String.IsNullOrWhiteSpace(model.Id)) continue;
+                if (await IsModelAllowedAsync(vmr, requestContext, model.Id, definitionsByName, token).ConfigureAwait(false)) kept.Add(model);
+            }
+
+            list.Data = kept;
+            return SerializeObject(list);
+        }
+
+        private static AnthropicModelList BuildAnthropicList(List<AnthropicModelInfo> models, bool hasMore)
+        {
+            AnthropicModelList list = new AnthropicModelList
+            {
+                Data = models ?? new List<AnthropicModelInfo>(),
+                HasMore = hasMore
+            };
+
+            list.FirstId = list.Data.Count > 0 ? list.Data[0].Id : null;
+            list.LastId = list.Data.Count > 0 ? list.Data[list.Data.Count - 1].Id : null;
+            return list;
+        }
+
+        private static AnthropicModelList CreateAnthropicResponse(List<ModelDefinition> definitions)
+        {
+            List<AnthropicModelInfo> models = definitions
+                .Select(definition => new AnthropicModelInfo
+                {
+                    Type = "model",
+                    Id = definition.Name,
+                    DisplayName = definition.Name,
+                    CreatedAt = definition.CreatedUtc.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture)
+                })
+                .ToList();
+            return BuildAnthropicList(models, false);
+        }
+
+        private static TypeSafeModelList CreateTypeSafeResponse(List<ModelDefinition> definitions)
+        {
+            return new TypeSafeModelList
+            {
+                Data = definitions
+                    .Select(definition => new TypeSafeModelInfo { Id = definition.Name, Object = "model", OwnedBy = "conductor" })
+                    .ToList()
+            };
+        }
+
+        private static T TryDeserialize<T>(byte[] responseBody) where T : class
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<T>(responseBody);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static byte[] SerializeObject<T>(T value)
+        {
+            JsonSerializerOptions options = new JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
+            };
+            return JsonSerializer.SerializeToUtf8Bytes(value, options);
         }
 
         private async Task FilterArrayAsync(
@@ -168,6 +288,10 @@ namespace Conductor.Server.Services
                 case RequestTypeEnum.OllamaListTags:
                 case RequestTypeEnum.OllamaListRunningModels:
                     return Serialize(CreateOllamaResponse(allowedDefinitions));
+                case RequestTypeEnum.AnthropicListModels:
+                    return SerializeObject(CreateAnthropicResponse(allowedDefinitions));
+                case RequestTypeEnum.TypeSafeListModels:
+                    return SerializeObject(CreateTypeSafeResponse(allowedDefinitions));
                 default:
                     return CreateEmptyResponse(requestContext.RequestType);
             }
@@ -291,6 +415,10 @@ namespace Conductor.Server.Services
                 case RequestTypeEnum.OllamaListTags:
                 case RequestTypeEnum.OllamaListRunningModels:
                     return Serialize(CreateOllamaResponse(new List<ModelDefinition>()));
+                case RequestTypeEnum.AnthropicListModels:
+                    return SerializeObject(CreateAnthropicResponse(new List<ModelDefinition>()));
+                case RequestTypeEnum.TypeSafeListModels:
+                    return SerializeObject(CreateTypeSafeResponse(new List<ModelDefinition>()));
                 default:
                     return Encoding.UTF8.GetBytes("{}");
             }
@@ -338,7 +466,9 @@ namespace Conductor.Server.Services
             return requestType == RequestTypeEnum.OpenAIListModels
                 || requestType == RequestTypeEnum.GeminiListModels
                 || requestType == RequestTypeEnum.OllamaListTags
-                || requestType == RequestTypeEnum.OllamaListRunningModels;
+                || requestType == RequestTypeEnum.OllamaListRunningModels
+                || requestType == RequestTypeEnum.AnthropicListModels
+                || requestType == RequestTypeEnum.TypeSafeListModels;
         }
     }
 }

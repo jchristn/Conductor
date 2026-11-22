@@ -192,6 +192,22 @@ namespace Test.Shared.Server.Mcp
             payload.GetProperty("message").GetString().Should().Contain("md_does_not_exist");
         }
 
+        public async Task Handshake_ToolsCall_CreateVmr_EnforcesApiTypeValidation()
+        {
+            await OpenSessionAsync().ConfigureAwait(false);
+
+            JsonElement notClientFacing = await SessionCallAsync("tools/call", new { name = "conductor_create_vmr", arguments = new { tenant_id = _TenantId, name = "ollaya vmr", api_type = "Ollaya" } }).ConfigureAwait(false);
+            JsonElement decisionsOff = await SessionCallAsync("tools/call", new { name = "conductor_create_vmr", arguments = new { tenant_id = _TenantId, name = "ts vmr", api_type = "TypeSafe", allow_decisions = false } }).ConfigureAwait(false);
+            JsonElement created = await SessionCallAsync("tools/call", new { name = "conductor_create_vmr", arguments = new { tenant_id = _TenantId, name = "anthropic vmr", api_type = "Anthropic" } }).ConfigureAwait(false);
+
+            IsErrorResult(notClientFacing.GetProperty("result")).Should().BeTrue();
+            GetTextPayload(notClientFacing.GetProperty("result")).GetProperty("errors")[0].GetProperty("code").GetString().Should().Be("VmrApiTypeNotClientFacing");
+            IsErrorResult(decisionsOff.GetProperty("result")).Should().BeTrue();
+            GetTextPayload(decisionsOff.GetProperty("result")).GetProperty("errors")[0].GetProperty("code").GetString().Should().Be("DecisionsDisabledOnDecisionRoute");
+            IsErrorResult(created.GetProperty("result")).Should().BeFalse();
+            GetTextPayload(created.GetProperty("result")).GetProperty("success").GetBoolean().Should().BeTrue();
+        }
+
         public async Task Handshake_ToolsCall_MissingRequiredArgument_ReturnsToolError()
         {
             await OpenSessionAsync().ConfigureAwait(false);

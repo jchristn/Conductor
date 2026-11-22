@@ -13,6 +13,18 @@ import SensitiveInput from '../components/SensitiveInput';
 import LoadModelModal from '../components/LoadModelModal';
 import OllamaModelManagerModal from '../components/OllamaModelManagerModal';
 import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
+import {
+  DEFAULT_ANTHROPIC_VERSION,
+  HEALTH_CHECK_METHODS,
+  getApiTypeBadgeClass,
+  getEndpointDefaults,
+  getHealthCheckTooltip,
+  getProvider,
+  getProviderLabel,
+  hasCapability,
+  isValidAnthropicVersion,
+  listProviders
+} from '../utils/providers';
 
 function formatBytes(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return '-';
@@ -78,40 +90,26 @@ function getServiceStatePresentation(value) {
   }
 }
 
-function ModelRunnerEndpoints() {
-  const { api, setError } = useApp();
-  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
-  const [endpoints, setEndpoints] = useState([]);
-  const [tenants, setTenants] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [selectedEndpoint, setSelectedEndpoint] = useState(null);
-  const [showMetadata, setShowMetadata] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showLoadModel, setShowLoadModel] = useState(false);
-  const [showManageOllamaModels, setShowManageOllamaModels] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [healthData, setHealthData] = useState({});
-  const [showHealthDetail, setShowHealthDetail] = useState(false);
-  const [healthDetailEndpoint, setHealthDetailEndpoint] = useState(null);
-  const [validationResult, setValidationResult] = useState(null);
-  const [validationLoading, setValidationLoading] = useState(false);
-  const [serviceStateActionLoading, setServiceStateActionLoading] = useState('');
-  const [formData, setFormData] = useState({
+function createEmptyEndpointForm() {
+  return {
     TenantId: '',
     Name: '',
     Hostname: '',
     Port: 11434,
     ApiKey: '',
+    ApiKeyStored: '',
+    ApiKeyCleared: false,
     ApiType: 'Ollama',
+    AnthropicVersion: '',
     UseSsl: false,
     TimeoutMs: 300000,
     Active: true,
     Labels: labelsFromValue([]),
     Tags: tagsFromValue({}),
+    HealthCheckEnabled: true,
     HealthCheckUrl: '/',
     HealthCheckMethod: 'GET',
+    HealthCheckRequestBody: '',
     HealthCheckIntervalMs: 5000,
     HealthCheckTimeoutMs: 5000,
     HealthCheckExpectedStatusCode: 200,
@@ -132,60 +130,127 @@ function ModelRunnerEndpoints() {
     RigMonitorCapabilitiesRefreshIntervalMs: 60000,
     RigMonitorTelemetryProfile: 'Full',
     RigMonitorTelemetrySelectors: ''
+  };
+}
+
+function normalizeHealthCheckMethod(value) {
+  if (value === 1 || value === 'HEAD') return 'HEAD';
+  if (value === 2 || value === 'POST') return 'POST';
+  return 'GET';
+}
+
+function endpointToForm(endpoint, overrides = {}) {
+  return {
+    ...createEmptyEndpointForm(),
+    TenantId: endpoint.TenantId || '',
+    Name: endpoint.Name || '',
+    Hostname: endpoint.Hostname || '',
+    Port: endpoint.Port || 11434,
+    ApiKey: endpoint.ApiKey || '',
+    ApiKeyStored: endpoint.ApiKey || '',
+    ApiKeyCleared: false,
+    ApiType: endpoint.ApiType || 'Ollama',
+    AnthropicVersion: endpoint.AnthropicVersion || '',
+    UseSsl: endpoint.UseSsl || false,
+    TimeoutMs: endpoint.TimeoutMs || 300000,
+    Active: endpoint.Active !== false,
+    Labels: labelsFromValue(endpoint.Labels),
+    Tags: tagsFromValue(endpoint.Tags),
+    HealthCheckEnabled: endpoint.HealthCheckEnabled !== false,
+    HealthCheckUrl: endpoint.HealthCheckUrl || '/',
+    HealthCheckMethod: normalizeHealthCheckMethod(endpoint.HealthCheckMethod),
+    HealthCheckRequestBody: endpoint.HealthCheckRequestBody || '',
+    HealthCheckIntervalMs: endpoint.HealthCheckIntervalMs || 5000,
+    HealthCheckTimeoutMs: endpoint.HealthCheckTimeoutMs || 5000,
+    HealthCheckExpectedStatusCode: endpoint.HealthCheckExpectedStatusCode || 200,
+    UnhealthyThreshold: endpoint.UnhealthyThreshold || 2,
+    HealthyThreshold: endpoint.HealthyThreshold || 2,
+    HealthCheckUseAuth: endpoint.HealthCheckUseAuth || false,
+    MaxParallelRequests: endpoint.MaxParallelRequests ?? 4,
+    Weight: endpoint.Weight || 1,
+    RigMonitorEnabled: endpoint.RigMonitor?.Enabled === true,
+    RigMonitorHostnameOverride: endpoint.RigMonitor?.HostnameOverride || '',
+    RigMonitorPort: endpoint.RigMonitor?.Port || 9990,
+    RigMonitorUseSsl: endpoint.RigMonitor?.UseSsl === true,
+    RigMonitorTimeoutMs: endpoint.RigMonitor?.TimeoutMs || 5000,
+    RigMonitorCollectDuringHealthCheck: endpoint.RigMonitor?.CollectDuringHealthCheck !== false,
+    RigMonitorRequireReadyz: endpoint.RigMonitor?.RequireReadyz !== false,
+    RigMonitorHealthAffectedByRigMonitor: endpoint.RigMonitor?.HealthAffectedByRigMonitor === true,
+    RigMonitorMaxTelemetryAgeMs: endpoint.RigMonitor?.MaxTelemetryAgeMs || 30000,
+    RigMonitorCapabilitiesRefreshIntervalMs: endpoint.RigMonitor?.CapabilitiesRefreshIntervalMs || 60000,
+    RigMonitorTelemetryProfile: endpoint.RigMonitor?.TelemetryProfile || 'Full',
+    RigMonitorTelemetrySelectors: (endpoint.RigMonitor?.TelemetrySelectors || []).join(', '),
+    ...overrides
+  };
+}
+
+/**
+ * Value to send as ApiKey. Contract: omitted, null or the masked value keeps the stored key,
+ * an empty string clears it, any other value replaces it.
+ * Returns undefined when the property should be omitted.
+ */
+export function resolveApiKeyForPayload(form) {
+  if (form.ApiKeyCleared) return '';
+  const value = form.ApiKey || '';
+  if (!value) return undefined;
+  return value;
+}
+
+/**
+ * Client-side checks that block saving. Returns a list of messages (empty when valid).
+ */
+export function getEndpointFormErrors(form) {
+  const errors = [];
+  if (form.ApiType === 'Anthropic' && form.AnthropicVersion && !isValidAnthropicVersion(form.AnthropicVersion.trim())) {
+    errors.push('Anthropic version must be a date in yyyy-MM-dd format, for example 2023-06-01.');
+  }
+  if (form.HealthCheckMethod === 'POST') {
+    const body = (form.HealthCheckRequestBody || '').trim();
+    if (!body) {
+      errors.push('A POST health check needs a request body.');
+    } else {
+      try {
+        JSON.parse(body);
+      } catch (err) {
+        errors.push(`Health check request body is not valid JSON: ${err.message}`);
+      }
+    }
+  }
+  return errors;
+}
+
+function ModelRunnerEndpoints() {
+  const { api, setError } = useApp();
+  const { pendingCreate, clearPendingCreate, onEntityCreated } = useOnboarding();
+  const [endpoints, setEndpoints] = useState([]);
+  const [tenants, setTenants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [selectedEndpoint, setSelectedEndpoint] = useState(null);
+  const [showMetadata, setShowMetadata] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLoadModel, setShowLoadModel] = useState(false);
+  const [showManageOllamaModels, setShowManageOllamaModels] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [healthData, setHealthData] = useState({});
+  const [showHealthDetail, setShowHealthDetail] = useState(false);
+  const [healthDetailEndpoint, setHealthDetailEndpoint] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [serviceStateActionLoading, setServiceStateActionLoading] = useState('');
+  const [formData, setFormData] = useState(createEmptyEndpointForm);
+  const [formErrors, setFormErrors] = useState([]);
+  const [apiKeyRevealError, setApiKeyRevealError] = useState('');
+
+  // Defaults come only from the type the operator selects (provider registry). Nothing is
+  // inferred from the hostname.
+  const applyApiTypeDefaults = (currentFormData, apiType) => ({
+    ...currentFormData,
+    ...getEndpointDefaults(apiType),
+    ApiType: apiType,
+    AnthropicVersion: apiType === 'Anthropic' ? currentFormData.AnthropicVersion : ''
   });
-
-  const getApiTypeDefaults = (apiType) => {
-    switch (apiType) {
-      case 'OpenAI':
-        return {
-          Hostname: 'api.openai.com',
-          Port: 443,
-          UseSsl: true,
-          TimeoutMs: 300000,
-          HealthCheckUrl: '/v1/models',
-          HealthCheckMethod: 'GET',
-          HealthCheckExpectedStatusCode: 200,
-          HealthCheckUseAuth: true
-        };
-      case 'Gemini':
-        return {
-          Hostname: 'generativelanguage.googleapis.com',
-          Port: 443,
-          UseSsl: true,
-          TimeoutMs: 300000,
-          HealthCheckUrl: '/v1beta/models',
-          HealthCheckMethod: 'GET',
-          HealthCheckExpectedStatusCode: 200,
-          HealthCheckUseAuth: true
-        };
-      case 'Ollama':
-        return {
-          Hostname: 'localhost',
-          Port: 11434,
-          UseSsl: false,
-          TimeoutMs: 300000,
-          HealthCheckUrl: '/',
-          HealthCheckMethod: 'GET',
-          HealthCheckExpectedStatusCode: 200,
-          HealthCheckUseAuth: false
-        };
-      default:
-        return null;
-    }
-  };
-
-  const applyApiTypeDefaults = (currentFormData, apiType) => {
-    const defaults = getApiTypeDefaults(apiType);
-    if (!defaults) {
-      return { ...currentFormData, ApiType: apiType };
-    }
-
-    return {
-      ...currentFormData,
-      ...defaults,
-      ApiType: apiType
-    };
-  };
 
   const fetchEndpoints = useCallback(async () => {
     try {
@@ -349,13 +414,13 @@ function ModelRunnerEndpoints() {
     return null;
   };
 
-  // Handle hostname input changes with auto-parsing
+  // Handle hostname input changes. A pasted URL fills hostname, port and SSL from what was typed;
+  // the type and every other default come only from the selected API type.
   const handleHostnameChange = (e) => {
     const value = e.target.value;
     const parsed = parseEndpointUrl(value);
 
     if (parsed) {
-      // User entered a URL, auto-populate fields
       const updates = {
         ...formData,
         Hostname: parsed.hostname,
@@ -364,68 +429,18 @@ function ModelRunnerEndpoints() {
       if (parsed.useSsl !== null) {
         updates.UseSsl = parsed.useSsl;
       }
-      // Set defaults for api.openai.com
-      if (parsed.hostname.toLowerCase() === 'api.openai.com') {
-        updates.HealthCheckUseAuth = true;
-        updates.HealthCheckUrl = '/v1/models';
-      } else if (parsed.hostname.toLowerCase() === 'generativelanguage.googleapis.com') {
-        updates.HealthCheckUseAuth = true;
-        updates.HealthCheckUrl = '/v1beta/models';
-      }
       setFormData(updates);
     } else {
-      // Just a plain hostname, update as-is
-      const updates = { ...formData, Hostname: value };
-      // Set defaults for api.openai.com
-      if (value.toLowerCase() === 'api.openai.com') {
-        updates.HealthCheckUseAuth = true;
-        updates.HealthCheckUrl = '/v1/models';
-      } else if (value.toLowerCase() === 'generativelanguage.googleapis.com') {
-        updates.HealthCheckUseAuth = true;
-        updates.HealthCheckUrl = '/v1beta/models';
-      }
-      setFormData(updates);
+      setFormData({ ...formData, Hostname: value });
     }
   };
 
   const handleCreate = () => {
     setEditMode(false);
     setValidationResult(null);
-    setFormData({
-      TenantId: '',
-      Name: '',
-      Hostname: '',
-      Port: 11434,
-      ApiKey: '',
-      ApiType: 'Ollama',
-      UseSsl: false,
-      TimeoutMs: 300000,
-      Active: true,
-      Labels: labelsFromValue([]),
-      Tags: tagsFromValue({}),
-      HealthCheckUrl: '/',
-      HealthCheckMethod: 'GET',
-      HealthCheckIntervalMs: 5000,
-      HealthCheckTimeoutMs: 5000,
-      HealthCheckExpectedStatusCode: 200,
-      UnhealthyThreshold: 2,
-      HealthyThreshold: 2,
-      HealthCheckUseAuth: false,
-      MaxParallelRequests: 4,
-      Weight: 1,
-      RigMonitorEnabled: false,
-      RigMonitorHostnameOverride: '',
-      RigMonitorPort: 9990,
-      RigMonitorUseSsl: false,
-      RigMonitorTimeoutMs: 5000,
-      RigMonitorCollectDuringHealthCheck: true,
-      RigMonitorRequireReadyz: true,
-      RigMonitorHealthAffectedByRigMonitor: false,
-      RigMonitorMaxTelemetryAgeMs: 30000,
-      RigMonitorCapabilitiesRefreshIntervalMs: 60000,
-      RigMonitorTelemetryProfile: 'Full',
-      RigMonitorTelemetrySelectors: ''
-    });
+    setFormErrors([]);
+    setApiKeyRevealError('');
+    setFormData(createEmptyEndpointForm());
     setShowForm(true);
   };
 
@@ -438,84 +453,59 @@ function ModelRunnerEndpoints() {
     setEditMode(true);
     setSelectedEndpoint(endpoint);
     setValidationResult(null);
-    setFormData({
-      TenantId: endpoint.TenantId || '',
-      Name: endpoint.Name || '',
-      Hostname: endpoint.Hostname || '',
-      Port: endpoint.Port || 11434,
-      ApiKey: endpoint.ApiKey || '',
-      ApiType: endpoint.ApiType || 'Ollama',
-      UseSsl: endpoint.UseSsl || false,
-      TimeoutMs: endpoint.TimeoutMs || 300000,
-      Active: endpoint.Active !== false,
-      Labels: labelsFromValue(endpoint.Labels),
-      Tags: tagsFromValue(endpoint.Tags),
-      HealthCheckUrl: endpoint.HealthCheckUrl || '/',
-      HealthCheckMethod: endpoint.HealthCheckMethod || 'GET',
-      HealthCheckIntervalMs: endpoint.HealthCheckIntervalMs || 5000,
-      HealthCheckTimeoutMs: endpoint.HealthCheckTimeoutMs || 5000,
-      HealthCheckExpectedStatusCode: endpoint.HealthCheckExpectedStatusCode || 200,
-      UnhealthyThreshold: endpoint.UnhealthyThreshold || 2,
-      HealthyThreshold: endpoint.HealthyThreshold || 2,
-      HealthCheckUseAuth: endpoint.HealthCheckUseAuth || false,
-      MaxParallelRequests: endpoint.MaxParallelRequests ?? 4,
-      Weight: endpoint.Weight || 1,
-      RigMonitorEnabled: endpoint.RigMonitor?.Enabled === true,
-      RigMonitorHostnameOverride: endpoint.RigMonitor?.HostnameOverride || '',
-      RigMonitorPort: endpoint.RigMonitor?.Port || 9990,
-      RigMonitorUseSsl: endpoint.RigMonitor?.UseSsl === true,
-      RigMonitorTimeoutMs: endpoint.RigMonitor?.TimeoutMs || 5000,
-      RigMonitorCollectDuringHealthCheck: endpoint.RigMonitor?.CollectDuringHealthCheck !== false,
-      RigMonitorRequireReadyz: endpoint.RigMonitor?.RequireReadyz !== false,
-      RigMonitorHealthAffectedByRigMonitor: endpoint.RigMonitor?.HealthAffectedByRigMonitor === true,
-      RigMonitorMaxTelemetryAgeMs: endpoint.RigMonitor?.MaxTelemetryAgeMs || 30000,
-      RigMonitorCapabilitiesRefreshIntervalMs: endpoint.RigMonitor?.CapabilitiesRefreshIntervalMs || 60000,
-      RigMonitorTelemetryProfile: endpoint.RigMonitor?.TelemetryProfile || 'Full',
-      RigMonitorTelemetrySelectors: (endpoint.RigMonitor?.TelemetrySelectors || []).join(', ')
-    });
+    setFormErrors([]);
+    setApiKeyRevealError('');
+    setFormData(endpointToForm(endpoint));
     setShowForm(true);
   };
 
-  const handleDuplicate = (endpoint) => {
+  // Endpoint reads return a masked key, so Duplicate fetches the real key through the audited
+  // reveal route. If that fails the copy starts without a key and the operator is told why.
+  const handleDuplicate = async (endpoint) => {
     setEditMode(false);
     setSelectedEndpoint(null);
     setValidationResult(null);
-    setFormData({
-      TenantId: endpoint.TenantId || '',
+    setFormErrors([]);
+    setApiKeyRevealError('');
+
+    let apiKey = '';
+    if (endpoint.ApiKey) {
+      try {
+        const revealed = await api.revealModelRunnerEndpointApiKey(endpoint.Id, endpoint.TenantId);
+        apiKey = revealed?.ApiKey || '';
+      } catch (err) {
+        setError('Could not copy the API key of the original endpoint: ' + err.message + '. Enter the key on the copy.');
+      }
+    }
+
+    setFormData(endpointToForm(endpoint, {
       Name: endpoint.Name ? endpoint.Name + ' (Copy)' : '',
-      Hostname: endpoint.Hostname || '',
-      Port: endpoint.Port || 11434,
-      ApiKey: endpoint.ApiKey || '',
-      ApiType: endpoint.ApiType || 'Ollama',
-      UseSsl: endpoint.UseSsl || false,
-      TimeoutMs: endpoint.TimeoutMs || 300000,
-      Active: endpoint.Active !== false,
-      Labels: labelsFromValue(endpoint.Labels),
-      Tags: tagsFromValue(endpoint.Tags),
-      HealthCheckUrl: endpoint.HealthCheckUrl || '/',
-      HealthCheckMethod: endpoint.HealthCheckMethod || 'GET',
-      HealthCheckIntervalMs: endpoint.HealthCheckIntervalMs || 5000,
-      HealthCheckTimeoutMs: endpoint.HealthCheckTimeoutMs || 5000,
-      HealthCheckExpectedStatusCode: endpoint.HealthCheckExpectedStatusCode || 200,
-      UnhealthyThreshold: endpoint.UnhealthyThreshold || 2,
-      HealthyThreshold: endpoint.HealthyThreshold || 2,
-      HealthCheckUseAuth: endpoint.HealthCheckUseAuth || false,
-      MaxParallelRequests: endpoint.MaxParallelRequests ?? 4,
-      Weight: endpoint.Weight || 1,
-      RigMonitorEnabled: endpoint.RigMonitor?.Enabled === true,
-      RigMonitorHostnameOverride: endpoint.RigMonitor?.HostnameOverride || '',
-      RigMonitorPort: endpoint.RigMonitor?.Port || 9990,
-      RigMonitorUseSsl: endpoint.RigMonitor?.UseSsl === true,
-      RigMonitorTimeoutMs: endpoint.RigMonitor?.TimeoutMs || 5000,
-      RigMonitorCollectDuringHealthCheck: endpoint.RigMonitor?.CollectDuringHealthCheck !== false,
-      RigMonitorRequireReadyz: endpoint.RigMonitor?.RequireReadyz !== false,
-      RigMonitorHealthAffectedByRigMonitor: endpoint.RigMonitor?.HealthAffectedByRigMonitor === true,
-      RigMonitorMaxTelemetryAgeMs: endpoint.RigMonitor?.MaxTelemetryAgeMs || 30000,
-      RigMonitorCapabilitiesRefreshIntervalMs: endpoint.RigMonitor?.CapabilitiesRefreshIntervalMs || 60000,
-      RigMonitorTelemetryProfile: endpoint.RigMonitor?.TelemetryProfile || 'Full',
-      RigMonitorTelemetrySelectors: (endpoint.RigMonitor?.TelemetrySelectors || []).join(', ')
-    });
+      ApiKey: apiKey,
+      ApiKeyStored: ''
+    }));
     setShowForm(true);
+  };
+
+  // Reveal control on the API key: replaces the masked value with the full key.
+  const handleRevealApiKey = async () => {
+    setApiKeyRevealError('');
+    const showingStored = formData.ApiKey && formData.ApiKey === formData.ApiKeyStored;
+    if (!editMode || !selectedEndpoint || !showingStored) {
+      return true;
+    }
+    try {
+      const revealed = await api.revealModelRunnerEndpointApiKey(selectedEndpoint.Id, selectedEndpoint.TenantId);
+      const fullKey = revealed?.ApiKey || '';
+      setFormData((current) => ({ ...current, ApiKey: fullKey, ApiKeyStored: fullKey }));
+      return true;
+    } catch (err) {
+      setApiKeyRevealError('Could not reveal the API key: ' + err.message);
+      return false;
+    }
+  };
+
+  const handleClearApiKey = () => {
+    setFormData((current) => ({ ...current, ApiKey: '', ApiKeyCleared: true }));
   };
 
   const handleViewMetadata = (endpoint) => {
@@ -559,20 +549,22 @@ function ModelRunnerEndpoints() {
   const buildEndpointPayload = () => {
     const telemetrySelectors = parseTelemetrySelectors(formData.RigMonitorTelemetrySelectors);
 
-    return {
+    const payload = {
       TenantId: formData.TenantId || null,
       Name: formData.Name,
       Hostname: formData.Hostname,
       Port: parseInt(formData.Port),
-      ApiKey: formData.ApiKey,
       ApiType: formData.ApiType,
+      AnthropicVersion: formData.ApiType === 'Anthropic' && formData.AnthropicVersion.trim() ? formData.AnthropicVersion.trim() : null,
       UseSsl: formData.UseSsl,
       TimeoutMs: parseInt(formData.TimeoutMs),
       Active: formData.Active,
       Labels: labelsToPayload(formData.Labels),
       Tags: tagsToPayload(formData.Tags),
+      HealthCheckEnabled: formData.HealthCheckEnabled,
       HealthCheckUrl: formData.HealthCheckUrl,
       HealthCheckMethod: formData.HealthCheckMethod,
+      HealthCheckRequestBody: formData.HealthCheckMethod === 'POST' ? formData.HealthCheckRequestBody : null,
       HealthCheckIntervalMs: parseInt(formData.HealthCheckIntervalMs),
       HealthCheckTimeoutMs: parseInt(formData.HealthCheckTimeoutMs),
       HealthCheckExpectedStatusCode: parseInt(formData.HealthCheckExpectedStatusCode),
@@ -596,6 +588,12 @@ function ModelRunnerEndpoints() {
         TelemetrySelectors: telemetrySelectors
       }
     };
+
+    const apiKey = resolveApiKeyForPayload(formData);
+    if (apiKey !== undefined) {
+      payload.ApiKey = apiKey;
+    }
+    return payload;
   };
 
   const validateDraft = async () => {
@@ -646,6 +644,11 @@ function ModelRunnerEndpoints() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const errors = getEndpointFormErrors(formData);
+    setFormErrors(errors);
+    if (errors.length > 0) {
+      return;
+    }
     try {
       const { payload, result } = await validateDraft();
       if (!result?.IsValid) {
@@ -702,8 +705,14 @@ function ModelRunnerEndpoints() {
     {
       key: 'ApiType',
       label: 'API Type',
-      tooltip: 'API format used by this endpoint (Ollama, OpenAI, vLLM, or Gemini)',
-      width: '100px'
+      tooltip: 'Upstream API type the operator selected for this endpoint. It decides the wire API, authentication and defaults.',
+      width: '130px',
+      render: (item) => (
+        <span className={getApiTypeBadgeClass(item.ApiType)} title={getProvider(item.ApiType)?.description || ''}>
+          {getProviderLabel(item.ApiType)}
+        </span>
+      ),
+      filterValue: (item) => `${item.ApiType || ''} ${getProviderLabel(item.ApiType)}`
     },
     {
       key: 'RigMonitor',
@@ -760,6 +769,9 @@ function ModelRunnerEndpoints() {
       sortable: false,
       render: (item) => {
         if (!item.Active) return <span className="status-badge pending" title="Inactive endpoints are not health-checked">Inactive</span>;
+        if (item.HealthCheckEnabled === false) {
+          return <span className="status-badge pending" title="Health checks are disabled for this endpoint, so Conductor sends no probe and treats it as healthy.">Checks Off</span>;
+        }
         const h = healthData[item.Id];
         if (!h) return <span className="status-badge pending" title="Awaiting first health check result">Awaiting Check</span>;
         return (
@@ -785,6 +797,7 @@ function ModelRunnerEndpoints() {
       },
       filterValue: (item) => {
         if (!item.Active) return 'inactive';
+        if (item.HealthCheckEnabled === false) return 'checks off';
         const h = healthData[item.Id];
         if (!h) return 'awaiting';
         return h.IsHealthy ? 'healthy' : 'unhealthy';
@@ -831,7 +844,7 @@ function ModelRunnerEndpoints() {
               { label: 'View Details', onClick: () => handleViewMetadata(item) },
               { label: 'Health Data', onClick: () => handleViewHealth(item) },
               { label: 'Load Model', onClick: () => handleOpenLoadModel(item) },
-              ...(item.ApiType === 'Ollama' ? [
+              ...(hasCapability(item.ApiType, 'modelManagement') ? [
                 { label: 'Manage Models', onClick: () => handleOpenManageOllamaModels(item) }
               ] : []),
               { label: 'Edit', onClick: () => handleEdit(item) },
@@ -909,6 +922,14 @@ function ModelRunnerEndpoints() {
 
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title={editMode ? 'Edit Endpoint' : 'Create Endpoint'} wide>
         <form onSubmit={handleSubmit}>
+          {formErrors.length > 0 && (
+            <div className="validation-panel error" role="alert">
+              <strong>Fix these fields before saving.</strong>
+              <ul className="validation-list">
+                {formErrors.map((message) => <li key={message}>{message}</li>)}
+              </ul>
+            </div>
+          )}
           {validationResult && (
             <div className={`validation-panel ${validationResult.IsValid ? 'success' : 'error'}`}>
               <strong>{validationResult.IsValid ? 'Draft looks routable.' : 'Resolve the blocking issues before saving.'}</strong>
@@ -956,13 +977,13 @@ function ModelRunnerEndpoints() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="hostname" title="Paste a full URL to auto-fill hostname, port, and SSL. Do not use localhost if running in Docker.">Hostname</label>
+              <label htmlFor="hostname" title="Paste a full URL to fill hostname, port, and SSL from it. Do not use localhost if running in Docker.">Hostname</label>
               <input
                 type="text"
                 id="hostname"
                 value={formData.Hostname}
                 onChange={handleHostnameChange}
-                placeholder="api.openai.com or https://api.openai.com"
+                placeholder="hostname or https://hostname:port"
                 required
               />
             </div>
@@ -981,17 +1002,20 @@ function ModelRunnerEndpoints() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="apiType" title="API format used by this endpoint (Ollama, OpenAI, vLLM, or Gemini)">API Type</label>
+              <label htmlFor="apiType" title="Upstream API type. Selecting a type fills its defaults (host, port, SSL, health check). Conductor never infers the type from the hostname.">API Type</label>
               <select
                 id="apiType"
                 value={formData.ApiType}
                 onChange={handleApiTypeChange}
+                aria-describedby="apiTypeHelp"
               >
-                <option value="Ollama">Ollama</option>
-                <option value="OpenAI">OpenAI</option>
-                <option value="vLLM">vLLM</option>
-                <option value="Gemini">Gemini</option>
+                {listProviders().map((provider) => (
+                  <option key={provider.value} value={provider.value} title={provider.description}>
+                    {provider.label}
+                  </option>
+                ))}
               </select>
+              <small id="apiTypeHelp" className="form-help">{getProvider(formData.ApiType)?.description}</small>
             </div>
             <div className="form-group">
               <label htmlFor="timeoutMs" title="How long Conductor waits for this endpoint to start responding: model load, prompt evaluation and, for non-streaming requests, the whole generation. Streamed responses are not limited after the first token. The smaller of this and the VMR's value applies.">Time to first byte (ms)</label>
@@ -1007,15 +1031,61 @@ function ModelRunnerEndpoints() {
             </div>
           </div>
           <div className="form-group">
-            <label htmlFor="apiKey" title="Bearer token for authenticated endpoints">API Key (optional)</label>
-            <SensitiveInput
-              id="apiKey"
-              value={formData.ApiKey}
-              onChange={(e) => setFormData({ ...formData, ApiKey: e.target.value })}
-              placeholder="Leave blank if not required"
-              autoComplete="new-password"
-            />
+            <label htmlFor="apiKey" title={`Upstream key for this endpoint, sent as ${getProvider(formData.ApiType)?.authLabel || 'Authorization: Bearer'}. Stored keys are shown masked; use the eye control to reveal the full value.`}>
+              {getProvider(formData.ApiType)?.apiKeyRequired ? 'API Key (required)' : 'API Key (optional)'}
+            </label>
+            <div className="api-key-row">
+              <SensitiveInput
+                id="apiKey"
+                value={formData.ApiKey}
+                onChange={(e) => setFormData({ ...formData, ApiKey: e.target.value, ApiKeyCleared: false })}
+                placeholder={formData.ApiKeyCleared ? 'Key will be cleared on save' : (editMode && formData.ApiKeyStored ? 'Leave blank to keep the stored key' : 'Leave blank if not required')}
+                autoComplete="new-password"
+                onReveal={handleRevealApiKey}
+                revealLabel="Reveal API key"
+                hideLabel="Hide API key"
+                describedBy="apiKeyHelp"
+              />
+              {editMode && (formData.ApiKeyStored || formData.ApiKey) && !formData.ApiKeyCleared && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-small"
+                  onClick={handleClearApiKey}
+                  title="Remove the stored key from this endpoint when you save"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <small id="apiKeyHelp" className="form-help">
+              {formData.ApiKeyCleared
+                ? 'The stored key will be removed when you save. Type a new key to replace it instead.'
+                : (editMode && formData.ApiKeyStored
+                  ? 'Leaving the key unchanged or blank keeps the stored key. Use Clear to remove it.'
+                  : `Sent upstream as ${getProvider(formData.ApiType)?.authLabel || 'Authorization: Bearer'}.`)}
+            </small>
+            {apiKeyRevealError && <small className="error-text">{apiKeyRevealError}</small>}
           </div>
+
+          {formData.ApiType === 'Anthropic' && (
+            <div className="form-group">
+              <label htmlFor="anthropicVersion" title="anthropic-version header Conductor sends upstream when the client does not send one">Anthropic version</label>
+              <input
+                type="text"
+                id="anthropicVersion"
+                value={formData.AnthropicVersion}
+                onChange={(e) => setFormData({ ...formData, AnthropicVersion: e.target.value })}
+                placeholder={DEFAULT_ANTHROPIC_VERSION}
+                aria-describedby="anthropicVersionHelp"
+              />
+              <small id="anthropicVersionHelp" className="form-help">
+                Format yyyy-MM-dd. A client's own anthropic-version header always wins. Leave blank to use the server default ({DEFAULT_ANTHROPIC_VERSION}).
+              </small>
+              {formData.AnthropicVersion && !isValidAnthropicVersion(formData.AnthropicVersion.trim()) && (
+                <small className="error-text">Use the yyyy-MM-dd format, for example {DEFAULT_ANTHROPIC_VERSION}.</small>
+              )}
+            </div>
+          )}
 
           <h3 style={{ marginTop: '24px', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>RigMonitor</h3>
 
@@ -1176,6 +1246,25 @@ function ModelRunnerEndpoints() {
 
           <h3 style={{ marginTop: '24px', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>Health Check Configuration</h3>
 
+          <div className="form-group checkbox-group">
+            <label title={getHealthCheckTooltip(formData.ApiType)}>
+              <input
+                type="checkbox"
+                checked={formData.HealthCheckEnabled}
+                onChange={(e) => setFormData({ ...formData, HealthCheckEnabled: e.target.checked })}
+                aria-describedby="healthCheckEnabledHelp"
+              />
+              Health checks enabled
+            </label>
+            <small id="healthCheckEnabledHelp" className="form-help">
+              {formData.ApiType === 'TypeSafe'
+                ? getHealthCheckTooltip('TypeSafe')
+                : (formData.HealthCheckEnabled
+                  ? 'Conductor probes this endpoint on the interval below.'
+                  : 'No probes are sent and the endpoint is treated as healthy.')}
+            </small>
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="healthCheckUrl" title="Path to check endpoint health (e.g., / or /v1/models)">Health Check URL</label>
@@ -1194,8 +1283,9 @@ function ModelRunnerEndpoints() {
                 value={formData.HealthCheckMethod}
                 onChange={(e) => setFormData({ ...formData, HealthCheckMethod: e.target.value })}
               >
-                <option value="GET">GET</option>
-                <option value="HEAD">HEAD</option>
+                {HEALTH_CHECK_METHODS.map((method) => (
+                  <option key={method} value={method}>{method}</option>
+                ))}
               </select>
             </div>
             <div className="form-group" style={{ maxWidth: '100px' }}>
@@ -1210,6 +1300,28 @@ function ModelRunnerEndpoints() {
               />
             </div>
           </div>
+
+          {formData.HealthCheckMethod === 'POST' && (
+            <div className="form-group">
+              <label htmlFor="healthCheckRequestBody" title="JSON body sent with each POST health check, with Content-Type: application/json">Health Check Request Body</label>
+              <textarea
+                id="healthCheckRequestBody"
+                className="code-input"
+                rows={4}
+                value={formData.HealthCheckRequestBody}
+                onChange={(e) => setFormData({ ...formData, HealthCheckRequestBody: e.target.value })}
+                placeholder='{"key": "value"}'
+                spellCheck={false}
+                aria-required="true"
+              />
+              {(() => {
+                const bodyErrors = getEndpointFormErrors({ ...formData, ApiType: '' });
+                return bodyErrors.length > 0
+                  ? <small className="error-text">{bodyErrors[0]}</small>
+                  : <small className="form-help">Required for POST. Sent as application/json.</small>;
+              })()}
+            </div>
+          )}
 
           <div className="form-row">
             <div className="form-group">
@@ -1260,7 +1372,7 @@ function ModelRunnerEndpoints() {
           </div>
 
           <div className="form-group checkbox-group">
-            <label title="Include API key in health check requests (required for OpenAI-compatible APIs and Gemini API)">
+            <label title={`Include the API key in health check requests, sent as ${getProvider(formData.ApiType)?.authLabel || 'Authorization: Bearer'}. Hosted providers reject unauthenticated health checks.`}>
               <input
                 type="checkbox"
                 checked={formData.HealthCheckUseAuth}

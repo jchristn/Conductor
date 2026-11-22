@@ -7,7 +7,7 @@
       "Enabled": true,
       "AllowedOrigins": ["*"],
       "AllowedMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      "AllowedHeaders": ["Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password", "x-admin-apikey", "x-admin-email", "x-admin-password"],
+      "AllowedHeaders": ["Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password", "x-admin-apikey", "x-admin-email", "x-admin-password", "anthropic-version", "anthropic-beta", "x-api-key"],
       "ExposedHeaders": [],
       "AllowCredentials": false,
       "MaxAgeSeconds": 86400
@@ -46,7 +46,7 @@
     "CleanupIntervalMinutes": 60,
     "CaptureRequestBody": true,
     "CaptureResponseBody": true,
-    "RedactedHeaders": ["authorization", "x-password", "x-admin-password", "x-goog-api-key"],
+    "RedactedHeaders": ["authorization", "x-password", "x-admin-password", "x-goog-api-key", "x-api-key", "anthropic-api-key"],
     "RedactedJsonFields": ["authorization", "api_key", "apikey", "password", "token", "bearertoken"],
     "MaxRequestBodyBytes": 65536,
     "MaxResponseBodyBytes": 65536
@@ -61,6 +61,17 @@
     "TracesSamplingRatio": 1.0,
     "IncludeRuntimeInstrumentation": true,
     "PrometheusEnabled": false
+  },
+  "Anthropic": {
+    "DefaultVersion": "2023-06-01",
+    "ForwardedRequestHeaders": ["anthropic-version", "anthropic-beta"],
+    "ForwardedResponseHeaders": ["request-id", "retry-after", "x-should-retry"],
+    "ForwardedResponseHeaderPrefixes": ["anthropic-ratelimit-"],
+    "SamplingParametersRemovedFromVersion": "2026-10-21"
+  },
+  "TypeSafe": {
+    "DefaultModel": "jev-latest",
+    "MaxQuestionsPerRequest": 64
   },
   "AdminApiKeys": [
     "conductoradmin"

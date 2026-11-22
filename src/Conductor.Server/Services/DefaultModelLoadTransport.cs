@@ -8,6 +8,7 @@ namespace Conductor.Server.Services
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Settings;
 
     /// <summary>
     /// Default HTTP transport for model load requests.
@@ -32,7 +33,7 @@ namespace Conductor.Server.Services
         /// <param name="handler">HTTP message handler, or null to use the default handler. Disposed with this transport.</param>
         public DefaultModelLoadTransport(HttpMessageHandler handler)
         {
-            _HttpClient = handler == null ? new HttpClient() : new HttpClient(handler, true);
+            _HttpClient = handler == null ? UpstreamHttpClientFactory.CreateClient() : new HttpClient(handler, true);
             _HttpClient.Timeout = Timeout.InfiniteTimeSpan;
         }
 
@@ -41,6 +42,18 @@ namespace Conductor.Server.Services
         /// limits come from the timeoutMs argument of <see cref="SendAsync"/>.
         /// </summary>
         public TimeSpan ClientTimeout => _HttpClient.Timeout;
+
+        /// <summary>
+        /// Anthropic settings used to resolve the anthropic-version header for Anthropic endpoints.
+        /// Null resets to defaults. Default: a new AnthropicSettings instance.
+        /// </summary>
+        public AnthropicSettings AnthropicSettings
+        {
+            get => _AnthropicSettings;
+            set => _AnthropicSettings = value ?? new AnthropicSettings();
+        }
+
+        private AnthropicSettings _AnthropicSettings = new AnthropicSettings();
 
         /// <summary>
         /// Send a model load probe to an upstream endpoint.
@@ -73,17 +86,7 @@ namespace Conductor.Server.Services
                     request.Content = new StringContent(plan.BodyJson, Encoding.UTF8, "application/json");
                 }
 
-                if (!String.IsNullOrEmpty(endpoint.ApiKey))
-                {
-                    if (endpoint.ApiType == ApiTypeEnum.Gemini)
-                    {
-                        request.Headers.TryAddWithoutValidation("x-goog-api-key", endpoint.ApiKey);
-                    }
-                    else
-                    {
-                        request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + endpoint.ApiKey);
-                    }
-                }
+                UpstreamAuthHeaders.Apply(request, endpoint, AnthropicSettings);
 
                 using (CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(token))
                 {

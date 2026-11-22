@@ -11,7 +11,7 @@ namespace Conductor.Core.Settings
         private bool _Enabled = false;
         private List<string> _AllowedOrigins = new List<string>();
         private List<string> _AllowedMethods = new List<string> { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
-        private List<string> _AllowedHeaders = new List<string> { "Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password", "x-admin-apikey", "x-admin-email", "x-admin-password" };
+        private List<string> _AllowedHeaders = new List<string> { "Content-Type", "Authorization", "x-tenant-id", "x-email", "x-password", "x-admin-apikey", "x-admin-email", "x-admin-password", "anthropic-version", "anthropic-beta", "x-api-key" };
         private List<string> _ExposedHeaders = new List<string>();
         private bool _AllowCredentials = false;
         private int _MaxAgeSeconds = 86400;
@@ -49,7 +49,8 @@ namespace Conductor.Core.Settings
 
         /// <summary>
         /// List of allowed request headers.
-        /// Default includes Content-Type, Authorization, and Conductor auth headers.
+        /// Default includes Content-Type, Authorization, the Conductor auth headers, and the Anthropic client headers
+        /// anthropic-version, anthropic-beta and x-api-key.
         /// </summary>
         public List<string> AllowedHeaders
         {

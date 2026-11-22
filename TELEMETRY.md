@@ -29,7 +29,7 @@ Conductor follows a decoupled telemetry model:
 
 - **Emission rides the .NET base class library.** Application and library code emit through
   `System.Diagnostics.Metrics.Meter` and `System.Diagnostics.ActivitySource` only. The core
-  library (`Conductor.Core`) takes **no dependency on OpenTelemetry** — when nothing is
+  library (`Conductor.Core`) takes **no dependency on OpenTelemetry**. When nothing is
   listening, every measurement is a cheap no-op. All instruments and activity sources are
   declared centrally in `Conductor.Core/Telemetry/ConductorTelemetry.cs`.
 - **The server owns the pipeline.** At startup `Conductor.Server` builds an OpenTelemetry
@@ -56,7 +56,7 @@ the in-process exporter), names are converted to Prometheus conventions:
 
 So `conductor.inference.request.duration` (unit `s`) becomes
 `conductor_inference_request_duration_seconds` with the usual `_bucket` / `_sum` / `_count`
-series. **All names in the tables below are the final Prometheus names** — use them verbatim in
+series. **All names in the tables below are the final Prometheus names**, so use them verbatim in
 PromQL.
 
 ---
@@ -112,7 +112,7 @@ easiest way to configure containers:
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` or `http/protobuf` |
 | `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Bearer <token>` |
 
-Telemetry failures never abort startup — if the pipeline cannot be built, Conductor logs a
+Telemetry failures never abort startup. If the pipeline cannot be built, Conductor logs a
 warning and continues with instrumentation disabled.
 
 ---
@@ -130,24 +130,31 @@ health, and proxy traffic).
 | Metric | Type | Unit | Labels | Represents |
 | --- | --- | --- | --- | --- |
 | `conductor_http_server_request_duration_seconds` | histogram | s | `http_method`, `http_status_code`, `status_class`, `route` | Per-request latency; its `_count` is the request counter. |
-| `conductor_http_server_active_requests` | gauge | — | `http_method` | Requests currently in flight. |
+| `conductor_http_server_active_requests` | gauge | none | `http_method` | Requests currently in flight. |
 
 `route` is a low-cardinality class (e.g. `/health`, `/v1.0/tenants`, `proxy`) so per-entity IDs
 do not explode cardinality. `status_class` is `2xx`/`4xx`/`5xx`/etc.
 
 ### Inference proxy
 
-Scope `Conductor.Inference`. Covers the OpenAI/Ollama/Gemini-compatible proxy path.
+Scope `Conductor.Inference`. Covers the proxy path for every VMR type (Ollama, OpenAI, vLLM, Gemini, Anthropic, and TypeSafe).
 
 | Metric | Type | Unit | Labels | Represents |
 | --- | --- | --- | --- | --- |
-| `conductor_inference_requests_total` | counter | — | `api_family`, `vmr`, `http_status_code`, `streaming` | Proxied inference requests. |
+| `conductor_inference_requests_total` | counter | none | `api_family`, `vmr`, `http_status_code`, `streaming` | Proxied inference requests. |
 | `conductor_inference_request_duration_seconds` | histogram | s | `api_family`, `vmr`, `http_status_code`, `streaming` | End-to-end proxied request duration. |
 | `conductor_inference_first_token_duration_seconds` | histogram | s | same | Time to first token / first response byte (streaming). |
-| `conductor_inference_upstream_errors_total` | counter | — | `api_family`, `vmr`, `exception_type` | Upstream call failures. |
+| `conductor_inference_upstream_errors_total` | counter | none | `api_family`, `vmr`, `exception_type` | Upstream call failures. |
+| `conductor_decision_question_count` | histogram | `{question}` | `vmr` | Number of questions in each proxied TypeSafe decision request (`POST /v1/systemone`). Recorded before forwarding, including for requests rejected with `400` for having too many questions. |
 
-`api_family` is `OpenAI` / `Ollama` / `Gemini` / `Management`; `vmr` is the virtual model runner
-name; `streaming` is `true`/`false`.
+`api_family` is derived from the classified request type: `OpenAI` (OpenAI and vLLM routes), `Ollama`,
+`Gemini`, `Anthropic` (messages, count tokens, list and get models), `TypeSafe` (decisions and model
+listing), or `Management` (unclassified requests forwarded inside a namespace, and management traffic).
+`vmr` is the virtual model runner name; `streaming` is `true`/`false`.
+
+The decision histogram is declared as `conductor.decision.question_count` with the annotation unit
+`{question}`, which Prometheus naming drops, so it is exported as `conductor_decision_question_count`
+with `_bucket`, `_sum`, and `_count` series. It uses the default OpenTelemetry bucket boundaries.
 
 ### Routing & load balancing
 
@@ -155,9 +162,9 @@ Scope `Conductor.Routing`.
 
 | Metric | Type | Unit | Labels | Represents |
 | --- | --- | --- | --- | --- |
-| `conductor_routing_decisions_total` | counter | — | `api_family`, `outcome`, `strategy`, `vmr` | Routing decisions evaluated. |
+| `conductor_routing_decisions_total` | counter | none | `api_family`, `outcome`, `strategy`, `vmr` | Routing decisions evaluated. |
 | `conductor_routing_decision_duration_seconds` | histogram | s | `api_family`, `outcome`, `strategy`, `vmr` | Time spent evaluating a routing decision. |
-| `conductor_routing_denials_total` | counter | — | `api_family`, `reason`, `vmr` | Requests denied before forwarding. |
+| `conductor_routing_denials_total` | counter | none | `api_family`, `reason`, `vmr` | Requests denied before forwarding. |
 
 `outcome` is `Routed`/`Denied`; `strategy` is the load-balancing mode; `reason` is the denial
 reason code (e.g. `EndpointAtCapacity`).
@@ -168,9 +175,12 @@ Scope `Conductor.ModelLoad`.
 
 | Metric | Type | Unit | Labels | Represents |
 | --- | --- | --- | --- | --- |
-| `conductor_model_load_requests_total` | counter | — | `target_type`, `success`, `outcome` | Control-plane model-load requests. |
+| `conductor_model_load_requests_total` | counter | none | `target_type`, `success`, `outcome` | Control-plane model-load requests. |
 | `conductor_model_load_request_duration_seconds` | histogram | s | `target_type`/`api_family`, `success`, `outcome` | Model-load duration. |
-| `conductor_model_load_endpoint_attempts_total` | counter | — | `api_family`, `success`, `outcome` | Per-endpoint load attempts. |
+| `conductor_model_load_endpoint_attempts_total` | counter | none | `api_family`, `success`, `outcome` | Per-endpoint load attempts. |
+
+For model load, `api_family` is the endpoint's `ApiType` name, one of `Ollama`, `OpenAI`, `Gemini`,
+`vLLM`, `Anthropic`, `TypeSafe`, `Ollaya`, `OllamaCloud`, or `OpenAICompatible`.
 
 ### Database
 
@@ -179,9 +189,9 @@ Scope `Conductor.Database`. Instrumented once at the driver chokepoint, so every
 
 | Metric | Type | Unit | Labels | Represents |
 | --- | --- | --- | --- | --- |
-| `conductor_db_client_operations_total` | counter | — | `db_system`, `db_operation` | Database operations executed. |
+| `conductor_db_client_operations_total` | counter | none | `db_system`, `db_operation` | Database operations executed. |
 | `conductor_db_client_operation_duration_seconds` | histogram | s | `db_system`, `db_operation` | Query latency. |
-| `conductor_db_client_errors_total` | counter | — | `db_system`, `db_operation` | Operations that threw. |
+| `conductor_db_client_errors_total` | counter | none | `db_system`, `db_operation` | Operations that threw. |
 
 `db_system` is `sqlite`/`postgresql`/`mssql`/`mysql`; `db_operation` is the SQL verb
 (`select`/`insert`/`update`/`delete`/…).
@@ -195,15 +205,15 @@ the same pipeline.
 
 | Metric | Type | Unit | Labels | Represents |
 | --- | --- | --- | --- | --- |
-| `conductor_qos_admissions_total` | counter | — | `vmr`, `qos_class`, `outcome` | Admission decisions (`admitted`/`rejected`/`timed_out`/`aborted`). |
-| `conductor_qos_rejections_total` | counter | — | `vmr`, `reason` | Requests turned away (`queue_full`/`total_depth`/`wait_timeout`/`aborted`). |
+| `conductor_qos_admissions_total` | counter | none | `vmr`, `qos_class`, `outcome` | Admission decisions (`admitted`/`rejected`/`timed_out`/`aborted`). |
+| `conductor_qos_rejections_total` | counter | none | `vmr`, `reason` | Requests turned away (`queue_full`/`total_depth`/`wait_timeout`/`aborted`). |
 | `conductor_qos_queue_wait_duration_seconds` | histogram | s | `vmr`, `qos_class` | Time a request waited before admission. |
-| `conductor_qos_queue_depth` | gauge | — | `vmr` | Requests currently parked in QoS queues. |
-| `qoskit_queue_enqueued_total` / `_dequeued_total` | counter | — | `queue_name`, `queue_type`, `queue_class` | Admitted / serviced items per class. |
-| `qoskit_queue_dropped_total` | counter | — | `queue_class`, `drop_reason` | Drops, split by reason (`newest`/`oldest`/`unknown_class`/`unroutable`). |
+| `conductor_qos_queue_depth` | gauge | none | `vmr` | Requests currently parked in QoS queues. |
+| `qoskit_queue_enqueued_total` / `_dequeued_total` | counter | none | `queue_name`, `queue_type`, `queue_class` | Admitted / serviced items per class. |
+| `qoskit_queue_dropped_total` | counter | none | `queue_class`, `drop_reason` | Drops, split by reason (`newest`/`oldest`/`unknown_class`/`unroutable`). |
 | `qoskit_queue_wait_duration_milliseconds` | histogram | ms | `queue_name`, `queue_class` | Per-class wait time (millisecond buckets applied as a view). |
-| `qoskit_policer_conformed_total` / `_exceeded_total` | counter | — | `queue_class` | LLQ token-bucket conform vs. throttle. |
-| `qoskit_queue_capacity` / `qoskit_queue_peak_depth` / `qoskit_queue_resident_bytes` | gauge | — | `queue_name` | Configured limit, high-water mark, resident cost (pull-based). |
+| `qoskit_policer_conformed_total` / `_exceeded_total` | counter | none | `queue_class` | LLQ token-bucket conform vs. throttle. |
+| `qoskit_queue_capacity` / `qoskit_queue_peak_depth` / `qoskit_queue_resident_bytes` | gauge | none | `queue_name` | Configured limit, high-water mark, resident cost (pull-based). |
 
 `qos_class` is a closed set defined by the profile; on a weighted-fair node with dynamic flows the
 profile can drop the per-class tag to bound cardinality. QoS metrics reach Prometheus by the same two
@@ -230,8 +240,8 @@ Scope `Conductor.Process`, plus the OpenTelemetry .NET runtime instrumentation (
 | --- | --- | --- | --- |
 | `conductor_process_memory_usage_bytes` | gauge | By | Process working set. |
 | `conductor_process_uptime_seconds` | gauge | s | Process uptime. |
-| `conductor_process_thread_count` | gauge | — | OS thread count. |
-| `process_runtime_dotnet_*` | various | — | GC, heap, thread-pool, and exception metrics from the .NET runtime. |
+| `conductor_process_thread_count` | gauge | none | OS thread count. |
+| `process_runtime_dotnet_*` | various | none | GC, heap, thread-pool, and exception metrics from the .NET runtime. |
 
 ### Histogram buckets
 
@@ -253,12 +263,20 @@ activity sources and exported over OTLP to Tempo.
 
 | Span | Kind | Source | Key attributes |
 | --- | --- | --- | --- |
-| `inference.proxy` | Server | `Conductor.Inference` | `conductor.vmr`, `conductor.api_family`, `conductor.model`, `http.request.method`, `http.response.status_code`, `conductor.streaming` |
+| `inference.proxy` | Server | `Conductor.Inference` | `conductor.vmr`, `conductor.api_family`, `conductor.model`, `http.request.method`, `http.response.status_code`, `conductor.streaming`, `conductor.endpoint.api_type`, `conductor.anthropic.version`, `conductor.decision.question_count` |
 | `inference.forward` | Client | `Conductor.Inference` | `server.address`, `server.port`, `conductor.endpoint_id`, `http.response.status_code` |
 | `routing.evaluate` | Internal | `Conductor.Routing` | `conductor.outcome`, `conductor.endpoint_id`, `conductor.denial_reason` |
 | `inference.qos.admit` | Internal | `Conductor.Inference` | `conductor.qos_class`, `conductor.qos_outcome` |
 | `queue.enqueue` / `queue.dequeue` / `link.move` | Internal | `QoSKit` | `queue.name`, `queue.class`, `qoskit.outcome`, `qoskit.wait_ms` |
 | `db <operation>` | Client | `Conductor.Database` | `db.system`, `db.operation` |
+
+Provider attributes on `inference.proxy`:
+
+- `conductor.endpoint.api_type`: the selected endpoint's `ApiType`, for example `Anthropic`, `OllamaCloud`, or `OpenAICompatible`. Set once an endpoint is chosen.
+- `conductor.anthropic.version`: the effective `anthropic-version` sent upstream (client header, then endpoint `AnthropicVersion`, then `Anthropic.DefaultVersion`). Anthropic endpoints only.
+- `conductor.decision.question_count`: the number of questions in a TypeSafe decision request.
+
+Model names appear only on spans, never as metric labels.
 
 Within a proxied request the spans nest: `inference.proxy` → `routing.evaluate`, `inference.qos.admit`,
 and `inference.forward`. The `inference.qos.admit` segment shows the time a request spent waiting in the
@@ -329,8 +347,8 @@ You do not have to use the bundled stack. Because Conductor speaks OTLP, it drop
 OpenTelemetry-compatible pipeline.
 
 **1. Point at your own collector or backend.** Set the endpoint (and headers for auth) to your
-collector or a vendor's OTLP ingest — Grafana Cloud, Honeycomb, New Relic, Datadog (OTLP),
-Elastic, etc.
+collector or a vendor's OTLP ingest, such as Grafana Cloud, Honeycomb, New Relic, Datadog (OTLP),
+or Elastic.
 
 ```json
 "OpenTelemetry": {
@@ -350,8 +368,8 @@ OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <ingest-token>
 ```
 
-**2. Scrape metrics directly with Prometheus.** Enable the in-process exporter and scrape it —
-no collector required for metrics:
+**2. Scrape metrics directly with Prometheus.** Enable the in-process exporter and scrape it;
+no collector is required for metrics:
 
 ```json
 "OpenTelemetry": { "Enabled": true, "PrometheusEnabled": true, "PrometheusPort": 9464 }
@@ -385,9 +403,9 @@ extend the instrumentation.
 Independent of the OpenTelemetry pipeline, Conductor also exposes its built-in operational
 metrics snapshot (unchanged from earlier releases):
 
-- `GET /v1.0/observability/metrics` — Prometheus text exposition (`conductor_*` operational
+- `GET /v1.0/observability/metrics`: Prometheus text exposition (`conductor_*` operational
   counters/histograms), bearer-authenticated.
-- `GET /v1.0/observability/metrics/summary` — JSON snapshot consumed by the dashboard's
+- `GET /v1.0/observability/metrics/summary`: JSON snapshot consumed by the dashboard's
   Operational Signals panel.
 
 This endpoint is useful for a quick in-app view without standing up the full stack; the

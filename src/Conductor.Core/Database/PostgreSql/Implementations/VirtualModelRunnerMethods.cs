@@ -35,7 +35,7 @@ namespace Conductor.Core.Database.PostgreSql.Implementations
             vmr.CreatedUtc = DateTime.UtcNow;
             vmr.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelaccesspolicyid, qosprofileid, modelrunnerendpointids, adaptiveloadbalancing, keepwarm, endpointgroups, endpointgroupids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO virtualmodelrunners (id, tenantid, name, hostname, basepath, apitype, loadbalancingmode, loadbalancingpolicyid, modelaccesspolicyid, qosprofileid, modelrunnerendpointids, adaptiveloadbalancing, keepwarm, endpointgroups, endpointgroupids, modelconfigurationids, modeldefinitionids, modelconfigurationmappings, timeoutms, allowembeddings, allowcompletions, allowmodelmanagement, allowdecisions, strictmode, sessionaffinitymode, sessionaffinityheader, sessiontimeoutms, sessionmaxentries, requesthistoryenabled, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(vmr.Id) + "', " +
                            "'" + _Driver.Sanitize(vmr.TenantId) + "', " +
                            "'" + _Driver.Sanitize(vmr.Name) + "', " +
@@ -58,6 +58,7 @@ namespace Conductor.Core.Database.PostgreSql.Implementations
                            _Driver.FormatBoolean(vmr.AllowEmbeddings) + ", " +
                            _Driver.FormatBoolean(vmr.AllowCompletions) + ", " +
                            _Driver.FormatBoolean(vmr.AllowModelManagement) + ", " +
+                           _Driver.FormatBoolean(vmr.AllowDecisions) + ", " +
                            _Driver.FormatBoolean(vmr.StrictMode) + ", " +
                            (int)vmr.SessionAffinityMode + ", " +
                            _Driver.FormatNullableString(vmr.SessionAffinityHeader) + ", " +
@@ -152,6 +153,7 @@ namespace Conductor.Core.Database.PostgreSql.Implementations
                            "allowembeddings = " + _Driver.FormatBoolean(vmr.AllowEmbeddings) + ", " +
                            "allowcompletions = " + _Driver.FormatBoolean(vmr.AllowCompletions) + ", " +
                            "allowmodelmanagement = " + _Driver.FormatBoolean(vmr.AllowModelManagement) + ", " +
+                           "allowdecisions = " + _Driver.FormatBoolean(vmr.AllowDecisions) + ", " +
                            "strictmode = " + _Driver.FormatBoolean(vmr.StrictMode) + ", " +
                            "sessionaffinitymode = " + (int)vmr.SessionAffinityMode + ", " +
                            "sessionaffinityheader = " + _Driver.FormatNullableString(vmr.SessionAffinityHeader) + ", " +

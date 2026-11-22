@@ -1,204 +1,393 @@
 {
   "info": {
     "name": "Conductor API",
-    "description": "Conductor API collection for managing tenants, model runners, virtual model runners, load-balancing policies, model access policies, validation, request history, analytics, observability, and backup/restore workflows.",
+    "description": "Conductor API collection, organized in folders by resource. It covers authentication, tenants, users, credentials, model runner endpoints (all nine endpoint types, including Anthropic, TypeSafe, Ollaya, OllamaCloud and OpenAICompatible), endpoint groups, model definitions, model configurations, load-balancing policies, QoS, model access policies, virtual model runners, VMR reservations, model loading, request history, analytics, validation and preview, routing explanation, endpoint states, observability, administrators, backup and restore, and the proxied Anthropic and TypeSafe decision APIs.\n\nSetup: set `baseUrl` (default http://127.0.0.1:9000) and `bearerToken` (a Conductor credential bearer token; use the Authentication folder to obtain one). Every request inherits collection-level Bearer auth from `{{bearerToken}}` unless it says otherwise. The Tenants and Administrators folders instead send the system administrator API key from `{{adminApiKey}}` in the `x-admin-apikey` header, because those routes require a system administrator. `tenantId` (default `default`, the tenant created on first run) is sent as `TenantId` in create, validate and update bodies and as `?tenantId=` on routes that take it. Global-admin credentials, including the first-run token, use it to pick a tenant; a write without it acts on the credential's own tenant. System administrator credentials have no tenant, so their writes must include it (400 otherwise). Other credentials always act in their own tenant and the value is ignored. Proxied requests need a credential in the VMR's own tenant, including for global admins; a credential from another tenant gets 403 CredentialTenantMismatch. Create requests store the new resource ID in a collection variable through a test script, so later requests in the same folder can use it.\n\nUpstream provider keys (`anthropicUpstreamApiKey`, `typesafeUpstreamApiKey`, `ollamaCloudUpstreamApiKey`) are empty by default; set them in your environment, never in the collection. Responses always mask endpoint API keys as **** plus the last four characters; use Reveal Endpoint API Key to read the full value. See REST_API.md for every route's parameters, bodies and status codes.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:9000",
-      "type": "string"
+      "value": "http://127.0.0.1:9000",
+      "type": "string",
+      "description": "Conductor server base URL, without a trailing slash. Default http://127.0.0.1:9000."
     },
     {
       "key": "bearerToken",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Conductor credential bearer token used by the collection-level Bearer auth. Never an upstream provider key."
+    },
+    {
+      "key": "email",
+      "value": "admin@conductor",
+      "type": "string",
+      "description": "Tenant user email for Login with Credential. Default admin@conductor, the user created on first run; change the password before production use."
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string",
+      "description": "Tenant user password for Login with Credential. Empty by default; the first-run password is password until you change it. Set it in your environment, not in the collection."
+    },
+    {
+      "key": "apiKey",
+      "value": "",
+      "type": "string",
+      "description": "Credential bearer token for Login with API Key, for example the API Key printed on first run. Empty by default; set it in your environment."
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@conductor",
+      "type": "string",
+      "description": "Administrator email for Login as Admin. Default admin@conductor, the administrator created on first run."
+    },
+    {
+      "key": "adminPassword",
+      "value": "",
+      "type": "string",
+      "description": "Administrator password for Login as Admin. Empty by default; the first-run password is password until you change it. Set it in your environment, not in the collection."
+    },
+    {
+      "key": "adminApiKey",
+      "value": "",
+      "type": "string",
+      "description": "System administrator API key (a value from AdminApiKeys in conductor.json; the built-in default is conductoradmin). Sent as the x-admin-apikey header by the Tenants and Administrators folders. Empty by default; set it in your environment, not in the collection."
+    },
+    {
+      "key": "decisionTooManyBody",
+      "value": "",
+      "type": "string",
+      "description": "Request body built by the pre-request script of Decide too many questions (400). Set automatically; leave empty."
     },
     {
       "key": "policyId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "modelAccessPolicyId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "modelAccessRuleId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "vmrId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "credentialId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "userId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "modelDefinitionId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "endpointId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "endpointGroupId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "historyEntryId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "requestHistoryId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "traceId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "vmrGuid",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "endpointGuid",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "providerName",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "modelName",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsRange",
       "value": "lastHour",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsStartUtc",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsEndUtc",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsBucketSeconds",
       "value": "60",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsStage",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsLimit",
       "value": "500",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsTimezone",
       "value": "UTC",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsGroupBy",
       "value": "RequestorUserId",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsRequestorUserGuid",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsCredentialGuid",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsTokenUnitCost",
       "value": "0.000001",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsCostCurrency",
       "value": "USD",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsReportId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "analyticsExportId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "tenantId",
       "value": "default",
-      "type": "string"
+      "type": "string",
+      "description": "Tenant ID sent as TenantId in request bodies and as ?tenantId= on routes that take it. Default: default. Global admin users may omit it on writes to act on their own tenant; system administrators must supply it."
     },
     {
       "key": "reservationId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "outsiderUserId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "outsiderCredentialId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "reservationAtUtc",
       "value": "2026-06-16T17:30:00Z",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "qosProfileId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
     },
     {
       "key": "qosTrafficClassId",
       "value": "",
-      "type": "string"
+      "type": "string",
+      "description": "Resource ID or query value used by requests in this collection. Usually set by a create request test script."
+    },
+    {
+      "key": "definitionId",
+      "value": "",
+      "type": "string",
+      "description": "Model definition ID used by the Model Definitions folder."
+    },
+    {
+      "key": "configurationId",
+      "value": "",
+      "type": "string",
+      "description": "Model configuration ID used by the Model Configurations folder."
+    },
+    {
+      "key": "adminId",
+      "value": "",
+      "type": "string",
+      "description": "Administrator ID used by the Administrators folder."
+    },
+    {
+      "key": "anthropicEndpointId",
+      "value": "",
+      "type": "string",
+      "description": "ID of the Anthropic endpoint. Set by Create Anthropic Endpoint."
+    },
+    {
+      "key": "anthropicVmrId",
+      "value": "",
+      "type": "string",
+      "description": "ID of the Anthropic virtual model runner. Set by Create Anthropic VMR."
+    },
+    {
+      "key": "anthropicVmrBasePath",
+      "value": "/v1.0/api/claude/",
+      "type": "string",
+      "description": "Base path of the Anthropic VMR, with leading and trailing slashes. Proxied Anthropic requests are sent to {{baseUrl}}{{anthropicVmrBasePath}}v1/..."
+    },
+    {
+      "key": "anthropicModel",
+      "value": "claude-opus-5-5",
+      "type": "string",
+      "description": "Anthropic model used by the proxied Anthropic requests and the Anthropic model load example."
+    },
+    {
+      "key": "anthropicVersion",
+      "value": "2023-06-01",
+      "type": "string",
+      "description": "anthropic-version header sent by the proxied Anthropic requests. The client value wins over the endpoint and server defaults."
+    },
+    {
+      "key": "anthropicUpstreamApiKey",
+      "value": "",
+      "type": "string",
+      "description": "Your Anthropic API key, stored on the Anthropic endpoint and sent upstream in x-api-key. Leave empty in the collection and set it in an environment. Never sent by clients to Conductor."
+    },
+    {
+      "key": "typesafeEndpointId",
+      "value": "",
+      "type": "string",
+      "description": "ID of the hosted TypeSafe endpoint. Set by Create TypeSafe Endpoint (hosted)."
+    },
+    {
+      "key": "ollayaEndpointId",
+      "value": "",
+      "type": "string",
+      "description": "ID of the local Ollaya endpoint. Set by Create Ollaya Endpoint."
+    },
+    {
+      "key": "typesafeVmrId",
+      "value": "",
+      "type": "string",
+      "description": "ID of the TypeSafe virtual model runner. Set by Create TypeSafe VMR."
+    },
+    {
+      "key": "typesafeVmrBasePath",
+      "value": "/v1.0/api/decide/",
+      "type": "string",
+      "description": "Base path of the TypeSafe VMR, with leading and trailing slashes. Decision requests are sent to {{baseUrl}}{{typesafeVmrBasePath}}v1/systemone."
+    },
+    {
+      "key": "decisionModel",
+      "value": "jev-latest",
+      "type": "string",
+      "description": "Decision model used by the proxied decision requests."
+    },
+    {
+      "key": "typesafeUpstreamApiKey",
+      "value": "",
+      "type": "string",
+      "description": "Your TypeSafe API key, stored on the TypeSafe endpoint and sent upstream as a Bearer token. Leave empty in the collection and set it in an environment."
+    },
+    {
+      "key": "ollamaCloudUpstreamApiKey",
+      "value": "",
+      "type": "string",
+      "description": "Your Ollama Cloud API key, stored on the OllamaCloud endpoint and sent upstream as a Bearer token. Leave empty in the collection and set it in an environment."
+    },
+    {
+      "key": "ollayaPort",
+      "value": "8080",
+      "type": "string",
+      "description": "Port of the local Ollaya runtime. Adjust to match your installation."
+    },
+    {
+      "key": "openAICompatiblePort",
+      "value": "1234",
+      "type": "string",
+      "description": "Port of the local OpenAI-compatible server (1234 is the LM Studio default). Adjust as needed."
     }
   ],
   "auth": {
@@ -240,7 +429,8 @@
                 "login",
                 "credential"
               ]
-            }
+            },
+            "description": "Log in with tenant ID, email and password. Public. Returns 200 with a bearer token, or 401 for bad credentials."
           }
         },
         {
@@ -268,7 +458,8 @@
                 "login",
                 "apikey"
               ]
-            }
+            },
+            "description": "Exchange an existing credential bearer token for session details. Public. Returns 200, or 401."
           }
         },
         {
@@ -296,10 +487,12 @@
                 "login",
                 "admin"
               ]
-            }
+            },
+            "description": "Log in as a system administrator with email and password. Public. Returns 200, or 401."
           }
         }
-      ]
+      ],
+      "description": "Obtain a bearer token. Login routes are public. Copy the returned token into the `bearerToken` variable."
     },
     {
       "name": "Tenants",
@@ -317,7 +510,8 @@
                 "v1.0",
                 "tenants"
               ]
-            }
+            },
+            "description": "List tenants. Requires authentication: system administrators and global admin users see every tenant; other users see only their own tenant, and the paging and filter parameters do not apply to them. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter. Returns 200 with Data, TotalCount and HasMore, or 401 without credentials."
           }
         },
         {
@@ -334,7 +528,8 @@
                 "tenants",
                 "{{tenantId}}"
               ]
-            }
+            },
+            "description": "Read one tenant by ID. Requires a global admin user or a system administrator. Returns 200, 401 for other callers, or 404 when the tenant does not exist."
           }
         },
         {
@@ -360,7 +555,8 @@
                 "v1.0",
                 "tenants"
               ]
-            }
+            },
+            "description": "Create a tenant. Requires a system administrator (this folder sends x-admin-apikey). Returns 201 with the stored tenant, 400 when validation fails, or 401 for any other caller, including global admin users."
           }
         },
         {
@@ -387,7 +583,8 @@
                 "tenants",
                 "{{tenantId}}"
               ]
-            }
+            },
+            "description": "Update a tenant. Requires a system administrator. Returns 200 with the stored tenant, 400 when validation fails, 401 for any other caller, or 404."
           }
         },
         {
@@ -404,7 +601,8 @@
                 "tenants",
                 "{{tenantId}}"
               ]
-            }
+            },
+            "description": "Delete a tenant and all of its data. Requires a system administrator. Request history (entries, analytics events and detail files) is deleted first, then the tenant's other resources. Returns 204, 401 for any other caller, or 404 when it does not exist."
           }
         },
         {
@@ -433,10 +631,31 @@
                 "purge"
               ]
             },
-            "description": "System-administrator only, destructive nuke. Permanently and irreversibly deletes the tenant and ALL of its associated data (users, credentials, virtual model runners, endpoints, load-balancing and model-access policies, reservations, QoS profiles, request history, and analytics). The request body must include ConfirmTenantId, and its value MUST exactly match the tenant id in the URL path; if they do not match the request is rejected without deleting anything. The default tenant cannot be purged: the endpoint refuses the request. This action cannot be undone."
+            "description": "System-administrator only (other callers get 401), destructive nuke. Permanently and irreversibly deletes the tenant and ALL of its associated data (users, credentials, virtual model runners, endpoints, load-balancing and model-access policies, reservations, QoS profiles, request history, and analytics). The request body must include ConfirmTenantId, and its value MUST exactly match the tenant id in the URL path; if they do not match the request is rejected without deleting anything. The default tenant cannot be purged: the endpoint refuses the request. This action cannot be undone."
           }
         }
-      ]
+      ],
+      "description": "Tenant management. Every tenant route requires authentication. Create, update, delete and purge require a system administrator; reading one tenant requires a global admin user or a system administrator; listing works for any authenticated caller, but users who are not global admins see only their own tenant. Requests in this folder authenticate as a system administrator with the x-admin-apikey header from `{{adminApiKey}}` (folder-level API key auth). To try List Tenants or Get Tenant as a global admin user instead, switch the request's auth to Inherit or Bearer with `{{bearerToken}}`. Calls without credentials, or below the required level, return 401.",
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "x-admin-apikey",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{adminApiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
     },
     {
       "name": "Users",
@@ -454,7 +673,8 @@
                 "v1.0",
                 "users"
               ]
-            }
+            },
+            "description": "List users visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore. Responses never contain Password."
           }
         },
         {
@@ -471,7 +691,8 @@
                 "users",
                 "{{userId}}"
               ]
-            }
+            },
+            "description": "Read one user by ID. Returns 200, or 404 when it does not exist in the caller's tenant. The response never contains Password."
           }
         },
         {
@@ -486,7 +707,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Email\": \"user@example.com\",\n  \"Password\": \"password123\",\n  \"Name\": \"Test User\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Email\": \"user@example.com\",\n  \"Password\": \"password123\",\n  \"FirstName\": \"Test\",\n  \"LastName\": \"User\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/users",
@@ -497,7 +718,8 @@
                 "v1.0",
                 "users"
               ]
-            }
+            },
+            "description": "Create a user. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored user, or 400 when validation fails. The response never contains Password."
           }
         },
         {
@@ -512,7 +734,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated User\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"FirstName\": \"Updated\",\n  \"LastName\": \"User\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/users/{{userId}}",
@@ -524,7 +746,8 @@
                 "users",
                 "{{userId}}"
               ]
-            }
+            },
+            "description": "Update a user. An omitted Password keeps the stored one, so a user read from the API can be sent back unchanged. Returns 200 with the stored user (without Password), 400 when validation fails, or 404."
           }
         },
         {
@@ -541,10 +764,12 @@
                 "users",
                 "{{userId}}"
               ]
-            }
+            },
+            "description": "Delete a user. Returns 204, or 404 when it does not exist."
           }
         }
-      ]
+      ],
+      "description": "User CRUD within a tenant. Requires a tenant admin or global admin."
     },
     {
       "name": "Credentials",
@@ -562,7 +787,8 @@
                 "v1.0",
                 "credentials"
               ]
-            }
+            },
+            "description": "List credentials visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -579,7 +805,8 @@
                 "credentials",
                 "{{credentialId}}"
               ]
-            }
+            },
+            "description": "Read one credential by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -594,7 +821,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"My API Key\",\n  \"UserId\": \"{{userId}}\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"My API Key\",\n  \"UserId\": \"{{userId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/credentials",
@@ -605,7 +832,8 @@
                 "v1.0",
                 "credentials"
               ]
-            }
+            },
+            "description": "Create a credential. Cross-tenant callers supply TenantId in the body. UserId names the owner and must be a user in the target tenant (400 otherwise); without UserId the credential belongs to the caller. A system administrator has no user, so it must supply UserId. Returns 201 with the stored credential, including its BearerToken."
           }
         },
         {
@@ -620,7 +848,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated API Key\",\n  \"Active\": true,\n  \"Labels\": [\n    \"ci\"\n  ],\n  \"Tags\": {\n    \"owner\": \"platform\"\n  }\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Updated API Key\",\n  \"Active\": true,\n  \"Labels\": [\n    \"ci\"\n  ],\n  \"Tags\": {\n    \"owner\": \"platform\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/credentials/{{credentialId}}",
@@ -650,10 +878,12 @@
                 "credentials",
                 "{{credentialId}}"
               ]
-            }
+            },
+            "description": "Delete a credential. Returns 204, or 404 when it does not exist."
           }
         }
-      ]
+      ],
+      "description": "Credential (bearer token) CRUD within a tenant. Requires a tenant admin or global admin. A credential is what clients send to Conductor, including as x-api-key on Anthropic VMRs."
     },
     {
       "name": "Model Runner Endpoints",
@@ -671,7 +901,8 @@
                 "v1.0",
                 "modelrunnerendpoints"
               ]
-            }
+            },
+            "description": "List model runner endpoints visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore. ApiKey is masked in the response."
           }
         },
         {
@@ -688,7 +919,8 @@
                 "modelrunnerendpoints",
                 "{{endpointId}}"
               ]
-            }
+            },
+            "description": "Read one model runner endpoint by ID. Returns 200, or 404 when it does not exist in the caller's tenant. ApiKey is masked in the response."
           }
         },
         {
@@ -703,7 +935,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"My Ollama Server\",\n  \"ApiType\": \"Ollama\",\n  \"Hostname\": \"localhost\",\n  \"Port\": 11434,\n  \"UseSsl\": false,\n  \"HealthCheckUrl\": \"/\",\n  \"HealthCheckMethod\": \"GET\",\n  \"HealthCheckExpectedStatusCode\": 200,\n  \"RigMonitor\": {\n    \"Enabled\": true,\n    \"Port\": 9990,\n    \"UseSsl\": false,\n    \"CollectDuringHealthCheck\": true,\n    \"RequireReadyz\": true,\n    \"HealthAffectedByRigMonitor\": false,\n    \"TelemetryProfile\": \"GpuPlacement\"\n  }\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"My Ollama Server\",\n  \"ApiType\": \"Ollama\",\n  \"Hostname\": \"127.0.0.1\",\n  \"Port\": 11434,\n  \"UseSsl\": false,\n  \"HealthCheckUrl\": \"/\",\n  \"HealthCheckMethod\": \"GET\",\n  \"HealthCheckExpectedStatusCode\": 200,\n  \"RigMonitor\": {\n    \"Enabled\": true,\n    \"Port\": 9990,\n    \"UseSsl\": false,\n    \"CollectDuringHealthCheck\": true,\n    \"RequireReadyz\": true,\n    \"HealthAffectedByRigMonitor\": false,\n    \"TelemetryProfile\": \"GpuPlacement\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
@@ -714,7 +946,8 @@
                 "v1.0",
                 "modelrunnerendpoints"
               ]
-            }
+            },
+            "description": "Create a model runner endpoint. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails. ApiKey is masked in the response. Omitted host, port, SSL and health check fields are filled from the ApiType defaults."
           }
         },
         {
@@ -729,7 +962,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated Endpoint\",\n  \"RigMonitor\": {\n    \"Enabled\": true,\n    \"HostnameOverride\": \"rigmonitor-host.local\",\n    \"Port\": 9990,\n    \"UseSsl\": false,\n    \"TimeoutMs\": 5000,\n    \"CollectDuringHealthCheck\": true,\n    \"RequireReadyz\": true,\n    \"HealthAffectedByRigMonitor\": false,\n    \"MaxTelemetryAgeMs\": 30000,\n    \"CapabilitiesRefreshIntervalMs\": 60000,\n    \"TelemetryProfile\": \"Custom\",\n    \"TelemetrySelectors\": [\"system\", \"cpu\", \"memory\", \"gpu\"]\n  }\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Updated Endpoint\",\n  \"RigMonitor\": {\n    \"Enabled\": true,\n    \"HostnameOverride\": \"rigmonitor-host.local\",\n    \"Port\": 9990,\n    \"UseSsl\": false,\n    \"TimeoutMs\": 5000,\n    \"CollectDuringHealthCheck\": true,\n    \"RequireReadyz\": true,\n    \"HealthAffectedByRigMonitor\": false,\n    \"MaxTelemetryAgeMs\": 30000,\n    \"CapabilitiesRefreshIntervalMs\": 60000,\n    \"TelemetryProfile\": \"Custom\",\n    \"TelemetrySelectors\": [\"system\", \"cpu\", \"memory\", \"gpu\"]\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{endpointId}}",
@@ -741,7 +974,8 @@
                 "modelrunnerendpoints",
                 "{{endpointId}}"
               ]
-            }
+            },
+            "description": "Update a model runner endpoint. Returns 200 with the stored resource, 400 when validation fails, or 404. ApiKey is masked in the response. An omitted, null or masked ApiKey keeps the stored key; an empty string clears it."
           }
         },
         {
@@ -758,7 +992,8 @@
                 "modelrunnerendpoints",
                 "{{endpointId}}"
               ]
-            }
+            },
+            "description": "Delete a model runner endpoint. Returns 204, or 404 when it does not exist."
           }
         },
         {
@@ -781,7 +1016,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Cached health state for every endpoint in scope. Endpoints with HealthCheckEnabled=false report healthy without being probed. Returns 200."
           }
         },
         {
@@ -799,7 +1035,8 @@
                 "{{endpointId}}",
                 "health"
               ]
-            }
+            },
+            "description": "Cached health state for one endpoint: IsHealthy, uptime, consecutive results, in-flight count, service state and history. Returns 200, or 404."
           }
         },
         {
@@ -824,7 +1061,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Tenant admin. Lists local models on an Ollama endpoint through GET /api/tags. Returns 400 for OllamaCloud and other types."
           }
         },
         {
@@ -860,7 +1098,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Tenant admin. Pulls a model onto an Ollama endpoint (POST /api/pull, stream=false). Returns 400 for OllamaCloud and other types."
           }
         },
         {
@@ -896,7 +1135,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Tenant admin. Deletes a local model from an Ollama endpoint. Returns 400 for OllamaCloud and other types."
           }
         },
         {
@@ -914,10 +1154,309 @@
                 "{{endpointId}}",
                 "rigmonitor"
               ]
-            }
+            },
+            "description": "Cached RigMonitor readiness, capabilities and telemetry for one endpoint. RigMonitor is not supported for OllamaCloud endpoints."
           }
+        },
+        {
+          "name": "Create Anthropic Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints"
+              ]
+            },
+            "description": "Create an Anthropic endpoint. Only Name, ApiType and ApiKey are sent; the server applies the Anthropic type defaults: api.anthropic.com, port 443, SSL, health check GET /v1/models?limit=1 with auth, enabled, every 60000 ms. The key is sent upstream in x-api-key with anthropic-version. AnthropicVersion is optional (yyyy-MM-dd; null uses Settings.Anthropic.DefaultVersion). Returns 201 with ApiKey masked, or 400 with AnthropicApiKeyMissing when no key is set. Stores the ID in anthropicEndpointId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Anthropic\",\n  \"ApiType\": \"Anthropic\",\n  \"ApiKey\": \"{{anthropicUpstreamApiKey}}\",\n  \"AnthropicVersion\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "pm.test('Type defaults applied', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.ApiType).to.eql('Anthropic');",
+                  "    pm.expect(body.Hostname).to.eql('api.anthropic.com');",
+                  "    pm.expect(body.HealthCheckEnabled).to.eql(true);",
+                  "});",
+                  "pm.test('ApiKey is masked or null', function () {",
+                  "    const key = pm.response.json().ApiKey;",
+                  "    pm.expect(key === null || key === undefined || String(key).startsWith('****')).to.be.true;",
+                  "});",
+                  "if (pm.response.code === 201 || pm.response.code === 200) { pm.collectionVariables.set('anthropicEndpointId', pm.response.json().Id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create TypeSafe Endpoint (hosted)",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints"
+              ]
+            },
+            "description": "Create a hosted TypeSafe endpoint for Jev decision models. Type defaults: api.typesafe.ai, port 443, SSL, health check POST /v1/systemone with a one-question decision probe body. Hosted TypeSafe has no /v1/models route and each probe is billed, so HealthCheckEnabled defaults to false (the endpoint is treated as healthy). Set HealthCheckEnabled to true to probe every 60000 ms. Returns 201, or 400 with TypeSafeApiKeyMissing. Stores the ID in typesafeEndpointId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"TypeSafe\",\n  \"ApiType\": \"TypeSafe\",\n  \"ApiKey\": \"{{typesafeUpstreamApiKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "pm.test('TypeSafe health defaults', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.ApiType).to.eql('TypeSafe');",
+                  "    pm.expect(body.HealthCheckEnabled).to.eql(false);",
+                  "    pm.expect(body.HealthCheckMethod).to.eql('POST');",
+                  "});",
+                  "pm.test('ApiKey is masked or null', function () {",
+                  "    const key = pm.response.json().ApiKey;",
+                  "    pm.expect(key === null || key === undefined || String(key).startsWith('****')).to.be.true;",
+                  "});",
+                  "if (pm.response.code === 201 || pm.response.code === 200) { pm.collectionVariables.set('typesafeEndpointId', pm.response.json().Id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Ollaya Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints"
+              ]
+            },
+            "description": "Create a local Ollaya endpoint (System One decision API). Endpoint-only: attach it to a TypeSafe VMR. Type defaults: 127.0.0.1, no SSL, health check GET /v1/models without auth every 5000 ms. The key is optional. Port is required: Ollaya has no default port, so a create without it fails with PortRequired. An update that omits Port keeps the stored port. Returns 201. Stores the ID in ollayaEndpointId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Ollaya (local)\",\n  \"ApiType\": \"Ollaya\",\n  \"Port\": {{ollayaPort}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "pm.test('Ollaya defaults', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.ApiType).to.eql('Ollaya');",
+                  "    pm.expect(body.HealthCheckUrl).to.eql('/v1/models');",
+                  "});",
+                  "if (pm.response.code === 201 || pm.response.code === 200) { pm.collectionVariables.set('ollayaEndpointId', pm.response.json().Id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create OllamaCloud Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints"
+              ]
+            },
+            "description": "Create an Ollama Cloud endpoint. Endpoint-only: attach it to an Ollama VMR. Type defaults: ollama.com, port 443, SSL, health check GET /api/tags with auth every 60000 ms. A key is required (OllamaCloudApiKeyMissing). Model management, keep-warm and RigMonitor are not supported. Returns 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Ollama Cloud\",\n  \"ApiType\": \"OllamaCloud\",\n  \"ApiKey\": \"{{ollamaCloudUpstreamApiKey}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "pm.test('ApiType is OllamaCloud', function () { pm.expect(pm.response.json().ApiType).to.eql('OllamaCloud'); });",
+                  "pm.test('ApiKey is masked or null', function () {",
+                  "    const key = pm.response.json().ApiKey;",
+                  "    pm.expect(key === null || key === undefined || String(key).startsWith('****')).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create OpenAICompatible Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints"
+              ]
+            },
+            "description": "Create an OpenAI-compatible endpoint (LM Studio, llama.cpp, Ollama /v1, and similar). Endpoint-only: attach it to an OpenAI VMR. Type defaults: 127.0.0.1, no SSL, health check GET /v1/models without auth every 5000 ms. The key is optional. Model load reports Verified. Port is required: OpenAICompatible has no default port, so a create without it fails with PortRequired. An update that omits Port keeps the stored port. Returns 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"LM Studio\",\n  \"ApiType\": \"OpenAICompatible\",\n  \"Port\": {{openAICompatiblePort}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "pm.test('ApiType is OpenAICompatible', function () { pm.expect(pm.response.json().ApiType).to.eql('OpenAICompatible'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reveal Endpoint API Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{anthropicEndpointId}}/apikey",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{anthropicEndpointId}}",
+                "apikey"
+              ]
+            },
+            "description": "Return the full, unmasked upstream API key of an endpoint: {\"ApiKey\":\"...\"}. When no key is set the body is {}. Requires a tenant admin, a global admin user, or a system administrator; standard users get 401 even though they can read and update endpoints. Tenant admins can reveal keys only in their own tenant; cross-tenant callers add ?tenantId=. Every call writes an audit log line that does not contain the key. Returns 200, 401, or 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                  "});",
+                  "pm.test('Body holds the unmasked key or nothing', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.be.an('object');",
+                  "    if (body.ApiKey !== undefined && body.ApiKey !== null) { pm.expect(String(body.ApiKey).startsWith('****')).to.be.false; }",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
-      ]
+      ],
+      "description": "Upstream model runner endpoints. ApiType is one of Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe, Ollaya, OllamaCloud, OpenAICompatible. The server fills type defaults (host, port, SSL, health check) for fields a create request omits; nothing is inferred from the hostname. ApiKey is masked in every response; an omitted, null or masked ApiKey on update keeps the stored key, and \"\" clears it. Auth: any authenticated user in the tenant; Ollama model management requires a tenant admin."
     },
     {
       "name": "Endpoint Groups",
@@ -941,7 +1480,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "List endpoint groups visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -964,7 +1504,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Read one endpoint group by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -990,7 +1531,8 @@
                 "v1.0",
                 "endpointgroups"
               ]
-            }
+            },
+            "description": "Create a endpoint group. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails."
           }
         },
         {
@@ -1017,7 +1559,8 @@
                 "endpointgroups",
                 "validate"
               ]
-            }
+            },
+            "description": "Validate an endpoint group draft without saving it. Returns 200 with a ResourceValidationResult."
           }
         },
         {
@@ -1044,7 +1587,8 @@
                 "endpointgroups",
                 "{{endpointGroupId}}"
               ]
-            }
+            },
+            "description": "Update a endpoint group. Returns 200 with the stored resource, 400 when validation fails, or 404."
           }
         },
         {
@@ -1067,10 +1611,12 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Delete a endpoint group. Returns 204, or 404 when it does not exist."
           }
         }
-      ]
+      ],
+      "description": "Reusable, tenant-scoped endpoint collections referenced by VMRs through EndpointGroupIds."
     },
     {
       "name": "Model Definitions",
@@ -1088,7 +1634,8 @@
                 "v1.0",
                 "modeldefinitions"
               ]
-            }
+            },
+            "description": "List model definitions visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -1105,7 +1652,8 @@
                 "modeldefinitions",
                 "{{definitionId}}"
               ]
-            }
+            },
+            "description": "Read one model definition by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -1120,7 +1668,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"llama3:8b\",\n  \"Family\": \"LLaMA\",\n  \"ParameterSize\": \"8B\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"llama3:8b\",\n  \"Family\": \"LLaMA\",\n  \"ParameterSize\": \"8B\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modeldefinitions",
@@ -1131,7 +1679,8 @@
                 "v1.0",
                 "modeldefinitions"
               ]
-            }
+            },
+            "description": "Create a model definition. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails."
           }
         },
         {
@@ -1146,7 +1695,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated Definition\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Updated Definition\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modeldefinitions/{{definitionId}}",
@@ -1158,7 +1707,8 @@
                 "modeldefinitions",
                 "{{definitionId}}"
               ]
-            }
+            },
+            "description": "Update a model definition. Returns 200 with the stored resource, 400 when validation fails, or 404."
           }
         },
         {
@@ -1175,10 +1725,12 @@
                 "modeldefinitions",
                 "{{definitionId}}"
               ]
-            }
+            },
+            "description": "Delete a model definition. Returns 204, or 404 when it does not exist."
           }
         }
-      ]
+      ],
+      "description": "Model catalog entries. SupportsCompletions, SupportsEmbeddings and SupportsDecisions declare capabilities used by strict mode."
     },
     {
       "name": "Model Configurations",
@@ -1196,7 +1748,8 @@
                 "v1.0",
                 "modelconfigurations"
               ]
-            }
+            },
+            "description": "List model configurations visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -1213,7 +1766,8 @@
                 "modelconfigurations",
                 "{{configurationId}}"
               ]
-            }
+            },
+            "description": "Read one model configuration by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -1228,7 +1782,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Low Temperature\",\n  \"PinnedCompletionsProperties\": {\n    \"temperature\": 0.3\n  }\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Low Temperature\",\n  \"PinnedCompletionsProperties\": {\n    \"temperature\": 0.3\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelconfigurations",
@@ -1239,7 +1793,8 @@
                 "v1.0",
                 "modelconfigurations"
               ]
-            }
+            },
+            "description": "Create a model configuration. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails."
           }
         },
         {
@@ -1254,7 +1809,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated Configuration\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Updated Configuration\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelconfigurations/{{configurationId}}",
@@ -1266,7 +1821,8 @@
                 "modelconfigurations",
                 "{{configurationId}}"
               ]
-            }
+            },
+            "description": "Update a model configuration. Returns 200 with the stored resource, 400 when validation fails, or 404."
           }
         },
         {
@@ -1283,10 +1839,12 @@
                 "modelconfigurations",
                 "{{configurationId}}"
               ]
-            }
+            },
+            "description": "Delete a model configuration. Returns 204, or 404 when it does not exist."
           }
         }
-      ]
+      ],
+      "description": "Reusable parameter sets and pinned properties applied to completion and embedding requests. Never applied to decision requests."
     },
     {
       "name": "Load Balancing Policies",
@@ -1304,7 +1862,8 @@
                 "v1.0",
                 "loadbalancingpolicies"
               ]
-            }
+            },
+            "description": "List load-balancing policys visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -1321,7 +1880,8 @@
                 "loadbalancingpolicies",
                 "{{policyId}}"
               ]
-            }
+            },
+            "description": "Read one load-balancing policy by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -1336,7 +1896,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Lowest GPU Utilization\",\n  \"Description\": \"Prefer the healthiest GPU-capable endpoint with the lowest utilization.\",\n  \"MaxTelemetryAgeMs\": 30000,\n  \"Filters\": [\n    { \"Metric\": \"health.isHealthy\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"health.hasCapacity\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"rig.gpu.available\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" }\n  ],\n  \"Ranking\": [\n    { \"Metric\": \"rig.gpu.avgUtilizationPercent\", \"Direction\": \"Ascending\", \"Weight\": 1.0 }\n  ],\n  \"FallbackMode\": \"UseLegacyLoadBalancingMode\",\n  \"TieBreaker\": \"RoundRobin\",\n  \"Active\": true\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Lowest GPU Utilization\",\n  \"Description\": \"Prefer the healthiest GPU-capable endpoint with the lowest utilization.\",\n  \"MaxTelemetryAgeMs\": 30000,\n  \"Filters\": [\n    { \"Metric\": \"health.isHealthy\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"health.hasCapacity\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"rig.gpu.available\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" }\n  ],\n  \"Ranking\": [\n    { \"Metric\": \"rig.gpu.avgUtilizationPercent\", \"Direction\": \"Ascending\", \"Weight\": 1.0 }\n  ],\n  \"FallbackMode\": \"UseLegacyLoadBalancingMode\",\n  \"TieBreaker\": \"RoundRobin\",\n  \"Active\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies",
@@ -1347,7 +1907,8 @@
                 "v1.0",
                 "loadbalancingpolicies"
               ]
-            }
+            },
+            "description": "Create a load-balancing policy. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails."
           }
         },
         {
@@ -1362,7 +1923,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated GPU Policy\",\n  \"MaxTelemetryAgeMs\": 45000,\n  \"Filters\": [\n    { \"Metric\": \"health.isHealthy\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"health.hasCapacity\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" }\n  ],\n  \"Ranking\": [\n    { \"Metric\": \"rig.gpu.minFreeMemoryMegabytes\", \"Direction\": \"Descending\", \"Weight\": 0.7 },\n    { \"Metric\": \"health.inFlightRequests\", \"Direction\": \"Ascending\", \"Weight\": 0.3 }\n  ],\n  \"FallbackMode\": \"UseLegacyLoadBalancingMode\",\n  \"TieBreaker\": \"Random\",\n  \"Active\": true\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Updated GPU Policy\",\n  \"MaxTelemetryAgeMs\": 45000,\n  \"Filters\": [\n    { \"Metric\": \"health.isHealthy\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" },\n    { \"Metric\": \"health.hasCapacity\", \"Operator\": \"Equal\", \"ValueType\": \"Boolean\", \"Value\": \"true\" }\n  ],\n  \"Ranking\": [\n    { \"Metric\": \"rig.gpu.minFreeMemoryMegabytes\", \"Direction\": \"Descending\", \"Weight\": 0.7 },\n    { \"Metric\": \"health.inFlightRequests\", \"Direction\": \"Ascending\", \"Weight\": 0.3 }\n  ],\n  \"FallbackMode\": \"UseLegacyLoadBalancingMode\",\n  \"TieBreaker\": \"Random\",\n  \"Active\": true\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/loadbalancingpolicies/{{policyId}}",
@@ -1374,7 +1935,8 @@
                 "loadbalancingpolicies",
                 "{{policyId}}"
               ]
-            }
+            },
+            "description": "Update a load-balancing policy. Returns 200 with the stored resource, 400 when validation fails, or 404."
           }
         },
         {
@@ -1391,7 +1953,8 @@
                 "loadbalancingpolicies",
                 "{{policyId}}"
               ]
-            }
+            },
+            "description": "Delete a load-balancing policy. Returns 204, or 404 when it does not exist."
           }
         },
         {
@@ -1408,10 +1971,12 @@
                 "loadbalancingpolicies",
                 "metrics"
               ]
-            }
+            },
+            "description": "Lists the metric names that load-balancing policy filters and rankings can use. Returns 200."
           }
         }
-      ]
+      ],
+      "description": "First-class policies that filter and rank endpoints using health, capacity and RigMonitor metrics."
     },
     {
       "name": "QoS Profiles",
@@ -1478,7 +2043,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 0,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 0,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/qosprofiles",
@@ -1505,7 +2070,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 0,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 0,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/qosprofiles/validate",
@@ -1569,7 +2134,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 250,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"single-node-fifo\",\n  \"DefaultClass\": \"default\",\n  \"IngressMode\": \"Single\",\n  \"IngressDefaultNode\": \"root\",\n  \"TailNode\": \"root\",\n  \"MaxQueueWaitMs\": 250,\n  \"Nodes\": [\n    {\n      \"Name\": \"root\",\n      \"Discipline\": \"Fifo\",\n      \"MaxDepth\": 0,\n      \"OverflowPolicy\": \"Reject\",\n      \"Classes\": []\n    }\n  ],\n  \"Rules\": [],\n  \"Links\": [],\n  \"IngressRoutes\": []\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/qosprofiles/{{qosProfileId}}",
@@ -1638,7 +2203,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"my-class\",\n  \"Description\": \"Interactive traffic that requires low-latency handling.\",\n  \"Tier\": \"Interactive\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"my-class\",\n  \"Description\": \"Interactive traffic that requires low-latency handling.\",\n  \"Tier\": \"Interactive\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/qostrafficclasses",
@@ -1683,7 +2248,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"my-class\",\n  \"Description\": \"Updated description for the interactive traffic class.\",\n  \"Tier\": \"Interactive\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"my-class\",\n  \"Description\": \"Updated description for the interactive traffic class.\",\n  \"Tier\": \"Interactive\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/qostrafficclasses/{{qosTrafficClassId}}",
@@ -1846,7 +2411,8 @@
                   "value": "true"
                 }
               ]
-            }
+            },
+            "description": "List model access policys visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -1869,7 +2435,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Read one model access policy by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -1895,7 +2462,8 @@
                 "v1.0",
                 "modelaccesspolicies"
               ]
-            }
+            },
+            "description": "Create a model access policy. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails."
           }
         },
         {
@@ -1922,7 +2490,8 @@
                 "modelaccesspolicies",
                 "{{modelAccessPolicyId}}"
               ]
-            }
+            },
+            "description": "Update a model access policy. Returns 200 with the stored resource, 400 when validation fails, or 404."
           }
         },
         {
@@ -1949,7 +2518,8 @@
                   "value": "true"
                 }
               ]
-            }
+            },
+            "description": "Delete a model access policy. Returns 204, or 404 when it does not exist."
           }
         },
         {
@@ -1976,7 +2546,8 @@
                 "modelaccesspolicies",
                 "validate"
               ]
-            }
+            },
+            "description": "Validate a policy draft and its nested rules without saving it. Returns 200 with a ResourceValidationResult."
           }
         },
         {
@@ -2010,7 +2581,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Evaluate a ModelAccessEvaluationContext against a policy. Use Action Decisions with RequestType TypeSafeDecide to test decision access."
           }
         },
         {
@@ -2057,10 +2629,12 @@
                   "value": "Completions"
                 }
               ]
-            }
+            },
+            "description": "Evaluate effective access from query parameters (credential, user, VMR, model, action). Returns 200 with a ModelAccessEvaluationResult."
           }
         }
-      ]
+      ],
+      "description": "Tenant-scoped ACL policies attached to VMRs. Actions: Completions, Embeddings, ListModels, ShowModel, LoadModel, UnloadModel, ModelManagement, Decisions. Completions does not imply Decisions. Requires a tenant admin."
     },
     {
       "name": "Virtual Model Runners",
@@ -2078,7 +2652,8 @@
                 "v1.0",
                 "virtualmodelrunners"
               ]
-            }
+            },
+            "description": "List virtual model runners visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -2095,7 +2670,8 @@
                 "virtualmodelrunners",
                 "{{vmrId}}"
               ]
-            }
+            },
+            "description": "Read one virtual model runner by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -2110,7 +2686,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\",\n  \"LoadBalancingMode\": \"Adaptive\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\",\n  \"ModelRunnerEndpointIds\": [\"{{endpointId}}\"],\n  \"EndpointGroupIds\": [\"{{endpointGroupId}}\"],\n  \"AdaptiveLoadBalancing\": {\n    \"SampleCount\": 2,\n    \"ColdStartScore\": 60,\n    \"EwmaAlpha\": 0.2,\n    \"BackoffBaseMs\": 30000,\n    \"BackoffMaxMs\": 300000,\n    \"FailureThreshold\": 3,\n    \"ExcludeBackoffEndpoints\": true,\n    \"BackoffBreaksSessionAffinity\": true,\n    \"Weights\": {\n      \"Success\": 35,\n      \"Latency\": 25,\n      \"TimeToFirstToken\": 15,\n      \"Pending\": 15,\n      \"EndpointWeight\": 10\n    }\n  }\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"My VMR\",\n  \"BasePath\": \"/v1.0/api/my-vmr/\",\n  \"LoadBalancingMode\": \"Adaptive\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\",\n  \"ModelRunnerEndpointIds\": [\"{{endpointId}}\"],\n  \"EndpointGroupIds\": [\"{{endpointGroupId}}\"],\n  \"AdaptiveLoadBalancing\": {\n    \"SampleCount\": 2,\n    \"ColdStartScore\": 60,\n    \"EwmaAlpha\": 0.2,\n    \"BackoffBaseMs\": 30000,\n    \"BackoffMaxMs\": 300000,\n    \"FailureThreshold\": 3,\n    \"ExcludeBackoffEndpoints\": true,\n    \"BackoffBreaksSessionAffinity\": true,\n    \"Weights\": {\n      \"Success\": 35,\n      \"Latency\": 25,\n      \"TimeToFirstToken\": 15,\n      \"Pending\": 15,\n      \"EndpointWeight\": 10\n    }\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
@@ -2121,7 +2697,8 @@
                 "v1.0",
                 "virtualmodelrunners"
               ]
-            }
+            },
+            "description": "Create a virtual model runner. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails. ApiType defaults to Ollama; attached endpoints must be accepted by the VMR type."
           }
         },
         {
@@ -2136,7 +2713,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"Name\": \"Updated VMR\",\n  \"LoadBalancingMode\": \"RoundRobin\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Updated VMR\",\n  \"LoadBalancingMode\": \"RoundRobin\",\n  \"LoadBalancingPolicyId\": \"{{policyId}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/{{vmrId}}",
@@ -2148,7 +2725,8 @@
                 "virtualmodelrunners",
                 "{{vmrId}}"
               ]
-            }
+            },
+            "description": "Update a virtual model runner. Returns 200 with the stored resource, 400 when validation fails, or 404."
           }
         },
         {
@@ -2165,7 +2743,8 @@
                 "virtualmodelrunners",
                 "{{vmrId}}"
               ]
-            }
+            },
+            "description": "Delete a virtual model runner. Its request history (entries, analytics events and detail files) is deleted first. Returns 204, or 404 when it does not exist."
           }
         },
         {
@@ -2183,7 +2762,8 @@
                 "{{vmrId}}",
                 "health"
               ]
-            }
+            },
+            "description": "Aggregated health for a VMR and its endpoints. Returns 200, or 404."
           }
         },
         {
@@ -2207,7 +2787,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "In-memory per-endpoint runtime statistics (pending, completed, EWMA success and latency, backoff). Returns 200."
           }
         },
         {
@@ -2242,7 +2823,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Reset runtime statistics for the VMR, or for one endpoint when EndpointId is supplied in the body."
           }
         },
         {
@@ -2277,7 +2859,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Clear transient runtime backoff for the VMR, or for one endpoint when EndpointId is supplied in the body."
           }
         },
         {
@@ -2330,8 +2913,107 @@
             },
             "description": "Tenant-admin route that runs a keep-warm pass now, regardless of schedule or KeepWarm.Enabled, and returns the resulting KeepWarmStatus. No request body is required. The call waits for the pass, which can take as long as a cold model load."
           }
+        },
+        {
+          "name": "Create Anthropic VMR",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners"
+              ]
+            },
+            "description": "Create an Anthropic VMR that exposes the Anthropic Messages API at {{anthropicVmrBasePath}}. Accepts only Anthropic endpoints. Point Claude Code at it with ANTHROPIC_BASE_URL={{baseUrl}}{{anthropicVmrBasePath}} (trailing slash optional) and ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY set to a Conductor credential. Returns 201, or 400 with EndpointApiTypeMismatch. Stores the ID in anthropicVmrId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"claude\",\n  \"BasePath\": \"{{anthropicVmrBasePath}}\",\n  \"ApiType\": \"Anthropic\",\n  \"ModelRunnerEndpointIds\": [\n    \"{{anthropicEndpointId}}\"\n  ],\n  \"RequestHistoryEnabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "pm.test('ApiType is Anthropic', function () { pm.expect(pm.response.json().ApiType).to.eql('Anthropic'); });",
+                  "if (pm.response.code === 201 || pm.response.code === 200) { pm.collectionVariables.set('anthropicVmrId', pm.response.json().Id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create TypeSafe VMR",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners"
+              ]
+            },
+            "description": "Create a TypeSafe VMR that exposes the System One decision API at {{typesafeVmrBasePath}}. Accepts TypeSafe and Ollaya endpoints. AllowDecisions must be true (DecisionsDisabledOnDecisionRoute). Attached model configurations are ignored (TypeSafeConfigurationIgnored warning). Returns 201. Stores the ID in typesafeVmrId.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"decide\",\n  \"BasePath\": \"{{typesafeVmrBasePath}}\",\n  \"ApiType\": \"TypeSafe\",\n  \"ModelRunnerEndpointIds\": [\n    \"{{typesafeEndpointId}}\"\n  ],\n  \"AllowDecisions\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201]);",
+                  "});",
+                  "pm.test('Decision VMR', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.ApiType).to.eql('TypeSafe');",
+                  "    pm.expect(body.AllowDecisions).to.eql(true);",
+                  "});",
+                  "if (pm.response.code === 201 || pm.response.code === 200) { pm.collectionVariables.set('typesafeVmrId', pm.response.json().Id); }"
+                ]
+              }
+            }
+          ]
         }
-      ]
+      ],
+      "description": "Virtual model runners (VMRs). ApiType is the API clients call and must be client-facing (Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe). Attached endpoints must match the compatibility table: Ollama accepts Ollama and OllamaCloud; OpenAI accepts OpenAI, OpenAICompatible and vLLM; TypeSafe accepts TypeSafe and Ollaya; vLLM, Gemini and Anthropic accept their own type."
     },
     {
       "name": "VMR Reservations",
@@ -2656,7 +3338,8 @@
             "description": "Negative effective-access example. During an active reservation, a user or credential not listed as a reservation subject should return a denied decision with a reservation reason code."
           }
         }
-      ]
+      ],
+      "description": "Exclusive access windows for selected users or credentials on a VMR."
     },
     {
       "name": "Model Loading",
@@ -2912,6 +3595,688 @@
                 }
               ],
               "body": "{\n  \"Success\": true,\n  \"TenantId\": \"default\",\n  \"TargetType\": \"VirtualModelRunner\",\n  \"TargetId\": \"vmr_123\",\n  \"Model\": \"gemma3:4b\",\n  \"ProbeKind\": \"Auto\",\n  \"DurationMs\": 4211,\n  \"OutcomeCode\": \"Loaded\",\n  \"Message\": \"Model load probe completed on 1 of 1 endpoint(s).\",\n  \"RoutingDecision\": {\n    \"Success\": true,\n    \"SelectedEndpointId\": \"mre_123\",\n    \"EffectiveModel\": \"gemma3:4b\"\n  },\n  \"EndpointResults\": [\n    {\n      \"EndpointId\": \"mre_123\",\n      \"EndpointName\": \"gpu-host-01\",\n      \"ApiType\": \"Ollama\",\n      \"Success\": true,\n      \"OutcomeCode\": \"Loaded\",\n      \"ProviderStatusCode\": 200,\n      \"Mechanism\": \"OllamaGenerate\",\n      \"RequestPath\": \"/api/generate\",\n      \"DurationMs\": 4211,\n      \"VerifiedLoaded\": true,\n      \"IgnoredFields\": [],\n      \"ErrorMessage\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Verify Anthropic Model (VerifiedRemote)",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{anthropicEndpointId}}/load-model?tenantId={{tenantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "{{anthropicEndpointId}}",
+                "load-model"
+              ],
+              "query": [
+                {
+                  "key": "tenantId",
+                  "value": "{{tenantId}}"
+                }
+              ]
+            },
+            "description": "Verify that an Anthropic model is available. Auto and MetadataOnly call GET /v1/models/{id} upstream, which is not billable, and report VerifiedRemote. ProbeKind ChatCompletion sends POST /v1/messages with max_tokens 1, which is billable; other probe kinds report UnsupportedApiType. Requires a tenant admin.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"Model\": \"{{anthropicModel}}\",\n  \"ProbeKind\": \"Auto\",\n  \"TimeoutMs\": 60000,\n  \"VerifyLoaded\": true,\n  \"DryRun\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                  "});",
+                  "pm.test('Endpoint result present', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.EndpointResults).to.be.an('array');",
+                  "    if (body.Success) { pm.expect(body.EndpointResults[0].OutcomeCode).to.eql('VerifiedRemote'); }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "response": [
+            {
+              "name": "Anthropic verified remote",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"Model\": \"{{anthropicModel}}\",\n  \"ProbeKind\": \"Auto\",\n  \"TimeoutMs\": 60000,\n  \"VerifyLoaded\": true,\n  \"DryRun\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/{{anthropicEndpointId}}/load-model?tenantId={{tenantId}}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"Success\": true,\n  \"TenantId\": \"default\",\n  \"TargetType\": \"ModelRunnerEndpoint\",\n  \"TargetId\": \"mre_anthropic\",\n  \"Model\": \"claude-opus-5-5\",\n  \"ProbeKind\": \"Auto\",\n  \"OutcomeCode\": \"VerifiedRemote\",\n  \"Message\": \"Model load probe completed on 1 of 1 endpoint(s).\",\n  \"DurationMs\": 212,\n  \"EndpointResults\": [\n    {\n      \"EndpointId\": \"mre_anthropic\",\n      \"EndpointName\": \"Anthropic\",\n      \"ApiType\": \"Anthropic\",\n      \"BaseUrl\": \"https://api.anthropic.com:443\",\n      \"Success\": true,\n      \"OutcomeCode\": \"VerifiedRemote\",\n      \"ProviderStatusCode\": 200,\n      \"Mechanism\": \"AnthropicGetModel\",\n      \"RequestPath\": \"/v1/models/claude-opus-5-5\",\n      \"DurationMs\": 212,\n      \"VerifiedLoaded\": false,\n      \"IgnoredFields\": [],\n      \"ErrorMessage\": null\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ],
+      "description": "Tenant-admin control-plane requests that load or verify models. Hosted providers report VerifiedRemote; explicit generation probes and the TypeSafe Decision probe are billable."
+    },
+    {
+      "name": "Proxied APIs",
+      "description": "Requests sent through virtual model runners rather than the management API. Each subfolder targets a VMR created in the Virtual Model Runners folder. Requests are classified by the VMR's configured ApiType: a path outside the type's namespace returns 404 without being forwarded. Paths with dot segments or encoded separators return 404 (UnsafePath). Authentication uses the collection bearer token (a Conductor credential), which must belong to the VMR's tenant: a credential from another tenant, including a global admin's, gets 403 CredentialTenantMismatch. Conductor-generated errors carry their reason code in the X-Conductor-Error-Code header. Upstream provider keys stay on the endpoints.",
+      "item": [
+        {
+          "name": "Anthropic",
+          "description": "Anthropic Messages API through the Anthropic VMR at {{anthropicVmrBasePath}}. Inbound credentials: Authorization Bearer or x-api-key (Anthropic VMRs only). anthropic-version: client header, then the endpoint AnthropicVersion, then Settings.Anthropic.DefaultVersion. Conductor-generated errors use the Anthropic error shape {\"type\":\"error\",\"error\":{\"type\",\"message\"}} with X-Conductor-Error-Code; upstream errors pass through unchanged.",
+          "item": [
+            {
+              "name": "Messages",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "anthropic-version",
+                    "value": "{{anthropicVersion}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{anthropicVmrBasePath}}v1/messages",
+                  "host": [
+                    "{{baseUrl}}{{anthropicVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "messages"
+                  ]
+                },
+                "description": "Anthropic create message (AnthropicMessages, model access action Completions). Authenticated with the collection bearer token, a Conductor credential. Conductor sends the endpoint key upstream in x-api-key and the client anthropic-version. Response headers request-id, retry-after, x-should-retry and anthropic-ratelimit-* are copied back. Usage, including cache token counts, is recorded in request history.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"model\": \"{{anthropicModel}}\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Say hello in five words.\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('Anthropic message shape', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql('message');",
+                      "    pm.expect(body.usage).to.have.property('input_tokens');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Messages (stream)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "anthropic-version",
+                    "value": "{{anthropicVersion}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{anthropicVmrBasePath}}v1/messages",
+                  "host": [
+                    "{{baseUrl}}{{anthropicVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "messages"
+                  ]
+                },
+                "description": "Streaming create message. The server-sent event stream is passed through unchanged. Input tokens are taken from message_start and output tokens from the last message_delta.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"model\": \"{{anthropicModel}}\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Say hello in five words.\"\n    }\n  ],\n  \"stream\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('Event stream', function () {",
+                      "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/event-stream');",
+                      "    pm.expect(pm.response.text()).to.include('message_start');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Count tokens",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "anthropic-version",
+                    "value": "{{anthropicVersion}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{anthropicVmrBasePath}}v1/messages/count_tokens",
+                  "host": [
+                    "{{baseUrl}}{{anthropicVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "messages",
+                    "count_tokens"
+                  ]
+                },
+                "description": "Anthropic count tokens (AnthropicCountTokens, action Completions). Classified as a metadata request by the Inference First QoS profile for newly seeded tenants.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"model\": \"{{anthropicModel}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Hello\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('input_tokens is a number', function () { pm.expect(pm.response.json().input_tokens).to.be.a('number'); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List models",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "anthropic-version",
+                    "value": "{{anthropicVersion}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{anthropicVmrBasePath}}v1/models",
+                  "host": [
+                    "{{baseUrl}}{{anthropicVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "models"
+                  ]
+                },
+                "description": "Anthropic list models (AnthropicListModels, action ListModels). With ModelAccessControl.ListModelsBehavior Filter or Synthesize the list keeps the Anthropic shape: data, has_more, first_id, last_id."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('data is an array', function () { pm.expect(pm.response.json().data).to.be.an('array'); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get model",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "anthropic-version",
+                    "value": "{{anthropicVersion}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{anthropicVmrBasePath}}v1/models/{{anthropicModel}}",
+                  "host": [
+                    "{{baseUrl}}{{anthropicVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "models",
+                    "{{anthropicModel}}"
+                  ]
+                },
+                "description": "Anthropic get model (AnthropicGetModel, action ShowModel)."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('Model id matches', function () { pm.expect(pm.response.json().id).to.eql(pm.variables.get('anthropicModel')); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Batches unsupported (404)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "anthropic-version",
+                    "value": "{{anthropicVersion}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{anthropicVmrBasePath}}v1/messages/batches",
+                  "host": [
+                    "{{baseUrl}}{{anthropicVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "messages",
+                    "batches"
+                  ]
+                },
+                "description": "Negative example: Message Batches and Files are stateful and not supported through Conductor. Returns 404 in the Anthropic error shape with not_found_error and X-Conductor-Error-Code UnsupportedRoute. Nothing is forwarded upstream.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"requests\": []\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 404', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([404]);",
+                      "});",
+                      "pm.test('Anthropic not_found_error', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.type).to.eql('error');",
+                      "    pm.expect(body.error.type).to.eql('not_found_error');",
+                      "    pm.expect(pm.response.headers.get('X-Conductor-Error-Code')).to.eql('UnsupportedRoute');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Conductor credential in x-api-key",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "anthropic-version",
+                    "value": "{{anthropicVersion}}"
+                  },
+                  {
+                    "key": "x-api-key",
+                    "value": "{{bearerToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{anthropicVmrBasePath}}v1/messages",
+                  "host": [
+                    "{{baseUrl}}{{anthropicVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "messages"
+                  ]
+                },
+                "description": "Authenticates with the Conductor credential in x-api-key instead of Authorization, the way Anthropic clients send their key. Accepted on Anthropic VMRs only; other VMR types return 401. The header is never forwarded upstream. A bad credential returns 401 with authentication_error.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"model\": \"{{anthropicModel}}\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Say hello in five words.\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('Not rejected as unauthenticated', function () { pm.expect(pm.response.code).to.not.eql(401); });"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Decision",
+          "description": "TypeSafe System One decision API through the TypeSafe VMR at {{typesafeVmrBasePath}}. A request has model, state and questions; question types are noul (binary), choice and score. Bodies with no questions, more than TypeSafe.MaxQuestionsPerRequest (default 64) questions, or invalid JSON get 400. Responses are not streamed. Request history records the DecisionQuestionCount.",
+          "item": [
+            {
+              "name": "Decide (binary)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  [
+                    "Content-Type",
+                    "application/json"
+                  ]
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{typesafeVmrBasePath}}v1/systemone",
+                  "host": [
+                    "{{baseUrl}}{{typesafeVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "systemone"
+                  ]
+                },
+                "description": "TypeSafe System One decision with one binary (noul) question. Classified as TypeSafeDecide and governed by the Decisions model access action. The answer is a probability, for example {\"noul\":0.97}. Model configurations are never applied.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"model\": \"{{decisionModel}}\",\n  \"state\": \"My invoice was charged twice this month. Can you fix it?\",\n  \"questions\": {\n    \"is_question\": {\n      \"type\": \"noul\",\n      \"instructions\": \"Is the message a question?\",\n      \"criteria\": {\n        \"true\": \"The message asks something\",\n        \"false\": \"The message only states something\"\n      }\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('Answer returned', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.answers).to.have.property('is_question');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Decide (choice)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  [
+                    "Content-Type",
+                    "application/json"
+                  ]
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{typesafeVmrBasePath}}v1/systemone",
+                  "host": [
+                    "{{baseUrl}}{{typesafeVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "systemone"
+                  ]
+                },
+                "description": "Decision with one choice question. criteria maps each option to a description or null. The answer names the chosen option with per-option probabilities.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"model\": \"{{decisionModel}}\",\n  \"state\": \"My invoice was charged twice this month. Can you fix it?\",\n  \"questions\": {\n    \"category\": {\n      \"type\": \"choice\",\n      \"instructions\": \"Which team should handle the message?\",\n      \"criteria\": {\n        \"billing\": \"Payments and invoices\",\n        \"technical\": null\n      }\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('Answer returned', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.answers).to.have.property('category');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Decide (score)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  [
+                    "Content-Type",
+                    "application/json"
+                  ]
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{typesafeVmrBasePath}}v1/systemone",
+                  "host": [
+                    "{{baseUrl}}{{typesafeVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "systemone"
+                  ]
+                },
+                "description": "Decision with one score question. criteria is an ordered list of levels and the answer is a score on that scale.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"model\": \"{{decisionModel}}\",\n  \"state\": \"My invoice was charged twice this month. Can you fix it?\",\n  \"questions\": {\n    \"urgency\": {\n      \"type\": \"score\",\n      \"instructions\": \"How urgent is the message?\",\n      \"criteria\": [\n        \"not urgent\",\n        \"somewhat urgent\",\n        \"very urgent\"\n      ]\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                      "});",
+                      "pm.test('Answer returned', function () {",
+                      "    const body = pm.response.json();",
+                      "    pm.expect(body.answers).to.have.property('urgency');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Decide too many questions (400)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  [
+                    "Content-Type",
+                    "application/json"
+                  ]
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}{{typesafeVmrBasePath}}v1/systemone",
+                  "host": [
+                    "{{baseUrl}}{{typesafeVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "systemone"
+                  ]
+                },
+                "description": "Negative example: the pre-request script builds 65 questions, one more than the default TypeSafe.MaxQuestionsPerRequest. Conductor returns 400 with Code DecisionRequestInvalid before routing, and nothing is forwarded. Empty questions and invalid JSON are rejected the same way.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{{decisionTooManyBody}}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Build a decision body with one more question than the default TypeSafe.MaxQuestionsPerRequest (64).",
+                      "const questions = {};",
+                      "for (let i = 0; i < 65; i++) { questions['q' + i] = { type: 'noul', instructions: 'Is item ' + i + ' relevant?' }; }",
+                      "pm.variables.set('decisionTooManyBody', JSON.stringify({ model: pm.variables.get('decisionModel'), state: 'test', questions: questions }));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 400', function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([400]);",
+                      "});",
+                      "pm.test('DecisionRequestInvalid', function () { pm.expect(pm.response.json().Code).to.eql('DecisionRequestInvalid'); });"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List models",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}{{typesafeVmrBasePath}}v1/models",
+                  "host": [
+                    "{{baseUrl}}{{typesafeVmrBasePath}}v1"
+                  ],
+                  "path": [
+                    "models"
+                  ]
+                },
+                "description": "TypeSafe list models (TypeSafeListModels, action ListModels). Ollaya serves this route; hosted TypeSafe does not, so with only a hosted endpoint the upstream status passes through. With ListModelsBehavior Synthesize the list is built from the VMR model definitions in the {\"object\":\"list\",\"data\":[...]} shape."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status is 200 or an upstream pass-through', function () { pm.expect(pm.response.code).to.be.below(500); });",
+                      "if (pm.response.code === 200) { pm.test('data is an array', function () { pm.expect(pm.response.json().data).to.be.an('array'); }); }"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         }
@@ -3228,7 +4593,8 @@
             "description": "Delete all request history entries matching the filter criteria."
           }
         }
-      ]
+      ],
+      "description": "Search, summarize, inspect and delete captured proxy requests. Entries include token counts, Anthropic cache token counts and the decision question count."
     },
     {
       "name": "Analytics Workspace",
@@ -3960,7 +5326,8 @@
                 "virtualmodelrunners",
                 "validate"
               ]
-            }
+            },
+            "description": "Validate a VMR draft without saving it. Errors include VmrApiTypeNotClientFacing, EndpointApiTypeMismatch and DecisionsDisabledOnDecisionRoute; warnings include TypeSafeConfigurationIgnored and DecisionModelNotEnabled. Returns 200 with a ResourceValidationResult."
           }
         },
         {
@@ -3975,7 +5342,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Preview Endpoint\",\n  \"Hostname\": \"localhost\",\n  \"Port\": 11434,\n  \"ApiType\": \"Ollama\"\n}"
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Preview Endpoint\",\n  \"Hostname\": \"127.0.0.1\",\n  \"Port\": 11434,\n  \"ApiType\": \"Ollama\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/validate",
@@ -3987,7 +5354,8 @@
                 "modelrunnerendpoints",
                 "validate"
               ]
-            }
+            },
+            "description": "Validate an endpoint draft without saving it. Provider codes include AnthropicApiKeyMissing, TypeSafeApiKeyMissing, OllamaCloudApiKeyMissing, AnthropicVersionInvalid, HealthCheckBodyRequired and AnthropicHealthCheckUnauthenticated. Returns 200 with a ResourceValidationResult."
           }
         },
         {
@@ -4014,7 +5382,8 @@
                 "modeldefinitions",
                 "validate"
               ]
-            }
+            },
+            "description": "Validate a model definition draft without saving it. Returns 200 with a ResourceValidationResult."
           }
         },
         {
@@ -4041,7 +5410,8 @@
                 "modelconfigurations",
                 "validate"
               ]
-            }
+            },
+            "description": "Validate a model configuration draft without saving it. Returns 200 with a ResourceValidationResult."
           }
         },
         {
@@ -4068,7 +5438,8 @@
                 "loadbalancingpolicies",
                 "validate"
               ]
-            }
+            },
+            "description": "Validate a load-balancing policy draft without saving it. Returns 200 with a ResourceValidationResult."
           }
         },
         {
@@ -4092,10 +5463,114 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Resolved, read-only effective configuration of a VMR: endpoints, permissions, policies, model definitions, configurations and the time-to-first-byte limit per endpoint."
           }
+        },
+        {
+          "name": "Validate Endpoint (AnthropicApiKeyMissing)",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/modelrunnerendpoints/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "modelrunnerendpoints",
+                "validate"
+              ]
+            },
+            "description": "Negative example: an Anthropic endpoint draft without an ApiKey. Returns 200 with IsValid=false and an AnthropicApiKeyMissing error. Nothing is saved.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"Anthropic without key\",\n  \"ApiType\": \"Anthropic\",\n  \"Hostname\": \"api.anthropic.com\",\n  \"Port\": 443,\n  \"UseSsl\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                  "});",
+                  "pm.test('Validation reports AnthropicApiKeyMissing', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.IsValid).to.eql(false);",
+                  "    pm.expect(body.Errors.map(e => e.Code)).to.include('AnthropicApiKeyMissing');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Validate VMR (VmrApiTypeNotClientFacing)",
+          "request": {
+            "method": "POST",
+            "header": [
+              [
+                "Content-Type",
+                "application/json"
+              ]
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1.0/virtualmodelrunners/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1.0",
+                "virtualmodelrunners",
+                "validate"
+              ]
+            },
+            "description": "Negative example: OpenAICompatible is an endpoint-only type, so it cannot be a VMR type. Returns 200 with IsValid=false and a VmrApiTypeNotClientFacing error. Use an OpenAI VMR with an OpenAICompatible endpoint instead.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TenantId\": \"{{tenantId}}\",\n  \"Name\": \"invalid-type\",\n  \"BasePath\": \"/v1.0/api/invalid-type/\",\n  \"ApiType\": \"OpenAICompatible\",\n  \"ModelRunnerEndpointIds\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200]);",
+                  "});",
+                  "pm.test('Validation reports VmrApiTypeNotClientFacing', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.IsValid).to.eql(false);",
+                  "    pm.expect(body.Errors.map(e => e.Code)).to.include('VmrApiTypeNotClientFacing');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
-      ]
+      ],
+      "description": "Validate drafts without saving them and preview a VMR's effective configuration. Validation results contain Errors and Warnings with machine-readable codes."
     },
     {
       "name": "Routing Explanation",
@@ -4131,10 +5606,12 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Simulate a representative request against a VMR and return the RoutingDecision with timeline, selected endpoint and candidate evidence. No upstream traffic is sent."
           }
         }
-      ]
+      ],
+      "description": "Simulate a representative request against a VMR and inspect the routing decision timeline and candidate evidence."
     },
     {
       "name": "Endpoint States",
@@ -4160,7 +5637,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Move the endpoint to Draining: no new assignments, pinned sessions continue. Returns 200 with the endpoint."
           }
         },
         {
@@ -4184,7 +5662,8 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Move the endpoint back to Normal service state. Returns 200 with the endpoint."
           }
         },
         {
@@ -4208,10 +5687,12 @@
                   "value": "{{tenantId}}"
                 }
               ]
-            }
+            },
+            "description": "Move the endpoint to Quarantined: excluded from all routing while still probed. Returns 200 with the endpoint."
           }
         }
-      ]
+      ],
+      "description": "Move an endpoint between Normal, Draining and Quarantined service states."
     },
     {
       "name": "Observability",
@@ -4231,7 +5712,8 @@
                 "metrics",
                 "summary"
               ]
-            }
+            },
+            "description": "JSON snapshot of operational metrics used by the dashboard. Returns 200."
           }
         },
         {
@@ -4248,10 +5730,12 @@
                 "observability",
                 "metrics"
               ]
-            }
+            },
+            "description": "Prometheus text exposition of the built-in conductor_* operational metrics. Returns 200 with text/plain."
           }
         }
-      ]
+      ],
+      "description": "Built-in operational metrics, as a JSON summary or Prometheus text."
     },
     {
       "name": "Administrators",
@@ -4269,7 +5753,8 @@
                 "v1.0",
                 "administrators"
               ]
-            }
+            },
+            "description": "List administrators visible to the caller. Optional query parameters: maxResults, continuationToken, nameFilter, activeFilter, tenantId. Returns 200 with Data, ContinuationToken, TotalCount and HasMore."
           }
         },
         {
@@ -4286,7 +5771,8 @@
                 "administrators",
                 "{{adminId}}"
               ]
-            }
+            },
+            "description": "Read one administrator by ID. Returns 200, or 404 when it does not exist in the caller's tenant."
           }
         },
         {
@@ -4312,7 +5798,8 @@
                 "v1.0",
                 "administrators"
               ]
-            }
+            },
+            "description": "Create a administrator. Cross-tenant callers supply TenantId in the body. Returns 201 with the stored resource, or 400 when validation fails."
           }
         },
         {
@@ -4357,10 +5844,32 @@
                 "administrators",
                 "{{adminId}}"
               ]
-            }
+            },
+            "description": "Delete a administrator. Returns 204, or 404 when it does not exist."
           }
         }
-      ]
+      ],
+      "description": "System administrator CRUD. Requires system administrator authentication. Requests in this folder send the x-admin-apikey header from `{{adminApiKey}}` (folder-level API key auth); the admin headers (x-admin-email and x-admin-password) also work.",
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "x-admin-apikey",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{adminApiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
     },
     {
       "name": "Backup & Restore",
@@ -4438,7 +5947,8 @@
             "description": "Validate a backup file without applying changes."
           }
         }
-      ]
+      ],
+      "description": "Export, validate and restore configuration. Backups contain unmasked endpoint API keys, so treat them as sensitive. Requires a global admin."
     }
   ]
 }

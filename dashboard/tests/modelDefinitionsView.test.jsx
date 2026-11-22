@@ -71,12 +71,37 @@ describe('Model Definitions view', () => {
       QuantizationLevel: 'Q8_0',
       SupportsEmbeddings: true,
       SupportsCompletions: true,
+      SupportsDecisions: false,
       Active: true,
       Labels: [],
       Tags: {}
     });
     expect(ctx.onboarding.onEntityCreated).toHaveBeenCalledWith('definition');
     await waitFor(() => expect(document.querySelector('.modal-body form')).toBeNull());
+  });
+
+  it('sends SupportsDecisions when the decisions setting is turned on, with help text', async () => {
+    ctx.app.api.createModelDefinition.mockImplementation(() => Promise.resolve({ Id: 'md_jev' }));
+    renderView(<ModelDefinitions />);
+    await screen.findByText('llama3.3:70b');
+    fireEvent.click(screen.getByRole('button', { name: 'Create Definition' }));
+    const form = formDialog();
+    typeInto(within(form).getByLabelText('Name'), 'jev-latest');
+    const decisions = within(form).getByLabelText('Supports Decisions');
+    expect(decisions.checked).toBe(false);
+    expect(within(form).getByText(/decision models such as Jev/)).toBeTruthy();
+    fireEvent.click(decisions);
+    fireEvent.click(within(form).getByRole('button', { name: 'Create' }));
+    await waitFor(() => expect(ctx.app.api.createModelDefinition).toHaveBeenCalledTimes(1));
+    expect(ctx.app.api.createModelDefinition.mock.calls[0][0]).toMatchObject({ Name: 'jev-latest', SupportsDecisions: true });
+  });
+
+  it('loads SupportsDecisions from an existing definition and lists it as a type', async () => {
+    ctx.app.api.listModelDefinitions.mockImplementation(() => page([
+      { Id: 'md_jev', TenantId: 'ten_alpha', Name: 'jev-latest', SupportsCompletions: false, SupportsDecisions: true, Active: true }
+    ]));
+    renderView(<ModelDefinitions />);
+    expect(await screen.findByText('Decisions')).toBeTruthy();
   });
 
   it('asks for confirmation before deleting and then calls deleteModelDefinition with the tenant', async () => {

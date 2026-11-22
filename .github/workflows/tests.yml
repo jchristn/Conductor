@@ -1,0 +1,100 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Full suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore
+        shell: bash
+        run: dotnet restore src/Conductor.sln
+
+      - name: Build
+        shell: bash
+        run: dotnet build src/Conductor.sln --no-restore
+
+      - name: Run console tests (Test.Automated)
+        shell: bash
+        run: dotnet run --project src/Test.Automated --no-build -- --results results.json
+
+      - name: Run xUnit tests (Test.Xunit)
+        shell: bash
+        run: dotnet test src/Test.Xunit --no-build --logger "trx;LogFileName=xunit.trx" --results-directory test-results
+
+      - name: Run NUnit tests (Test.Nunit)
+        shell: bash
+        run: dotnet test src/Test.Nunit --no-build --logger "trx;LogFileName=nunit.trx" --results-directory test-results
+
+      # Test.McpServer runs its tool tests and exits. --non-interactive skips the
+      # interactive prompt, and the harness exits non-zero when setup throws or a
+      # tool test fails. The summary line is also required to report 0 failures.
+      - name: Run MCP server tests (Test.McpServer)
+        shell: bash
+        run: |
+          dotnet run --project src/Test.McpServer --no-build -- --non-interactive 2>&1 | tee mcp-output.txt
+          grep -Eq "Test Results: [0-9]+ passed, 0 failed" mcp-output.txt
+
+      - name: Run C# SDK tests
+        shell: bash
+        run: bash ./sdk/csharp/run-tests.sh --logger "trx;LogFileName=sdk-csharp.trx" --results-directory "$GITHUB_WORKSPACE/test-results"
+
+      - name: Run JavaScript SDK tests
+        shell: bash
+        run: bash ./sdk/javascript/run-tests.sh
+
+      - name: Run Python SDK tests
+        shell: bash
+        run: bash ./sdk/python/run-tests.sh
+
+      - name: Install dashboard dependencies
+        shell: bash
+        working-directory: dashboard
+        run: npm ci --no-audit --no-fund
+
+      - name: Run dashboard tests
+        shell: bash
+        working-directory: dashboard
+        run: npm test
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            results.json
+            mcp-output.txt
+            test-results/

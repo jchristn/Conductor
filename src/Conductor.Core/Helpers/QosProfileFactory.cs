@@ -34,7 +34,11 @@ namespace Conductor.Core.Helpers
             RequestTypeEnum.GeminiListModels,
             RequestTypeEnum.OllamaListTags,
             RequestTypeEnum.OllamaListRunningModels,
-            RequestTypeEnum.OllamaShowModelInfo
+            RequestTypeEnum.OllamaShowModelInfo,
+            RequestTypeEnum.AnthropicListModels,
+            RequestTypeEnum.AnthropicGetModel,
+            RequestTypeEnum.AnthropicCountTokens,
+            RequestTypeEnum.TypeSafeListModels
         };
 
         /// <summary>The header clients set to name a traffic class directly.</summary>

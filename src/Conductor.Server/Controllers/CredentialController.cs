@@ -1,6 +1,7 @@
 namespace Conductor.Server.Controllers
 {
     using System;
+    using System.Threading;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Helpers;
@@ -56,6 +57,39 @@ namespace Conductor.Server.Controllers
             credential = await Database.Credential.CreateAsync(credential);
 
             return credential;
+        }
+
+        /// <summary>
+        /// Resolve and validate the user a new credential belongs to. When requestedUserId is empty the caller's own user is
+        /// used. A caller may name a different user only when it may assign owners (tenant admin, global admin or system
+        /// administrator). Either way the owner must exist in the target tenant, so a credential can never be bound to a user
+        /// outside the tenant it is created in.
+        /// </summary>
+        /// <param name="tenantId">Target tenant. Must not be null or empty.</param>
+        /// <param name="callerUserId">The authenticated caller's user ID. Null for system administrators.</param>
+        /// <param name="callerCanAssignOwner">True when the caller is a tenant admin, global admin or system administrator.</param>
+        /// <param name="requestedUserId">UserId supplied in the request body. Null allowed.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The owner user ID. Never null.</returns>
+        /// <exception cref="WebserverException">Thrown with BadRequest when no owner can be determined or the owner is not in
+        /// the target tenant, and with Forbidden when the caller may not create credentials for another user.</exception>
+        public async Task<string> ResolveOwnerUserIdAsync(string tenantId, string callerUserId, bool callerCanAssignOwner, string requestedUserId, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(tenantId))
+                throw new WebserverException(ApiResultEnum.BadRequest, "TenantId is required.");
+
+            string ownerUserId = !String.IsNullOrWhiteSpace(requestedUserId) ? requestedUserId : callerUserId;
+            if (String.IsNullOrWhiteSpace(ownerUserId))
+                throw new WebserverException(ApiResultEnum.BadRequest, "UserId is required: system administrator credentials have no user, so supply the UserId of a user in tenant '" + tenantId + "'.");
+
+            if (!String.Equals(ownerUserId, callerUserId, StringComparison.Ordinal) && !callerCanAssignOwner)
+                throw new WebserverException(ApiResultEnum.Forbidden, "Only tenant administrators and global administrators can create credentials for another user.");
+
+            UserMaster owner = await Database.User.ReadAsync(tenantId, ownerUserId, token).ConfigureAwait(false);
+            if (owner == null)
+                throw new WebserverException(ApiResultEnum.BadRequest, "UserId '" + ownerUserId + "' was not found in tenant '" + tenantId + "'. A credential must belong to a user in the tenant it is created in.");
+
+            return owner.Id;
         }
 
         /// <summary>

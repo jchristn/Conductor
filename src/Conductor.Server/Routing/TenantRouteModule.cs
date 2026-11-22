@@ -31,7 +31,10 @@ namespace Conductor.Server.Routing
                 .WithDescription("Create a new tenant in the system")
                 .WithRequestBody(Api.JsonRequestBody<TenantMetadata>("Tenant to create", true))
                 .WithResponse(201, Api.JsonResponse<TenantMetadata>("Created tenant"))
-                .WithResponse(400, OpenApiResponseMetadata.BadRequest()));
+                .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithSecurity("Bearer")
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
 
             _App.Get("/v1.0/tenants/{id}", async (req) =>
                 await tenantController.Read(req.Parameters["id"]),
@@ -41,7 +44,10 @@ namespace Conductor.Server.Routing
                 .WithDescription("Retrieve a specific tenant by its unique identifier")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The tenant ID"))
                 .WithResponse(200, Api.JsonResponse<TenantMetadata>("Tenant details"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound()));
+                .WithResponse(404, OpenApiResponseMetadata.NotFound())
+                .WithSecurity("Bearer")
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
 
             _App.Put<TenantMetadata>("/v1.0/tenants/{id}", async (req) =>
                 await tenantController.Update(req.Parameters["id"], req.Data as TenantMetadata),
@@ -52,7 +58,10 @@ namespace Conductor.Server.Routing
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The tenant ID"))
                 .WithRequestBody(Api.JsonRequestBody<TenantMetadata>("Updated tenant data", true))
                 .WithResponse(200, Api.JsonResponse<TenantMetadata>("Updated tenant"))
-                .WithResponse(404, OpenApiResponseMetadata.NotFound()));
+                .WithResponse(404, OpenApiResponseMetadata.NotFound())
+                .WithSecurity("Bearer")
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
 
             _App.Delete("/v1.0/tenants/{id}", async (req) =>
             {
@@ -66,7 +75,10 @@ namespace Conductor.Server.Routing
                 .WithDescription("Delete a tenant from the system")
                 .WithParameter(OpenApiParameterMetadata.Path("id", "The tenant ID"))
                 .WithResponse(204, OpenApiResponseMetadata.NoContent())
-                .WithResponse(404, OpenApiResponseMetadata.NotFound()));
+                .WithResponse(404, OpenApiResponseMetadata.NotFound())
+                .WithSecurity("Bearer")
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
 
             _App.Post<TenantPurgeRequest>("/v1.0/tenants/{id}/purge", async (req) =>
             {
@@ -118,6 +130,12 @@ namespace Conductor.Server.Routing
                 if (!String.IsNullOrEmpty(activeFilterStr) && Boolean.TryParse(activeFilterStr, out bool active))
                     activeFilter = active;
 
+                // System administrators and global admin users see every tenant; other users see only their own.
+                if (req.Http.Metadata is Services.AuthenticationResult userAuth && !userAuth.IsAdmin)
+                {
+                    return await tenantController.EnumerateOwn(userAuth.Tenant?.Id);
+                }
+
                 return await tenantController.Enumerate(
                     maxResults,
                     req.Http.Request.Query.Elements.Get("continuationToken"),
@@ -127,12 +145,15 @@ namespace Conductor.Server.Routing
             api => api
                 .WithTag("Tenants")
                 .WithSummary("List tenants")
-                .WithDescription("Enumerate all tenants with optional filtering and pagination")
+                .WithDescription("Enumerate tenants with optional filtering and pagination. System administrators and global admin users see all tenants; other authenticated users see only their own tenant.")
                 .WithParameter(OpenApiParameterMetadata.Query("maxResults", "Maximum number of results to return", false, OpenApiSchemaMetadata.Integer()))
                 .WithParameter(OpenApiParameterMetadata.Query("continuationToken", "Token for pagination", false))
                 .WithParameter(OpenApiParameterMetadata.Query("nameFilter", "Filter tenants by name", false))
                 .WithParameter(OpenApiParameterMetadata.Query("activeFilter", "Filter by active status", false, OpenApiSchemaMetadata.Boolean()))
-                .WithResponse(200, Api.JsonResponse<object>("List of tenants with pagination info")));
+                .WithResponse(200, Api.JsonResponse<object>("List of tenants with pagination info"))
+                .WithSecurity("Bearer")
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
+            auth: true);
 
         }
     }

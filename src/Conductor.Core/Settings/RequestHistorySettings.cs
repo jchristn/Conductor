@@ -80,6 +80,8 @@ namespace Conductor.Core.Settings
 
         /// <summary>
         /// Header names that should be redacted when persisted.
+        /// Default: authorization, x-password, x-admin-password, x-goog-api-key, x-api-key, anthropic-api-key, cookie,
+        /// set-cookie. Cookie and Set-Cookie are always redacted, even when a configured list omits them.
         /// </summary>
         public List<string> RedactedHeaders
         {
@@ -129,7 +131,11 @@ namespace Conductor.Core.Settings
             "authorization",
             "x-password",
             "x-admin-password",
-            "x-goog-api-key"
+            "x-goog-api-key",
+            "x-api-key",
+            "anthropic-api-key",
+            "cookie",
+            "set-cookie"
         };
         private List<string> _RedactedJsonFields = new List<string>
         {

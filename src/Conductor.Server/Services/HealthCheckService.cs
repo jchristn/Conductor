@@ -14,6 +14,7 @@ namespace Conductor.Server.Services
     using Conductor.Core.Database;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
+    using Conductor.Core.Settings;
     using Conductor.Core.Telemetry;
     using SyslogLogging;
 
@@ -28,12 +29,15 @@ namespace Conductor.Server.Services
         private readonly DatabaseDriverBase _Database;
         private readonly LoggingModule _Logging;
         private readonly HttpClient _HttpClient;
+        private readonly AnthropicSettings _AnthropicSettings;
         private readonly RigMonitorClient _RigMonitorClient;
         private readonly ConcurrentDictionary<string, EndpointHealthState> _HealthStates;
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _CancellationTokens;
         private readonly ConcurrentDictionary<string, Task> _RunningTasks;
         private readonly ConcurrentDictionary<string, ModelRunnerEndpoint> _ActiveEndpoints;
         private readonly ConcurrentDictionary<string, string> _EndpointHealthCheckKeys;
+        private readonly ConcurrentDictionary<string, bool> _ImmediateCheckRequested = new ConcurrentDictionary<string, bool>();
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> _GroupWakeSignals = new ConcurrentDictionary<string, TaskCompletionSource<bool>>();
         private TaskCompletionSource<bool> _CapacityPulse = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private CancellationTokenSource _GlobalCancellation;
         private bool _Disposed;
@@ -44,11 +48,13 @@ namespace Conductor.Server.Services
         /// <param name="database">Database driver.</param>
         /// <param name="logging">Logging module.</param>
         /// <param name="httpMessageHandler">Optional HTTP message handler for tests.</param>
-        public HealthCheckService(DatabaseDriverBase database, LoggingModule logging, HttpMessageHandler httpMessageHandler = null)
+        /// <param name="anthropicSettings">Anthropic settings used for the anthropic-version header (optional); when null, defaults are used.</param>
+        public HealthCheckService(DatabaseDriverBase database, LoggingModule logging, HttpMessageHandler httpMessageHandler = null, AnthropicSettings anthropicSettings = null)
         {
+            _AnthropicSettings = anthropicSettings ?? new AnthropicSettings();
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
-            _HttpClient = httpMessageHandler == null ? new HttpClient() : new HttpClient(httpMessageHandler);
+            _HttpClient = httpMessageHandler == null ? UpstreamHttpClientFactory.CreateClient() : new HttpClient(httpMessageHandler);
             _RigMonitorClient = new RigMonitorClient(_Logging);
             _HealthStates = new ConcurrentDictionary<string, EndpointHealthState>();
             _CancellationTokens = new ConcurrentDictionary<string, CancellationTokenSource>();
@@ -157,6 +163,8 @@ namespace Conductor.Server.Services
             _RunningTasks.Clear();
             _ActiveEndpoints.Clear();
             _EndpointHealthCheckKeys.Clear();
+            _ImmediateCheckRequested.Clear();
+            foreach (string key in _GroupWakeSignals.Keys.ToList()) WakeHealthCheckGroup(key);
             _Logging.Info(_Header + "stopped");
         }
 
@@ -290,6 +298,7 @@ namespace Conductor.Server.Services
             _Logging.Debug(_Header + "endpoint deleted: {endpointId}");
             StopHealthCheckTask(endpointId);
             _HealthStates.TryRemove(endpointId, out _);
+            _ImmediateCheckRequested.TryRemove(endpointId, out _);
         }
 
         /// <summary>
@@ -371,6 +380,12 @@ namespace Conductor.Server.Services
 
         private void StartHealthCheckTask(ModelRunnerEndpoint endpoint)
         {
+            if (!endpoint.HealthCheckEnabled)
+            {
+                MarkHealthCheckDisabled(endpoint);
+                return;
+            }
+
             EndpointHealthState state = null;
             if (_HealthStates.TryGetValue(endpoint.Id, out EndpointHealthState existingState))
             {
@@ -380,7 +395,7 @@ namespace Conductor.Server.Services
                     existingState.TenantId = endpoint.TenantId;
                     existingState.ServiceState = endpoint.ServiceState;
 
-                    if (endpoint.RigMonitor?.Enabled == true)
+                    if (IsRigMonitorActive(endpoint))
                     {
                         existingState.RigMonitor ??= new RigMonitorEndpointStatus();
                         existingState.RigMonitor.Enabled = true;
@@ -405,7 +420,7 @@ namespace Conductor.Server.Services
                     FirstCheckUtc = DateTime.UtcNow,
                     LastStateChangeUtc = DateTime.UtcNow,
                     ServiceState = endpoint.ServiceState,
-                    RigMonitor = endpoint.RigMonitor?.Enabled == true
+                    RigMonitor = IsRigMonitorActive(endpoint)
                         ? new RigMonitorEndpointStatus
                         {
                             Enabled = true,
@@ -423,13 +438,61 @@ namespace Conductor.Server.Services
                 _ActiveEndpoints.TryRemove(endpoint.Id, out _);
                 _EndpointHealthCheckKeys.TryRemove(endpoint.Id, out _);
                 StopHealthCheckGroupIfEmpty(existingKey);
+
+                // The probe target (URL, method, auth or body) changed, so the last result no longer describes it: probe now.
+                _ImmediateCheckRequested[endpoint.Id] = true;
             }
 
             _ActiveEndpoints.AddOrUpdate(endpoint.Id, endpoint, (k, v) => endpoint);
             _EndpointHealthCheckKeys.AddOrUpdate(endpoint.Id, healthCheckKey, (k, v) => healthCheckKey);
             EnsureHealthCheckGroupTask(healthCheckKey);
 
+            // The group's loop may already be sleeping (for example because another endpoint with the same health check URL
+            // was probed moments ago). Wake it so a newly registered endpoint, or one with an immediate probe request, is
+            // probed now instead of after the current sleep.
+            WakeHealthCheckGroup(healthCheckKey);
+
             _Logging.Info(_Header + $"health check registered for endpoint {endpoint.Id} ({endpoint.Name}) - interval: {endpoint.HealthCheckIntervalMs}ms, URL: {BuildHealthCheckUrl(endpoint)}");
+        }
+
+        private void MarkHealthCheckDisabled(ModelRunnerEndpoint endpoint)
+        {
+            // Health checks are off: send no probe and treat the endpoint as healthy.
+            if (_EndpointHealthCheckKeys.TryRemove(endpoint.Id, out string existingKey))
+            {
+                _ActiveEndpoints.TryRemove(endpoint.Id, out _);
+                StopHealthCheckGroupIfEmpty(existingKey);
+            }
+            else
+            {
+                _ActiveEndpoints.TryRemove(endpoint.Id, out _);
+            }
+
+            DateTime now = DateTime.UtcNow;
+            EndpointHealthState state = _HealthStates.GetOrAdd(endpoint.Id, _ => new EndpointHealthState
+            {
+                EndpointId = endpoint.Id,
+                FirstCheckUtc = now,
+                LastStateChangeUtc = now
+            });
+
+            lock (state.Lock)
+            {
+                state.EndpointName = endpoint.Name;
+                state.TenantId = endpoint.TenantId;
+                state.ServiceState = endpoint.ServiceState;
+                state.LastError = null;
+                state.ConsecutiveFailures = 0;
+                if (!state.IsHealthy)
+                {
+                    state.IsHealthy = true;
+                    state.LastHealthyUtc = now;
+                    state.LastStateChangeUtc = now;
+                }
+            }
+
+            PulseCapacity();
+            _Logging.Info(_Header + $"health checks disabled for endpoint {endpoint.Id} ({endpoint.Name}); treating it as healthy");
         }
 
         private void StopHealthCheckTask(string endpointId)
@@ -488,6 +551,40 @@ namespace Conductor.Server.Services
             }
 
             _RunningTasks.TryRemove(healthCheckKey, out _);
+            WakeHealthCheckGroup(healthCheckKey);
+        }
+
+        private Task GetHealthCheckGroupWakeTask(string healthCheckKey)
+        {
+            return _GroupWakeSignals.GetOrAdd(
+                healthCheckKey,
+                _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        }
+
+        private void WakeHealthCheckGroup(string healthCheckKey)
+        {
+            if (String.IsNullOrWhiteSpace(healthCheckKey)) return;
+            if (_GroupWakeSignals.TryRemove(healthCheckKey, out TaskCompletionSource<bool> signal))
+            {
+                signal.TrySetResult(true);
+            }
+        }
+
+        private async Task WaitUntilNextDueOrWokenAsync(string healthCheckKey, CancellationToken token)
+        {
+            // Take the wake signal before computing the delay: a registration that happens after this point completes the
+            // signal, and one that happened before it is already visible to the delay computation.
+            Task wakeTask = GetHealthCheckGroupWakeTask(healthCheckKey);
+            int delayMs = GetDelayUntilNextDueMs(healthCheckKey, DateTime.UtcNow);
+
+            using (CancellationTokenSource delayCts = CancellationTokenSource.CreateLinkedTokenSource(token))
+            {
+                Task delayTask = Task.Delay(delayMs, delayCts.Token);
+                await Task.WhenAny(delayTask, wakeTask).ConfigureAwait(false);
+                delayCts.Cancel();
+            }
+
+            token.ThrowIfCancellationRequested();
         }
 
         private bool HasActiveEndpointsForHealthCheckKey(string healthCheckKey)
@@ -531,13 +628,9 @@ namespace Conductor.Server.Services
                     continue;
                 }
 
-                lock (state.Lock)
+                if (GetRemainingMs(endpoint, state, now) < 1)
                 {
-                    DateTime referenceUtc = state.LastCheckUtc ?? state.FirstCheckUtc;
-                    if ((now - referenceUtc).TotalMilliseconds >= endpoint.HealthCheckIntervalMs)
-                    {
-                        dueEndpoints.Add(endpoint);
-                    }
+                    dueEndpoints.Add(endpoint);
                 }
             }
 
@@ -554,11 +647,7 @@ namespace Conductor.Server.Services
                 int remainingMs = 0;
                 if (_HealthStates.TryGetValue(endpoint.Id, out EndpointHealthState state))
                 {
-                    lock (state.Lock)
-                    {
-                        DateTime referenceUtc = state.LastCheckUtc ?? state.FirstCheckUtc;
-                        remainingMs = endpoint.HealthCheckIntervalMs - (int)(now - referenceUtc).TotalMilliseconds;
-                    }
+                    remainingMs = GetRemainingMs(endpoint, state, now);
                 }
 
                 if (remainingMs < 1)
@@ -575,6 +664,19 @@ namespace Conductor.Server.Services
             return shortestDelayMs;
         }
 
+        private int GetRemainingMs(ModelRunnerEndpoint endpoint, EndpointHealthState state, DateTime now)
+        {
+            // An endpoint that has never been checked (new, just created, or just registered at startup), or whose probe
+            // target changed, is checked immediately instead of after a full interval.
+            if (_ImmediateCheckRequested.ContainsKey(endpoint.Id)) return 0;
+
+            lock (state.Lock)
+            {
+                if (!state.LastCheckUtc.HasValue) return 0;
+                return endpoint.HealthCheckIntervalMs - (int)(now - state.LastCheckUtc.Value).TotalMilliseconds;
+            }
+        }
+
         private async Task HealthCheckLoop(string healthCheckKey, CancellationToken token)
         {
             while (!token.IsCancellationRequested && !(_GlobalCancellation?.IsCancellationRequested ?? false))
@@ -586,7 +688,7 @@ namespace Conductor.Server.Services
                         break;
                     }
 
-                    await Task.Delay(GetDelayUntilNextDueMs(healthCheckKey, DateTime.UtcNow), token).ConfigureAwait(false);
+                    await WaitUntilNextDueOrWokenAsync(healthCheckKey, token).ConfigureAwait(false);
 
                     if (token.IsCancellationRequested) break;
 
@@ -620,6 +722,7 @@ namespace Conductor.Server.Services
 
                     foreach (ModelRunnerEndpoint endpoint in dueEndpoints)
                     {
+                        _ImmediateCheckRequested.TryRemove(endpoint.Id, out _);
                         bool success = EvaluateHealthCheckResult(endpoint, probeResult, out string error);
 
                         if (success)
@@ -631,7 +734,7 @@ namespace Conductor.Server.Services
                             _Logging.Debug(_Header + "health check failed for endpoint " + endpoint.Id + " (" + endpoint.Name + ")" + (!String.IsNullOrEmpty(error) ? ": " + error : ""));
                         }
 
-                        if (endpoint.RigMonitor?.Enabled == true)
+                        if (IsRigMonitorActive(endpoint))
                         {
                             RigMonitorRefreshResult rigMonitorResult = await RefreshRigMonitorStatusAsync(endpoint, token).ConfigureAwait(false);
                             if (endpoint.RigMonitor.HealthAffectedByRigMonitor)
@@ -660,7 +763,7 @@ namespace Conductor.Server.Services
 
         private async Task<RigMonitorRefreshResult> RefreshRigMonitorStatusAsync(ModelRunnerEndpoint endpoint, CancellationToken token)
         {
-            if (endpoint == null || endpoint.RigMonitor == null || !endpoint.RigMonitor.Enabled)
+            if (endpoint == null || !IsRigMonitorActive(endpoint))
             {
                 return new RigMonitorRefreshResult { Success = true };
             }
@@ -786,28 +889,31 @@ namespace Conductor.Server.Services
         private async Task<HealthCheckProbeResult> PerformHealthCheck(ModelRunnerEndpoint endpoint, int timeoutMs, CancellationToken token)
         {
             string url = BuildHealthCheckUrl(endpoint);
-            string method = endpoint.HealthCheckMethod == HealthCheckMethodEnum.HEAD ? "HEAD" : "GET";
+            string method = GetHealthCheckMethodName(endpoint);
 
             _Logging.Debug(_Header + "performing shared health check " + method + " " + url);
 
             using (HttpRequestMessage request = new HttpRequestMessage
             {
                 RequestUri = new Uri(url),
-                Method = endpoint.HealthCheckMethod == HealthCheckMethodEnum.HEAD
-                    ? HttpMethod.Head
-                    : HttpMethod.Get
+                Method = GetHealthCheckHttpMethod(endpoint)
             })
             {
-                if (endpoint.HealthCheckUseAuth && !String.IsNullOrEmpty(endpoint.ApiKey))
+                if (endpoint.HealthCheckMethod == HealthCheckMethodEnum.POST)
                 {
-                    if (endpoint.ApiType == ApiTypeEnum.Gemini)
-                    {
-                        request.Headers.Add("x-goog-api-key", endpoint.ApiKey);
-                    }
-                    else
-                    {
-                        request.Headers.Add("Authorization", "Bearer " + endpoint.ApiKey);
-                    }
+                    request.Content = new StringContent(endpoint.HealthCheckRequestBody ?? String.Empty, Encoding.UTF8);
+                    request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+                }
+
+                if (endpoint.HealthCheckUseAuth)
+                {
+                    UpstreamAuthHeaders.Apply(request, endpoint, _AnthropicSettings);
+                }
+                else if (endpoint.ApiType == ApiTypeEnum.Anthropic)
+                {
+                    request.Headers.TryAddWithoutValidation(
+                        UpstreamAuthHeaders.AnthropicVersionHeader,
+                        UpstreamAuthHeaders.ResolveAnthropicVersion(null, endpoint, _AnthropicSettings));
                 }
 
                 using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token))
@@ -871,14 +977,59 @@ namespace Conductor.Server.Services
             return healthCheckUrl.StartsWith("/") ? healthCheckUrl : "/" + healthCheckUrl;
         }
 
+        private static bool IsRigMonitorActive(ModelRunnerEndpoint endpoint)
+        {
+            // RigMonitor describes a local rig; it never applies to OllamaCloud endpoints.
+            return endpoint != null
+                && endpoint.RigMonitor != null
+                && endpoint.RigMonitor.Enabled
+                && endpoint.ApiType != ApiTypeEnum.OllamaCloud;
+        }
+
+        private static string GetHealthCheckMethodName(ModelRunnerEndpoint endpoint)
+        {
+            switch (endpoint.HealthCheckMethod)
+            {
+                case HealthCheckMethodEnum.HEAD:
+                    return "HEAD";
+                case HealthCheckMethodEnum.POST:
+                    return "POST";
+                default:
+                    return "GET";
+            }
+        }
+
+        private static HttpMethod GetHealthCheckHttpMethod(ModelRunnerEndpoint endpoint)
+        {
+            switch (endpoint.HealthCheckMethod)
+            {
+                case HealthCheckMethodEnum.HEAD:
+                    return HttpMethod.Head;
+                case HealthCheckMethodEnum.POST:
+                    return HttpMethod.Post;
+                default:
+                    return HttpMethod.Get;
+            }
+        }
+
         private static string BuildHealthCheckKey(ModelRunnerEndpoint endpoint)
         {
-            string method = endpoint.HealthCheckMethod == HealthCheckMethodEnum.HEAD ? "HEAD" : "GET";
+            string method = GetHealthCheckMethodName(endpoint);
             string authKey = "none";
             if (endpoint.HealthCheckUseAuth && !String.IsNullOrEmpty(endpoint.ApiKey))
             {
-                string headerName = endpoint.ApiType == ApiTypeEnum.Gemini ? "x-goog-api-key" : "Authorization";
+                string headerName = UpstreamAuthHeaders.GetKeyHeaderName(endpoint.ApiType);
                 authKey = headerName + ":" + HashSecret(endpoint.ApiKey);
+            }
+
+            if (endpoint.ApiType == ApiTypeEnum.Anthropic)
+            {
+                authKey += " version=" + (endpoint.AnthropicVersion ?? "default");
+            }
+
+            if (endpoint.HealthCheckMethod == HealthCheckMethodEnum.POST)
+            {
+                authKey += " body=" + HashSecret(endpoint.HealthCheckRequestBody);
             }
 
             Uri uri = new Uri(BuildHealthCheckUrl(endpoint));
@@ -893,7 +1044,7 @@ namespace Conductor.Server.Services
 
         private static string GetLogSafeHealthCheckKey(ModelRunnerEndpoint endpoint)
         {
-            string method = endpoint.HealthCheckMethod == HealthCheckMethodEnum.HEAD ? "HEAD" : "GET";
+            string method = GetHealthCheckMethodName(endpoint);
             return method + " " + BuildHealthCheckUrl(endpoint);
         }
 
@@ -936,8 +1087,11 @@ namespace Conductor.Server.Services
                     state.ConsecutiveSuccesses++;
                     state.ConsecutiveFailures = 0;
 
-                    // Check if we should transition to healthy
-                    if (!state.IsHealthy && state.ConsecutiveSuccesses >= endpoint.HealthyThreshold)
+                    // Transition to healthy after HealthyThreshold consecutive successes, or on the very first success of an
+                    // endpoint that has never been healthy (new, just created, or just started), so a fresh endpoint does not
+                    // wait HealthyThreshold full intervals before it can take traffic.
+                    bool firstSuccess = !state.LastHealthyUtc.HasValue;
+                    if (!state.IsHealthy && (state.ConsecutiveSuccesses >= endpoint.HealthyThreshold || firstSuccess))
                     {
                         // Calculate downtime before transition
                         if (state.LastStateChangeUtc.HasValue)
@@ -951,7 +1105,7 @@ namespace Conductor.Server.Services
                         state.LastHealthyUtc = now;
                         state.LastStateChangeUtc = now;
 
-                        _Logging.Info(_Header + "endpoint " + endpoint.Id + " " + endpoint.Name + " is now HEALTHY after " + state.ConsecutiveSuccesses + " consecutive successful checks");
+                        _Logging.Info(_Header + "endpoint " + endpoint.Id + " " + endpoint.Name + " is now HEALTHY after " + state.ConsecutiveSuccesses + " consecutive successful check(s)" + (firstSuccess ? " (first successful check)" : String.Empty));
                     }
                 }
                 else

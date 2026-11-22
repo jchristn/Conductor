@@ -56,13 +56,26 @@ namespace Conductor.Core.Models
         }
 
         /// <summary>
-        /// Password (hashed).
+        /// Password. Accepted on create and update requests. REST responses never contain it: API responses are built with
+        /// WithoutPassword, which leaves this property null so the serializer omits it. Setting null or empty throws.
         /// </summary>
+        /// <exception cref="ArgumentNullException">Thrown when set to null or empty.</exception>
         public string Password
         {
             get => _Password;
-            set => _Password = (String.IsNullOrEmpty(value) ? throw new ArgumentNullException(nameof(Password)) : value);
+            set
+            {
+                _Password = (String.IsNullOrEmpty(value) ? throw new ArgumentNullException(nameof(Password)) : value);
+                _PasswordWasSet = true;
+            }
         }
+
+        /// <summary>
+        /// True when Password was assigned after construction (for example because a request body contained it). An update
+        /// whose body omits Password keeps the stored password instead of resetting it. Not serialized. Not thread safe.
+        /// </summary>
+        [JsonIgnore]
+        public bool PasswordWasSet => _PasswordWasSet;
 
         /// <summary>
         /// Boolean indicating if the user is active.
@@ -147,6 +160,7 @@ namespace Conductor.Core.Models
         private string _LastName = "Last";
         private string _Email = "user@example.com";
         private string _Password = "password";
+        private bool _PasswordWasSet = false;
         private List<string> _Labels = new List<string>();
         private Dictionary<string, string> _Tags = new Dictionary<string, string>();
 
@@ -155,6 +169,21 @@ namespace Conductor.Core.Models
         /// </summary>
         public UserMaster()
         {
+        }
+
+        /// <summary>
+        /// Create a copy suitable for API responses: every field is copied except Password, which is null so it is omitted
+        /// from serialized output. The original is not modified.
+        /// </summary>
+        /// <param name="user">User to copy. Null returns null.</param>
+        /// <returns>A copy without the password, or null.</returns>
+        public static UserMaster WithoutPassword(UserMaster user)
+        {
+            if (user == null) return null;
+            UserMaster copy = _Serializer.CopyObject<UserMaster>(user);
+            copy._Password = null;
+            copy._PasswordWasSet = false;
+            return copy;
         }
 
         /// <summary>

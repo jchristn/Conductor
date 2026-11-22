@@ -724,6 +724,47 @@ namespace Conductor.Core.Enums
         /// <summary>
         /// Run a keep-warm pass for a virtual model runner immediately.
         /// </summary>
-        RunVirtualModelRunnerKeepWarm
+        RunVirtualModelRunnerKeepWarm,
+
+        // ==================== Proxied API Operations (Anthropic) ====================
+
+        /// <summary>
+        /// Anthropic create message (POST /v1/messages).
+        /// </summary>
+        AnthropicMessages,
+
+        /// <summary>
+        /// Anthropic count message tokens (POST /v1/messages/count_tokens).
+        /// </summary>
+        AnthropicCountTokens,
+
+        /// <summary>
+        /// Anthropic list models (GET /v1/models).
+        /// </summary>
+        AnthropicListModels,
+
+        /// <summary>
+        /// Anthropic get model (GET /v1/models/{id}).
+        /// </summary>
+        AnthropicGetModel,
+
+        // ==================== Proxied API Operations (TypeSafe System One) ====================
+
+        /// <summary>
+        /// TypeSafe System One decision (POST /v1/systemone).
+        /// </summary>
+        TypeSafeDecide,
+
+        /// <summary>
+        /// TypeSafe list models (GET /v1/models).
+        /// </summary>
+        TypeSafeListModels,
+
+        // ==================== Model Runner Endpoint Secret Operations ====================
+
+        /// <summary>
+        /// Reveal the full upstream API key of a model runner endpoint (GET /v1.0/modelrunnerendpoints/{id}/apikey).
+        /// </summary>
+        ReadModelRunnerEndpointApiKey
     }
 }

@@ -38,6 +38,24 @@ namespace Conductor.Server.Services
         /// <returns>Authentication result with tenant and user info.</returns>
         public async Task<AuthenticationResult> AuthenticateAsync(HttpContextBase ctx, CancellationToken token = default)
         {
+            return await AuthenticateAsync(ctx, false, token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Authenticate a request using a bearer token, the ?key= query parameter, optionally the x-api-key header, or the
+        /// tenant/email/password headers. The x-api-key header carries a normal Conductor credential and is accepted only
+        /// when acceptApiKeyHeader is true, which the proxy sets for Anthropic virtual model runners because Anthropic
+        /// clients send their key there. Safe for concurrent use.
+        /// </summary>
+        /// <param name="ctx">HTTP context. Must not be null.</param>
+        /// <param name="acceptApiKeyHeader">True to also accept a Conductor bearer token in the x-api-key header (after
+        /// the Authorization header and before the ?key= query parameter).</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Authentication result with tenant and user info. Never null.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when ctx is null.</exception>
+        public async Task<AuthenticationResult> AuthenticateAsync(HttpContextBase ctx, bool acceptApiKeyHeader, CancellationToken token = default)
+        {
+            ArgumentNullException.ThrowIfNull(ctx);
             AuthenticationResult result = new AuthenticationResult();
 
             // Try bearer token first
@@ -46,6 +64,13 @@ namespace Conductor.Server.Services
             if (!String.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 bearerToken = authHeader.Substring(7).Trim();
+            }
+
+            // On Anthropic virtual model runners only, accept the Conductor credential in x-api-key.
+            if (String.IsNullOrEmpty(bearerToken) && acceptApiKeyHeader)
+            {
+                string apiKeyHeader = ctx.Request.Headers.Get("x-api-key");
+                if (!String.IsNullOrWhiteSpace(apiKeyHeader)) bearerToken = apiKeyHeader.Trim();
             }
 
             // Fall back to ?key= query parameter (used by Gemini-compatible clients)

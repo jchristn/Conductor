@@ -25,7 +25,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints", async (req) =>
             {
                 ModelRunnerEndpoint mre = req.Data as ModelRunnerEndpoint;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await mreController.Create(tenantId, mre);
             },
@@ -43,7 +43,7 @@ namespace Conductor.Server.Routing
             _App.Post<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints/validate", async (req) =>
             {
                 ModelRunnerEndpoint mre = req.Data as ModelRunnerEndpoint;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await mreController.Validate(tenantId, mre, !String.IsNullOrEmpty(existingId) ? existingId : mre?.Id);
             },
@@ -105,7 +105,7 @@ namespace Conductor.Server.Routing
 
             _App.Post("/v1.0/modelrunnerendpoints/{id}/drain", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.Drain(tenantId, req.Parameters["id"]);
             },
             api => api
@@ -121,7 +121,7 @@ namespace Conductor.Server.Routing
 
             _App.Post("/v1.0/modelrunnerendpoints/{id}/resume", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.Resume(tenantId, req.Parameters["id"]);
             },
             api => api
@@ -137,7 +137,7 @@ namespace Conductor.Server.Routing
 
             _App.Post("/v1.0/modelrunnerendpoints/{id}/quarantine", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.Quarantine(tenantId, req.Parameters["id"]);
             },
             api => api
@@ -153,7 +153,7 @@ namespace Conductor.Server.Routing
 
             _App.Post<ModelLoadRequest>("/v1.0/modelrunnerendpoints/{id}/load-model", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.LoadModel(tenantId, req.Parameters["id"], req.Data as ModelLoadRequest);
             },
             api => api
@@ -190,7 +190,7 @@ namespace Conductor.Server.Routing
 
             _App.Post<OllamaModelPullRequest>("/v1.0/modelrunnerendpoints/{id}/ollama/models/pull", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.PullOllamaModel(tenantId, req.Parameters["id"], req.Data as OllamaModelPullRequest);
             },
             api => api
@@ -209,7 +209,7 @@ namespace Conductor.Server.Routing
 
             _App.Post<OllamaModelDeleteRequest>("/v1.0/modelrunnerendpoints/{id}/ollama/models/delete", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 return await mreController.DeleteOllamaModel(tenantId, req.Parameters["id"], req.Data as OllamaModelDeleteRequest);
             },
             api => api
@@ -222,6 +222,23 @@ namespace Conductor.Server.Routing
                 .WithRequestBody(Api.JsonRequestBody<OllamaModelDeleteRequest>("Ollama model delete request", true))
                 .WithResponse(200, Api.JsonResponse<OllamaModelOperationResponse>("Ollama delete result"))
                 .WithResponse(400, OpenApiResponseMetadata.BadRequest())
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound()),
+            auth: true);
+
+            _App.Get("/v1.0/modelrunnerendpoints/{id}/apikey", async (req) =>
+            {
+                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                return await mreController.RevealApiKey(tenantId, req.Parameters["id"], DescribeRequester(req.Http.Metadata));
+            },
+            api => api
+                .WithTag("Model Runner Endpoints")
+                .WithSummary("Reveal model runner endpoint API key")
+                .WithDescription("Return the full, unmasked upstream API key of a model runner endpoint. Requires a tenant admin, a global admin or a system administrator. Each call writes an audit log line that does not contain the key.")
+                .WithSecurity("Bearer")
+                .WithParameter(OpenApiParameterMetadata.Path("id", "The model runner endpoint ID"))
+                .WithParameter(OpenApiParameterMetadata.Query("tenantId", "Tenant ID for admin or cross-tenant callers", false))
+                .WithResponse(200, Api.JsonResponse<ModelRunnerEndpointApiKeyResponse>("The full API key"))
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
                 .WithResponse(404, OpenApiResponseMetadata.NotFound()),
             auth: true);
@@ -245,7 +262,7 @@ namespace Conductor.Server.Routing
             _App.Put<ModelRunnerEndpoint>("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
                 ModelRunnerEndpoint mre = req.Data as ModelRunnerEndpoint;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, mre?.TenantId);
                 return await mreController.Update(tenantId, req.Parameters["id"], mre);
             },
             api => api
@@ -262,7 +279,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/modelrunnerendpoints/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await mreController.Delete(tenantId, req.Parameters["id"]);
                 return null;
@@ -306,6 +323,21 @@ namespace Conductor.Server.Routing
                 .WithResponse(401, OpenApiResponseMetadata.Unauthorized()),
             auth: true);
 
+        }
+
+        private static string DescribeRequester(object metadata)
+        {
+            if (metadata is Services.AuthenticationResult userAuth)
+            {
+                return "user:" + (userAuth.User?.Id ?? "unknown") + (userAuth.Credential != null ? " credential:" + userAuth.Credential.Id : String.Empty);
+            }
+
+            if (metadata is Services.AdminAuthenticationResult adminAuth)
+            {
+                return "admin:" + (adminAuth.Administrator?.Id ?? (adminAuth.IsApiKeyAuth ? "apikey" : "unknown"));
+            }
+
+            return null;
         }
     }
 }

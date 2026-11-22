@@ -54,5 +54,10 @@ namespace Conductor.Core.Models
         /// Redacted error message.
         /// </summary>
         public string ErrorMessage { get; set; } = null;
+
+        /// <summary>
+        /// Number of questions in a decision request, recorded by the proxy before forwarding. Null for other request types.
+        /// </summary>
+        public int? DecisionQuestionCount { get; set; } = null;
     }
 }

@@ -9,6 +9,14 @@ namespace Conductor.Core.Helpers
     public static class DataTableHelper
     {
         /// <summary>
+        /// Optional callback invoked with a warning message when an enum column holds a value that is not defined by the
+        /// target enum (for example an integer written by a newer version of Conductor). The default value is returned in
+        /// that case. Null (the default) disables the warning. The callback may be invoked concurrently from multiple
+        /// threads, so it must be thread safe.
+        /// </summary>
+        public static Action<string> UnknownEnumValueWarning { get; set; } = null;
+
+        /// <summary>
         /// Get a string value from a DataRow.
         /// </summary>
         /// <param name="row">DataRow.</param>
@@ -233,13 +241,37 @@ namespace Conductor.Core.Helpers
             if (row[columnName] == null || row[columnName] == DBNull.Value) return defaultValue;
 
             object val = row[columnName];
-            if (val is int intVal && Enum.IsDefined(typeof(T), intVal))
+            string text = val.ToString();
+            if (Int64.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long numeric))
             {
-                return (T)(object)intVal;
+                if (numeric >= Int32.MinValue && numeric <= Int32.MaxValue)
+                {
+                    object candidate = Enum.ToObject(typeof(T), (int)numeric);
+                    if (Enum.IsDefined(typeof(T), candidate)) return (T)candidate;
+                }
+
+                WarnUnknownEnumValue<T>(columnName, text, defaultValue);
+                return defaultValue;
             }
 
-            if (Enum.TryParse<T>(val.ToString(), true, out T result)) return result;
+            if (Enum.TryParse<T>(text, true, out T result) && Enum.IsDefined(typeof(T), result)) return result;
+            WarnUnknownEnumValue<T>(columnName, text, defaultValue);
             return defaultValue;
+        }
+
+        private static void WarnUnknownEnumValue<T>(string columnName, string value, T defaultValue) where T : struct, Enum
+        {
+            Action<string> handler = UnknownEnumValueWarning;
+            if (handler == null) return;
+
+            try
+            {
+                handler("column '" + columnName + "' holds value '" + value + "', which is not defined by " + typeof(T).Name + "; using '" + defaultValue + "'");
+            }
+            catch (Exception)
+            {
+                // A failing warning callback must never break a database read.
+            }
         }
     }
 }

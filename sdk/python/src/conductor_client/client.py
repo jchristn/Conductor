@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import requests
 
@@ -86,6 +86,60 @@ class ConductorClient:
 
     def get_virtual_model_runner_reservation_effective(self, vmr_id: str, filters: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._request("GET", f"/v1.0/virtualmodelrunners/{vmr_id}/reservation-effective{self._query_string(filters)}")
+
+    def list_model_runner_endpoints(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/modelrunnerendpoints{self._query_string(filters)}")
+
+    def get_model_runner_endpoint(self, endpoint_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        """Read an endpoint. ApiKey in the response is masked; see reveal_model_runner_endpoint_api_key."""
+        return self._request("GET", f"/v1.0/modelrunnerendpoints/{self._path_id(endpoint_id)}{self._tenant_query(tenant_id)}")
+
+    def create_model_runner_endpoint(self, endpoint: dict[str, Any]) -> dict[str, Any]:
+        """Create an endpoint. The payload passes through unchanged (AnthropicVersion, HealthCheckEnabled, and so on)."""
+        return self._request("POST", "/v1.0/modelrunnerendpoints", endpoint or {})
+
+    def update_model_runner_endpoint(self, endpoint_id: str, endpoint: dict[str, Any]) -> dict[str, Any]:
+        """Update an endpoint. An omitted, null or masked ApiKey keeps the stored key; an empty string clears it."""
+        return self._request("PUT", f"/v1.0/modelrunnerendpoints/{self._path_id(endpoint_id)}", endpoint or {})
+
+    def delete_model_runner_endpoint(self, endpoint_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+        return self._request("DELETE", f"/v1.0/modelrunnerendpoints/{self._path_id(endpoint_id)}{self._tenant_query(tenant_id)}")
+
+    def reveal_model_runner_endpoint_api_key(self, endpoint_id: str, tenant_id: str | None = None) -> str | None:
+        """Return the full upstream API key of an endpoint, or None when unset. The server audits each call."""
+        result = self._request("GET", f"/v1.0/modelrunnerendpoints/{self._path_id(endpoint_id)}/apikey{self._tenant_query(tenant_id)}")
+        api_key = result.get("ApiKey") if isinstance(result, dict) else None
+        return api_key if isinstance(api_key, str) else None
+
+    def list_model_definitions(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/modeldefinitions{self._query_string(filters)}")
+
+    def get_model_definition(self, definition_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/modeldefinitions/{self._path_id(definition_id)}{self._tenant_query(tenant_id)}")
+
+    def create_model_definition(self, definition: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/modeldefinitions", definition or {})
+
+    def update_model_definition(self, definition_id: str, definition: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PUT", f"/v1.0/modeldefinitions/{self._path_id(definition_id)}", definition or {})
+
+    def delete_model_definition(self, definition_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+        return self._request("DELETE", f"/v1.0/modeldefinitions/{self._path_id(definition_id)}{self._tenant_query(tenant_id)}")
+
+    def list_virtual_model_runners(self, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/virtualmodelrunners{self._query_string(filters)}")
+
+    def get_virtual_model_runner(self, vmr_id: str, tenant_id: str | None = None) -> dict[str, Any]:
+        return self._request("GET", f"/v1.0/virtualmodelrunners/{self._path_id(vmr_id)}{self._tenant_query(tenant_id)}")
+
+    def create_virtual_model_runner(self, vmr: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/v1.0/virtualmodelrunners", vmr or {})
+
+    def update_virtual_model_runner(self, vmr_id: str, vmr: dict[str, Any]) -> dict[str, Any]:
+        return self._request("PUT", f"/v1.0/virtualmodelrunners/{self._path_id(vmr_id)}", vmr or {})
+
+    def delete_virtual_model_runner(self, vmr_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+        return self._request("DELETE", f"/v1.0/virtualmodelrunners/{self._path_id(vmr_id)}{self._tenant_query(tenant_id)}")
 
     def validate_model_runner_endpoint(self, draft: dict[str, Any], existing_id: str | None = None) -> dict[str, Any]:
         return self._request("POST", f"/v1.0/modelrunnerendpoints/validate{self._existing_id_query(existing_id)}", draft)
@@ -349,6 +403,12 @@ class ConductorClient:
 
         serialized = urlencode({key: value for key, value in filters.items() if value not in (None, "")})
         return f"?{serialized}" if serialized else ""
+
+    @staticmethod
+    def _path_id(value: str) -> str:
+        if not value:
+            raise ValueError("id is required")
+        return quote(str(value), safe="")
 
     @staticmethod
     def _existing_id_query(existing_id: str | None) -> str:

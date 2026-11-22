@@ -40,7 +40,6 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.CreateTenant,
             RequestTypeEnum.UpdateTenant,
             RequestTypeEnum.DeleteTenant,
-            RequestTypeEnum.ListTenants,
             RequestTypeEnum.PurgeTenant
         };
 
@@ -75,6 +74,8 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.DeleteCredential,
             RequestTypeEnum.ListCredentials,
             RequestTypeEnum.LoadModelRunnerEndpointModel,
+            // Revealing a full upstream key is restricted to tenant admins, global admins and system administrators.
+            RequestTypeEnum.ReadModelRunnerEndpointApiKey,
             RequestTypeEnum.ListOllamaEndpointModels,
             RequestTypeEnum.PullOllamaEndpointModel,
             RequestTypeEnum.DeleteOllamaEndpointModel,
@@ -111,6 +112,9 @@ namespace Conductor.Core.Authorization
         /// </summary>
         public static readonly HashSet<RequestTypeEnum> RequiresAuthentication = new()
         {
+            // Listing tenants is scoped by the route: global admins and system administrators see all tenants, other users
+            // see only their own.
+            RequestTypeEnum.ListTenants,
             RequestTypeEnum.CreateModelRunnerEndpoint,
             RequestTypeEnum.ReadModelRunnerEndpoint,
             RequestTypeEnum.UpdateModelRunnerEndpoint,
@@ -202,7 +206,13 @@ namespace Conductor.Core.Authorization
             RequestTypeEnum.OllamaPullModel,
             RequestTypeEnum.OllamaDeleteModel,
             RequestTypeEnum.OllamaListRunningModels,
-            RequestTypeEnum.OllamaShowModelInfo
+            RequestTypeEnum.OllamaShowModelInfo,
+            RequestTypeEnum.AnthropicMessages,
+            RequestTypeEnum.AnthropicCountTokens,
+            RequestTypeEnum.AnthropicListModels,
+            RequestTypeEnum.AnthropicGetModel,
+            RequestTypeEnum.TypeSafeDecide,
+            RequestTypeEnum.TypeSafeListModels
         };
 
         /// <summary>

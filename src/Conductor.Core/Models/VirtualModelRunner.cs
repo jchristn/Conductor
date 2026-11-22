@@ -318,6 +318,12 @@ namespace Conductor.Core.Models
         public bool AllowModelManagement { get; set; } = false;
 
         /// <summary>
+        /// Boolean indicating whether decision requests (TypeSafe System One) are allowed. Default: true.
+        /// A decision request on a runner with this set to false is rejected with 403.
+        /// </summary>
+        public bool AllowDecisions { get; set; } = true;
+
+        /// <summary>
         /// When enabled, only accepts requests for models defined by attached ModelDefinitions.
         /// If no ModelDefinitions are attached, all requests are rejected.
         /// </summary>
@@ -502,6 +508,9 @@ namespace Conductor.Core.Models
                 AllowEmbeddings = DataTableHelper.GetBooleanValue(row, "allowembeddings"),
                 AllowCompletions = DataTableHelper.GetBooleanValue(row, "allowcompletions"),
                 AllowModelManagement = DataTableHelper.GetBooleanValue(row, "allowmodelmanagement"),
+                AllowDecisions = !row.Table.Columns.Contains("allowdecisions")
+                    || row["allowdecisions"] == DBNull.Value
+                    || DataTableHelper.GetBooleanValue(row, "allowdecisions"),
                 StrictMode = DataTableHelper.GetBooleanValue(row, "strictmode"),
                 Active = DataTableHelper.GetBooleanValue(row, "active"),
                 CreatedUtc = DataTableHelper.GetDateTimeValue(row, "createdutc"),

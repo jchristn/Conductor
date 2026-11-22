@@ -21,6 +21,7 @@ namespace Conductor.Server.Routing
         protected readonly SyslogLogging.LoggingModule _Logging;
         protected readonly AuthenticationService _AuthService;
         protected readonly OperationalMetricsService _OperationalMetricsService;
+        protected readonly ProxyAuthenticationGate _ProxyAuthGate;
 
         protected readonly TenantController tenantController;
         protected readonly UserController userController;
@@ -50,6 +51,7 @@ namespace Conductor.Server.Routing
             _Logging = context.Logging;
             _AuthService = context.AuthService;
             _OperationalMetricsService = context.OperationalMetricsService;
+            _ProxyAuthGate = new ProxyAuthenticationGate(context.Database, context.AuthService);
             tenantController = context.TenantController;
             userController = context.UserController;
             credentialController = context.CredentialController;
@@ -75,22 +77,12 @@ namespace Conductor.Server.Routing
 
         protected string GetTenantIdFromAuth(object metadata, string requestBodyTenantId)
         {
-            if (metadata is AuthenticationResult userAuth)
-            {
-                if (userAuth.IsAdmin)
-                {
-                    return !String.IsNullOrEmpty(requestBodyTenantId) ? requestBodyTenantId : null;
-                }
+            return RequestTenantResolver.ResolveReadTenantId(metadata, requestBodyTenantId);
+        }
 
-                return userAuth.Tenant?.Id;
-            }
-
-            if (metadata is AdminAuthenticationResult)
-            {
-                return requestBodyTenantId;
-            }
-
-            return null;
+        protected string GetWriteTenantIdFromAuth(object metadata, string requestTenantId)
+        {
+            return RequestTenantResolver.ResolveWriteTenantId(metadata, requestTenantId);
         }
 
         protected string GetUserIdFromAuth(object metadata, string requestBodyUserId)
@@ -234,6 +226,13 @@ namespace Conductor.Server.Routing
                     AuthenticationResult = AuthenticationResultEnum.Success,
                     AuthorizationResult = AuthorizationResultEnum.Permitted
                 };
+            }
+
+            // Proxied virtual model runner requests authenticate by the runner's configured API type.
+            AuthResult proxyAuth = await _ProxyAuthGate.TryAuthenticateAsync(ctx, ctx.Token).ConfigureAwait(false);
+            if (proxyAuth != null)
+            {
+                return proxyAuth;
             }
 
             bool requiresAdminAuth = Core.Authorization.AuthorizationConfig.RequiresAdmin(requestType);

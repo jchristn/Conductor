@@ -18,6 +18,10 @@ namespace Conductor.Server.Services
 
         internal int? ProviderTotalDurationMs { get; set; } = null;
 
+        internal int? CacheCreationInputTokens { get; set; } = null;
+
+        internal int? CacheReadInputTokens { get; set; } = null;
+
         internal string RawProviderMetrics { get; set; } = null;
     }
 }

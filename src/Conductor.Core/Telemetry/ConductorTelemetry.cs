@@ -161,6 +161,15 @@ namespace Conductor.Core.Telemetry
         /// <summary>Metric name: QoS current parked-request depth up/down counter.</summary>
         public const string MetricQosQueueDepth = "conductor.qos.queue.depth";
 
+        /// <summary>Metric name and span attribute: number of questions in a decision (TypeSafe System One) request.</summary>
+        public const string MetricDecisionQuestionCount = "conductor.decision.question_count";
+
+        /// <summary>Span attribute: the selected endpoint's API type, for example Anthropic or OllamaCloud.</summary>
+        public const string AttributeEndpointApiType = "conductor.endpoint.api_type";
+
+        /// <summary>Span attribute: the effective anthropic-version sent upstream.</summary>
+        public const string AttributeAnthropicVersion = "conductor.anthropic.version";
+
         #endregion
 
         #region Meters
@@ -225,6 +234,10 @@ namespace Conductor.Core.Telemetry
         /// <summary>Inference time-to-first-token in seconds. Never null.</summary>
         public static Histogram<double> InferenceFirstTokenDuration { get; } =
             _InferenceMeter.CreateHistogram<double>(MetricInferenceFirstTokenDuration, "s", "Time to first token or first response byte for streamed inference.");
+
+        /// <summary>Decision request question count histogram. Never null.</summary>
+        public static Histogram<long> DecisionQuestionCount { get; } =
+            _InferenceMeter.CreateHistogram<long>(MetricDecisionQuestionCount, "{question}", "Number of questions in proxied decision requests.");
 
         /// <summary>Inference upstream error counter. Never null.</summary>
         public static Counter<long> InferenceUpstreamErrors { get; } =

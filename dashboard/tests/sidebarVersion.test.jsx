@@ -32,9 +32,9 @@ describe('Sidebar version footer', () => {
     const last = nav.lastElementChild;
     expect(last.className).toBe('sidebar-version');
     expect(last.textContent).toBe('v' + pkg.version);
-    expect(last.textContent).toBe('v1.0.0');
+    expect(last.textContent).toBe('v1.1.0');
     expect(last.getAttribute('aria-label')).toBe('Conductor version ' + pkg.version);
-    expect(last.getAttribute('aria-label')).toBe('Conductor version 1.0.0');
+    expect(last.getAttribute('aria-label')).toBe('Conductor version 1.1.0');
     const hasAdminAccess = auth.isAdmin || auth.currentUser?.IsAdmin;
     const expected = NAV_SECTIONS.flatMap((s) => s.items)
       .filter((item) => itemVisible(item, { isAdmin: auth.isAdmin, hasAdminAccess }));

@@ -1,5 +1,6 @@
 import React from 'react';
 import { getOperationsForApiType } from '../utils/requestTemplates';
+import { getApiTypeBadgeClass, getProviderLabel, listClientFacingProviders } from '../utils/providers';
 
 /**
  * Configuration panel component for the API Explorer.
@@ -15,12 +16,13 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
     setOperationId,
     modelName,
     setModelName,
-    streamEnabled,
     setStreamEnabled,
     selectedCredentialId,
     setSelectedCredentialId,
-    operation
+    operation,
+    isStreaming
   } = explorer;
+  const apiTypeOptions = listClientFacingProviders();
 
   const operations = getOperationsForApiType(apiType);
   const activeVmrs = vmrs.filter(v => v.Active);
@@ -53,7 +55,7 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
                 <strong>VMR:</strong> {selectedVmr.Name}
               </span>
               <span className="config-item">
-                <span className={`api-type-badge ${apiType.toLowerCase()}`}>{apiType}</span>
+                <span className={getApiTypeBadgeClass(apiType)}>{getProviderLabel(apiType)}</span>
               </span>
               <span className="config-item">
                 <strong>Operation:</strong> {operation?.label || operationId}
@@ -65,7 +67,7 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
               )}
               {operation?.supportsStreaming && (
                 <span className="config-item">
-                  {streamEnabled ? 'Streaming' : 'Non-streaming'}
+                  {isStreaming ? 'Streaming' : 'Non-streaming'}
                 </span>
               )}
               {selectedCredential && (
@@ -100,7 +102,7 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
               <optgroup label="Active">
                 {activeVmrs.map(vmr => (
                   <option key={vmr.Id} value={vmr.Id}>
-                    {vmr.Name} ({vmr.ApiType})
+                    {vmr.Name} ({getProviderLabel(vmr.ApiType)})
                   </option>
                 ))}
               </optgroup>
@@ -109,7 +111,7 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
               <optgroup label="Inactive">
                 {inactiveVmrs.map(vmr => (
                   <option key={vmr.Id} value={vmr.Id}>
-                    {vmr.Name} ({vmr.ApiType})
+                    {vmr.Name} ({getProviderLabel(vmr.ApiType)})
                   </option>
                 ))}
               </optgroup>
@@ -118,7 +120,7 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
         </div>
 
         <div className="config-group api-type">
-          <label htmlFor="api-type" title="API format (auto-set from VMR)">
+          <label htmlFor="api-type" title="API the request is shaped for. Selecting a VMR sets this to the VMR's configured type; change it only to send a request the VMR will reject.">
             API Type
           </label>
           <select
@@ -126,10 +128,11 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
             value={apiType}
             onChange={handleApiTypeChange}
           >
-            <option value="OpenAI">OpenAI</option>
-            <option value="vLLM">vLLM</option>
-            <option value="Gemini">Gemini</option>
-            <option value="Ollama">Ollama</option>
+            {apiTypeOptions.map((provider) => (
+              <option key={provider.value} value={provider.value} title={provider.description}>
+                {provider.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -180,14 +183,18 @@ function ApiExplorerConfig({ explorer, vmrs, vmrDefinitions, vmrCredentials, loa
           <label className="toggle-switch">
             <input
               type="checkbox"
-              checked={streamEnabled}
+              aria-label="Streaming"
+              checked={isStreaming}
               onChange={(e) => setStreamEnabled(e.target.checked)}
-              disabled={!operation?.supportsStreaming}
+              disabled={!operation?.supportsStreaming || operation?.forceStream === true}
             />
             <span className="toggle-slider"></span>
           </label>
           {!operation?.supportsStreaming && (
             <span className="config-hint">Not supported</span>
+          )}
+          {operation?.forceStream && (
+            <span className="config-hint">Always streams</span>
           )}
         </div>
       </div>

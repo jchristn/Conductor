@@ -33,7 +33,7 @@ namespace Conductor.Server.Routing
             _App.Post<QosProfile>("/v1.0/qosprofiles", async (req) =>
             {
                 QosProfile profile = req.Data as QosProfile;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, profile?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, profile?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await qosProfileController.Create(tenantId, profile);
             },
@@ -51,7 +51,7 @@ namespace Conductor.Server.Routing
             _App.Post<QosProfile>("/v1.0/qosprofiles/validate", async (req) =>
             {
                 QosProfile profile = req.Data as QosProfile;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, profile?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, profile?.TenantId);
                 return await Task.FromResult(qosProfileController.Validate(tenantId, profile));
             },
             api => api
@@ -83,7 +83,7 @@ namespace Conductor.Server.Routing
             _App.Put<QosProfile>("/v1.0/qosprofiles/{id}", async (req) =>
             {
                 QosProfile profile = req.Data as QosProfile;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, profile?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, profile?.TenantId);
                 return await qosProfileController.Update(tenantId, req.Parameters["id"], profile);
             },
             api => api
@@ -101,7 +101,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/qosprofiles/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await qosProfileController.Delete(tenantId, req.Parameters["id"]);
                 return null;

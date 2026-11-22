@@ -19,7 +19,7 @@ namespace Conductor.Server.Routing
             _App.Post<QosTrafficClass>("/v1.0/qostrafficclasses", async (req) =>
             {
                 QosTrafficClass trafficClass = req.Data as QosTrafficClass;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, trafficClass?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, trafficClass?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await qosTrafficClassController.Create(tenantId, trafficClass);
             },
@@ -53,7 +53,7 @@ namespace Conductor.Server.Routing
             _App.Put<QosTrafficClass>("/v1.0/qostrafficclasses/{id}", async (req) =>
             {
                 QosTrafficClass trafficClass = req.Data as QosTrafficClass;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, trafficClass?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, trafficClass?.TenantId);
                 return await qosTrafficClassController.Update(tenantId, req.Parameters["id"], trafficClass);
             },
             api => api
@@ -71,7 +71,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/qostrafficclasses/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await qosTrafficClassController.Delete(tenantId, req.Parameters["id"]);
                 return null;

@@ -12,7 +12,19 @@ import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 import LoadModelModal from '../components/LoadModelModal';
 import LabelsTagsEditor, { labelsFromValue, labelsToPayload, tagsFromValue, tagsToPayload } from '../components/LabelsTagsEditor';
+import AnthropicConnectPanel from '../components/AnthropicConnectPanel';
 import { hubPath } from '../config/navConfig';
+import {
+  acceptsEndpointType,
+  formatProviderList,
+  getAcceptedEndpointTypes,
+  getApiTypeBadgeClass,
+  getProvider,
+  getProviderLabel,
+  hasCapability,
+  isClientFacing,
+  listClientFacingProviders
+} from '../utils/providers';
 
 const VMR_BASE_PATH_PREFIX = '/v1.0/api/';
 
@@ -96,8 +108,24 @@ function getReservationStateForVmr(vmr, reservations) {
   return { label: 'Open', tone: 'success', title: 'No active or upcoming reservation applies to this VMR.' };
 }
 
-function getDefaultExplainRequest(apiType) {
+export function getDefaultExplainRequest(apiType) {
   switch (apiType) {
+    case 'Anthropic':
+      return {
+        Method: 'POST',
+        RelativePath: '/v1/messages',
+        SourceIp: '127.0.0.1',
+        HeadersJson: '{\n  "anthropic-version": "2023-06-01"\n}',
+        Body: '{\n  "model": "claude-opus-5-5",\n  "max_tokens": 1024,\n  "messages": [{ "role": "user", "content": "hello" }]\n}'
+      };
+    case 'TypeSafe':
+      return {
+        Method: 'POST',
+        RelativePath: '/v1/systemone',
+        SourceIp: '127.0.0.1',
+        HeadersJson: '{}',
+        Body: '{\n  "model": "jev-latest",\n  "state": "hello",\n  "questions": {\n    "is_greeting": { "type": "noul", "instructions": "Is this a greeting?" }\n  }\n}'
+      };
     case 'Gemini':
       return {
         Method: 'POST',
@@ -228,6 +256,7 @@ function VirtualModelRunners() {
   const [explainLoading, setExplainLoading] = useState(false);
   const [routingExplanation, setRoutingExplanation] = useState(null);
   const [explainRequest, setExplainRequest] = useState(getDefaultExplainRequest('OpenAI'));
+  const [showConnect, setShowConnect] = useState(false);
   const [formData, setFormData] = useState({
     TenantId: '',
     Name: '',
@@ -248,6 +277,7 @@ function VirtualModelRunners() {
     TimeoutMs: 300000,
     AllowEmbeddings: true,
     AllowCompletions: true,
+    AllowDecisions: true,
     AllowModelManagement: false,
     StrictMode: false,
     RequestHistoryEnabled: true,
@@ -328,6 +358,7 @@ function VirtualModelRunners() {
       TimeoutMs: 300000,
       AllowEmbeddings: true,
       AllowCompletions: true,
+      AllowDecisions: true,
       AllowModelManagement: false,
       StrictMode: false,
       RequestHistoryEnabled: true,
@@ -366,6 +397,7 @@ function VirtualModelRunners() {
       TimeoutMs: vmr.TimeoutMs || 300000,
       AllowEmbeddings: vmr.AllowEmbeddings !== false,
       AllowCompletions: vmr.AllowCompletions !== false,
+      AllowDecisions: vmr.AllowDecisions !== false,
       AllowModelManagement: vmr.AllowModelManagement === true,
       StrictMode: vmr.StrictMode === true,
       RequestHistoryEnabled: vmr.RequestHistoryEnabled === true,
@@ -404,6 +436,7 @@ function VirtualModelRunners() {
       TimeoutMs: vmr.TimeoutMs || 300000,
       AllowEmbeddings: vmr.AllowEmbeddings !== false,
       AllowCompletions: vmr.AllowCompletions !== false,
+      AllowDecisions: vmr.AllowDecisions !== false,
       AllowModelManagement: vmr.AllowModelManagement === true,
       StrictMode: vmr.StrictMode === true,
       RequestHistoryEnabled: vmr.RequestHistoryEnabled === true,
@@ -432,6 +465,13 @@ function VirtualModelRunners() {
     setSelectedVmr(vmr);
     setShowLoadModel(true);
   };
+
+  const handleOpenConnect = (vmr) => {
+    setSelectedVmr(vmr);
+    setShowConnect(true);
+  };
+
+  const getVmrBaseUrl = (vmr) => `${serverUrl}${(vmr?.BasePath || '').replace(/\/+$/, '')}`;
 
   const handleViewReservations = (vmr) => {
     navigate(hubPath('runners', 'reservations', { vmrId: vmr.Id }));
@@ -496,6 +536,7 @@ function VirtualModelRunners() {
       TimeoutMs: parseInt(formData.TimeoutMs),
       AllowEmbeddings: formData.AllowEmbeddings,
       AllowCompletions: formData.AllowCompletions,
+      AllowDecisions: formData.AllowDecisions,
       AllowModelManagement: formData.AllowModelManagement,
       StrictMode: formData.StrictMode,
       RequestHistoryEnabled: formData.RequestHistoryEnabled,
@@ -829,8 +870,14 @@ function VirtualModelRunners() {
     {
       key: 'ApiType',
       label: 'API Type',
-      tooltip: 'API format exposed by this VMR (OpenAI, vLLM, Gemini, or Ollama)',
-      width: '100px'
+      tooltip: 'API that clients call on this VMR. It decides which endpoint types can be attached.',
+      width: '120px',
+      render: (item) => (
+        <span className={getApiTypeBadgeClass(item.ApiType)} title={getProvider(item.ApiType)?.description || ''}>
+          {getProviderLabel(item.ApiType)}
+        </span>
+      ),
+      filterValue: (item) => `${item.ApiType || ''} ${getProviderLabel(item.ApiType)}`
     },
     {
       key: 'LoadBalancingMode',
@@ -925,6 +972,9 @@ function VirtualModelRunners() {
               { label: 'Runtime Stats', onClick: () => handleViewRuntimeStats(item) },
               { label: 'Effective Config', onClick: () => handleViewEffectiveConfiguration(item) },
               { label: 'Explain Routing', onClick: () => handleOpenExplainRouting(item) },
+              ...(item.ApiType === 'Anthropic' ? [
+                { label: 'Connect a Client', onClick: () => handleOpenConnect(item) }
+              ] : []),
               { label: 'Reservations', onClick: () => handleViewReservations(item) },
               { label: 'Load Model', onClick: () => handleOpenLoadModel(item) },
               { label: 'Edit', onClick: () => handleEdit(item) },
@@ -948,7 +998,7 @@ function VirtualModelRunners() {
       <div className="view-header">
         <div>
           <h1>Virtual Model Runners</h1>
-          <p className="view-subtitle">Configure virtual model runners that expose model configurations to the network via OpenAI, vLLM, Gemini, or Ollama compatible APIs.</p>
+          <p className="view-subtitle">Configure virtual model runners that expose model configurations to the network via the {formatProviderList({ clientFacingOnly: true })} APIs.</p>
         </div>
         <div className="view-actions">
           <button className="btn-icon" onClick={fetchData} title="Refresh">
@@ -1054,17 +1104,29 @@ function VirtualModelRunners() {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="apiType" title="API format exposed by this VMR (OpenAI, vLLM, Gemini, or Ollama)">API Type</label>
+              <label htmlFor="apiType" title="API that clients call on this VMR. Only client-facing types are listed; endpoint-only types (Ollama Cloud, OpenAI-compatible, Ollaya) attach to the VMR type that speaks their API.">API Type</label>
               <select
                 id="apiType"
                 value={formData.ApiType}
                 onChange={(e) => setFormData({ ...formData, ApiType: e.target.value })}
+                aria-describedby="vmrApiTypeHelp"
               >
-                <option value="OpenAI">OpenAI</option>
-                <option value="vLLM">vLLM</option>
-                <option value="Gemini">Gemini</option>
-                <option value="Ollama">Ollama</option>
+                {!isClientFacing(formData.ApiType) && formData.ApiType && (
+                  <option value={formData.ApiType} disabled>
+                    {getProviderLabel(formData.ApiType)} (not client-facing)
+                  </option>
+                )}
+                {listClientFacingProviders().map((provider) => (
+                  <option key={provider.value} value={provider.value} title={provider.description}>
+                    {provider.label}
+                  </option>
+                ))}
               </select>
+              <small id="vmrApiTypeHelp" className="form-help">
+                {isClientFacing(formData.ApiType)
+                  ? `Accepts ${getAcceptedEndpointTypes(formData.ApiType).map(getProviderLabel).join(', ')} endpoints.`
+                  : `${getProviderLabel(formData.ApiType)} is endpoint-only and cannot be a VMR type. Choose a client-facing type.`}
+              </small>
             </div>
             <div className="form-group">
               <label htmlFor="timeoutMs" title="How long Conductor waits for the model to start responding: model load, prompt evaluation and, for non-streaming requests, the whole generation. Streamed responses are not limited after the first token. The smaller of this and the endpoint's value applies.">Time to first byte (ms)</label>
@@ -1277,6 +1339,7 @@ function VirtualModelRunners() {
             )}
           </div>
 
+          {hasCapability(formData.ApiType, 'keepWarm') && (
           <div className="form-group">
             <div className="checkbox-group">
               <label title="Periodically check that this VMR's models are loaded on its eligible Ollama endpoints, and load any that are not, so clients do not wait for a cold load. A warm-up load uses one of the endpoint's Max Parallel Requests slots; a busy endpoint is retried at the next interval.">
@@ -1338,34 +1401,65 @@ function VirtualModelRunners() {
                     />
                   </div>
                 </div>
-                <small className="form-help">Applies to Ollama endpoints only. Status and a Run now action are in Effective Config.</small>
+                <small className="form-help">Applies to self-hosted Ollama endpoints only, not Ollama Cloud. Status and a Run now action are in Effective Config.</small>
               </>
             )}
           </div>
+          )}
 
           <div className="form-group">
-            <label title="Backend model runner endpoints that will handle requests for this VMR">Model Runner Endpoints</label>
-            <div className="endpoint-list">
-              {!formData.TenantId ? (
-                <p className="no-items">Select a tenant first.</p>
-              ) : endpoints.filter(e => e.TenantId === formData.TenantId).length === 0 ? (
-                <p className="no-items">No endpoints available for this tenant.</p>
-              ) : (
-                endpoints.filter(e => e.TenantId === formData.TenantId).map((endpoint) => (
-                  <label key={endpoint.Id} className="endpoint-item">
-                    <input
-                      type="checkbox"
-                      checked={(formData.ModelRunnerEndpointIds || []).includes(endpoint.Id)}
-                      onChange={() => handleEndpointToggle(endpoint.Id)}
-                    />
-                    <span className="endpoint-name">{endpoint.Name}</span>
-                    <span className="endpoint-url">
-                      {endpoint.UseSsl ? 'https' : 'http'}://{endpoint.Hostname}:{endpoint.Port}
-                    </span>
-                  </label>
-                ))
-              )}
-            </div>
+            <label title="Backend model runner endpoints that will handle requests for this VMR. Only endpoint types this VMR type accepts are listed.">Model Runner Endpoints</label>
+            {(() => {
+              const tenantEndpoints = endpoints.filter((e) => e.TenantId === formData.TenantId);
+              const selectedIds = formData.ModelRunnerEndpointIds || [];
+              const visibleEndpoints = tenantEndpoints.filter((e) =>
+                acceptsEndpointType(formData.ApiType, e.ApiType) || selectedIds.includes(e.Id));
+              const hiddenCount = tenantEndpoints.length - visibleEndpoints.length;
+              const accepted = getAcceptedEndpointTypes(formData.ApiType).map(getProviderLabel).join(', ');
+              return (
+                <>
+                  <div className="endpoint-list">
+                    {!formData.TenantId ? (
+                      <p className="no-items">Select a tenant first.</p>
+                    ) : visibleEndpoints.length === 0 ? (
+                      <p className="no-items">
+                        {tenantEndpoints.length === 0
+                          ? 'No endpoints available for this tenant.'
+                          : `No ${accepted || 'compatible'} endpoints are available for this tenant.`}
+                      </p>
+                    ) : (
+                      visibleEndpoints.map((endpoint) => {
+                        const compatible = acceptsEndpointType(formData.ApiType, endpoint.ApiType);
+                        return (
+                          <label key={endpoint.Id} className="endpoint-item">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(endpoint.Id)}
+                              onChange={() => handleEndpointToggle(endpoint.Id)}
+                            />
+                            <span className="endpoint-name">{endpoint.Name}</span>
+                            <span className={getApiTypeBadgeClass(endpoint.ApiType)}>{getProviderLabel(endpoint.ApiType)}</span>
+                            <span className="endpoint-url">
+                              {endpoint.UseSsl ? 'https' : 'http'}://{endpoint.Hostname}:{endpoint.Port}
+                            </span>
+                            {!compatible && (
+                              <span className="error-text" title="Saving is rejected with EndpointApiTypeMismatch until this endpoint is removed or the VMR type changes.">
+                                Not accepted by {getProviderLabel(formData.ApiType)}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                  {formData.TenantId && hiddenCount > 0 && (
+                    <p className="form-help">
+                      {hiddenCount} endpoint{hiddenCount === 1 ? '' : 's'} hidden because {getProviderLabel(formData.ApiType)} VMRs accept only {accepted} endpoints.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           <div className="detail-section">
@@ -1469,6 +1563,10 @@ function VirtualModelRunners() {
             />
           </div>
 
+          {formData.ApiType === 'Anthropic' && !basePathValidationError && (
+            <AnthropicConnectPanel baseUrl={`${serverUrl}${normalizeVmrBasePath(formData.BasePath).replace(/\/+$/, '')}`} />
+          )}
+
           <LabelsTagsEditor
             labels={formData.Labels}
             tags={formData.Tags}
@@ -1500,7 +1598,18 @@ function VirtualModelRunners() {
           </div>
 
           <div className="form-group checkbox-group">
-            <label title="Enable pull, push, and delete model operations (Ollama API only in the current implementation)">
+            <label title="Allow decision requests (TypeSafe System One POST /v1/systemone). Only TypeSafe VMRs serve decisions; turning this off on a TypeSafe VMR blocks every decision request and is a validation error.">
+              <input
+                type="checkbox"
+                checked={formData.AllowDecisions}
+                onChange={(e) => setFormData({ ...formData, AllowDecisions: e.target.checked })}
+              />
+              Allow Decisions
+            </label>
+          </div>
+
+          <div className="form-group checkbox-group">
+            <label title="Enable pull, push, and delete model operations. Only Ollama VMRs with self-hosted Ollama endpoints support this; Ollama Cloud endpoints reject it.">
               <input
                 type="checkbox"
                 checked={formData.AllowModelManagement}
@@ -1790,7 +1899,7 @@ function VirtualModelRunners() {
               <div className="detail-section">
                 <div className="detail-grid">
                   <div className="detail-item"><label>Base Path</label><code>{effectiveConfig.BasePath}</code></div>
-                  <div className="detail-item"><label>API Type</label><span>{effectiveConfig.ApiType}</span></div>
+                  <div className="detail-item"><label>API Type</label><span className={getApiTypeBadgeClass(effectiveConfig.ApiType)}>{getProviderLabel(effectiveConfig.ApiType)}</span></div>
                   <div className="detail-item"><label>Load Balancing</label><span>{effectiveConfig.Policy?.Name || effectiveConfig.LoadBalancingMode}</span></div>
                   <div className="detail-item"><label>Model Access</label><span>{effectiveConfig.ModelAccessPolicy?.PolicyName || effectiveConfig.ModelAccessPolicy?.PolicyId || 'None'}</span></div>
                   <div className="detail-item"><label>Access Mode</label><span>{effectiveConfig.ModelAccessPolicy?.Mode || 'Disabled'}</span></div>
@@ -1800,6 +1909,10 @@ function VirtualModelRunners() {
                   <div className="detail-item"><label title="This VMR's time-to-first-byte limit. Each endpoint below shows the limit actually applied.">Time to First Byte</label><span>{effectiveConfig.RequestTimeoutMs != null ? `${Number(effectiveConfig.RequestTimeoutMs).toLocaleString()} ms` : 'Unknown'}</span></div>
                 </div>
               </div>
+
+              {(effectiveConfig.ApiType || selectedVmr?.ApiType) === 'Anthropic' && (
+                <AnthropicConnectPanel baseUrl={`${serverUrl}${(effectiveConfig.BasePath || selectedVmr?.BasePath || '').replace(/\/+$/, '')}`} />
+              )}
 
               <div className="detail-section">
                 <h3>Reservations</h3>
@@ -1824,6 +1937,9 @@ function VirtualModelRunners() {
                 <div className="summary-badge-row">
                   <span className={`service-state-badge ${effectiveConfig.Permissions?.AllowEmbeddings ? 'success' : 'neutral'}`}>Embeddings {effectiveConfig.Permissions?.AllowEmbeddings ? 'On' : 'Off'}</span>
                   <span className={`service-state-badge ${effectiveConfig.Permissions?.AllowCompletions ? 'success' : 'neutral'}`}>Completions {effectiveConfig.Permissions?.AllowCompletions ? 'On' : 'Off'}</span>
+                  {effectiveConfig.Permissions?.AllowDecisions !== undefined && (
+                    <span className={`service-state-badge ${effectiveConfig.Permissions.AllowDecisions ? 'success' : 'neutral'}`}>Decisions {effectiveConfig.Permissions.AllowDecisions ? 'On' : 'Off'}</span>
+                  )}
                   <span className={`service-state-badge ${effectiveConfig.Permissions?.AllowModelManagement ? 'success' : 'neutral'}`}>Model Mgmt {effectiveConfig.Permissions?.AllowModelManagement ? 'On' : 'Off'}</span>
                 </div>
               </div>
@@ -1922,6 +2038,15 @@ function VirtualModelRunners() {
           ) : (
             <p className="no-items">No effective configuration available.</p>
           )}
+        </Modal>
+
+        <Modal
+          isOpen={showConnect}
+          onClose={() => setShowConnect(false)}
+          title={`Connect a Client: ${selectedVmr?.Name || 'VMR'}`}
+          wide
+        >
+          {selectedVmr && <AnthropicConnectPanel baseUrl={getVmrBaseUrl(selectedVmr)} />}
         </Modal>
 
         <Modal

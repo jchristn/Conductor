@@ -247,9 +247,14 @@ namespace Conductor.Core.Database.Sqlite
             await EnsureColumnAsync("virtualmodelrunners", "keepwarm", TableQueries.AddKeepWarmColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroupids", TableQueries.AddEndpointGroupIdsColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "allowdecisions", "ALTER TABLE virtualmodelrunners ADD COLUMN allowdecisions INTEGER NOT NULL DEFAULT 1;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modeldefinitions", "supportsdecisions", "ALTER TABLE modeldefinitions ADD COLUMN supportsdecisions INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
 
             await EnsureColumnAsync("modelrunnerendpoints", "rigmonitor", TableQueries.AddRigMonitorColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("modelrunnerendpoints", "servicestate", "ALTER TABLE modelrunnerendpoints ADD COLUMN servicestate INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "healthcheckenabled", "ALTER TABLE modelrunnerendpoints ADD COLUMN healthcheckenabled INTEGER NOT NULL DEFAULT 1;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "healthcheckrequestbody", "ALTER TABLE modelrunnerendpoints ADD COLUMN healthcheckrequestbody TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "anthropicversion", "ALTER TABLE modelrunnerendpoints ADD COLUMN anthropicversion TEXT;", token).ConfigureAwait(false);
 
             await EnsureColumnAsync("requesthistory", "requesttransfertype", TableQueries.AddRequestTransferTypeColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "responsetransfertype", TableQueries.AddResponseTransferTypeColumn, token).ConfigureAwait(false);
@@ -306,6 +311,9 @@ namespace Conductor.Core.Database.Sqlite
             await EnsureColumnAsync("requesthistory", "dominantstagekind", "ALTER TABLE requesthistory ADD COLUMN dominantstagekind TEXT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "dominantstagedurationms", "ALTER TABLE requesthistory ADD COLUMN dominantstagedurationms INTEGER;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "analyticsfailurecode", "ALTER TABLE requesthistory ADD COLUMN analyticsfailurecode TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "cachecreationinputtokens", "ALTER TABLE requesthistory ADD COLUMN cachecreationinputtokens INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "cachereadinputtokens", "ALTER TABLE requesthistory ADD COLUMN cachereadinputtokens INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "decisionquestioncount", "ALTER TABLE requesthistory ADD COLUMN decisionquestioncount INTEGER;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationguid", "ALTER TABLE requestanalyticsevents ADD COLUMN reservationguid TEXT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationname", "ALTER TABLE requestanalyticsevents ADD COLUMN reservationname TEXT;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationdecision", "ALTER TABLE requestanalyticsevents ADD COLUMN reservationdecision TEXT;", token).ConfigureAwait(false);

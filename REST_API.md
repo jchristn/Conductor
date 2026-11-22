@@ -11,14 +11,18 @@ The management API is versioned under `/v1.0`.
 Examples in this document assume:
 
 ```text
-http://localhost:9000
+http://127.0.0.1:9000
 ```
 
 So a full resource URL looks like:
 
 ```text
-http://localhost:9000/v1.0/virtualmodelrunners
+http://127.0.0.1:9000/v1.0/virtualmodelrunners
 ```
+
+Examples use `127.0.0.1` rather than `localhost`, because some clients (notably on Windows) try IPv6 `::1` first for `localhost` and stall before falling back to IPv4. With the default `Webserver.Hostname` of `localhost`, the server listens on `127.0.0.1`.
+
+Examples that send `YOUR_TOKEN` work with the "API Key" the server prints on first run. That token belongs to a global-admin user in the first-run tenant `default`. The examples name that tenant explicitly, although a global admin's writes default to its own tenant (see [Tenant scoping rules](#tenant-scoping-rules)).
 
 ## Content type and enum format
 
@@ -26,6 +30,9 @@ http://localhost:9000/v1.0/virtualmodelrunners
 - Enum values are serialized as strings such as `OpenAI`, `LeastRecentlyUsed`, or `FailClosed`.
 - Successful deletes return HTTP `204 No Content`.
 - Successful creates generally return HTTP `201 Created`.
+- An enum value that is not valid returns `400` with a message that lists the valid values, for example `The value of 'ApiType' is not valid. Valid values: Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe, Ollaya, OllamaCloud, OpenAICompatible.`
+- Responses do not echo request headers. Earlier versions returned `Host`, `Accept`, `Accept-Language`, and `Accept-Charset` as response headers; v1.1.0 removes them.
+- Responses omit properties whose value is `null`. A field that this document shows as `null`, or describes as null when unset, is absent from the response JSON rather than present with a `null` value. Clients should treat a missing property as `null`. Request bodies may send `null` or leave the property out.
 
 ## Authentication
 
@@ -80,6 +87,15 @@ Authorization: Bearer your-admin-api-key
 
 For bearer-token-authenticated proxied Gemini requests, Conductor also checks `?key=` if no bearer token is present. This is intended to support Gemini-style clients.
 
+### `x-api-key` on Anthropic virtual model runners
+
+On proxied requests to a VMR whose `ApiType` is `Anthropic`, Conductor also accepts a normal Conductor credential (bearer token) in the `x-api-key` header, because that is where Anthropic clients such as Claude Code and the Anthropic SDKs send their key. The `Authorization` header is checked first, then `x-api-key`, then `?key=`. The value is looked up exactly like a bearer token, so it must be a Conductor credential, not an Anthropic key.
+
+- Other VMR types never accept `x-api-key` as a credential. A request to an OpenAI VMR with only `x-api-key` gets the generic `401`.
+- Inbound `authorization`, `x-api-key`, and `anthropic-api-key` headers are never forwarded upstream for any API family. Conductor authenticates to the upstream with the endpoint's own key.
+- The administrator header is `x-admin-apikey`, so this does not collide with administrator authentication.
+- When authentication fails on an Anthropic VMR, the `401` uses the Anthropic error shape with `authentication_error` (see [Anthropic](#anthropic)).
+
 ## Authorization levels
 
 Conductor's route permissions are split across four levels:
@@ -112,10 +128,14 @@ Most resources are tenant-scoped:
 
 Rules:
 
-- Normal tenant users are always scoped to their own tenant.
-- Global admin users and system administrators can work across tenants.
-- On create routes, cross-tenant callers should supply `TenantId` in the request body.
-- On read, update, delete, list, and health routes for tenant-scoped resources, cross-tenant callers can use `?tenantId=<tenant-id>`.
+- Normal tenant users, including tenant admins, are always scoped to their own tenant. A `TenantId` in their request body or a `?tenantId=` query is ignored.
+- Global admin users and system administrators can work across tenants. They name the tenant with `TenantId` in the request body on create, validate, and update routes, and with `?tenantId=<tenant-id>` on read, delete, list, health, and action routes (such as `drain`, `load-model`, and `apikey`).
+- When a global admin user leaves the tenant out of a write (create, update, delete, validate, `drain`, `resume`, `quarantine`, endpoint and VMR `load-model`, `keep-warm/run`, `runtime-stats/reset`, `runtime-backoff/clear`, and Ollama model `pull` and `delete`), the request acts on the user's own tenant. The first-run "API Key" is a global-admin credential in tenant `default`, so its writes default to `default`.
+- A system administrator (admin API key or admin headers) has no tenant. A write without a tenant returns `400` with `TenantId is required: system administrator credentials have no tenant, so supply TenantId in the request body (create and update) or the tenantId query parameter (delete and other routes).`
+- Reads are unchanged: a global admin or system administrator that leaves the tenant out of a read or list gets every tenant's resources.
+- Analytics saved reports are the exception: a report created without a tenant is a global report. Request history deletes also follow the read rule, so a cross-tenant caller that leaves the tenant out can delete entries in any tenant.
+- Proxied requests follow a stricter rule: a credential can call only VMRs in its own tenant, even when it belongs to a global admin. See [Proxied Virtual Model Runner APIs](#proxied-virtual-model-runner-apis).
+- The tenant created on first run is `default`. The examples in this document use it.
 
 Example:
 
@@ -139,11 +159,12 @@ Typical list response shape:
 ```json
 {
   "Data": [],
-  "ContinuationToken": null,
   "TotalCount": 0,
   "HasMore": false
 }
 ```
+
+`ContinuationToken` is present only when there is another page (`HasMore` is `true`).
 
 ## Common error behavior
 
@@ -165,9 +186,16 @@ Typical response codes:
 
 The dashboard client expects error payloads to include `Message` or `message`, but exact error bodies may vary by route.
 
+Proxied requests add two rules:
+
+- A path outside the VMR type's namespace returns `404` without being forwarded. See [Request classification by VMR type](#request-classification-by-vmr-type).
+- Errors that Conductor itself generates carry Conductor's reason code in the `X-Conductor-Error-Code` response header on every API family. On an `Anthropic` VMR they also use the Anthropic error shape. See [Proxy error codes](#proxy-error-codes) and [Anthropic](#anthropic).
+
+Route-level authorization failures, such as a standard user calling a `TenantAdmin` route, return `401`, the same as a missing credential.
+
 ## Core resource shapes
 
-These are the primary JSON resources used across the API.
+These are the primary JSON resources used across the API. The shapes list every field, including fields that can be `null`. Responses leave out `null` fields (see [Content type and enum format](#content-type-and-enum-format)), so a field shown as `null` here is absent from a response until it has a value.
 
 ### Tenant
 
@@ -193,7 +221,7 @@ These are the primary JSON resources used across the API.
   "FirstName": "Admin",           // required
   "LastName": "User",             // required
   "Email": "admin@conductor",     // required
-  "Password": "password",         // required in create/update payloads
+  "Password": "password",         // write-only and never returned; required on create (an omitted or empty value returns 400); omit it on update to keep the stored one
   "Active": true,
   "IsAdmin": true,
   "IsTenantAdmin": true,
@@ -232,13 +260,16 @@ These are the primary JSON resources used across the API.
   "Name": "GPU Host A",                 // required
   "Hostname": "gpu-a.local",            // required
   "Port": 11434,
-  "ApiKey": null,
-  "ApiType": "Ollama",                  // Ollama, OpenAI, Gemini, vLLM
+  "ApiKey": "****cdef",                 // masked in every response; omitted when unset. See ApiKey handling
+  "ApiType": "Ollama",                  // Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe, Ollaya, OllamaCloud, OpenAICompatible
   "UseSsl": false,
+  "AnthropicVersion": null,             // Anthropic only; yyyy-MM-dd; null uses Settings.Anthropic.DefaultVersion; omitted from responses when null
   "TimeoutMs": 300000,                  // time to first byte; see Request timeouts. Default 300000, minimum 1000
   "Active": true,
+  "HealthCheckEnabled": true,           // false sends no probes and treats the endpoint as healthy; TypeSafe defaults to false
   "HealthCheckUrl": "/",
-  "HealthCheckMethod": "GET",
+  "HealthCheckMethod": "GET",           // GET, HEAD, POST
+  "HealthCheckRequestBody": null,       // sent as application/json when HealthCheckMethod is POST; required for POST; omitted from responses when null
   "HealthCheckIntervalMs": 5000,
   "HealthCheckTimeoutMs": 5000,
   "HealthCheckExpectedStatusCode": 200,
@@ -269,6 +300,44 @@ These are the primary JSON resources used across the API.
   "LastUpdateUtc": "2026-05-18T12:00:00Z"
 }
 ```
+
+`ApiType` values:
+
+| Value | Wire API | Upstream auth | Client-facing (usable as a VMR type) |
+| --- | --- | --- | --- |
+| `Ollama` | Ollama `/api/*` | `Authorization: Bearer` when a key is set | yes |
+| `OpenAI` | OpenAI `/v1/*` | `Authorization: Bearer` | yes |
+| `Gemini` | Gemini `/v1beta/*` | `x-goog-api-key` | yes |
+| `vLLM` | OpenAI `/v1/*` | `Authorization: Bearer` when a key is set | yes |
+| `Anthropic` | Anthropic `/v1/*` | `x-api-key` and `anthropic-version` | yes |
+| `TypeSafe` | TypeSafe System One `/v1/*` | `Authorization: Bearer` (key required) | yes |
+| `Ollaya` | TypeSafe System One `/v1/*` | `Authorization: Bearer` when a key is set | no |
+| `OllamaCloud` | Ollama `/api/*` | `Authorization: Bearer` (key required) | no |
+| `OpenAICompatible` | OpenAI `/v1/*` | `Authorization: Bearer` when a key is set | no |
+
+Type defaults: on create, the server fills fields that the request omits from the selected type. Nothing is inferred from the hostname. Fields the request sets are kept.
+
+| Type | Hostname, port, SSL | Health check | `HealthCheckUseAuth` | `HealthCheckEnabled` | `HealthCheckIntervalMs` |
+| --- | --- | --- | --- | --- | --- |
+| `Anthropic` | `api.anthropic.com`, 443, `true` | `GET /v1/models?limit=1` | `true` | `true` | 60000 |
+| `TypeSafe` | `api.typesafe.ai`, 443, `true` | `POST /v1/systemone` with the probe body below | `true` | `false` | 60000 |
+| `Ollaya` | `127.0.0.1`, port as supplied (required, `PortRequired`), `false` | `GET /v1/models` | `false` | `true` | 5000 |
+| `OllamaCloud` | `ollama.com`, 443, `true` | `GET /api/tags` | `true` | `true` | 60000 |
+| `OpenAICompatible` | `127.0.0.1`, port as supplied (required, `PortRequired`), `false` | `GET /v1/models` | `false` | `true` | 5000 |
+
+`Ollama`, `OpenAI`, `Gemini`, and `vLLM` keep the field defaults shown in the shape above. The TypeSafe health probe body asks one question, matching PolyPrompt's `TypeSafeClient` connectivity check:
+
+```json
+{"model":"jev-latest","state":"ping","questions":{"reachable":{"type":"noul","instructions":"Is this a test message?"}}}
+```
+
+#### ApiKey handling
+
+- Read, list, create, and update responses mask `ApiKey` as `****` followed by the last four characters (for example `****cdef`). A key of four characters or fewer is shown as `****`. When no key is set, `ApiKey` is omitted from the response.
+- On create and update, an omitted or `null` `ApiKey` keeps the stored key, and so does the masked value that a read returned. An empty string (`""`) clears the key. Any other value replaces it. Before v1.1.0, omitting `ApiKey` on update cleared the key.
+- `GET /v1.0/modelrunnerendpoints/{id}/apikey` returns the full value and writes an audit log line. See [Reveal an endpoint API key](#reveal-an-endpoint-api-key).
+- Backup export and restore keep the real, unmasked keys, so backup files are sensitive.
+- The MCP server masks keys in its outputs the same way.
 
 ### Endpoint Group
 
@@ -304,6 +373,7 @@ These are the primary JSON resources used across the API.
   "ContextWindowSize": 8192,
   "SupportsEmbeddings": false,
   "SupportsCompletions": true,
+  "SupportsDecisions": false,     // answers TypeSafe System One decision requests; default false
   "Active": true,
   "Labels": [],
   "Tags": {},
@@ -415,7 +485,18 @@ Supported enum values:
 - `Effect`: `Allow`, `Deny`
 - `SubjectType`: `Credential`, `CredentialLabel`, `User`, `UserLabel`, `Tenant`, `Any`
 - `ResourceType`: `ModelDefinition`, `ModelName`, `ModelLabel`, `VirtualModelRunner`, `Any`
-- `Actions`: `Completions`, `Embeddings`, `ListModels`, `ShowModel`, `LoadModel`, `UnloadModel`, `ModelManagement`
+- `Actions`: `Completions`, `Embeddings`, `ListModels`, `ShowModel`, `LoadModel`, `UnloadModel`, `ModelManagement`, `Decisions`
+
+Proxied request types map to actions as follows. `Decisions` is separate: a rule that allows `Completions` does not allow decision requests.
+
+| Action | Request types |
+| --- | --- |
+| `Completions` | OpenAI chat and completions, Gemini generate and stream, Ollama generate and chat, `AnthropicMessages`, `AnthropicCountTokens` |
+| `Embeddings` | OpenAI, Gemini, and Ollama embeddings |
+| `ListModels` | OpenAI, Gemini, Ollama tags and running models, `AnthropicListModels`, `TypeSafeListModels` |
+| `ShowModel` | `OllamaShowModelInfo`, `AnthropicGetModel` |
+| `Decisions` | `TypeSafeDecide` |
+| `LoadModel`, `UnloadModel` | model load routes, Ollama pull and delete |
 
 Selector objects support simple keys such as `label`, `labels`, `value`, `equals`, `prefix`, and `contains`.
 
@@ -428,7 +509,7 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
   "Name": "gpu-chat",                     // required
   "Hostname": null,
   "BasePath": "/v1.0/api/gpu-chat/",      // required; exactly one segment after /v1.0/api/
-  "ApiType": "OpenAI",
+  "ApiType": "OpenAI",                    // client-facing only: Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe
   "LoadBalancingMode": "RoundRobin",      // RoundRobin, Random, FirstAvailable, LeastRecentlyUsed, Adaptive
   "LoadBalancingPolicyId": "lbp_xxx",
   "ModelAccessPolicyId": "map_xxx",
@@ -461,6 +542,7 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
   "AllowEmbeddings": true,
   "AllowCompletions": true,
   "AllowModelManagement": false,
+  "AllowDecisions": true,                 // decision requests; must be true on a TypeSafe VMR
   "StrictMode": false,
   "SessionAffinityMode": "None",          // None, SourceIP, ApiKey, Header
   "SessionAffinityHeader": null,
@@ -482,6 +564,19 @@ Selector objects support simple keys such as `label`, `labels`, `value`, `equals
   "LastUpdateUtc": "2026-05-18T12:00:00Z"
 }
 ```
+
+A VMR's `ApiType` is the API its clients call, and it decides which endpoint types it may use:
+
+| VMR `ApiType` | Accepted endpoint `ApiType` |
+| --- | --- |
+| `Ollama` | `Ollama`, `OllamaCloud` |
+| `OpenAI` | `OpenAI`, `OpenAICompatible`, `vLLM` |
+| `vLLM` | `vLLM` |
+| `Gemini` | `Gemini` |
+| `Anthropic` | `Anthropic` |
+| `TypeSafe` | `TypeSafe`, `Ollaya` |
+
+`Ollaya`, `OllamaCloud`, and `OpenAICompatible` are endpoint-only types and are rejected as a VMR type (`VmrApiTypeNotClientFacing`). An attached endpoint outside the table is rejected with `EndpointApiTypeMismatch`. Both rules apply through REST, MCP, and backup restore.
 
 ### Administrator response
 
@@ -597,17 +692,20 @@ Auth level: `AdminOnly`
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/v1.0/administrators` | List administrators. Query: `maxResults`, `continuationToken`, `activeFilter`. |
-| `POST` | `/v1.0/administrators` | Create administrator. |
+| `POST` | `/v1.0/administrators` | Create administrator. `Email` and `Password` are required; a body without either returns `400`. |
 | `GET` | `/v1.0/administrators/{id}` | Read administrator. |
 | `PUT` | `/v1.0/administrators/{id}` | Update administrator. |
 | `DELETE` | `/v1.0/administrators/{id}` | Delete administrator. Cannot delete the currently authenticated administrator account. |
 
 ### Tenants
 
-Auth:
+Every tenant route requires authentication. Before v1.1.0, all of them except purge accepted requests without credentials.
 
-- `GET /v1.0/tenants/{id}`: `GlobalAdmin`
-- all other tenant routes: `AdminOnly`
+- `GET /v1.0/tenants`: `Authenticated`. System administrators and global admin users see every tenant. Other users see only their own tenant, and the paging and filter parameters do not apply to them.
+- `GET /v1.0/tenants/{id}`: `GlobalAdmin`.
+- `POST /v1.0/tenants`, `PUT /v1.0/tenants/{id}`, `DELETE /v1.0/tenants/{id}`, and `POST /v1.0/tenants/{id}/purge`: `AdminOnly` (a system administrator, through the admin API key or the admin headers).
+
+A request without a credential, or with a credential below the route's level, gets `401`.
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -615,8 +713,8 @@ Auth:
 | `POST` | `/v1.0/tenants` | Create tenant. |
 | `GET` | `/v1.0/tenants/{id}` | Read tenant. |
 | `PUT` | `/v1.0/tenants/{id}` | Update tenant. |
-| `DELETE` | `/v1.0/tenants/{id}` | Delete tenant and all subordinate tenant data (now including QoS profiles and traffic classes). |
-| `POST` | `/v1.0/tenants/{id}/purge` | Purge (nuke) a tenant and all of its data; returns an itemized `TenantPurgeReport`. **System-admin only** (returns `403` for tenant-scoped callers). The body must echo the id as `{"ConfirmTenantId":"<id>"}` (mismatch → `400`); the reserved `default` tenant cannot be purged. |
+| `DELETE` | `/v1.0/tenants/{id}` | Delete tenant and all subordinate tenant data (including QoS profiles and traffic classes). Request history is deleted first: entries, analytics events, and detail files for every VMR in the tenant. Returns `204`. |
+| `POST` | `/v1.0/tenants/{id}/purge` | Purge (nuke) a tenant and all of its data; returns an itemized `TenantPurgeReport`. **System-admin only** (other callers get `401`). The body must echo the id as `{"ConfirmTenantId":"<id>"}` (mismatch → `400`); the reserved `default` tenant cannot be purged. |
 
 ### Users
 
@@ -625,9 +723,9 @@ Auth level: `TenantAdmin`
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/v1.0/users` | List users. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId` for cross-tenant callers. |
-| `POST` | `/v1.0/users` | Create user. Cross-tenant callers supply `TenantId` in the body. |
-| `GET` | `/v1.0/users/{id}` | Read user. Optional `tenantId` query for cross-tenant callers. |
-| `PUT` | `/v1.0/users/{id}` | Update user. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/users` | Create user. Cross-tenant callers supply `TenantId` in the body. `Password` is required: a body without a non-empty `Password` returns `400` (`Password is required when creating a user: ...`). The response does not contain `Password`. |
+| `GET` | `/v1.0/users/{id}` | Read user. Optional `tenantId` query for cross-tenant callers. The response does not contain `Password`. |
+| `PUT` | `/v1.0/users/{id}` | Update user. Cross-tenant callers supply `TenantId` in the body. An omitted `Password` keeps the stored one. The response does not contain `Password`. |
 | `DELETE` | `/v1.0/users/{id}` | Delete user. Optional `tenantId` query for cross-tenant callers. Also deletes associated credentials. |
 
 ### Credentials
@@ -637,10 +735,21 @@ Auth level: `TenantAdmin`
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/v1.0/credentials` | List credentials. Query: `maxResults`, `continuationToken`, `activeFilter`, optional `tenantId`. |
-| `POST` | `/v1.0/credentials` | Create credential. Cross-tenant callers supply `TenantId` and `UserId` in the body. `BearerToken` is generated if omitted. |
+| `POST` | `/v1.0/credentials` | Create credential. Cross-tenant callers supply `TenantId` in the body. `UserId` names the owner; without it the credential belongs to the caller. `BearerToken` is generated if omitted. See [Credential owner](#credential-owner). |
 | `GET` | `/v1.0/credentials/{id}` | Read credential. Optional `tenantId` query. |
 | `PUT` | `/v1.0/credentials/{id}` | Update credential. Optional new `BearerToken` must be unique. |
 | `DELETE` | `/v1.0/credentials/{id}` | Delete credential. Optional `tenantId` query. |
+
+User responses (create, read, list, update) never contain `Password`. Passwords are still stored as sent, so protect the database and its backups.
+
+#### Credential owner
+
+On `POST /v1.0/credentials`, the owner is resolved like this:
+
+- `UserId` set: the credential belongs to that user, who must exist in the target tenant. Otherwise the request returns `400` with `UserId '<id>' was not found in tenant '<tenant>'. A credential must belong to a user in the tenant it is created in.`
+- `UserId` omitted: the credential belongs to the authenticated user.
+- A system administrator has no user, so it must supply `UserId`. Without it the request returns `400` with `UserId is required: system administrator credentials have no user, so supply the UserId of a user in tenant '<tenant>'.`
+- Only tenant admins, global admins, and system administrators can create credentials, so only they can name another user. Before v1.1.0 the body's `UserId` was replaced with the caller's, so a global admin creating a key for a standard user got a global admin key.
 
 ### Model Runner Endpoints
 
@@ -650,9 +759,10 @@ Auth level: `Authenticated`
 | --- | --- | --- |
 | `GET` | `/v1.0/modelrunnerendpoints` | List endpoints. Query: `maxResults`, `continuationToken`, `nameFilter`, `activeFilter`, optional `tenantId`. |
 | `POST` | `/v1.0/modelrunnerendpoints` | Create endpoint. Cross-tenant callers supply `TenantId` in the body. |
-| `POST` | `/v1.0/modelrunnerendpoints/validate` | Validate an endpoint draft without saving it. Optional query: `tenantId`, `existingId`. |
-| `GET` | `/v1.0/modelrunnerendpoints/{id}` | Read endpoint. Optional `tenantId` query. |
-| `PUT` | `/v1.0/modelrunnerendpoints/{id}` | Update endpoint. Cross-tenant callers supply `TenantId` in the body. |
+| `POST` | `/v1.0/modelrunnerendpoints/validate` | Validate an endpoint draft without saving it. Optional query: `tenantId`, `existingId`. A new draft (no `existingId`, or one that does not exist) gets the type defaults first, as on create. |
+| `GET` | `/v1.0/modelrunnerendpoints/{id}` | Read endpoint. Optional `tenantId` query. `ApiKey` is masked. |
+| `GET` | `/v1.0/modelrunnerendpoints/{id}/apikey` | Tenant-admin route to reveal the full upstream API key. Optional `tenantId` query. Audited. See [Reveal an endpoint API key](#reveal-an-endpoint-api-key). |
+| `PUT` | `/v1.0/modelrunnerendpoints/{id}` | Update endpoint. Cross-tenant callers supply `TenantId` in the body. An omitted, `null`, or masked `ApiKey` keeps the stored key; `""` clears it. For `Ollaya` and `OpenAICompatible`, an omitted `Port` keeps the stored port. A new `ApiType` that an attached VMR does not accept is rejected with `400` `EndpointApiTypeMismatch`. |
 | `DELETE` | `/v1.0/modelrunnerendpoints/{id}` | Delete endpoint. Optional `tenantId` query. Also removes the endpoint from referenced VMRs and endpoint groups. |
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/drain` | Move the endpoint to `Draining` service state. Optional `tenantId` query. |
 | `POST` | `/v1.0/modelrunnerendpoints/{id}/resume` | Move the endpoint back to `Normal` service state. Optional `tenantId` query. |
@@ -704,7 +814,70 @@ RigMonitor status response fields include:
 - `Capabilities`
 - `Telemetry`
 
-`Capabilities` is a cached summary of platform support. `Telemetry` contains nested `System`, `Cpu`, `Memory`, `Network`, `Disk`, `Gpu`, and `Ollama` sections.
+`Capabilities` is a cached summary of platform support. `Telemetry` contains nested `System`, `Cpu`, `Memory`, `Network`, `Disk`, `Gpu`, and `Ollama` sections. RigMonitor applies only to `Ollama` endpoints; enabling it on an `OllamaCloud` endpoint fails validation with `OllamaCloudRigMonitorUnsupported`.
+
+Endpoints with `HealthCheckEnabled=false` are not probed. Their health state reports `IsHealthy=true` with no `LastError`, and they stay eligible for routing.
+
+Other endpoints start unhealthy. Conductor probes an endpoint immediately when it is created, when the server starts, and when its probe target (health check URL, method, auth, or body) changes. The first successful probe of an endpoint that has not been healthy since the server started marks it healthy; after that, probes run every `HealthCheckIntervalMs` and `HealthyThreshold` and `UnhealthyThreshold` apply. A new `Anthropic` endpoint, with its 60,000 ms interval, can therefore take traffic as soon as its first probe succeeds instead of after two intervals.
+
+#### Create an endpoint
+
+```bash
+curl -X POST http://127.0.0.1:9000/v1.0/modelrunnerendpoints \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"TenantId":"default","Name":"Anthropic","ApiType":"Anthropic","ApiKey":"sk-ant-api03-...wxyz"}'
+```
+
+`TenantId` names the tenant. A global-admin credential, such as the first-run token, can leave it out to create the endpoint in its own tenant. A non-admin credential always creates in its own tenant. A system administrator must supply it.
+
+Returns `201 Created` with the stored endpoint. Type defaults fill the omitted host, port, SSL, and health check fields, and `ApiKey` comes back masked. `AnthropicVersion` was not set, so it is absent from the response (null fields are omitted) and requests use `Anthropic.DefaultVersion`:
+
+```jsonc
+{
+  "Id": "mre_xxx",
+  "TenantId": "default",
+  "Name": "Anthropic",
+  "ApiType": "Anthropic",
+  "Hostname": "api.anthropic.com",
+  "Port": 443,
+  "UseSsl": true,
+  "ApiKey": "****wxyz",
+  "HealthCheckEnabled": true,
+  "HealthCheckMethod": "GET",
+  "HealthCheckUrl": "/v1/models?limit=1",
+  "HealthCheckUseAuth": true,
+  "HealthCheckIntervalMs": 60000
+  // other fields omitted
+}
+```
+
+Create and update run the same validation as `POST /v1.0/modelrunnerendpoints/validate`, and `validate` applies the type defaults to a new draft the same way create does. When an error-severity rule fails, for example `AnthropicApiKeyMissing` for an `Anthropic` endpoint without a key, or `PortRequired` for an `Ollaya` or `OpenAICompatible` endpoint without a `Port`, they return `400` with the validation messages. Use the `validate` route to see the codes.
+
+An update that changes `ApiType` to a type that an attached VMR does not accept fails with `400`, code `EndpointApiTypeMismatch` on field `ApiType`, and a message that names each affected VMR, for example `Endpoint 'Anthropic' cannot change its API type from Anthropic to OpenAI because it is attached to virtual model runner(s) 'claude' (Anthropic) that do not accept OpenAI endpoints. Detach it from those runners first, or keep API type Anthropic.` The stored endpoint is not changed.
+
+#### Reveal an endpoint API key
+
+`GET /v1.0/modelrunnerendpoints/{id}/apikey`
+
+Auth level: `TenantAdmin`: a tenant admin, a global admin user, or a system administrator. Standard users cannot reveal keys, even though they can read and update endpoints. The route is tenant scoped: tenant admins can reveal keys only for endpoints in their own tenant, and cross-tenant callers pass `?tenantId=<tenant-id>`.
+
+| Status | Meaning |
+| --- | --- |
+| `200` | The endpoint exists. The body holds the full key. |
+| `401` | No valid credential, or the caller is a standard user. |
+| `404` | No endpoint with that ID in the caller's tenant. |
+
+```bash
+curl "http://127.0.0.1:9000/v1.0/modelrunnerendpoints/mre_123/apikey?tenantId=default" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```json
+{ "ApiKey": "sk-ant-api03-...wxyz" }
+```
+
+When the endpoint has no key, the response is `{}` (null values are not serialized). Every call writes an `Info` audit log line with the tenant, endpoint, requester (user and credential, or administrator), and whether a key was present. The key itself is never logged. The dashboard's reveal control and the endpoint Duplicate action use this route, as do the SDK methods `RevealModelRunnerEndpointApiKeyAsync` (C#), `revealModelRunnerEndpointApiKey` (JavaScript), and `reveal_model_runner_endpoint_api_key` (Python).
 
 ### Endpoint Groups
 
@@ -725,7 +898,7 @@ Endpoint groups are tenant-wide reusable objects. A VMR references them through 
 
 Auth level: `TenantAdmin`
 
-These routes are available only when the target model runner endpoint has `ApiType=Ollama`. They call the configured endpoint directly and return upstream status details without creating request-history entries.
+These routes are available only when the target model runner endpoint has `ApiType=Ollama`. `OllamaCloud` endpoints are rejected with `400` (`Ollama model management (list, pull, delete) is not supported for OllamaCloud endpoints.`), and other types with `400` as well. They call the configured endpoint directly and return upstream status details without creating request-history entries.
 
 | Method | Path | Upstream Ollama API | Notes |
 | --- | --- | --- | --- |
@@ -930,7 +1103,6 @@ Example evaluation response:
   "Allowed": true,
   "Decision": "Permit",
   "Mode": "Enforce",
-  "DefaultSource": null,
   "PolicyId": "map_xxx",
   "PolicyName": "Production model access",
   "RuleId": "mar_xxx",
@@ -944,6 +1116,13 @@ Example evaluation response:
 Proxy enforcement occurs after request/model resolution and before endpoint inventory, session affinity, load balancing, and provider calls. Authentication failures return `401`; authenticated model access denials return `403`. In monitor mode, denied decisions are recorded as `WouldDeny=true` while the request continues.
 
 List-models responses are governed by server setting `ModelAccessControl.ListModelsBehavior`: `Filter` removes denied upstream models, `Synthesize` returns a provider-shaped list from allowed active VMR model definitions, and `RawPassThrough` leaves upstream responses unchanged.
+
+Anthropic and TypeSafe lists keep their provider shapes under `Filter` and `Synthesize`:
+
+- `AnthropicListModels`: `{"data":[{"type":"model","id":"claude-opus-5-5","display_name":"claude-opus-5-5","created_at":"2026-11-21T00:00:00Z"}],"has_more":false,"first_id":"claude-opus-5-5","last_id":"claude-opus-5-5"}`. `Filter` keeps the upstream entries that are allowed and recomputes `first_id` and `last_id`; `Synthesize` builds entries from model definition names and creation times.
+- `TypeSafeListModels`: `{"object":"list","data":[{"id":"jev-latest","object":"model","owned_by":"conductor"}]}`. `Synthesize` sets `owned_by` to `conductor`.
+
+If the upstream body cannot be parsed, Conductor returns an empty list in the provider's shape and logs a warning.
 
 Label subject/resource rules can match a literal label by `SubjectId` or `ResourceId`, or by selectors such as `{ "label": "finance" }` and `{ "labels": "finance,production" }`. `ModelName` rules can match exact names with `ResourceId`, or text selectors such as `{ "equals": "gpt-4o-mini" }`, `{ "prefix": "gpt-4" }`, and `{ "contains": "70b" }`.
 
@@ -1084,7 +1263,7 @@ Auth level: `Authenticated`
 | `POST` | `/v1.0/virtualmodelrunners/validate` | Validate a VMR draft without saving it. Optional query: `tenantId`, `existingId`. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}` | Read VMR. Optional `tenantId` query. |
 | `PUT` | `/v1.0/virtualmodelrunners/{id}` | Update VMR. Cross-tenant callers supply `TenantId` in the body. `BasePath` must stay `/v1.0/api/{name}/`. |
-| `DELETE` | `/v1.0/virtualmodelrunners/{id}` | Delete VMR. Optional `tenantId` query. |
+| `DELETE` | `/v1.0/virtualmodelrunners/{id}` | Delete VMR. Optional `tenantId` query. Deletes the VMR's request history first (entries, analytics events, and detail files), then the VMR, and returns `204`. Before v1.1.0 this failed with `500` once the VMR had request history. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}/health` | Get aggregated health for the VMR and its endpoints. Optional `tenantId` query. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}/effective` | Return the resolved read-only effective configuration for the VMR. Optional `tenantId` query. |
 | `GET` | `/v1.0/virtualmodelrunners/{id}/runtime-stats` | Return in-memory endpoint runtime stats for the VMR. Optional `tenantId` query. |
@@ -1109,6 +1288,52 @@ VMR health response fields include:
 - `Endpoints`
 
 Validation routes return a `ResourceValidationResult` with `Errors` and `Warnings`. The VMR `effective` response resolves the endpoint inventory, request permissions, the VMR's time-to-first-byte limit (`RequestTimeoutMs`) and, for each endpoint, the limit actually applied (`Endpoints[].RequestTimeout`, with `TimeoutMs`, `Source` of `VirtualModelRunner`, `ModelRunnerEndpoint` or `Both`, and a readable `Description` such as `"60,000 ms (virtual model runner; endpoint Dell GB10 allows 300,000 ms)"`), session-affinity settings, attached policy metadata, model definitions, model configurations, adaptive settings, endpoint groups, and `ModelConfigurationMappings` that the proxy path will use. Runtime stats responses return `EndpointRuntimeStatsCollection` with per-endpoint pending count, completed count, success/error EWMA, latency EWMA, TTFT EWMA, last status/error, consecutive failures, transient backoff state, and recency timestamps. The VMR `explain-routing` response returns a `RoutingDecision` containing a timeline, selected endpoint, selection strategy, endpoint group, adaptive score evidence, session-affinity outcome, policy metadata, mutation summary, and per-candidate evidence.
+
+#### Validation codes for provider types
+
+The `validate` routes return a `ResourceValidationResult`:
+
+```json
+{
+  "ResourceType": "VirtualModelRunner",
+  "IsValid": false,
+  "Errors": [
+    {
+      "Code": "VmrApiTypeNotClientFacing",
+      "Field": "ApiType",
+      "Message": "API type 'OpenAICompatible' is an endpoint-only type and cannot be used for a virtual model runner. Use one of: Ollama, OpenAI, Gemini, vLLM, Anthropic, TypeSafe."
+    }
+  ],
+  "Warnings": []
+}
+```
+
+These codes cover endpoint types and decision models. Errors block create, update, and restore; warnings do not.
+
+| Code | Severity | Resource | Condition |
+| --- | --- | --- | --- |
+| `VmrApiTypeNotClientFacing` | error | VMR | The VMR `ApiType` is `Ollaya`, `OllamaCloud`, or `OpenAICompatible`. Only this error is reported; attached endpoints are not also reported as `EndpointApiTypeMismatch`. |
+| `EndpointApiTypeMismatch` | error | VMR | An attached endpoint's type is not accepted by the VMR type (see the compatibility table). The message reads, for example, `Endpoint 'Anthropic' has API type Anthropic, but virtual model runners of type OpenAI accept only endpoints of type OpenAI, OpenAICompatible, vLLM.` |
+| `EndpointApiTypeMismatch` | error | Endpoint | An endpoint update changes `ApiType` to a type that an attached VMR does not accept. Reported on field `ApiType`, naming the VMRs. |
+| `EndpointMissing` | error | VMR | A `ModelRunnerEndpointIds` entry is empty or not found in the tenant. |
+| `ModelDefinitionMissing` | error | VMR | A `ModelDefinitionIds` entry is empty or not found in the tenant. |
+| `ModelConfigurationMissing` | error | VMR | A `ModelConfigurationIds` entry is empty or not found in the tenant. |
+| `DecisionsDisabledOnDecisionRoute` | error | VMR | A `TypeSafe` VMR has `AllowDecisions=false`. |
+| `TypeSafeConfigurationIgnored` | warning | VMR | Model configurations are attached to a `TypeSafe` VMR; they are never applied to decision requests. |
+| `DecisionModelNotEnabled` | warning | VMR | A `TypeSafe` VMR has a model definition without `SupportsDecisions`; in strict mode its decision requests get `404`. |
+| `AnthropicConfigurationMismatch` | warning | VMR | A configuration on an `Anthropic` VMR sets `RepeatPenalty` or `ContextWindowSize`, which are never sent to Anthropic. |
+| `ModelConfigurationSamplingIgnored` | warning | VMR | A configuration on an `Anthropic` VMR sets `Temperature`, `TopP`, or `TopK` while an attached endpoint's effective `anthropic-version` is `Anthropic.SamplingParametersRemovedFromVersion` (`2026-10-21`) or later. |
+| `AnthropicApiKeyMissing` | error | Endpoint | An `Anthropic` endpoint has no `ApiKey`. |
+| `TypeSafeApiKeyMissing` | error | Endpoint | A `TypeSafe` endpoint has no `ApiKey`. |
+| `OllamaCloudApiKeyMissing` | error | Endpoint | An `OllamaCloud` endpoint has no `ApiKey`. |
+| `AnthropicVersionInvalid` | error | Endpoint | `AnthropicVersion` is set but is not in `yyyy-MM-dd` format. |
+| `AnthropicHealthCheckUnauthenticated` | warning | Endpoint | An `Anthropic` endpoint has health checks enabled with `HealthCheckUseAuth=false`; Anthropic rejects unauthenticated requests, so the endpoint would be reported unhealthy. |
+| `HealthCheckBodyRequired` | error | Endpoint | `HealthCheckMethod` is `POST` with no `HealthCheckRequestBody`. |
+| `HealthCheckAuthRequiresApiKey` | error | Endpoint | `HealthCheckUseAuth` is `true` but the endpoint has no `ApiKey`. Not reported for `Anthropic`, `TypeSafe`, or `OllamaCloud`, which report their own `...ApiKeyMissing` error instead. |
+| `PortRequired` | error | Endpoint | A new `Ollaya` or `OpenAICompatible` endpoint has no `Port`. These types have no default port. Updates that omit `Port` keep the stored port. |
+| `OllamaCloudRigMonitorUnsupported` | error | Endpoint | An `OllamaCloud` endpoint has RigMonitor enabled. |
+
+On a `TypeSafe` VMR, the existing rule that at least one of `AllowCompletions`, `AllowEmbeddings`, or `AllowModelManagement` must be on does not apply, because the VMR serves decisions.
 
 ### Model loading
 
@@ -1150,14 +1375,14 @@ Fields:
 | --- | --- |
 | `Model` | Required for direct endpoint loading. For VMR loading it may be omitted only when exactly one active attached `ModelDefinition` exists. |
 | `ModelDefinitionId` | Optional VMR selector. If supplied, `Model` must be empty or match the definition name. |
-| `ProbeKind` | `Auto`, `MetadataOnly`, `ChatCompletion`, `Completion`, `Embeddings`, or `NativeGenerate`. |
+| `ProbeKind` | `Auto`, `MetadataOnly`, `ChatCompletion`, `Completion`, `Embeddings`, `NativeGenerate`, or `Decision`. `Decision` applies only to `TypeSafe` and `Ollaya` endpoints. |
 | `TargetMode` | VMR only: `SelectedEndpoint`, `AllEligibleEndpoints`, `AllConfiguredEndpoints`, or `SpecificEndpointIds`. |
 | `EndpointIds` | Required only when `TargetMode=SpecificEndpointIds`; IDs must already be attached to the VMR. |
 | `InputText` | Tiny non-sensitive probe text. It may be sent to hosted providers for explicit generation or embedding probes. |
 | `KeepAlive` | Ollama retention hint. Other providers report it in `IgnoredFields`. |
 | `TimeoutMs` | Per-attempt upstream timeout covering the whole load call, clamped by the server from 1,000 to 1,800,000 ms. Default 300,000. Long values are honored in full (before v0.6.1 every load was cut off at 100 seconds). A cold load also has to fit within the runner's own load timeout, such as Ollama's `OLLAMA_LOAD_TIMEOUT`. |
 | `MaxRetries` | Per-endpoint retry count, clamped from 0 to 3. |
-| `VerifyLoaded` | Runs provider-specific verification after a probe, such as Ollama `/api/ps` or metadata list checks. |
+| `VerifyLoaded` | Runs provider-specific verification after a probe, such as Ollama `/api/ps` or metadata list checks. Ignored for `TypeSafe`, which has no metadata API. |
 | `IncludeInactive` | VMR target selection includes inactive configured endpoints when true. |
 | `DryRun` | Returns the planned mechanism and target endpoints without sending upstream traffic. |
 
@@ -1187,8 +1412,7 @@ Response body:
       "RequestPath": "/api/generate",
       "DurationMs": 4211,
       "VerifiedLoaded": true,
-      "IgnoredFields": [],
-      "ErrorMessage": null
+      "IgnoredFields": []
     }
   ]
 }
@@ -1202,12 +1426,33 @@ To keep a large model warm continuously, enable [Keep warm](#keep-warm) on the V
 
 Provider behavior:
 
-| Provider | `Auto` behavior | Result semantics |
-| --- | --- | --- |
-| Ollama | `POST /api/generate` with minimal output and optional `keep_alive`; embeddings use `/api/embed`. | `Loaded` or `AlreadyAvailable` when `/api/ps` confirms residency. Missing models fail; Conductor does not pull models. |
-| vLLM | `GET /v1/models` metadata verification unless an explicit probe is requested. | `Verified` when the model is served. Explicit probes can warm tokenization or graph paths, but do not load arbitrary new weights. |
-| OpenAI | `GET /v1/models` metadata verification unless an explicit probe is requested. | `VerifiedRemote`; hosted OpenAI has no host-local load primitive. Explicit generation or embedding probes may be billable. |
-| Gemini | `GET /v1beta/models` metadata verification unless an explicit probe is requested. | `VerifiedRemote`; hosted Gemini has no host-local load primitive. Explicit generation or embedding probes may be billable. |
+| Provider | `Auto` behavior | Other probe kinds | Result semantics |
+| --- | --- | --- | --- |
+| Ollama | `POST /api/generate` with minimal output and optional `keep_alive`; embeddings use `/api/embed`. | All except `Decision`. | `Loaded` or `AlreadyAvailable` when `/api/ps` confirms residency. Missing models fail; Conductor does not pull models. |
+| OllamaCloud | Same native generation probe as Ollama. Billable. | All except `Decision`. `KeepAlive` is reported in `IgnoredFields`. | `VerifiedRemote`; no `/api/ps` residency check. |
+| vLLM | `GET /v1/models` metadata verification unless an explicit probe is requested. | `ChatCompletion`, `Completion`, `Embeddings`, `MetadataOnly`. | `Verified` when the model is served. Explicit probes can warm tokenization or graph paths, but do not load arbitrary new weights. |
+| OpenAI | `GET /v1/models` metadata verification unless an explicit probe is requested. | `ChatCompletion`, `Completion`, `Embeddings`, `MetadataOnly`. Generation and embedding probes may be billable. | `VerifiedRemote`; hosted OpenAI has no host-local load primitive. |
+| OpenAICompatible | `GET /v1/models` metadata verification unless an explicit probe is requested. | `ChatCompletion`, `Completion`, `Embeddings`, `MetadataOnly`. Not flagged as billable. | `Verified`. |
+| Gemini | `GET /v1beta/models` metadata verification unless an explicit probe is requested. | Generation and embedding probes may be billable. | `VerifiedRemote`; hosted Gemini has no host-local load primitive. |
+| Anthropic | `GET /v1/models/{id}` (also used for `MetadataOnly`). | `ChatCompletion` sends `POST /v1/messages` with `max_tokens: 1`, which is billable. Other kinds report `UnsupportedApiType`. | `VerifiedRemote`. |
+| TypeSafe | One-question `Decision` probe: `POST /v1/systemone` with the model and a `ping` state. Billable. | `Decision`. `MetadataOnly` and the other kinds report `UnsupportedApiType`, because hosted TypeSafe has no model metadata API. | `VerifiedRemote`. |
+| Ollaya | `GET /v1/models` (also used for `MetadataOnly`). | `Decision` sends the one-question probe. Other kinds report `UnsupportedApiType`. | `Verified`. |
+
+When no model is given for the decision probe, `TypeSafe.DefaultModel` (`jev-latest`) is used. Example of a verified Anthropic endpoint:
+
+```json
+{
+  "EndpointId": "mre_anthropic",
+  "ApiType": "Anthropic",
+  "Success": true,
+  "OutcomeCode": "VerifiedRemote",
+  "ProviderStatusCode": 200,
+  "Mechanism": "AnthropicGetModel",
+  "RequestPath": "/v1/models/claude-opus-5-5",
+  "VerifiedLoaded": false,
+  "IgnoredFields": []
+}
+```
 
 ### Keep warm
 
@@ -1287,6 +1532,8 @@ Backup package shape:
 }
 ```
 
+Backups contain the real, unmasked endpoint `ApiKey` values, so treat backup files as sensitive. Restore runs the same validation as create and update, including the VMR type rules (`VmrApiTypeNotClientFacing`, `EndpointApiTypeMismatch`).
+
 Backups include endpoint groups, VMR reservations, and nested reservation subjects. Validation checks endpoint group endpoint membership plus reservation tenant, VMR, user, credential, subject, and overlap rules before restore; restore uses the same `Skip`, `Overwrite`, or `Fail` conflict mode as the other configuration entities.
 
 Restore request shape:
@@ -1333,7 +1580,6 @@ Restore response shape:
 ```jsonc
 {
   "Success": true,
-  "ErrorMessage": null,
   "Summary": {
     "Tenants": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
     "Users": { "Created": 0, "Updated": 0, "Skipped": 0, "Failed": 0 },
@@ -1522,6 +1768,9 @@ Request history entry fields include:
 - `PromptTokens`
 - `CompletionTokens`
 - `TotalTokens`
+- `CacheCreationInputTokens` (Anthropic `cache_creation_input_tokens`; `null` when not reported)
+- `CacheReadInputTokens` (Anthropic `cache_read_input_tokens`; `null` when not reported)
+- `DecisionQuestionCount` (questions in a TypeSafe decision request; `null` for other request types)
 - `TokensPerSecondOverall`
 - `TokensPerSecondGeneration`
 - `AnalyticsCaptured`
@@ -1544,6 +1793,8 @@ Detail responses extend the entry with:
 - `ResponseBody`
 - `ResponseBodyTruncated`
 - `RoutingDecision`
+
+Usage is parsed by the routed endpoint's configured `ApiType`. For `Anthropic`, `PromptTokens` is `usage.input_tokens`, `CompletionTokens` is `usage.output_tokens`, and `TotalTokens` is their sum; the cache counts are stored separately and are not added to the total. Streaming responses take input tokens from `message_start` and output tokens from the last `message_delta`. `ProviderRequestId` comes from the `request-id` response header, then from the message `id`. For `TypeSafe` and `Ollaya`, tokens come from the decision response's `usage` block.
 
 If request or response bodies have aged past `BodyRetentionDays`, detail records remain readable but the body content is scrubbed while the searchable routing and latency metadata stays available until `MetadataRetentionDays` expires.
 
@@ -1675,8 +1926,7 @@ GET query parameters:
   "PromptTokens": 240000,
   "CompletionTokens": 62000,
   "TotalTokens": 302000,
-  "CachedTokens": null,
-  "MultimodalTokens": null,
+  // CachedTokens and MultimodalTokens appear only when the provider reported them
   "UnknownTokenUsageCount": 3,
   "TokenUnitCost": 0.00001,
   "CostCurrency": "USD",
@@ -1693,8 +1943,6 @@ GET query parameters:
       "PromptTokens": 42000,
       "CompletionTokens": 12000,
       "TotalTokens": 54000,
-      "CachedTokens": null,
-      "MultimodalTokens": null,
       "UnknownTokenUsageCount": 0,
       "EstimatedCost": 0.54
     }
@@ -1791,11 +2039,70 @@ If a VMR has:
 
 then the proxy surface begins there.
 
+Proxied requests need a Conductor credential (see [Authentication](#authentication)), except the health probe on the base URL. On `Anthropic` VMRs the credential may also be sent in `x-api-key`.
+
+A credential can call only VMRs in its own tenant. A credential from another tenant gets `403` with `X-Conductor-Error-Code: CredentialTenantMismatch` (`permission_error` on `Anthropic` VMRs), whether or not model access control is enabled. The rule includes global admin users, who need a credential in the VMR's tenant. System administrator API keys have no tenant and are not checked. Before v1.1.0 the tenant check ran only when model access control was enabled.
+
+Conductor's upstream HTTP clients never store or send cookies, so a `Set-Cookie` from an upstream is not replayed on later requests. `cookie` and `set-cookie` are always redacted in request history.
+
+### Request classification by VMR type
+
+Every request is classified by the VMR's configured `ApiType`. Conductor never infers the API from the path, hostname, or response. Each type has one path namespace, relative to the VMR base path:
+
+| VMR type | Namespace | Classified routes (request type) | Inside the namespace, not classified | Outside the namespace |
+| --- | --- | --- | --- | --- |
+| `Ollama` | `/api/` | `/api/generate`, `/api/chat`, `/api/tags`, `/api/embed`, `/api/embeddings`, `/api/pull`, `/api/delete`, `/api/ps`, `/api/show` | forwarded as `Unknown` | `404` |
+| `OpenAI`, `vLLM` | `/v1/` | `/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/v1/embeddings` | forwarded as `Unknown` | `404` |
+| `Gemini` | `/v1beta/` | `/v1beta/models`, `/v1beta/models/{model}:generateContent`, `:streamGenerateContent`, `:embedContent` | forwarded as `Unknown` | `404` |
+| `Anthropic` | `/v1/` | `POST /v1/messages` (`AnthropicMessages`), `POST /v1/messages/count_tokens` (`AnthropicCountTokens`), `GET /v1/models` (`AnthropicListModels`), `GET /v1/models/{id}` (`AnthropicGetModel`) | `/v1/messages/batches*` and `/v1/files*` return `404` `not_found_error`; other paths are forwarded as `Unknown` | `404` |
+| `TypeSafe` | `/v1/` | `POST /v1/systemone` (`TypeSafeDecide`), `GET /v1/models` (`TypeSafeListModels`) | forwarded as `Unknown` | `404` |
+
+A request outside the namespace is answered with `404` and is never forwarded. The message names the namespace:
+
+```json
+{
+  "Error": "The path '/v1/chat/completions' is outside the '/api/' namespace of this Ollama virtual model runner.",
+  "StatusCode": 404,
+  "Code": "NotFound",
+  "Timestamp": "2026-11-21T12:00:00Z"
+}
+```
+
+The response carries `X-Conductor-Error-Code: OutsideApiNamespace`, and the unsupported Batches and Files routes on `Anthropic` VMRs carry `X-Conductor-Error-Code: UnsupportedRoute`. On an `Anthropic` VMR both use the Anthropic error shape.
+
+A path that contains a `.` or `..` segment, a backslash, or a percent-encoded `.`, `/`, or `\` (`%2e`, `%2f`, `%5c`, including double-encoded forms such as `%252e`) returns `404` with `X-Conductor-Error-Code: UnsafePath` and the message `The path contains dot segments or encoded path separators, which Conductor does not forward.` The check runs before classification, so a path such as `/v1/x/../files` can no longer reach a route that the namespace or the Batches and Files rule blocks.
+
+Before v1.1.0, some paths outside a VMR's namespace were forwarded. For example, an OpenAI client pointed at an Ollama VMR's `/v1/chat/completions` reached Ollama's own OpenAI-compatible API. That request now gets `404`; use an `OpenAI` VMR with an `OpenAICompatible` endpoint that points at the Ollama host instead.
+
+`GET` and `HEAD` on the VMR base URL remain the health probe (see [Health probe on the VMR base URL](#health-probe-on-the-vmr-base-url)).
+
+### Proxy error codes
+
+Errors that Conductor itself generates on a proxied request carry a reason code in the `X-Conductor-Error-Code` response header on every API family. The body's `Code` can be a generic value such as `NotFound`, so read the header to tell one condition from another. The same code is recorded in request history as `DenialReasonCode` where a routing decision denied the request. Codes added or changed in v1.1.0:
+
+| Code | Status | Condition |
+| --- | --- | --- |
+| `CredentialTenantMismatch` | `403` | The credential belongs to a different tenant than the VMR. |
+| `UnsafePath` | `404` | The path has dot segments, a backslash, or encoded separators. |
+| `OutsideApiNamespace` | `404` | The path is outside the VMR type's namespace. |
+| `UnsupportedRoute` | `404` | Message Batches or Files on an `Anthropic` VMR. |
+| `RequestBodyInvalid` | `400` | The body of a completion, embedding, or model management request is not a valid JSON object. `invalid_request_error` on `Anthropic` VMRs. Previously reported as `502`. |
+| `StrictModeModelRequired` | `400` | Strict mode is on and the request names no model. Previously `401`. |
+| `StrictModeModelRejected` | `404` | Strict mode is on and the requested model is not attached. Previously `401`. |
+| `ModelNotAttached` | `404` | More than one model definition is attached and the requested model is not one of them. Previously `401`. |
+| `StrictModeNoModels` | `404` | Strict mode is on and the VMR has no active model definitions. Previously `401`. |
+| `ModelDoesNotSupportDecisions` | `404` | Strict mode, decision request for a model definition without `SupportsDecisions`. |
+| `ModelSupportsOnlyDecisions` | `404` | Strict mode, completion or embedding request for a decision-only model definition. |
+| `DecisionsNotAllowed` | `403` | Decision request on a VMR with `AllowDecisions=false`. |
+| `DecisionRequestInvalid` | `400` | Invalid decision request body on a `TypeSafe` VMR. |
+| `ModelListingUnsupported` | `404` | `GET /v1/models` on a `TypeSafe` VMR whose only endpoints are hosted `TypeSafe`. |
+| `UpstreamTimeout` | `504` | The upstream did not return headers within the effective `TimeoutMs`. |
+
 ### Supported API families
 
 #### OpenAI
 
-Available when the VMR `ApiType` is `OpenAI`.
+Available when the VMR `ApiType` is `OpenAI`. Accepts `OpenAI`, `OpenAICompatible`, and `vLLM` endpoints.
 
 Typical proxied routes:
 
@@ -1806,7 +2113,7 @@ Typical proxied routes:
 
 #### vLLM
 
-Available when the VMR `ApiType` is `vLLM`.
+Available when the VMR `ApiType` is `vLLM`. Accepts `vLLM` endpoints.
 
 Conductor uses the OpenAI-compatible surface:
 
@@ -1817,7 +2124,7 @@ Conductor uses the OpenAI-compatible surface:
 
 #### Gemini
 
-Available when the VMR `ApiType` is `Gemini`.
+Available when the VMR `ApiType` is `Gemini`. Accepts `Gemini` endpoints.
 
 Typical proxied routes:
 
@@ -1828,7 +2135,7 @@ Typical proxied routes:
 
 #### Ollama
 
-Available when the VMR `ApiType` is `Ollama`.
+Available when the VMR `ApiType` is `Ollama`. Accepts `Ollama` and `OllamaCloud` endpoints. `OllamaCloud` endpoints receive the endpoint key as `Authorization: Bearer`.
 
 Typical proxied routes:
 
@@ -1841,6 +2148,123 @@ Typical proxied routes:
 - `DELETE /v1.0/api/{vmr}/api/delete`
 - `GET /v1.0/api/{vmr}/api/ps`
 - `POST /v1.0/api/{vmr}/api/show`
+
+#### Anthropic
+
+Available when the VMR `ApiType` is `Anthropic`. Accepts `Anthropic` endpoints.
+
+Routes:
+
+- `POST /v1.0/api/{vmr}/v1/messages` (`AnthropicMessages`, model access action `Completions`). `"stream": true` responses are passed through as server-sent events.
+- `POST /v1.0/api/{vmr}/v1/messages/count_tokens` (`AnthropicCountTokens`, action `Completions`).
+- `GET /v1.0/api/{vmr}/v1/models` (`AnthropicListModels`, action `ListModels`).
+- `GET /v1.0/api/{vmr}/v1/models/{id}` (`AnthropicGetModel`, action `ShowModel`).
+- Other `/v1/` paths are forwarded unclassified.
+- `/v1/messages/batches*` and `/v1/files*` return `404` with `not_found_error` and the message `Message Batches and Files are not supported through Conductor.` They are stateful APIs and are out of scope.
+
+Inbound authentication: a Conductor credential in `Authorization: Bearer` or `x-api-key` (see [`x-api-key` on Anthropic virtual model runners](#x-api-key-on-anthropic-virtual-model-runners)). Claude Code and the Anthropic SDKs work with `ANTHROPIC_BASE_URL` set to the VMR base URL, for example `http://127.0.0.1:9000/v1.0/api/claude`, and `ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY` set to a Conductor credential.
+
+Request headers sent upstream:
+
+- `x-api-key`: the endpoint's `ApiKey`.
+- `anthropic-version`: the client's header if it sent one, then the endpoint's `AnthropicVersion`, then `Anthropic.DefaultVersion` (`2023-06-01`).
+- Client headers listed in `Anthropic.ForwardedRequestHeaders` (default `anthropic-version`, `anthropic-beta`) are copied. Credential headers (`authorization`, `x-api-key`, `anthropic-api-key`, `x-goog-api-key`) are never copied, even if listed.
+- `Authorization` is never sent to Anthropic.
+
+Response headers copied to the client: names in `Anthropic.ForwardedResponseHeaders` (default `request-id`, `retry-after`, `x-should-retry`) and names that start with a prefix in `Anthropic.ForwardedResponseHeaderPrefixes` (default `anthropic-ratelimit-`).
+
+Errors: upstream errors pass through unchanged. Errors that Conductor itself generates use the Anthropic shape, with Conductor's reason code in the `X-Conductor-Error-Code` header:
+
+```json
+{"type":"error","error":{"type":"not_found_error","message":"Message Batches and Files are not supported through Conductor."}}
+```
+
+| Condition | HTTP status | `error.type` |
+| --- | --- | --- |
+| Authentication failure (missing or invalid credential) | `401` | `authentication_error` |
+| Access denied (for example a model access policy denial, or a credential from another tenant with `CredentialTenantMismatch`) | `403` | `permission_error` |
+| Not found, unsupported route, outside the namespace, strict-mode model mismatch | `404` | `not_found_error` |
+| QoS rejection or endpoint at capacity | `429` | `rate_limit_error` |
+| No healthy endpoint (`NoHealthyEndpointsAvailable`, all endpoints quarantined, draining, or in backoff), or any `503` | `502` or `503` | `overloaded_error` |
+| Other upstream failure or Conductor timeout (`502`, `504`, other `5xx`) | `5xx` | `api_error` |
+| Malformed JSON body (`RequestBodyInvalid`), strict mode without a model (`StrictModeModelRequired`), and other `4xx` | `400` or other `4xx` | `invalid_request_error` |
+
+Model configurations: `MaxTokens` maps to `max_tokens`. `Temperature`, `TopP`, and `TopK` are injected only when the effective `anthropic-version` is earlier than `Anthropic.SamplingParametersRemovedFromVersion` (default `2026-10-21`). `RepeatPenalty` and `ContextWindowSize` are never injected.
+
+Usage capture: non-streaming responses record `usage.input_tokens`, `usage.output_tokens`, `usage.cache_creation_input_tokens`, and `usage.cache_read_input_tokens`. Streaming responses take input and cache tokens from `message_start.message.usage` and output tokens from the last `message_delta.usage.output_tokens`. `TotalTokens` is input plus output. The provider request id comes from the `request-id` header, then from the message `id`.
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:9000/v1.0/api/claude/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_CONDUCTOR_TOKEN" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model":"claude-opus-5-5",
+    "max_tokens":256,
+    "messages":[{"role":"user","content":"Hello"}]
+  }'
+```
+
+#### TypeSafe
+
+Available when the VMR `ApiType` is `TypeSafe`. Accepts `TypeSafe` (hosted Jev models) and `Ollaya` (local runtime) endpoints. Both speak the TypeSafe System One API and receive the endpoint key as `Authorization: Bearer`.
+
+Routes:
+
+- `POST /v1.0/api/{vmr}/v1/systemone` (`TypeSafeDecide`, model access action `Decisions`).
+- `GET /v1.0/api/{vmr}/v1/models` (`TypeSafeListModels`, action `ListModels`). Hosted TypeSafe does not serve this route, so Conductor routes it only to the VMR's `Ollaya` endpoints. When the VMR has only hosted `TypeSafe` endpoints, it returns `404` with code `ModelListingUnsupported` and a message suggesting an `Ollaya` endpoint. Before this change the answer alternated between `404` and `200` under round robin.
+- Other `/v1/` paths are forwarded unclassified.
+
+Wire format. A request names a model, a `state` (the input the questions are about), and a `questions` object keyed by question id. Each question has a `type`: `noul` (binary; optional `criteria` with `true` and `false` descriptions), `choice` (`criteria` maps each option to a description or `null`), or `score` (`criteria` is an ordered list of levels).
+
+```json
+{
+  "model": "jev-latest",
+  "state": "My invoice was charged twice this month. Can you fix it?",
+  "questions": {
+    "is_question": { "type": "noul", "instructions": "Is the message a question?" },
+    "category": { "type": "choice", "instructions": "Which team should handle it?", "criteria": { "billing": null, "technical": null } },
+    "urgency": { "type": "score", "instructions": "How urgent is the message?", "criteria": ["not urgent", "somewhat urgent", "very urgent"] }
+  }
+}
+```
+
+The response returns one answer per question id and a `usage` block (values are illustrative):
+
+```json
+{
+  "model": "jev-latest",
+  "answers": {
+    "is_question": { "noul": 0.97, "confidence": 0.91 },
+    "category": { "choice": "billing", "probabilities": { "billing": 0.88, "technical": 0.12 } },
+    "urgency": { "score": 1.2 }
+  },
+  "usage": { "input_tokens": 142, "output_tokens": 9 }
+}
+```
+
+Rules:
+
+- Responses are not streamed.
+- The body must be a valid JSON object whose `questions` is an object keyed by question id, with at least one question and at most `TypeSafe.MaxQuestionsPerRequest` questions (default 64, minimum 1, maximum 1024). Otherwise Conductor returns `400` with `Code: "DecisionRequestInvalid"` and does not forward the request. The message names the problem, for example `The decision request has 65 questions; the maximum is 64.`, or `'questions' must be an object keyed by question id, for example {"q1":{"type":"noul","instructions":"..."}}.` when `questions` is an array.
+- Model configurations are never applied to decision requests.
+- A decision request on a VMR with `AllowDecisions=false` gets `403` (`DecisionsNotAllowed`). Validation already requires `AllowDecisions=true` on `TypeSafe` VMRs.
+- In strict mode, a decision request for a model definition without `SupportsDecisions` gets `404` (`ModelDoesNotSupportDecisions`), and a completion or embedding request for a model definition that supports only decisions gets `404` (`ModelSupportsOnlyDecisions`).
+- Model access policies evaluate decision requests with the `Decisions` action. Allowing `Completions` does not allow `Decisions`.
+- Usage capture records `usage.input_tokens`, `usage.output_tokens`, and `DecisionQuestionCount`.
+
+Health checks differ by endpoint type. Hosted TypeSafe has no `/v1/models` route, so its health check is the one-question `POST /v1/systemone` probe (the same probe PolyPrompt's `TypeSafeClient` uses). Each probe is billed, so hosted TypeSafe health checks are off by default (`HealthCheckEnabled=false`) and the endpoint is treated as healthy; when enabled, the default interval is 60,000 ms. Ollaya endpoints use `GET /v1/models` every 5,000 ms.
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:9000/v1.0/api/decide/v1/systemone \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"model":"jev-latest","state":"Is this spam? WIN A FREE CRUISE","questions":{"spam":{"type":"noul","instructions":"Is the message spam?"}}}'
+```
 
 ### Proxy behavior controls on the VMR
 
@@ -1856,7 +2280,8 @@ These VMR fields affect proxied behavior:
 | `AllowEmbeddings` | If `false`, embedding routes are rejected. |
 | `AllowCompletions` | If `false`, completion/chat routes are rejected. |
 | `AllowModelManagement` | If `false`, model management routes such as list/pull/delete are rejected. |
-| `StrictMode` | If `true`, only attached `ModelDefinitions` are accepted. |
+| `AllowDecisions` | If `false`, decision requests are rejected with `403`. Must be `true` on a `TypeSafe` VMR. |
+| `StrictMode` | If `true`, only attached `ModelDefinitions` are accepted. A request without a model gets `400` (`StrictModeModelRequired`); an unattached model, or a VMR with no active definitions, gets `404` (`StrictModeModelRejected`, `StrictModeNoModels`). |
 | `SessionAffinityMode` | Enables sticky routing by source IP, API key, or a custom header. |
 | `TimeoutMs` | Maximum proxy wait time per request. |
 
@@ -1926,17 +2351,19 @@ default before v0.6.1. Records are not changed automatically.
 ### Create a tenant
 
 ```bash
-curl -X POST http://localhost:9000/v1.0/tenants \
+curl -X POST http://127.0.0.1:9000/v1.0/tenants \
   -H "Content-Type: application/json" \
-  -H "x-admin-email: admin@example.com" \
-  -H "x-admin-password: secret" \
+  -H "x-admin-email: admin@conductor" \
+  -H "x-admin-password: password" \
   -d '{"Name":"Production"}'
 ```
+
+These are the administrator credentials created on first run. Change them before the server is reachable by anyone else. Creating a tenant requires a system administrator, so a tenant bearer token, even a global admin's, gets `401`. The admin API key works as well: `-H "x-admin-apikey: conductoradmin"`.
 
 ### Login and receive a bearer token
 
 ```bash
-curl -X POST http://localhost:9000/v1.0/auth/login/credential \
+curl -X POST http://127.0.0.1:9000/v1.0/auth/login/credential \
   -H "Content-Type: application/json" \
   -d '{"TenantId":"default","Email":"admin@conductor","Password":"password"}'
 ```
@@ -1944,10 +2371,11 @@ curl -X POST http://localhost:9000/v1.0/auth/login/credential \
 ### Create a load-balancing policy
 
 ```bash
-curl -X POST http://localhost:9000/v1.0/loadbalancingpolicies \
+curl -X POST http://127.0.0.1:9000/v1.0/loadbalancingpolicies \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
+    "TenantId":"default",
     "Name":"Least In-Flight",
     "Filters":[],
     "Ranking":[
@@ -1966,7 +2394,7 @@ curl -X POST http://localhost:9000/v1.0/loadbalancingpolicies \
 ### Call a VMR's OpenAI-compatible chat route
 
 ```bash
-curl -X POST http://localhost:9000/v1.0/api/my-vmr/v1/chat/completions \
+curl -X POST http://127.0.0.1:9000/v1.0/api/my-vmr/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -1980,7 +2408,7 @@ curl -X POST http://localhost:9000/v1.0/api/my-vmr/v1/chat/completions \
 ### Load or verify a model on an endpoint
 
 ```bash
-curl -X POST "http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/load-model?tenantId=default" \
+curl -X POST "http://127.0.0.1:9000/v1.0/modelrunnerendpoints/mre_123/load-model?tenantId=default" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -1994,7 +2422,7 @@ curl -X POST "http://localhost:9000/v1.0/modelrunnerendpoints/mre_123/load-model
 ### Load or verify a model through a VMR
 
 ```bash
-curl -X POST "http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/load-model?tenantId=default" \
+curl -X POST "http://127.0.0.1:9000/v1.0/virtualmodelrunners/vmr_123/load-model?tenantId=default" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -2003,6 +2431,40 @@ curl -X POST "http://localhost:9000/v1.0/virtualmodelrunners/vmr_123/load-model?
     "ProbeKind":"Auto",
     "VerifyLoaded":true
   }'
+```
+
+### Reveal an endpoint's API key
+
+```bash
+curl "http://127.0.0.1:9000/v1.0/modelrunnerendpoints/mre_123/apikey?tenantId=default" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+`YOUR_TOKEN` must belong to a tenant admin or a global admin; standard users get `401`.
+
+### Create a TypeSafe endpoint and VMR
+
+```bash
+curl -X POST http://127.0.0.1:9000/v1.0/modelrunnerendpoints \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"TenantId":"default","Name":"TypeSafe","ApiType":"TypeSafe","ApiKey":"YOUR_TYPESAFE_KEY"}'
+
+curl -X POST http://127.0.0.1:9000/v1.0/virtualmodelrunners \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"TenantId":"default","Name":"decide","BasePath":"/v1.0/api/decide/","ApiType":"TypeSafe","ModelRunnerEndpointIds":["mre_typesafe"],"AllowDecisions":true}'
+```
+
+Replace `mre_typesafe` with the `Id` returned by the first call.
+
+### Call an Anthropic VMR
+
+```bash
+curl -X POST http://127.0.0.1:9000/v1.0/api/claude/v1/messages/count_tokens \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"model":"claude-opus-5-5","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
 ## Related documentation

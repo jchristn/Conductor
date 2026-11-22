@@ -1,6 +1,7 @@
 namespace Conductor.Server.Controllers
 {
     using System;
+    using System.Collections.Generic;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Helpers;
@@ -17,13 +18,20 @@ namespace Conductor.Server.Controllers
     public class TenantController : BaseController
     {
         private string _Header = "[TenantController] ";
+        private readonly RequestHistoryService _RequestHistoryService;
 
         /// <summary>
         /// Instantiate the tenant controller.
         /// </summary>
-        public TenantController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging)
+        /// <param name="database">Database driver.</param>
+        /// <param name="authService">Authentication service.</param>
+        /// <param name="serializer">Serializer.</param>
+        /// <param name="logging">Logging module.</param>
+        /// <param name="requestHistoryService">Request history service (optional); when set, deleting a tenant also removes its stored request history detail files.</param>
+        public TenantController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging, RequestHistoryService requestHistoryService = null)
             : base(database, authService, serializer, logging)
         {
+            _RequestHistoryService = requestHistoryService;
         }
 
         /// <summary>
@@ -124,6 +132,9 @@ namespace Conductor.Server.Controllers
         private async Task DeleteAssociatedDataAsync(string tenantId)
         {
             Logging.Info(_Header + "starting deletion of subordinate data for tenant " + tenantId);
+
+            // Delete request history first: its rows reference the tenant and its virtual model runners.
+            await RequestHistoryPurger.DeleteForTenantAsync(Database, _RequestHistoryService, tenantId).ConfigureAwait(false);
 
             // Delete virtual model runners
             EnumerationResult<VirtualModelRunner> vmrs = await Database.VirtualModelRunner.EnumerateAsync(tenantId, new EnumerationRequest { MaxResults = 10000 });
@@ -276,6 +287,29 @@ namespace Conductor.Server.Controllers
                 request.ActiveFilter = activeFilter.Value;
 
             return await Database.Tenant.EnumerateAsync(request);
+        }
+
+        /// <summary>
+        /// List only the caller's own tenant. Used for authenticated tenant users who are not global admins: they may see
+        /// their own tenant in tenant pickers, but never other tenants.
+        /// </summary>
+        /// <param name="tenantId">The caller's tenant identifier. Null or empty returns an empty list.</param>
+        /// <returns>An enumeration result containing at most one tenant. Never null.</returns>
+        public async Task<EnumerationResult<TenantMetadata>> EnumerateOwn(string tenantId)
+        {
+            List<TenantMetadata> data = new List<TenantMetadata>();
+            if (!String.IsNullOrEmpty(tenantId))
+            {
+                TenantMetadata tenant = await Database.Tenant.ReadAsync(tenantId).ConfigureAwait(false);
+                if (tenant != null) data.Add(tenant);
+            }
+
+            return new EnumerationResult<TenantMetadata>
+            {
+                Data = data,
+                TotalCount = data.Count,
+                HasMore = false
+            };
         }
     }
 }

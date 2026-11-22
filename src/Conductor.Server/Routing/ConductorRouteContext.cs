@@ -51,7 +51,7 @@ namespace Conductor.Server.Routing
             RequestHistoryService = requestHistoryService;
             VirtualModelRunnerReservationService = virtualModelRunnerReservationService;
 
-            TenantController = new TenantController(Database, AuthService, Serializer, Logging);
+            TenantController = new TenantController(Database, AuthService, Serializer, Logging, RequestHistoryService);
             UserController = new UserController(Database, AuthService, Serializer, Logging);
             CredentialController = new CredentialController(Database, AuthService, Serializer, Logging);
             ModelRunnerEndpointController = new ModelRunnerEndpointController(Database, AuthService, Serializer, Logging, HealthCheckService, ConfigurationValidationService, ModelLoadService, OllamaModelManagementService);
@@ -63,7 +63,7 @@ namespace Conductor.Server.Routing
             QosTrafficClassController = new QosTrafficClassController(Database, AuthService, Serializer, Logging);
             QosRuntimeController = new QosRuntimeController(Database, AuthService, Serializer, Logging, QosAdmissionService, HealthCheckService, RoutingDecisionService);
             ModelAccessPolicyController = new ModelAccessPolicyController(Database, AuthService, Serializer, Logging, ModelAccessControlService);
-            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService, RuntimeStatsService, KeepWarmService);
+            VirtualModelRunnerController = new VirtualModelRunnerController(Database, AuthService, Serializer, Logging, HealthCheckService, SessionAffinityService, ConfigurationValidationService, RoutingDecisionService, ModelLoadService, RuntimeStatsService, KeepWarmService, RequestHistoryService);
             VirtualModelRunnerReservationController = new VirtualModelRunnerReservationController(Database, AuthService, Serializer, Logging, VirtualModelRunnerReservationService);
             AuthController = new AuthController(Database, AuthService, Serializer, Logging, Settings.AdminApiKeys);
             AdministratorController = new AdministratorController(Database, AuthService, Serializer, Logging);

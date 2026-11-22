@@ -640,6 +640,10 @@ namespace Conductor.Server.Services
             if (headers == null) return result;
 
             HashSet<string> redactedHeaders = new HashSet<string>(_Settings.RedactedHeaders ?? new List<string>(), StringComparer.InvariantCultureIgnoreCase);
+
+            // Cookies carry session state; they are redacted even when an older configuration's list omits them.
+            redactedHeaders.Add("cookie");
+            redactedHeaders.Add("set-cookie");
             foreach (KeyValuePair<string, string> header in headers)
             {
                 if (String.IsNullOrWhiteSpace(header.Key)) continue;

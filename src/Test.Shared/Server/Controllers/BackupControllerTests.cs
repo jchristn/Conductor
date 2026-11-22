@@ -2,6 +2,7 @@ namespace Test.Shared.Server.Controllers
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.Threading.Tasks;
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
@@ -224,6 +225,63 @@ namespace Test.Shared.Server.Controllers
             restoredGroup.EndpointIds.Should().ContainSingle(endpoint.Id);
             VirtualModelRunner restoredVmr = await Database.VirtualModelRunner.ReadAsync(tenant.Id, vmr.Id).ConfigureAwait(false);
             restoredVmr.EndpointGroupIds.Should().ContainSingle(group.Id);
+        }
+
+        public async Task BackupAndRestore_KeepRealKeysAndRoundTripNewFields()
+        {
+            TenantMetadata tenant = await Database.Tenant.CreateAsync(new TenantMetadata { Name = "Anthropic Backup Tenant", Active = true }).ConfigureAwait(false);
+            ModelRunnerEndpoint endpoint = await Database.ModelRunnerEndpoint.CreateAsync(new ModelRunnerEndpoint
+            {
+                TenantId = tenant.Id,
+                Name = "Anthropic Backup Endpoint",
+                Hostname = "api.anthropic.com",
+                Port = 443,
+                UseSsl = true,
+                ApiType = ApiTypeEnum.Anthropic,
+                ApiKey = "sk-ant-backup-secret-0042",
+                AnthropicVersion = "2024-06-01",
+                HealthCheckEnabled = false,
+                HealthCheckUseAuth = true
+            }).ConfigureAwait(false);
+            ModelDefinition definition = await Database.ModelDefinition.CreateAsync(new ModelDefinition { TenantId = tenant.Id, Name = "jev-backup", SupportsDecisions = true }).ConfigureAwait(false);
+            VirtualModelRunner vmr = await Database.VirtualModelRunner.CreateAsync(new VirtualModelRunner
+            {
+                TenantId = tenant.Id,
+                Name = "Anthropic Backup VMR",
+                BasePath = "/v1.0/api/anthropic-backup/",
+                ApiType = ApiTypeEnum.Anthropic,
+                AllowDecisions = false,
+                ModelRunnerEndpointIds = new List<string> { endpoint.Id }
+            }).ConfigureAwait(false);
+
+            BackupPackage package = await _Controller.CreateBackup("admin@example.com").ConfigureAwait(false);
+            ModelRunnerEndpoint exported = package.ModelRunnerEndpoints.Single(item => item.Id == endpoint.Id);
+            exported.ApiKey.Should().Be("sk-ant-backup-secret-0042");
+            exported.AnthropicVersion.Should().Be("2024-06-01");
+            exported.HealthCheckEnabled.Should().BeFalse();
+            package.ModelDefinitions.Single(item => item.Id == definition.Id).SupportsDecisions.Should().BeTrue();
+            package.VirtualModelRunners.Single(item => item.Id == vmr.Id).AllowDecisions.Should().BeFalse();
+
+            await Database.VirtualModelRunner.DeleteAsync(tenant.Id, vmr.Id).ConfigureAwait(false);
+            await Database.ModelDefinition.DeleteAsync(tenant.Id, definition.Id).ConfigureAwait(false);
+            await Database.ModelRunnerEndpoint.DeleteAsync(tenant.Id, endpoint.Id).ConfigureAwait(false);
+
+            string json = Serializer.SerializeJson(package, false);
+            BackupPackage reloaded = Serializer.DeserializeJson<BackupPackage>(json);
+            reloaded.Tenants = reloaded.Tenants.Where(item => item.Id == tenant.Id).ToList();
+            RestoreResult result = await _Controller.RestoreBackup(new RestoreRequest
+            {
+                Package = reloaded,
+                Options = new RestoreOptions { ConflictResolution = ConflictResolutionMode.Overwrite }
+            }).ConfigureAwait(false);
+
+            result.Success.Should().BeTrue(result.ErrorMessage);
+            ModelRunnerEndpoint restored = await Database.ModelRunnerEndpoint.ReadAsync(tenant.Id, endpoint.Id).ConfigureAwait(false);
+            restored.ApiKey.Should().Be("sk-ant-backup-secret-0042");
+            restored.AnthropicVersion.Should().Be("2024-06-01");
+            restored.HealthCheckEnabled.Should().BeFalse();
+            (await Database.ModelDefinition.ReadAsync(tenant.Id, definition.Id).ConfigureAwait(false)).SupportsDecisions.Should().BeTrue();
+            (await Database.VirtualModelRunner.ReadAsync(tenant.Id, vmr.Id).ConfigureAwait(false)).AllowDecisions.Should().BeFalse();
         }
 
         public async Task ValidateBackup_WithCrossTenantEndpointGroupReference_ReturnsValidationError()

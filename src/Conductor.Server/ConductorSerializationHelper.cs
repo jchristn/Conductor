@@ -30,9 +30,30 @@ namespace Conductor.Server
         /// <typeparam name="T">Target type.</typeparam>
         /// <param name="json">JSON string; may be null or empty.</param>
         /// <returns>Instance of <typeparamref name="T"/>, or default when input is empty.</returns>
+        /// <exception cref="System.Text.Json.JsonException">Thrown when the JSON is malformed or a value has the wrong type. An
+        /// invalid enum value is reported with the property name and the list of valid values instead of the internal type name.
+        /// A value that a model property rejects (for example an empty required string, whose setter throws
+        /// ArgumentNullException) is also reported as a JsonException naming the property, so the client gets 400, not 500.</exception>
         public T DeserializeJson<T>(string json)
         {
-            return _Serializer.DeserializeJson<T>(json);
+            try
+            {
+                return _Serializer.DeserializeJson<T>(json);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                string friendly = JsonErrorMessageFormatter.Format(ex, typeof(T));
+                if (friendly == null) throw;
+                throw new System.Text.Json.JsonException(friendly, ex.Path, ex.LineNumber, ex.BytePositionInLine, ex);
+            }
+            catch (System.ArgumentNullException ex) when (!System.String.IsNullOrEmpty(ex.ParamName))
+            {
+                throw new System.Text.Json.JsonException("The request body is invalid: " + ex.ParamName + " cannot be null or empty.", ex);
+            }
+            catch (System.ArgumentException ex) when (!System.String.IsNullOrEmpty(ex.ParamName))
+            {
+                throw new System.Text.Json.JsonException("The request body is invalid: " + ex.Message, ex);
+            }
         }
 
         /// <summary>

@@ -6,6 +6,7 @@ namespace Conductor.Server.Routing
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
     using Conductor.Server;
+    using Conductor.Server.Services;
     using WatsonWebserver.Core.OpenApi;
     using Controllers = Conductor.Server.Controllers;
     using Services = Conductor.Server.Services;
@@ -23,15 +24,18 @@ namespace Conductor.Server.Routing
             _App.Post<Credential>("/v1.0/credentials", async (req) =>
             {
                 Credential credential = req.Data as Credential;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, credential?.TenantId);
-                string userId = GetUserIdFromAuth(req.Http.Metadata, credential?.UserId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, credential?.TenantId);
+                AuthenticationResult userAuth = req.Http.Metadata as AuthenticationResult;
+                bool canAssignOwner = req.Http.Metadata is AdminAuthenticationResult
+                    || (userAuth != null && (userAuth.IsAdmin || userAuth.IsTenantAdmin));
+                string userId = await credentialController.ResolveOwnerUserIdAsync(tenantId, userAuth?.User?.Id, canAssignOwner, credential?.UserId);
                 req.Http.Response.StatusCode = 201;
                 return await credentialController.Create(tenantId, userId, credential);
             },
             api => api
                 .WithTag("Credentials")
                 .WithSummary("Create credential")
-                .WithDescription("Create a new API credential (bearer token) for the authenticated user")
+                .WithDescription("Create a new API credential (bearer token). The credential belongs to the authenticated user unless a tenant admin, global admin or system administrator supplies UserId, which must name a user in the target tenant.")
                 .WithSecurity("Bearer")
                 .WithRequestBody(Api.JsonRequestBody<Credential>("Credential to create", true))
                 .WithResponse(201, Api.JsonResponse<Credential>("Created credential with bearer token"))
@@ -58,7 +62,7 @@ namespace Conductor.Server.Routing
             _App.Put<Credential>("/v1.0/credentials/{id}", async (req) =>
             {
                 Credential credential = req.Data as Credential;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, credential?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, credential?.TenantId);
                 return await credentialController.Update(tenantId, req.Parameters["id"], credential);
             },
             api => api
@@ -75,7 +79,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/credentials/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await credentialController.Delete(tenantId, req.Parameters["id"]);
                 return null;

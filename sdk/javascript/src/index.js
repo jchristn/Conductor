@@ -1,3 +1,5 @@
+export { ApiTypes, ApiTypeValues, ClientFacingApiTypes, VmrEndpointCompatibility, acceptsEndpoint } from './apiTypes.js';
+
 export class ConductorApiError extends Error {
   constructor(message, status, endpoint, response) {
     super(message);
@@ -89,6 +91,72 @@ export class ConductorClient {
 
   async getVirtualModelRunnerReservationEffective(id, filters = {}) {
     return this.#request('GET', `/v1.0/virtualmodelrunners/${encodeURIComponent(id)}/reservation-effective${this.#queryString(filters)}`);
+  }
+
+  async listModelRunnerEndpoints(filters = {}) {
+    return this.#request('GET', `/v1.0/modelrunnerendpoints${this.#queryString(filters)}`);
+  }
+
+  async getModelRunnerEndpoint(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/modelrunnerendpoints/${this.#requireId(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createModelRunnerEndpoint(endpoint) {
+    return this.#request('POST', '/v1.0/modelrunnerendpoints', endpoint || {});
+  }
+
+  async updateModelRunnerEndpoint(id, endpoint) {
+    return this.#request('PUT', `/v1.0/modelrunnerendpoints/${this.#requireId(id)}`, endpoint || {});
+  }
+
+  async deleteModelRunnerEndpoint(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/modelrunnerendpoints/${this.#requireId(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  // Returns the full upstream API key (or null when unset). Endpoint reads return a masked key.
+  async revealModelRunnerEndpointApiKey(id, tenantId = null) {
+    const result = await this.#request('GET', `/v1.0/modelrunnerendpoints/${this.#requireId(id)}/apikey${this.#tenantQuery(tenantId)}`);
+    return typeof result?.ApiKey === 'string' ? result.ApiKey : null;
+  }
+
+  async listModelDefinitions(filters = {}) {
+    return this.#request('GET', `/v1.0/modeldefinitions${this.#queryString(filters)}`);
+  }
+
+  async getModelDefinition(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/modeldefinitions/${this.#requireId(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createModelDefinition(definition) {
+    return this.#request('POST', '/v1.0/modeldefinitions', definition || {});
+  }
+
+  async updateModelDefinition(id, definition) {
+    return this.#request('PUT', `/v1.0/modeldefinitions/${this.#requireId(id)}`, definition || {});
+  }
+
+  async deleteModelDefinition(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/modeldefinitions/${this.#requireId(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async listVirtualModelRunners(filters = {}) {
+    return this.#request('GET', `/v1.0/virtualmodelrunners${this.#queryString(filters)}`);
+  }
+
+  async getVirtualModelRunner(id, tenantId = null) {
+    return this.#request('GET', `/v1.0/virtualmodelrunners/${this.#requireId(id)}${this.#tenantQuery(tenantId)}`);
+  }
+
+  async createVirtualModelRunner(vmr) {
+    return this.#request('POST', '/v1.0/virtualmodelrunners', vmr || {});
+  }
+
+  async updateVirtualModelRunner(id, vmr) {
+    return this.#request('PUT', `/v1.0/virtualmodelrunners/${this.#requireId(id)}`, vmr || {});
+  }
+
+  async deleteVirtualModelRunner(id, tenantId = null) {
+    return this.#request('DELETE', `/v1.0/virtualmodelrunners/${this.#requireId(id)}${this.#tenantQuery(tenantId)}`);
   }
 
   async validateModelRunnerEndpoint(draft, existingId = null) {
@@ -386,6 +454,13 @@ export class ConductorClient {
     }
 
     return response.json();
+  }
+
+  #requireId(id) {
+    if (id === null || id === undefined || id === '') {
+      throw new Error('id is required');
+    }
+    return encodeURIComponent(id);
   }
 
   #existingIdQuery(existingId) {

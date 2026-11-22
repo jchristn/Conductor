@@ -10,27 +10,32 @@ namespace Conductor.Server.Services
     using Conductor.Core.Enums;
     using Conductor.Core.Models;
     using Conductor.Core.Serialization;
+    using Conductor.Core.Settings;
     using JsonMerge;
 
     internal sealed class RoutingModelMutationService
     {
         private readonly DatabaseDriverBase _Database;
         private readonly Serializer _Serializer = new Serializer();
+        private readonly AnthropicSettings _AnthropicSettings;
 
-        internal RoutingModelMutationService(DatabaseDriverBase database)
+        internal RoutingModelMutationService(DatabaseDriverBase database, AnthropicSettings anthropicSettings = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
+            _AnthropicSettings = anthropicSettings ?? new AnthropicSettings();
         }
 
         internal async Task<RoutingModelMutationResult> ApplyAsync(
             VirtualModelRunner vmr,
             UrlContext urlContext,
             byte[] requestBody,
-            CancellationToken token)
+            CancellationToken token,
+            ModelRunnerEndpoint endpoint = null,
+            string clientAnthropicVersion = null)
         {
             RoutingModelMutationResult result = await ResolveAsync(vmr, urlContext, requestBody, token).ConfigureAwait(false);
             if (!result.Success) return result;
-            if (!urlContext.IsCompletionsRequest && !urlContext.IsEmbeddingsRequest) return result;
+            if (!urlContext.IsCompletionsRequest && !urlContext.IsEmbeddingsRequest && !urlContext.IsDecisionRequest) return result;
 
             if (requestBody == null || requestBody.Length < 1)
             {
@@ -53,14 +58,25 @@ namespace Conductor.Server.Services
             result.MutationSummary.EffectiveModel = result.EffectiveModel;
             result.MutationSummary.ModelDefinitionId = result.ModelDefinition?.Id;
 
-            if (urlContext.IsCompletionsRequest && result.ModelConfiguration != null)
+            // Model configurations are never applied to decision requests (TypeSafe System One).
+            if (!urlContext.IsDecisionRequest)
             {
-                ApplyConfigurationToBody(bodyDict, result.ModelConfiguration, urlContext, result.MutationSummary);
-            }
+                if (urlContext.IsCompletionsRequest && result.ModelConfiguration != null)
+                {
+                    bool allowSampling = true;
+                    if (urlContext.ApiType == ApiTypeEnum.Anthropic)
+                    {
+                        string effectiveVersion = UpstreamAuthHeaders.ResolveAnthropicVersion(clientAnthropicVersion, endpoint, _AnthropicSettings);
+                        allowSampling = _AnthropicSettings.AllowsSamplingParameters(effectiveVersion);
+                    }
 
-            if (result.ModelConfiguration != null)
-            {
-                ApplyPinnedProperties(bodyDict, result.ModelConfiguration, urlContext, result.MutationSummary);
+                    ApplyConfigurationToBody(bodyDict, result.ModelConfiguration, urlContext, result.MutationSummary, allowSampling);
+                }
+
+                if (result.ModelConfiguration != null)
+                {
+                    ApplyPinnedProperties(bodyDict, result.ModelConfiguration, urlContext, result.MutationSummary);
+                }
             }
 
             string mutatedJson = _Serializer.SerializeJson(bodyDict, false);
@@ -87,7 +103,8 @@ namespace Conductor.Server.Services
                 RequestBody = requestBody
             };
 
-            if (!CanResolveRequestModel(urlContext))
+            bool resolvesModel = CanResolveRequestModel(urlContext);
+            if (!resolvesModel && !RequiresJsonObjectBody(urlContext))
             {
                 return result;
             }
@@ -96,7 +113,23 @@ namespace Conductor.Server.Services
             if (requestBody != null && requestBody.Length > 0)
             {
                 string bodyJson = Encoding.UTF8.GetString(requestBody);
-                bodyDict = _Serializer.DeserializeJson<Dictionary<string, object>>(bodyJson);
+                try
+                {
+                    bodyDict = _Serializer.DeserializeJson<Dictionary<string, object>>(bodyJson);
+                }
+                catch (JsonException ex)
+                {
+                    // A malformed client body is the client's error (400), never an upstream failure (502), and it is not
+                    // forwarded.
+                    string position = ex.BytePositionInLine.HasValue ? " (near byte " + ex.BytePositionInLine.Value + ")" : String.Empty;
+                    return DenyMutation(result, 400, "RequestBodyInvalid", "The request body is not a valid JSON object" + position + ".");
+                }
+            }
+
+            if (!resolvesModel)
+            {
+                // The body only had to be valid JSON; this request type has no model resolution.
+                return result;
             }
 
             result.RequestedModel = ExtractRequestedModel(urlContext, bodyDict);
@@ -104,7 +137,7 @@ namespace Conductor.Server.Services
             result.EffectiveModel = result.RequestedModel;
             result.MutationSummary.EffectiveModel = result.EffectiveModel;
 
-            bool routeModelDefinitionEnforced = urlContext.IsCompletionsRequest || urlContext.IsEmbeddingsRequest;
+            bool routeModelDefinitionEnforced = urlContext.IsCompletionsRequest || urlContext.IsEmbeddingsRequest || urlContext.IsDecisionRequest;
             List<ModelDefinition> modelDefinitions = await ResolveActiveModelDefinitionsAsync(vmr, token).ConfigureAwait(false);
 
             if (routeModelDefinitionEnforced)
@@ -113,17 +146,17 @@ namespace Conductor.Server.Services
                 {
                     if (modelDefinitions.Count < 1)
                     {
-                        return DenyMutation(result, 401, "StrictModeNoModels", "Strict mode is enabled but no active model definitions are attached.");
+                        return DenyMutation(result, 404, "StrictModeNoModels", "Strict mode is enabled but no active model definitions are attached.");
                     }
 
                     if (String.IsNullOrWhiteSpace(result.RequestedModel))
                     {
-                        return DenyMutation(result, 401, "StrictModeModelRequired", "Strict mode requires the request to specify a model.");
+                        return DenyMutation(result, 400, "StrictModeModelRequired", "Strict mode requires the request to specify a model.");
                     }
 
                     if (!modelDefinitions.Exists(item => String.Equals(item.Name, result.RequestedModel, StringComparison.OrdinalIgnoreCase)))
                     {
-                        return DenyMutation(result, 401, "StrictModeModelRejected", "The requested model is not attached to this virtual model runner.");
+                        return DenyMutation(result, 404, "StrictModeModelRejected", "The requested model is not attached to this virtual model runner.");
                     }
                 }
 
@@ -137,16 +170,35 @@ namespace Conductor.Server.Services
                     ModelDefinition matchedDefinition = modelDefinitions.Find(item => String.Equals(item.Name, result.RequestedModel, StringComparison.OrdinalIgnoreCase));
                     if (matchedDefinition == null)
                     {
-                        return DenyMutation(result, 401, "ModelNotAttached", "The requested model is not attached to this virtual model runner.");
+                        return DenyMutation(result, 404, "ModelNotAttached", "The requested model is not attached to this virtual model runner.");
                     }
 
                     result.ModelDefinition = matchedDefinition;
                     result.EffectiveModel = matchedDefinition.Name;
                 }
 
-                List<ModelConfiguration> configurations = await ResolveActiveModelConfigurationsAsync(vmr, token).ConfigureAwait(false);
-                result.ModelConfiguration = SelectConfiguration(vmr, configurations, result.EffectiveModel);
-                result.MutationSummary.ModelConfigurationId = result.ModelConfiguration?.Id;
+                if (vmr.StrictMode && result.ModelDefinition != null)
+                {
+                    if (urlContext.IsDecisionRequest && !result.ModelDefinition.SupportsDecisions)
+                    {
+                        return DenyMutation(result, 404, "ModelDoesNotSupportDecisions", "The model '" + result.ModelDefinition.Name + "' does not support decision requests.");
+                    }
+
+                    if ((urlContext.IsCompletionsRequest || urlContext.IsEmbeddingsRequest)
+                        && result.ModelDefinition.SupportsDecisions
+                        && !result.ModelDefinition.SupportsCompletions
+                        && !result.ModelDefinition.SupportsEmbeddings)
+                    {
+                        return DenyMutation(result, 404, "ModelSupportsOnlyDecisions", "The model '" + result.ModelDefinition.Name + "' supports only decision requests.");
+                    }
+                }
+
+                if (!urlContext.IsDecisionRequest)
+                {
+                    List<ModelConfiguration> configurations = await ResolveActiveModelConfigurationsAsync(vmr, token).ConfigureAwait(false);
+                    result.ModelConfiguration = SelectConfiguration(vmr, configurations, result.EffectiveModel);
+                    result.MutationSummary.ModelConfigurationId = result.ModelConfiguration?.Id;
+                }
             }
             else if (!String.IsNullOrWhiteSpace(result.RequestedModel))
             {
@@ -226,7 +278,7 @@ namespace Conductor.Server.Services
         private static bool CanResolveRequestModel(UrlContext urlContext)
         {
             if (urlContext == null) return false;
-            if (urlContext.IsCompletionsRequest || urlContext.IsEmbeddingsRequest) return true;
+            if (urlContext.IsCompletionsRequest || urlContext.IsEmbeddingsRequest || urlContext.IsDecisionRequest) return true;
 
             switch (urlContext.RequestType)
             {
@@ -237,6 +289,15 @@ namespace Conductor.Server.Services
                 default:
                     return false;
             }
+        }
+
+        private static bool RequiresJsonObjectBody(UrlContext urlContext)
+        {
+            // Request types whose documented body is a JSON object but that do not resolve a model. Every other JSON-body
+            // proxy request type (completions, embeddings, decisions, Ollama pull, delete and show) is already validated by
+            // model resolution. Unclassified passthrough requests are not listed, because their bodies need not be JSON.
+            if (urlContext == null) return false;
+            return urlContext.RequestType == RequestTypeEnum.AnthropicCountTokens;
         }
 
         private static string ExtractRequestedModel(UrlContext urlContext, Dictionary<string, object> bodyDict)
@@ -279,17 +340,20 @@ namespace Conductor.Server.Services
             Dictionary<string, object> bodyDict,
             ModelConfiguration configuration,
             UrlContext urlContext,
-            RequestMutationSummary mutationSummary)
+            RequestMutationSummary mutationSummary,
+            bool allowSampling)
         {
-            if (configuration.Temperature.HasValue)
+            // Anthropic removed the sampling parameters from newer API versions; they are injected only when allowed.
+            bool isAnthropic = urlContext.ApiType == ApiTypeEnum.Anthropic;
+            if (configuration.Temperature.HasValue && allowSampling)
             {
                 ApplyMutationValue(bodyDict, urlContext, mutationSummary, "temperature", configuration.Temperature.Value, "ModelConfiguration:" + configuration.Name);
             }
-            if (configuration.TopP.HasValue)
+            if (configuration.TopP.HasValue && allowSampling)
             {
                 ApplyMutationValue(bodyDict, urlContext, mutationSummary, "top_p", configuration.TopP.Value, "ModelConfiguration:" + configuration.Name);
             }
-            if (configuration.TopK.HasValue)
+            if (configuration.TopK.HasValue && allowSampling)
             {
                 ApplyMutationValue(bodyDict, urlContext, mutationSummary, "top_k", configuration.TopK.Value, "ModelConfiguration:" + configuration.Name);
             }
@@ -297,11 +361,11 @@ namespace Conductor.Server.Services
             {
                 ApplyMutationValue(bodyDict, urlContext, mutationSummary, "max_tokens", configuration.MaxTokens.Value, "ModelConfiguration:" + configuration.Name);
             }
-            if (configuration.RepeatPenalty.HasValue && urlContext.ApiType != ApiTypeEnum.Gemini)
+            if (configuration.RepeatPenalty.HasValue && urlContext.ApiType != ApiTypeEnum.Gemini && !isAnthropic)
             {
                 ApplyMutationValue(bodyDict, urlContext, mutationSummary, "repeat_penalty", configuration.RepeatPenalty.Value, "ModelConfiguration:" + configuration.Name);
             }
-            if (configuration.ContextWindowSize.HasValue && urlContext.ApiType != ApiTypeEnum.Gemini)
+            if (configuration.ContextWindowSize.HasValue && urlContext.ApiType != ApiTypeEnum.Gemini && !isAnthropic)
             {
                 ApplyMutationValue(bodyDict, urlContext, mutationSummary, "num_ctx", configuration.ContextWindowSize.Value, "ModelConfiguration:" + configuration.Name);
             }

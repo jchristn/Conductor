@@ -303,6 +303,7 @@ namespace Conductor.McpServer
                     hostname = e.Hostname,
                     port = e.Port,
                     apiType = e.ApiType.ToString(),
+                    apiKey = ApiKeyMasking.Mask(e.ApiKey),
                     useSsl = e.UseSsl,
                     maxParallelRequests = e.MaxParallelRequests,
                     weight = e.Weight,
@@ -343,10 +344,14 @@ namespace Conductor.McpServer
                     hostname = endpoint.Hostname,
                     port = endpoint.Port,
                     apiType = endpoint.ApiType.ToString(),
+                    apiKey = ApiKeyMasking.Mask(endpoint.ApiKey),
+                    anthropicVersion = endpoint.AnthropicVersion,
                     useSsl = endpoint.UseSsl,
                     timeoutMs = endpoint.TimeoutMs,
                     maxParallelRequests = endpoint.MaxParallelRequests,
                     weight = endpoint.Weight,
+                    healthCheckEnabled = endpoint.HealthCheckEnabled,
+                    healthCheckMethod = endpoint.HealthCheckMethod.ToString(),
                     healthCheckUrl = endpoint.HealthCheckUrl,
                     healthCheckIntervalMs = endpoint.HealthCheckIntervalMs,
                     active = endpoint.Active,
@@ -512,6 +517,7 @@ namespace Conductor.McpServer
                     allowCompletions = vmr.AllowCompletions,
                     allowEmbeddings = vmr.AllowEmbeddings,
                     allowModelManagement = vmr.AllowModelManagement,
+                    allowDecisions = vmr.AllowDecisions,
                     active = vmr.Active,
                     createdUtc = vmr.CreatedUtc,
                     labels = vmr.Labels,
@@ -545,8 +551,14 @@ namespace Conductor.McpServer
                 string apiType = GetStringProperty(args, "api_type");
                 if (!String.IsNullOrEmpty(apiType))
                 {
-                    if (Enum.TryParse<Conductor.Core.Enums.ApiTypeEnum>(apiType, true, out Conductor.Core.Enums.ApiTypeEnum parsedApiType))
-                        vmr.ApiType = parsedApiType;
+                    if (!Enum.TryParse<Conductor.Core.Enums.ApiTypeEnum>(apiType, true, out Conductor.Core.Enums.ApiTypeEnum parsedApiType)
+                        || !Enum.IsDefined(typeof(Conductor.Core.Enums.ApiTypeEnum), parsedApiType)
+                        || Int32.TryParse(apiType, out int _))
+                    {
+                        return CreateErrorResult("api_type '" + apiType + "' is not a valid API type.");
+                    }
+
+                    vmr.ApiType = parsedApiType;
                 }
 
                 string loadBalancing = GetStringProperty(args, "load_balancing");
@@ -569,6 +581,48 @@ namespace Conductor.McpServer
 
                 if (args.HasValue && args.Value.TryGetProperty("allow_embeddings", out JsonElement allowEmb))
                     vmr.AllowEmbeddings = allowEmb.GetBoolean();
+
+                if (args.HasValue && args.Value.TryGetProperty("allow_decisions", out JsonElement allowDec))
+                    vmr.AllowDecisions = allowDec.GetBoolean();
+
+                // VMR writes go through the same API type rules as REST and backup restore.
+                ResourceValidationResult validation = new ResourceValidationResult { ResourceType = "VirtualModelRunner", IsValid = true };
+                List<ModelRunnerEndpoint> endpoints = new List<ModelRunnerEndpoint>();
+                foreach (string endpointId in vmr.ModelRunnerEndpointIds ?? new List<string>())
+                {
+                    if (String.IsNullOrWhiteSpace(endpointId))
+                    {
+                        validation.IsValid = false;
+                        validation.Errors.Add(new ResourceValidationIssue
+                        {
+                            Code = "EndpointMissing",
+                            Field = "ModelRunnerEndpointIds",
+                            Message = "endpoint_ids contains an empty endpoint ID; every entry must reference an existing endpoint in the same tenant."
+                        });
+                        continue;
+                    }
+
+                    ModelRunnerEndpoint endpoint = _Database.ModelRunnerEndpoint.ReadAsync(tenantId, endpointId).GetAwaiter().GetResult();
+                    if (endpoint == null)
+                    {
+                        validation.IsValid = false;
+                        validation.Errors.Add(new ResourceValidationIssue
+                        {
+                            Code = "EndpointMissing",
+                            Field = "ModelRunnerEndpointIds",
+                            Message = "Endpoint '" + endpointId + "' was not found in the same tenant."
+                        });
+                        continue;
+                    }
+
+                    endpoints.Add(endpoint);
+                }
+
+                VirtualModelRunnerTypeRules.Validate(vmr, endpoints, validation);
+                if (validation.Errors.Count > 0)
+                {
+                    return CreateValidationErrorResult(validation);
+                }
 
                 VirtualModelRunner created = _Database.VirtualModelRunner
                     .CreateAsync(vmr)
@@ -1463,6 +1517,18 @@ namespace Conductor.McpServer
                 }
             }
             return null;
+        }
+
+        private object CreateValidationErrorResult(ResourceValidationResult validation)
+        {
+            McpToolCallResult result = McpToolCallResult.FromText(JsonSerializer.Serialize(new
+            {
+                error = true,
+                message = "Validation failed: " + String.Join(" ", validation.Errors.Select(item => item.Message)),
+                errors = validation.Errors.Select(item => new { code = item.Code, field = item.Field, message = item.Message }).ToList()
+            }));
+            result.IsError = true;
+            return result;
         }
 
         private object CreateErrorResult(string message)

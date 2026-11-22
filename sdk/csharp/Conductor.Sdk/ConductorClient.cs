@@ -71,6 +71,245 @@ namespace Conductor.Sdk
         }
 
         /// <summary>
+        /// List model runner endpoints. <c>ApiKey</c> values in the response are masked (<c>****</c> plus the last 4 characters) or null.
+        /// </summary>
+        /// <param name="filters">Query-string filters such as maxResults, continuationToken, nameFilter, activeFilter, and tenantId. May be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> ListModelRunnerEndpointsAsync(IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/modelrunnerendpoints" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get a model runner endpoint. The <c>ApiKey</c> value in the response is masked; use
+        /// <see cref="RevealModelRunnerEndpointApiKeyAsync"/> to read the full value.
+        /// </summary>
+        /// <param name="id">Model runner endpoint ID. Must not be null or empty.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> GetModelRunnerEndpointAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            return await GetJsonAsync("/v1.0/modelrunnerendpoints/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Create a model runner endpoint. The payload is sent as-is, so every server field passes through, including
+        /// <c>AnthropicVersion</c>, <c>HealthCheckEnabled</c>, and <c>HealthCheckRequestBody</c>. Fields the payload omits
+        /// receive the server's defaults for the selected <see cref="ApiType"/>.
+        /// </summary>
+        /// <param name="endpoint">Endpoint payload. When null, an empty object is sent.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response with a masked <c>ApiKey</c>.</returns>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> CreateModelRunnerEndpointAsync(object endpoint, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/modelrunnerendpoints", endpoint ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Update a model runner endpoint. When <c>ApiKey</c> is omitted, null, or equal to the masked value, the stored key is kept;
+        /// an empty string clears it.
+        /// </summary>
+        /// <param name="id">Model runner endpoint ID. Must not be null or empty.</param>
+        /// <param name="endpoint">Endpoint payload. When null, an empty object is sent.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response with a masked <c>ApiKey</c>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> UpdateModelRunnerEndpointAsync(string id, object endpoint, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            return await PutJsonAsync("/v1.0/modelrunnerendpoints/" + Uri.EscapeDataString(id), endpoint ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete a model runner endpoint.
+        /// </summary>
+        /// <param name="id">Model runner endpoint ID. Must not be null or empty.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task DeleteModelRunnerEndpointAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            await DeleteAsync("/v1.0/modelrunnerendpoints/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Reveal the full upstream API key of a model runner endpoint by calling
+        /// <c>GET /v1.0/modelrunnerendpoints/{id}/apikey</c>. Requires the same permission as updating the endpoint.
+        /// The server writes an audit log line for every call; the line does not contain the key.
+        /// </summary>
+        /// <param name="id">Model runner endpoint ID. Must not be null or empty.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The full API key, or null when the endpoint has no key.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<string> RevealModelRunnerEndpointApiKeyAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            using JsonDocument response = await GetJsonAsync("/v1.0/modelrunnerendpoints/" + Uri.EscapeDataString(id) + "/apikey" + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+
+            if (response.RootElement.ValueKind == JsonValueKind.Object
+                && response.RootElement.TryGetProperty("ApiKey", out JsonElement apiKey)
+                && apiKey.ValueKind == JsonValueKind.String)
+            {
+                return apiKey.GetString();
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// List model definitions.
+        /// </summary>
+        /// <param name="filters">Query-string filters such as maxResults, continuationToken, nameFilter, activeFilter, and tenantId. May be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> ListModelDefinitionsAsync(IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/modeldefinitions" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get a model definition.
+        /// </summary>
+        /// <param name="id">Model definition ID. Must not be null or empty.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> GetModelDefinitionAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            return await GetJsonAsync("/v1.0/modeldefinitions/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Create a model definition. The payload is sent as-is, including <c>SupportsDecisions</c> (default false on the server).
+        /// </summary>
+        /// <param name="definition">Model definition payload. When null, an empty object is sent.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> CreateModelDefinitionAsync(object definition, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/modeldefinitions", definition ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Update a model definition.
+        /// </summary>
+        /// <param name="id">Model definition ID. Must not be null or empty.</param>
+        /// <param name="definition">Model definition payload. When null, an empty object is sent.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> UpdateModelDefinitionAsync(string id, object definition, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            return await PutJsonAsync("/v1.0/modeldefinitions/" + Uri.EscapeDataString(id), definition ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete a model definition.
+        /// </summary>
+        /// <param name="id">Model definition ID. Must not be null or empty.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task DeleteModelDefinitionAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            await DeleteAsync("/v1.0/modeldefinitions/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// List virtual model runners.
+        /// </summary>
+        /// <param name="filters">Query-string filters such as maxResults, continuationToken, nameFilter, activeFilter, and tenantId. May be null.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> ListVirtualModelRunnersAsync(IDictionary<string, string> filters = null, CancellationToken token = default)
+        {
+            return await GetJsonAsync("/v1.0/virtualmodelrunners" + QueryString(filters), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Get a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID. Must not be null or empty.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> GetVirtualModelRunnerAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            return await GetJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Create a virtual model runner. The payload is sent as-is, including <c>AllowDecisions</c> (default true on the server).
+        /// The <c>ApiType</c> must be client facing (see <see cref="ApiTypeCompatibility.IsClientFacing"/>) or the server
+        /// rejects the request with <c>VmrApiTypeNotClientFacing</c>.
+        /// </summary>
+        /// <param name="virtualModelRunner">Virtual model runner payload. When null, an empty object is sent.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> CreateVirtualModelRunnerAsync(object virtualModelRunner, CancellationToken token = default)
+        {
+            return await PostJsonAsync("/v1.0/virtualmodelrunners", virtualModelRunner ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Update a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID. Must not be null or empty.</param>
+        /// <param name="virtualModelRunner">Virtual model runner payload. When null, an empty object is sent.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>JSON response.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task<JsonDocument> UpdateVirtualModelRunnerAsync(string id, object virtualModelRunner, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            return await PutJsonAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id), virtualModelRunner ?? new object(), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Delete a virtual model runner.
+        /// </summary>
+        /// <param name="id">Virtual model runner ID. Must not be null or empty.</param>
+        /// <param name="tenantId">Optional tenant ID.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>Task.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="id"/> is null or empty.</exception>
+        /// <exception cref="ConductorApiException">Thrown when the server returns a non-success status code.</exception>
+        public async Task DeleteVirtualModelRunnerAsync(string id, string tenantId = null, CancellationToken token = default)
+        {
+            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            await DeleteAsync("/v1.0/virtualmodelrunners/" + Uri.EscapeDataString(id) + QueryString(new Dictionary<string, string> { ["tenantId"] = tenantId }), token).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// List endpoint groups.
         /// </summary>
         /// <param name="filters">Query-string filters.</param>

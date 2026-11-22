@@ -1,6 +1,7 @@
 namespace Conductor.Server.Controllers
 {
     using System;
+    using System.Linq;
     using System.Threading.Tasks;
     using Conductor.Core.Database;
     using Conductor.Core.Helpers;
@@ -17,6 +18,11 @@ namespace Conductor.Server.Controllers
     public class UserController : BaseController
     {
         /// <summary>
+        /// Message returned with 400 when a user create request does not supply a non-empty Password.
+        /// </summary>
+        public const string PasswordRequiredMessage = "Password is required when creating a user: supply a non-empty Password in the request body.";
+
+        /// <summary>
         /// Instantiate the user controller.
         /// </summary>
         public UserController(DatabaseDriverBase database, AuthenticationService authService, Serializer serializer, LoggingModule logging)
@@ -25,15 +31,21 @@ namespace Conductor.Server.Controllers
         }
 
         /// <summary>
-        /// Create a user.
+        /// Create a user. The response never contains the password. The request must set Password explicitly to a
+        /// non-empty value: the model's built-in default is never stored as a real password.
         /// </summary>
         /// <param name="tenantId">Tenant ID from auth.</param>
         /// <param name="user">User data.</param>
         /// <returns>Created user.</returns>
+        /// <exception cref="WebserverException">Thrown with BadRequest when the body is missing, a required field is
+        /// empty, or Password was not supplied.</exception>
         public async Task<UserMaster> Create(string tenantId, UserMaster user)
         {
             if (user == null)
                 throw new WebserverException(ApiResultEnum.BadRequest, "Invalid request body");
+
+            if (!user.PasswordWasSet)
+                throw new WebserverException(ApiResultEnum.BadRequest, PasswordRequiredMessage);
 
             if (String.IsNullOrEmpty(user.FirstName) || String.IsNullOrEmpty(user.LastName) ||
                 String.IsNullOrEmpty(user.Email) || String.IsNullOrEmpty(user.Password))
@@ -43,7 +55,7 @@ namespace Conductor.Server.Controllers
             user.TenantId = tenantId;
             user = await Database.User.CreateAsync(user);
 
-            return user;
+            return UserMaster.WithoutPassword(user);
         }
 
         /// <summary>
@@ -66,7 +78,7 @@ namespace Conductor.Server.Controllers
             if (user == null)
                 throw new WebserverException(ApiResultEnum.NotFound);
 
-            return user;
+            return UserMaster.WithoutPassword(user);
         }
 
         /// <summary>
@@ -91,9 +103,13 @@ namespace Conductor.Server.Controllers
             user.Id = id;
             user.TenantId = tenantId;
             user.CreatedUtc = existing.CreatedUtc;
+
+            // Responses never include the password, so a client that sends back a user it read has no password to send:
+            // an omitted Password keeps the stored one.
+            if (!user.PasswordWasSet) user.Password = existing.Password;
             user = await Database.User.UpdateAsync(user);
 
-            return user;
+            return UserMaster.WithoutPassword(user);
         }
 
         /// <summary>
@@ -150,7 +166,13 @@ namespace Conductor.Server.Controllers
             if (activeFilter.HasValue)
                 request.ActiveFilter = activeFilter.Value;
 
-            return await Database.User.EnumerateAsync(tenantId, request);
+            EnumerationResult<UserMaster> result = await Database.User.EnumerateAsync(tenantId, request);
+            if (result?.Data != null)
+            {
+                result.Data = result.Data.Select(UserMaster.WithoutPassword).ToList();
+            }
+
+            return result;
         }
     }
 }

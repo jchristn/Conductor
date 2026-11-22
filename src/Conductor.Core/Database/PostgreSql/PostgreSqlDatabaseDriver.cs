@@ -244,9 +244,14 @@ namespace Conductor.Core.Database.PostgreSql
             await EnsureColumnAsync("virtualmodelrunners", "keepwarm", TableQueries.AddKeepWarmColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroups", TableQueries.AddEndpointGroupsColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("virtualmodelrunners", "endpointgroupids", TableQueries.AddEndpointGroupIdsColumn, token).ConfigureAwait(false);
+            await EnsureColumnAsync("virtualmodelrunners", "allowdecisions", "ALTER TABLE virtualmodelrunners ADD COLUMN allowdecisions BOOLEAN NOT NULL DEFAULT TRUE;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modeldefinitions", "supportsdecisions", "ALTER TABLE modeldefinitions ADD COLUMN supportsdecisions BOOLEAN NOT NULL DEFAULT FALSE;", token).ConfigureAwait(false);
 
             await EnsureColumnAsync("modelrunnerendpoints", "rigmonitor", TableQueries.AddRigMonitorColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("modelrunnerendpoints", "servicestate", "ALTER TABLE modelrunnerendpoints ADD COLUMN servicestate INTEGER NOT NULL DEFAULT 0;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "healthcheckenabled", "ALTER TABLE modelrunnerendpoints ADD COLUMN healthcheckenabled BOOLEAN NOT NULL DEFAULT TRUE;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "healthcheckrequestbody", "ALTER TABLE modelrunnerendpoints ADD COLUMN healthcheckrequestbody TEXT;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("modelrunnerendpoints", "anthropicversion", "ALTER TABLE modelrunnerendpoints ADD COLUMN anthropicversion VARCHAR(32);", token).ConfigureAwait(false);
 
             await EnsureColumnAsync("requesthistory", "requesttransfertype", TableQueries.AddRequestTransferTypeColumn, token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "responsetransfertype", TableQueries.AddResponseTransferTypeColumn, token).ConfigureAwait(false);
@@ -303,6 +308,9 @@ namespace Conductor.Core.Database.PostgreSql
             await EnsureColumnAsync("requesthistory", "dominantstagekind", "ALTER TABLE requesthistory ADD COLUMN dominantstagekind VARCHAR(128);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "dominantstagedurationms", "ALTER TABLE requesthistory ADD COLUMN dominantstagedurationms INTEGER;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requesthistory", "analyticsfailurecode", "ALTER TABLE requesthistory ADD COLUMN analyticsfailurecode VARCHAR(128);", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "cachecreationinputtokens", "ALTER TABLE requesthistory ADD COLUMN cachecreationinputtokens INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "cachereadinputtokens", "ALTER TABLE requesthistory ADD COLUMN cachereadinputtokens INTEGER;", token).ConfigureAwait(false);
+            await EnsureColumnAsync("requesthistory", "decisionquestioncount", "ALTER TABLE requesthistory ADD COLUMN decisionquestioncount INTEGER;", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationguid", "ALTER TABLE requestanalyticsevents ADD COLUMN reservationguid VARCHAR(48);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationname", "ALTER TABLE requestanalyticsevents ADD COLUMN reservationname VARCHAR(255);", token).ConfigureAwait(false);
             await EnsureColumnAsync("requestanalyticsevents", "reservationdecision", "ALTER TABLE requestanalyticsevents ADD COLUMN reservationdecision VARCHAR(32);", token).ConfigureAwait(false);

@@ -1,12 +1,12 @@
-# Conductor QoS & Queueing — Overview
+# Conductor QoS & Queueing Overview
 
-Conductor can put a Quality-of-Service queueing layer in front of any virtual model runner (VMR). Instead of letting requests race to an endpoint and bounce with `429` the moment every endpoint is busy, a VMR linked to a **QoS profile** classifies incoming traffic, parks it in the queue discipline you choose — FIFO, priority, weighted-fair, low-latency, weighted round robin, or a hierarchy of them — and releases requests in scheduled order as endpoint capacity frees. The queueing engine is built on [QoSKit](https://github.com/jchristn/qoskit); Conductor owns the configuration, the request path, the seeding, and the telemetry.
+Conductor can put a Quality-of-Service queueing layer in front of any virtual model runner (VMR). Instead of letting requests race to an endpoint and bounce with `429` the moment every endpoint is busy, a VMR linked to a **QoS profile** classifies incoming traffic, parks it in the queue discipline you choose (FIFO, priority, weighted-fair, low-latency, weighted round robin, or a hierarchy of them), and releases requests in scheduled order as endpoint capacity frees. The queueing engine is built on [QoSKit](https://github.com/jchristn/qoskit); Conductor owns the configuration, the request path, the seeding, and the telemetry.
 
 This document is the practical guide: what QoS does, how it is put together, how to configure it, and how to watch it work.
 
 ## The problem it solves
 
-An inference endpoint has a finite number of slots (`MaxParallelRequests`). When a VMR's endpoints are all full, something has to give. Conductor's older behavior was to reject immediately — correct, but blunt: a burst of low-value batch traffic and a human waiting on a chat response were treated identically, and both got bounced. QoS changes that. Under contention it becomes an admission controller that decides *who waits and who goes first*, and it only rejects when a queue is genuinely full or a request has waited past its deadline. When there is spare capacity, it does nothing measurable — a priority queue with idle endpoints behaves exactly like FIFO, because every request is released the instant it arrives.
+An inference endpoint has a finite number of slots (`MaxParallelRequests`). When a VMR's endpoints are all full, something has to give. Conductor's older behavior was to reject immediately. That was correct, but blunt: a burst of low-value batch traffic and a human waiting on a chat response were treated identically, and both got bounced. QoS changes that. Under contention it becomes an admission controller that decides *who waits and who goes first*, and it only rejects when a queue is genuinely full or a request has waited past its deadline. When there is spare capacity, it does nothing measurable: a priority queue with idle endpoints behaves exactly like FIFO, because every request is released the instant it arrives.
 
 The key idea worth internalizing: **scheduling is invisible until requests actually wait.** QoS earns its keep exactly when a VMR is saturated. A VMR whose endpoints are configured with unlimited concurrency never builds a backlog and never pays for queueing.
 
@@ -14,11 +14,11 @@ The key idea worth internalizing: **scheduling is invisible until requests actua
 
 A **QoS profile** is a tenant-scoped, reusable record. A VMR references one by id; linking a profile is required, and new VMRs default to the tenant's built-in FIFO profile. A profile answers three questions and nothing else.
 
-**Classification** decides which traffic class a request belongs to. You choose what drives it: a custom header, a specific credential, the requested model, a body attribute, the tenant, the user, the client IP, or the API family. Rules are evaluated in order; the first match wins; anything unmatched takes the profile's default class. Classification never blocks and never touches the network — it reads fields Conductor has already parsed.
+**Classification** decides which traffic class a request belongs to. You choose what drives it: a custom header, a specific credential, the requested model, a body attribute, the tenant, the user, the client IP, or the API family. Rules are evaluated in order; the first match wins; anything unmatched takes the profile's default class. Classification never blocks and never touches the network; it reads fields Conductor has already parsed. The API family value is one of `OpenAI`, `Ollama`, `Gemini`, `Anthropic`, `TypeSafe`, or `Management`, and it comes from the request type, which each VMR classifies by its own configured `ApiType`.
 
 **Topology** is the set of queue nodes and the links between them, ending in a single tail queue. Each node is a discipline with its own depth bound and overflow policy. A class maps onto a priority band, a weighted-fair flow, a CBWFQ/LLQ class, or a WRR sub-queue depending on the discipline.
 
-**Admission** is the runtime behavior. A per-VMR scheduler drains the tail in the discipline's order and releases one request each time an endpoint slot frees. A full queue is rejected immediately; a request that waits past the profile's deadline is rejected with `Retry-After`. Admission gates against the VMR's *existing* endpoint capacity — the sum of its endpoints' `MaxParallelRequests` — so QoS never introduces a second concurrency limit to reason about.
+**Admission** is the runtime behavior. A per-VMR scheduler drains the tail in the discipline's order and releases one request each time an endpoint slot frees. A full queue is rejected immediately; a request that waits past the profile's deadline is rejected with `Retry-After`. Admission gates against the VMR's *existing* endpoint capacity, the sum of its endpoints' `MaxParallelRequests`, so QoS never introduces a second concurrency limit to reason about.
 
 ### The traffic classes
 
@@ -26,7 +26,7 @@ Every tenant is seeded with a standard class catalog. These names are the vocabu
 
 | Class | Meaning | Typical scheduling |
 | --- | --- | --- |
-| `realtime` | Live/streaming — voice, token streaming | Strict-priority, rate-limited; above human |
+| `realtime` | Live/streaming: voice, token streaming | Strict-priority, rate-limited; above human |
 | `human-interactive` | A person waiting on a response | Strict-priority, rate-limited |
 | `agent-interactive` | An autonomous agent in a live loop | Top weighted-fair tier |
 | `batch-time-bound` | Bulk work with a soft deadline | Mid weighted-fair |
@@ -35,7 +35,7 @@ Every tenant is seeded with a standard class catalog. These names are the vocabu
 
 ## How configuration becomes behavior
 
-A stored profile is inert rows in the database. On first use for a VMR, Conductor's compiler reads the profile aggregate and builds a live runtime: a classifier delegate, one QoSKit queue per node, the pipeline that moves work to the tail, and the scheduler that drains it. The item carried through the queues is a lightweight ticket — the class it was assigned plus a release signal — never the request body, so a deep backlog stays cheap and no payload data ever reaches a metric label. Editing a linked profile rebuilds its runtime: the new runtime is compiled first, then requests already waiting in the old one are moved into it, so an edit never drops queued work. A compile failure fails open (the VMR admits without queueing) rather than blocking traffic, and a failed rebuild keeps the previous runtime serving and is retried a few seconds later.
+A stored profile is inert rows in the database. On first use for a VMR, Conductor's compiler reads the profile aggregate and builds a live runtime: a classifier delegate, one QoSKit queue per node, the pipeline that moves work to the tail, and the scheduler that drains it. The item carried through the queues is a lightweight ticket (the class it was assigned plus a release signal), never the request body, so a deep backlog stays cheap and no payload data ever reaches a metric label. Editing a linked profile rebuilds its runtime: the new runtime is compiled first, then requests already waiting in the old one are moved into it, so an edit never drops queued work. A compile failure fails open (the VMR admits without queueing) rather than blocking traffic, and a failed rebuild keeps the previous runtime serving and is retried a few seconds later.
 
 A VMR's admission capacity is the sum of its endpoints' `MaxParallelRequests`. It is re-read every few seconds and immediately after an endpoint, endpoint group, VMR, or backup restore change, without disturbing requests that are waiting or in flight. The scheduler that releases waiting requests is supervised: if it ever faults, it logs the error, returns any capacity it was holding, and restarts with backoff, and the fault is visible as the `Recovering` scheduler state and fault count in the runtime view.
 
@@ -47,15 +47,17 @@ Do nothing and every VMR uses the tenant's **Default (FIFO)** profile: a single 
 
 ### Keeping health checks from crowding out inference
 
-Model list and model info requests (`/v1/models`, `/v1beta/models`, `/api/tags`, `/api/ps`, `/api/show`) take endpoint capacity just like inference. When many monitors or health checkers poll them through a VMR, they can fill the endpoint's `MaxParallelRequests` and cause `429`s for real inference and embedding traffic.
+Model list, model info, and token counting requests (`/v1/models`, `/v1/models/{id}` and `/v1/messages/count_tokens` on Anthropic VMRs, `/v1beta/models`, `/api/tags`, `/api/ps`, `/api/show`) take endpoint capacity just like inference. When many monitors or health checkers poll them through a VMR, they can fill the endpoint's `MaxParallelRequests` and cause `429`s for real inference and embedding traffic.
 
-Every tenant is seeded with an **Inference First** profile for this. It is a strict two-band `Priority` queue: requests whose request type is `OpenAIListModels`, `GeminiListModels`, `OllamaListTags`, `OllamaListRunningModels`, or `OllamaShowModelInfo` go to the `metadata` class in the lower band, and everything else goes to `default` in the higher band. When the VMR is saturated, waiting inference is always admitted before waiting metadata requests. There is no aging, so metadata requests wait until inference drains and are rejected with `429` after `MaxQueueWaitMs` (30 seconds). The profile is not linked to any VMR by default; link it to the VMRs your health checkers poll.
+Every tenant is seeded with an **Inference First** profile for this. It is a strict two-band `Priority` queue: requests whose request type is `OpenAIListModels`, `GeminiListModels`, `OllamaListTags`, `OllamaListRunningModels`, `OllamaShowModelInfo`, `AnthropicListModels`, `AnthropicGetModel`, `AnthropicCountTokens`, or `TypeSafeListModels` go to the `metadata` class in the lower band, and everything else goes to `default` in the higher band. When the VMR is saturated, waiting inference is always admitted before waiting metadata requests. There is no aging, so metadata requests wait until inference drains and are rejected with `429` after `MaxQueueWaitMs` (30 seconds). The profile is not linked to any VMR by default; link it to the VMRs your health checkers poll.
+
+The four Anthropic and TypeSafe request types were added in v1.1.0. A tenant's Inference First profile is created once, so profiles seeded by an earlier version keep their original five rules. To get the new behavior there, add `RequestType` rules for `AnthropicListModels`, `AnthropicGetModel`, `AnthropicCountTokens`, and `TypeSafeListModels` that assign the `metadata` class. Decision requests (`TypeSafeDecide`) and Anthropic messages are inference and stay in the higher band.
 
 Once admitted, a metadata request still occupies an endpoint slot until the upstream responds. Better still, point health checkers at the VMR's base URL: a `GET` or `HEAD` on `/v1.0/api/{vmr}/` needs no credentials, never queues, uses no endpoint slot, and returns `204` when the VMR has a healthy endpoint or `503` when it has none.
 
 ### Classifying by a custom header
 
-The Standard Workloads profile classifies on the `X-Conductor-Class` header — a client simply declares its class:
+The Standard Workloads profile classifies on the `X-Conductor-Class` header, so a client simply declares its class:
 
 ```
 POST /v1.0/api/{vmr}/v1/chat/completions
@@ -135,13 +137,13 @@ Deleting a tenant now also removes its QoS configuration. For a full, reportable
 
 ## The discipline catalog
 
-- **FIFO / LIFO** — the baseline; order by arrival (or reverse).
-- **Priority** — strict bands, lowest band first, with optional aging so a busy high band cannot starve the low ones forever.
-- **WFQ** — weighted fair queuing across flows; heavier flows get proportionally more service.
-- **CBWFQ** — weighted fair queuing over named classes matched by the assigned class.
-- **LLQ** — strict-priority classes served ahead of weighted-fair classes, with an optional token-bucket rate limit on the priority classes so they cannot starve everything else. This is what the seeded Standard Workloads profile uses.
-- **WRR** — sub-queues served in proportion to weight using deficit round robin.
+- **FIFO / LIFO**: the baseline; order by arrival (or reverse).
+- **Priority**: strict bands, lowest band first, with optional aging so a busy high band cannot starve the low ones forever.
+- **WFQ**: weighted fair queuing across flows; heavier flows get proportionally more service.
+- **CBWFQ**: weighted fair queuing over named classes matched by the assigned class.
+- **LLQ**: strict-priority classes served ahead of weighted-fair classes, with an optional token-bucket rate limit on the priority classes so they cannot starve everything else. This is what the seeded Standard Workloads profile uses.
+- **WRR**: sub-queues served in proportion to weight using deficit round robin.
 
-Nodes chain into a hierarchy that ends at one tail. The classic shape — a low-latency queue and a weighted-fair queue on the input side, chosen by classifier, both feeding a strict-priority tail — is expressed as two ingress nodes, a class-routed ingress, and links into the tail.
+Nodes chain into a hierarchy that ends at one tail. The classic shape (a low-latency queue and a weighted-fair queue on the input side, chosen by classifier, both feeding a strict-priority tail) is expressed as two ingress nodes, a class-routed ingress, and links into the tail.
 
-The honest limit worth stating: queues live in memory. An in-flight HTTP request cannot survive a server restart — its socket is already gone — so the backlog is not persisted; only the profile configuration is durable. On restart, parked waiters are cancelled and their clients retry.
+The honest limit worth stating: queues live in memory. An in-flight HTTP request cannot survive a server restart, because its socket is already gone, so the backlog is not persisted; only the profile configuration is durable. On restart, parked waiters are cancelled and their clients retry.

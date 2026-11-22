@@ -20,7 +20,7 @@ namespace Conductor.Server.Routing
             _App.Post<VirtualModelRunnerReservation>("/v1.0/vmrreservations", async (req) =>
             {
                 VirtualModelRunnerReservation reservation = req.Data as VirtualModelRunnerReservation;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, reservation?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, reservation?.TenantId);
                 req.Http.Response.StatusCode = 201;
                 return await vmrReservationController.Create(tenantId, reservation, req.Http.Metadata as Services.AuthenticationResult);
             },
@@ -39,7 +39,7 @@ namespace Conductor.Server.Routing
             _App.Post<VirtualModelRunnerReservation>("/v1.0/vmrreservations/validate", async (req) =>
             {
                 VirtualModelRunnerReservation reservation = req.Data as VirtualModelRunnerReservation;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, reservation?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, reservation?.TenantId);
                 string existingId = req.Http.Request.Query.Elements.Get("existingId");
                 return await vmrReservationController.Validate(tenantId, reservation, !String.IsNullOrEmpty(existingId) ? existingId : reservation?.Id);
             },
@@ -97,7 +97,7 @@ namespace Conductor.Server.Routing
             _App.Put<VirtualModelRunnerReservation>("/v1.0/vmrreservations/{id}", async (req) =>
             {
                 VirtualModelRunnerReservation reservation = req.Data as VirtualModelRunnerReservation;
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, reservation?.TenantId);
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, reservation?.TenantId);
                 return await vmrReservationController.Update(tenantId, req.Parameters["id"], reservation);
             },
             api => api
@@ -116,7 +116,7 @@ namespace Conductor.Server.Routing
 
             _App.Delete("/v1.0/vmrreservations/{id}", async (req) =>
             {
-                string tenantId = GetTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
+                string tenantId = GetWriteTenantIdFromAuth(req.Http.Metadata, req.Http.Request.Query.Elements.Get("tenantId"));
                 req.Http.Response.StatusCode = 204;
                 await vmrReservationController.Delete(tenantId, req.Parameters["id"]);
                 return null;

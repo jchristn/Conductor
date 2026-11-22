@@ -34,7 +34,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
             definition.CreatedUtc = DateTime.UtcNow;
             definition.LastUpdateUtc = DateTime.UtcNow;
 
-            string query = "INSERT INTO modeldefinitions (id, tenantid, name, sourceurl, family, parametersize, quantizationlevel, contextwindowsize, supportsembeddings, supportscompletions, active, createdutc, lastupdateutc, labels, tags, metadata) " +
+            string query = "INSERT INTO modeldefinitions (id, tenantid, name, sourceurl, family, parametersize, quantizationlevel, contextwindowsize, supportsembeddings, supportscompletions, supportsdecisions, active, createdutc, lastupdateutc, labels, tags, metadata) " +
                            "VALUES ('" + _Driver.Sanitize(definition.Id) + "', " +
                            "'" + _Driver.Sanitize(definition.TenantId) + "', " +
                            "'" + _Driver.Sanitize(definition.Name) + "', " +
@@ -45,6 +45,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            _Driver.FormatNullable(definition.ContextWindowSize) + ", " +
                            _Driver.FormatBoolean(definition.SupportsEmbeddings) + ", " +
                            _Driver.FormatBoolean(definition.SupportsCompletions) + ", " +
+                           _Driver.FormatBoolean(definition.SupportsDecisions) + ", " +
                            _Driver.FormatBoolean(definition.Active) + ", " +
                            "'" + _Driver.FormatDateTime(definition.CreatedUtc) + "', " +
                            "'" + _Driver.FormatDateTime(definition.LastUpdateUtc) + "', " +
@@ -103,6 +104,7 @@ namespace Conductor.Core.Database.SqlServer.Implementations
                            "contextwindowsize = " + _Driver.FormatNullable(definition.ContextWindowSize) + ", " +
                            "supportsembeddings = " + _Driver.FormatBoolean(definition.SupportsEmbeddings) + ", " +
                            "supportscompletions = " + _Driver.FormatBoolean(definition.SupportsCompletions) + ", " +
+                           "supportsdecisions = " + _Driver.FormatBoolean(definition.SupportsDecisions) + ", " +
                            "active = " + _Driver.FormatBoolean(definition.Active) + ", " +
                            "lastupdateutc = '" + _Driver.FormatDateTime(definition.LastUpdateUtc) + "', " +
                            "labels = " + _Driver.FormatNullableString(definition.LabelsJson) + ", " +
